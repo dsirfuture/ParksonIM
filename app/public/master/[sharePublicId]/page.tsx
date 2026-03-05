@@ -6,19 +6,12 @@ import { ShareActions } from "./ShareActions";
 
 export const runtime = "nodejs";
 
-type Props = Readonly<{
-  params: {
-    sharePublicId: string;
-  };
-}>;
-
-export default async function PublicMasterPage({ params }: Props) {
+export default async function PublicMasterPage(props: any) {
   const lang = getLang();
 
-  const sharePublicId = params?.sharePublicId?.trim();
+  const sharePublicId = (props?.params?.sharePublicId as string | undefined)?.trim();
   if (!sharePublicId) notFound();
 
-  // ✅ 公共页只取需要展示的字段，减少 DB 负担
   const share = await prisma.masterShareLink.findUnique({
     where: { share_public_id: sharePublicId },
     select: {
@@ -59,7 +52,6 @@ export default async function PublicMasterPage({ params }: Props) {
         </h1>
         <p className="text-slate-500 font-mono">{share.master.master_no}</p>
 
-        {/* ✅ Client component for share/copy actions */}
         <ShareActions lang={lang} publicPath={publicPath} />
       </div>
 
