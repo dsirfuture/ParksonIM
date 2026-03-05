@@ -1,18 +1,13 @@
 import { getLang } from "@/lib/i18n-server";
 import { t } from "@/lib/i18n";
 
-type Props = Readonly<{
-  params: { sharePublicId: string };
-}>;
-
-/**
- * Temporary public master page (no Prisma).
- * Reason: Prisma schema/client does not expose masterShareLink/masterReceipt yet.
- * We'll restore real page after migrations.
- */
-export default async function PublicMasterPage({ params }: Props) {
+export default async function PublicMasterPage({
+  params,
+}: {
+  params: Promise<{ sharePublicId: string }>;
+}) {
   const lang = await getLang();
-  const sharePublicId = params.sharePublicId;
+  const { sharePublicId } = await params;
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 py-10">
