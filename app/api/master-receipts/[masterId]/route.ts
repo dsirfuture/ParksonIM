@@ -1,25 +1,24 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { getSession } from '@/lib/tenant';
-import { errorResponse } from '@/lib/errors';
+import { NextResponse } from "next/server";
+import { getSession } from "@/lib/tenant";
+import { errorResponse } from "@/lib/errors";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ masterId: string }> }
-) {
-  const { masterId } = await params;
+/**
+ * Temporary no-op.
+ * Reason: Prisma schema/client does not expose MasterReceipt model yet.
+ * We'll enable real DB query after migrations.
+ */
+export async function GET(_req: Request, ctx: any) {
   const session = await getSession();
-  if (!session) return errorResponse('FORBIDDEN', 'Auth required', 403);
+  if (!session) return errorResponse("FORBIDDEN", "Auth required", 403);
 
-  const master = await prisma.masterReceipt.findUnique({
-    where: { id: masterId },
-    include: {
-      sources: { include: { receipt: true } },
-      shares: true
-    }
+  const masterId = (ctx?.params?.masterId as string | undefined)?.trim();
+  if (!masterId) return errorResponse("VALIDATION_FAILED", "masterId required", 400);
+
+  return NextResponse.json({
+    ok: true,
+    skipped: true,
+    reason: "MasterReceipt model not enabled in Prisma client yet",
+    masterId,
+    data: null,
   });
-
-  if (!master) return errorResponse('NOT_FOUND', 'Master receipt not found', 404);
-
-  return NextResponse.json(master);
 }
