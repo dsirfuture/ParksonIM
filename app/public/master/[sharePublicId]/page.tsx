@@ -2,13 +2,14 @@ import { prisma } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n-server";
 import { t } from "@/lib/i18n";
 import { notFound } from "next/navigation";
+import { ShareActions } from "./ShareActions";
 
 export default async function PublicMasterPage({
   params,
 }: {
   params: { sharePublicId: string };
 }) {
-  const lang = getLang(); // ✅ no await
+  const lang = getLang();
   const sharePublicId = params.sharePublicId;
 
   const share = await prisma.masterShareLink.findUnique({
@@ -26,9 +27,8 @@ export default async function PublicMasterPage({
     notFound();
   }
 
-  const publicUrl = `/public/master/${sharePublicId}`;
-  const downloadUrl = `/api/public/master/${sharePublicId}/download`;
-  const waUrl = `https://wa.me/?text=${encodeURIComponent(publicUrl)}`;
+  const publicPath = `/public/master/${sharePublicId}`;
+  const downloadPath = `/api/public/master/${sharePublicId}/download`;
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 py-8">
@@ -39,46 +39,8 @@ export default async function PublicMasterPage({
         </h1>
         <p className="text-slate-500 font-mono">{share.master.master_no}</p>
 
-        {/* Share actions (public, no token) */}
-        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-          {/* Copy link */}
-          <button
-            type="button"
-            className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 font-semibold hover:bg-slate-50"
-            onClick={async () => {
-              // 这里是 Client 行为：用一个小技巧，避免把整个页面变成 client component
-              // 通过 window.location.origin 拼成完整链接
-              const full = `${window.location.origin}${publicUrl}`;
-              await navigator.clipboard.writeText(full);
-              alert(t(lang, "public.master.copied"));
-            }}
-          >
-            {t(lang, "public.master.copyLink")}
-          </button>
-
-          {/* WhatsApp */}
-          <a
-            className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 font-semibold hover:bg-slate-50"
-            href={waUrl}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {t(lang, "public.master.shareWhatsapp")}
-          </a>
-
-          {/* WeChat: same as copy link */}
-          <button
-            type="button"
-            className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 font-semibold hover:bg-slate-50"
-            onClick={async () => {
-              const full = `${window.location.origin}${publicUrl}`;
-              await navigator.clipboard.writeText(full);
-              alert(t(lang, "public.master.wechatHint"));
-            }}
-          >
-            {t(lang, "public.master.shareWechat")}
-          </button>
-        </div>
+        {/* ✅ Client component for share/copy actions */}
+        <ShareActions lang={lang} publicPath={publicPath} />
       </div>
 
       {/* Table */}
@@ -114,14 +76,14 @@ export default async function PublicMasterPage({
       {/* Download */}
       <div className="flex justify-center">
         <a
-          href={downloadUrl}
+          href={downloadPath}
           className="bg-[#2f3c7e] text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:opacity-90 transition-opacity"
         >
           {t(lang, "public.master.downloadXlsx")}
         </a>
       </div>
 
-      {/* Note: public page must not show price/discount/amount */}
+      {/* Note */}
       <div className="text-center text-xs text-slate-400">
         {t(lang, "public.master.noPricingNote")}
       </div>
