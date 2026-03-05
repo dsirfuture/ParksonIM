@@ -1,0 +1,18 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Receipt {
+  id         String   @id @default(uuid())
+  tenant_id  String
+  company_id String
+  receipt_no String
+  created_at DateTime @default(now())
+
+  @@unique([tenant_id, company_id, receipt_no])
+}
