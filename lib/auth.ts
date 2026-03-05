@@ -1,14 +1,12 @@
-import { getSession } from './tenant';
+import { getSession } from "@/lib/tenant";
 
+/**
+ * Minimal admin check for now.
+ * Later we can connect to DB user roles.
+ */
 export async function isAdmin() {
   const session = await getSession();
   if (!session) return false;
-  
-  // Default admin bootstrapping
-  const adminEmail = "duyongquan@gmail.com";
-  
-  // In a real app, we would check the user's role in the DB or their email from the auth provider
-  return session.role === 'admin' || session.userId === 'admin-user-id';
+
+  return session.role === "admin";
 }
-// Backward-compatible export (some routes import logScan)
-export const logScan = writeScanLog;
