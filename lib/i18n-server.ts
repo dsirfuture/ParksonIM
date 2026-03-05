@@ -1,18 +1,12 @@
-// lib/i18n-server.ts
 import { cookies } from "next/headers";
-import type { Lang } from "@/lib/i18n";
+import type { Lang } from "./i18n";
 
-const LANG_COOKIE = "lang";
+export const LANG_COOKIE = "parksonmx_lang";
 
-export function getServerLang(): Lang {
-  const c = cookies().get(LANG_COOKIE)?.value;
-  if (c === "es" || c === "zh") return c;
+export async function getLang(): Promise<Lang> {
+  const ck = await cookies(); // ✅ cookies() is async in your Next typings
+  const v = ck.get(LANG_COOKIE)?.value;
+
+  if (v === "zh" || v === "es") return v;
   return "zh";
 }
-
-export function setLangCookieValue(lang: Lang) {
-  // Server Actions / Route Handlers can call this if needed.
-  // In most pages, you only need getServerLang().
-  cookies().set(LANG_COOKIE, lang, { path: "/" });
-}
-export { getServerLang as getLang };
