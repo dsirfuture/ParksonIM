@@ -1,31 +1,19 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { errorResponse } from '@/lib/errors';
+import { NextResponse } from "next/server";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ publicShareId: string }> }
-) {
-  const { publicShareId } = await params;
-  const receipt = await prisma.receipt.findUnique({
-    where: { public_share_id: publicShareId },
-    select: {
-      receipt_no: true,
-      supplier_name: true,
-      created_at: true,
-      public_evidence_enabled: true,
-      evidences: {
-        where: { type: 'photo' },
-        select: {
-          file_url: true,
-          created_at: true,
-        }
-      }
-    }
+/**
+ * Temporary no-op public evidence endpoint.
+ * Reason: Receipt model does not have `public_share_id` field yet.
+ * We'll implement proper public evidence via MasterShareLink / ReceiptPublicShare later.
+ */
+export async function GET(_req: Request, ctx: any) {
+  const publicShareId = (ctx?.params?.publicShareId as string | undefined)?.trim();
+
+  return NextResponse.json({
+    ok: true,
+    skipped: true,
+    reason: "Public evidence link mapping not enabled yet",
+    publicShareId: publicShareId || null,
+    receipt: null,
+    evidences: [],
   });
-
-  if (!receipt) return errorResponse('NOT_FOUND', 'Evidence not found', 404);
-  if (!receipt.public_evidence_enabled) return errorResponse('FORBIDDEN', 'Sharing disabled', 403);
-
-  return NextResponse.json(receipt);
 }
