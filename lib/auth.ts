@@ -10,3 +10,5 @@ export async function isAdmin() {
   // In a real app, we would check the user's role in the DB or their email from the auth provider
   return session.role === 'admin' || session.userId === 'admin-user-id';
 }
+// Backward-compatible export (some routes import logScan)
+export const logScan = writeScanLog;
