@@ -28,8 +28,11 @@ enum ShareTokenType {
   worker_receipt
   customer_receipt
   customer_item
-  public_evidence
-  public_master
+}
+
+enum SharePermission {
+  edit
+  read_only
 }
 
 enum UserRole {
@@ -38,283 +41,312 @@ enum UserRole {
   customer
 }
 
-model User {
-  id         String   @id @default(uuid())
-  tenant_id  String
-  company_id String
+enum ImportBatchStatus {
+  draft
+  validated
+  committed
+}
 
-  role       UserRole
-  name       String
-  active     Boolean  @default(true)
+enum ExportJobStatus {
+  pending
+  running
+  completed
+  failed
+}
 
-  created_at DateTime @default(now())
-
-  @@index([tenant_id, company_id])
-  @@index([role])
+enum MasterStatus {
+  draft
+  completed
 }
 
 model Receipt {
-  id               String        @id @default(uuid())
-  tenant_id        String
-  company_id       String
+  id               String        @id @default(uuid()) @db.Uuid
+  tenant_id         String
+  company_id        String
 
-  receipt_no       String
-  supplier_name    String?
+  receipt_no        String
+  supplier_name     String?
 
-  status           ReceiptStatus @default(pending)
-  total_items      Int           @default(0)
-  completed_items  Int           @default(0)
-  progress_percent Float         @default(0)
+  status            ReceiptStatus @default(pending)
+  total_items       Int           @default(0)
+  completed_items   Int           @default(0)
+  progress_percent  Float         @default(0)
 
-  locked           Boolean       @default(false)
-  version          Int           @default(0)
+  created_at        DateTime      @default(now())
+  created_by        String
+  last_activity_at  DateTime      @default(now())
 
-  created_at       DateTime      @default(now())
-  created_by       String?
-  last_activity_at DateTime      @default(now())
+  locked            Boolean       @default(false)
+  version           Int           @default(0)
 
-  // relations
-  items            ReceiptItem[]
-  evidences        Evidence[]
-  logs             ScanLog[]
-  shareTokens      ShareToken[]
-  masterSources    MasterReceiptSource[]
+  // 用于“公开证据页”（不需要 Header 密钥，但 URL 本身是不可猜的随机串）
+  public_share_id   String?       @unique
+
+  items             ReceiptItem[]
+  evidences         Evidence[]
+  logs              ScanLog[]
+  shareTokens       ShareToken[]
+
+  master_sources    MasterReceiptSource[]
 
   @@unique([tenant_id, company_id, receipt_no])
-  @@index([tenant_id, company_id])
-  @@index([receipt_no])
-  @@index([status])
+  @@index([tenant_id, company_id, status])
+  @@index([tenant_id, company_id, last_activity_at])
 }
 
 model ReceiptItem {
-  id              String     @id @default(uuid())
-  tenant_id       String
-  company_id      String
-
-  receipt_id      String
-  receipt         Receipt    @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
-
-  sku             String
-  barcode         String
-
-  name_zh         String
-  name_es         String
-
-  // 你要求的维度
-  case_pack       Int?       // 中包数
-  expected_qty    Int        // 商品总数量（应验）
-  good_qty        Int        @default(0)
-  damaged_qty     Int        @default(0)
-
-  sell_price      Decimal?   @db.Numeric(12, 2)
-  discount        Decimal?   @db.Numeric(12, 2)
-  line_total      Decimal?   @db.Numeric(14, 2)
-
-  // 扩展：非清单到货
-  unexpected      Boolean    @default(false)
-
-  status          ItemStatus @default(pending)
-  locked          Boolean    @default(false)
-  evidence_count  Int        @default(0)
-
-  last_updated_at DateTime   @default(now())
-  last_updated_by String?
-  version         Int        @default(0)
-
-  // relations
-  evidences        Evidence[]
-  logs             ScanLog[]
-
-  @@index([tenant_id, company_id])
-  @@index([receipt_id])
-  @@index([sku])
-  @@index([barcode])
-  @@unique([tenant_id, company_id, receipt_id, sku])
-}
-
-model Evidence {
-  id         String       @id @default(uuid())
-  tenant_id  String
-  company_id String
-
-  receipt_id String
-  receipt    Receipt      @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
-
-  item_id    String?
-  item       ReceiptItem? @relation(fields: [item_id], references: [id], onDelete: SetNull)
-
-  type       EvidenceType @default(photo)
-  file_url   String
-  file_size  Int
-  mime_type  String
-  checksum   String
-
-  created_at DateTime     @default(now())
-  created_by String?
-
-  @@index([tenant_id, company_id])
-  @@index([receipt_id])
-  @@index([item_id])
-}
-
-model ScanLog {
-  id          String       @id @default(uuid())
-  tenant_id   String
-  company_id  String
-
-  receipt_id  String
-  receipt     Receipt      @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
-
-  item_id     String?
-  item        ReceiptItem? @relation(fields: [item_id], references: [id], onDelete: SetNull)
-
-  action_type String
-  before_value Json?
-  after_value  Json?
-
-  operator_id String?
-  device_id   String?
-
-  created_at  DateTime     @default(now())
-
-  @@index([tenant_id, company_id])
-  @@index([receipt_id])
-  @@index([item_id])
-  @@index([created_at])
-}
-
-model ShareToken {
-  id          String        @id @default(uuid())
-  tenant_id   String
-  company_id  String
-
-  token       String        @unique
-  type        ShareTokenType
-  permission  String        @default("read_only")
-
-  receipt_id  String?
-  receipt     Receipt?      @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
-
-  item_id     String?
-  item        ReceiptItem?   @relation(fields: [item_id], references: [id], onDelete: SetNull)
-
-  expires_at  DateTime?
-  active      Boolean       @default(true)
-
-  created_at  DateTime      @default(now())
-  created_by  String?
-
-  @@index([tenant_id, company_id])
-  @@index([receipt_id])
-  @@index([item_id])
-}
-
-model MasterReceipt {
-  id         String   @id @default(uuid())
-  tenant_id  String
-  company_id String
-
-  master_no  String   @unique
-  status     String   @default("draft")
-
-  created_at DateTime @default(now())
-  created_by String?
-
-  // relations
-  sources    MasterReceiptSource[]
-  shareLinks MasterShareLink[]
-
-  @@index([tenant_id, company_id])
-}
-
-model MasterReceiptSource {
-  id         String  @id @default(uuid())
-  tenant_id  String
-  company_id String
-
-  master_id  String
-  master     MasterReceipt @relation(fields: [master_id], references: [id], onDelete: Cascade)
-
-  receipt_id String
-  receipt    Receipt       @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
-
-  @@unique([tenant_id, company_id, master_id, receipt_id])
-  @@index([tenant_id, company_id])
-  @@index([master_id])
-  @@index([receipt_id])
-}
-
-model MasterShareLink {
-  id              String   @id @default(uuid())
+  id              String     @id @default(uuid()) @db.Uuid
   tenant_id        String
   company_id       String
 
-  share_public_id  String   @unique
-  master_id        String
-  master           MasterReceipt @relation(fields: [master_id], references: [id], onDelete: Cascade)
+  receipt_id       String     @db.Uuid
+  receipt          Receipt    @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
 
-  active           Boolean  @default(true)
-  expires_at       DateTime?
+  sku              String
+  barcode          String
+  name_zh          String
+  name_es          String
 
-  created_at       DateTime @default(now())
-  created_by       String?
+  // 你的“中包数”
+  case_pack        Int?
+
+  expected_qty     Int
+  good_qty         Int        @default(0)
+  damaged_qty      Int        @default(0)
+
+  // 不在验货单里实际到货（unexpected=true），不定价
+  unexpected       Boolean    @default(false)
+
+  // 金额相关（注意：这里必须用 @db.Decimal，不要用 @db.Numeric）
+  sell_price       Decimal?   @db.Decimal(12, 2)
+  discount         Decimal?   @db.Decimal(12, 2)
+  line_total       Decimal?   @db.Decimal(14, 2)
+
+  status           ItemStatus @default(pending)
+  locked           Boolean    @default(false)
+
+  last_updated_at  DateTime   @default(now())
+  last_updated_by  String?
+
+  evidence_count   Int        @default(0)
+  version          Int        @default(0)
+
+  evidences        Evidence[]
+  logs             ScanLog[]
+  shareTokens      ShareToken[]
+
+  @@unique([tenant_id, company_id, receipt_id, sku])
+  @@index([tenant_id, company_id, receipt_id])
+  @@index([tenant_id, company_id, sku])
+  @@index([tenant_id, company_id, barcode])
+}
+
+model Evidence {
+  id         String       @id @default(uuid()) @db.Uuid
+  tenant_id   String
+  company_id  String
+
+  receipt_id  String       @db.Uuid
+  item_id     String?      @db.Uuid
+
+  type        EvidenceType
+  file_url    String
+  file_size   Int
+  mime_type   String
+  checksum    String
+
+  created_at  DateTime     @default(now())
+  created_by  String
+
+  // 你要求“证据可公开浏览”
+  is_public   Boolean      @default(true)
+
+  receipt     Receipt      @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
+  item        ReceiptItem? @relation(fields: [item_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, company_id, receipt_id])
+  @@index([tenant_id, company_id, item_id])
+}
+
+model ScanLog {
+  id          String      @id @default(uuid()) @db.Uuid
+  tenant_id    String
+  company_id   String
+
+  receipt_id   String      @db.Uuid
+  item_id      String?     @db.Uuid
+
+  action_type  String
+  before_value Json?
+  after_value  Json?
+
+  operator_id  String
+  device_id    String?
+  created_at   DateTime    @default(now())
+
+  receipt      Receipt     @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
+  item         ReceiptItem? @relation(fields: [item_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, company_id, receipt_id])
+  @@index([tenant_id, company_id, item_id])
+  @@index([tenant_id, company_id, created_at])
+}
+
+model ShareToken {
+  id          String          @id @default(uuid()) @db.Uuid
+  tenant_id    String
+  company_id   String
+
+  token       String          @unique
+  type        ShareTokenType
+  permission  SharePermission
+
+  receipt_id  String          @db.Uuid
+  item_id     String?         @db.Uuid
+
+  expires_at  DateTime?
+  active      Boolean         @default(true)
+
+  created_at  DateTime        @default(now())
+  created_by  String
+
+  receipt     Receipt         @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
+  item        ReceiptItem?    @relation(fields: [item_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, company_id, receipt_id])
+  @@index([tenant_id, company_id, token])
+}
+
+model User {
+  id          String   @id
+  tenant_id    String
+  company_id   String
+
+  role        UserRole
+  name        String
+  active      Boolean  @default(true)
+  created_at  DateTime @default(now())
 
   @@index([tenant_id, company_id])
-  @@index([master_id])
 }
 
 model IdempotencyRecord {
-  id         String   @id @default(uuid())
-  tenant_id  String
-  company_id String
+  id            String   @id @default(uuid()) @db.Uuid
+  tenant_id      String
+  company_id     String
 
-  key        String
-  request_hash String
-  status     String   @default("processing")
-  response_json Json?
+  key           String
+  request_hash  String
+  response_body Json
+  response_status Int
 
-  created_at DateTime @default(now())
+  created_at    DateTime @default(now())
 
   @@unique([tenant_id, company_id, key])
-  @@index([tenant_id, company_id])
   @@index([created_at])
 }
 
 model ImportBatch {
-  id         String   @id @default(uuid())
-  tenant_id  String
-  company_id String
+  id               String            @id @default(uuid()) @db.Uuid
+  tenant_id         String
+  company_id        String
 
-  receipt_id String?
-  status     String   @default("draft") // draft/validated/committed/failed
+  receipt_id        String            @db.Uuid
+  receipt           Receipt           @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
 
-  filename   String?
-  file_hash  String?
+  status            ImportBatchStatus @default(draft)
+  original_filename String?
+  created_at        DateTime          @default(now())
+  created_by        String
+  committed_at      DateTime?
 
-  created_at DateTime @default(now())
-  created_by String?
+  errors            ImportException[]
 
-  exceptions ImportException[]
-
-  @@index([tenant_id, company_id])
-  @@index([receipt_id])
-  @@index([status])
+  @@index([tenant_id, company_id, receipt_id])
 }
 
 model ImportException {
-  id         String   @id @default(uuid())
-  tenant_id  String
-  company_id String
+  id          String   @id @default(uuid()) @db.Uuid
+  tenant_id    String
+  company_id   String
 
-  batch_id   String
-  batch      ImportBatch @relation(fields: [batch_id], references: [id], onDelete: Cascade)
+  batch_id    String   @db.Uuid
+  batch       ImportBatch @relation(fields: [batch_id], references: [id], onDelete: Cascade)
 
-  row_no     Int
-  field      String
-  message    String
+  row_number  Int
+  field       String
+  message     String
+  created_at  DateTime @default(now())
 
-  created_at DateTime @default(now())
+  @@index([tenant_id, company_id, batch_id])
+}
 
-  @@index([tenant_id, company_id])
-  @@index([batch_id])
+model ExportJob {
+  id          String         @id @default(uuid()) @db.Uuid
+  tenant_id    String
+  company_id   String
+
+  type        String
+  status      ExportJobStatus @default(pending)
+
+  file_url    String?
+  created_at  DateTime        @default(now())
+  created_by  String
+}
+
+model MasterReceipt {
+  id           String       @id @default(uuid()) @db.Uuid
+  tenant_id     String
+  company_id    String
+
+  master_no    String
+  status       MasterStatus @default(draft)
+
+  created_at   DateTime     @default(now())
+  created_by   String
+
+  // 公开总账单链接用（无需 Header 密钥）
+  public_share_id String?   @unique
+
+  sources      MasterReceiptSource[]
+  shareLinks   MasterShareLink[]
+
+  @@unique([tenant_id, company_id, master_no])
+  @@index([tenant_id, company_id, created_at])
+}
+
+model MasterReceiptSource {
+  id          String       @id @default(uuid()) @db.Uuid
+  tenant_id    String
+  company_id   String
+
+  master_id   String       @db.Uuid
+  receipt_id  String       @db.Uuid
+
+  created_at  DateTime     @default(now())
+
+  master      MasterReceipt @relation(fields: [master_id], references: [id], onDelete: Cascade)
+  receipt     Receipt       @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, company_id, master_id, receipt_id])
+  @@index([tenant_id, company_id, master_id])
+  @@index([tenant_id, company_id, receipt_id])
+}
+
+model MasterShareLink {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenant_id      String
+  company_id     String
+
+  share_public_id String @unique
+
+  master_id      String  @db.Uuid
+  master         MasterReceipt @relation(fields: [master_id], references: [id], onDelete: Cascade)
+
+  active        Boolean  @default(true)
+  expires_at    DateTime?
+  created_at    DateTime @default(now())
+  created_by    String
+
+  @@index([tenant_id, company_id, master_id])
 }
