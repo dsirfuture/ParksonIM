@@ -1,12 +1,11 @@
 import { cookies } from "next/headers";
 import type { Lang } from "./i18n";
 
-export const LANG_COOKIE = "parksonmx_lang";
+export const LANG_COOKIE = "lang";
 
 export async function getLang(): Promise<Lang> {
-  const ck = await cookies(); // ✅ cookies() is async in your Next typings
-  const v = ck.get(LANG_COOKIE)?.value;
-
-  if (v === "zh" || v === "es") return v;
+  const store = await cookies(); // ✅ Next 15: cookies() returns Promise
+  const c = store.get(LANG_COOKIE)?.value;
+  if (c === "zh" || c === "es") return c;
   return "zh";
 }
