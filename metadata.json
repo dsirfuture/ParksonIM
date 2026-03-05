@@ -1,0 +1,5 @@
+{
+  "name": "ParksonMX Web Inspection Platform",
+  "description": "Enterprise-grade warehouse inspection and receipt management system for BS DU S.A. DE C.V.",
+  "requestFramePermissions": ["camera"]
+}
