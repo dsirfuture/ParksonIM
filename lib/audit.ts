@@ -1,6 +1,9 @@
-// lib/audit.ts
 import { prisma } from "@/lib/prisma";
 
+/**
+ * Write ScanLog (audit trail)
+ * Keep payload JSON for before/after snapshots.
+ */
 export async function writeScanLog(params: {
   tenant_id: string;
   company_id: string;
@@ -26,3 +29,9 @@ export async function writeScanLog(params: {
     },
   });
 }
+
+/**
+ * ✅ Backward-compatible export:
+ * some routes import { logScan } from "@/lib/audit"
+ */
+export const logScan = writeScanLog;
