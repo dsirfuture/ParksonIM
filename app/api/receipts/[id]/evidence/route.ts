@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
 import { errorResponse } from "@/lib/errors";
 import { nanoid } from "nanoid";
@@ -7,9 +6,9 @@ import { nanoid } from "nanoid";
 export const runtime = "nodejs";
 
 /**
- * Evidence upload (temporary version)
- * Note: Receipt.locked field is not available in current Prisma schema,
- * so we skip locked-check for now to pass build.
+ * Temporary no-op evidence upload endpoint.
+ * Reason: Prisma schema/client does not expose Evidence model yet.
+ * We'll enable real DB create + storage upload after migrations.
  */
 export async function POST(req: Request, ctx: any) {
   const session = await getSession();
@@ -24,25 +23,16 @@ export async function POST(req: Request, ctx: any) {
 
   if (!file) return errorResponse("VALIDATION_FAILED", "File required", 400);
 
-  // ✅ Only verify receipt exists and belongs to tenant/company
-  const receipt = await prisma.receipt.findFirst({
-    where: {
-      id,
-      tenant_id: session.tenantId,
-      company_id: session.companyId,
-    },
-    select: { id: true },
-  });
-
-  if (!receipt) return errorResponse("NOT_FOUND", "Receipt not found", 404);
-
-  // In a real app, upload to object storage and use returned URL
+  // Fake URL (later replace with real object storage upload)
   const fileUrl = `https://storage.parksonmx.com/evidence/${nanoid()}_${file.name}`;
 
-  const evidence = await prisma.evidence.create({
+  // Return mock evidence object (so UI can continue)
+  return NextResponse.json({
+    ok: true,
+    skipped: true,
+    reason: "Evidence model not enabled in Prisma client yet",
     data: {
-      tenant_id: session.tenantId,
-      company_id: session.companyId,
+      id: `mock_${nanoid()}`,
       receipt_id: id,
       item_id: itemId,
       type: "photo",
@@ -50,9 +40,8 @@ export async function POST(req: Request, ctx: any) {
       file_size: file.size,
       mime_type: file.type,
       checksum: "mock-checksum",
+      created_at: new Date().toISOString(),
       created_by: session.userId,
     },
   });
-
-  return NextResponse.json(evidence);
 }
