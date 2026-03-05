@@ -46,6 +46,11 @@ export const dict: Record<Lang, Record<string, string>> = {
     "common.ok": "确定",
     "common.share": "分享",
 
+    // ✅ Status aliases (for code like t(lang, `status.${receipt.status}`))
+    "status.pending": "待开始",
+    "status.in_progress": "进行中",
+    "status.completed": "已完成",
+
     // Language
     "lang.switch": "语言",
     "lang.zh": "中文",
@@ -98,7 +103,8 @@ export const dict: Record<Lang, Record<string, string>> = {
     "dashboard.table.progress": "进度",
     "dashboard.table.updatedAt": "更新时间",
     "dashboard.noteTitle": "提示",
-    "dashboard.noteDesc": "当前版本先保证系统可部署运行；统计汇总会在补齐数据库迁移后启用真实数据。",
+    "dashboard.noteDesc":
+      "当前版本先保证系统可部署运行；统计汇总会在补齐数据库迁移后启用真实数据。",
 
     // =========================
     // Receipts List
@@ -117,7 +123,7 @@ export const dict: Record<Lang, Record<string, string>> = {
     "receipts.table.open": "打开",
     "receipts.empty": "暂无验货单",
 
-    // Receipt Status
+    // Receipt Status (备用：如果你页面用 receipt.status.*)
     "receipt.status.pending": "待开始",
     "receipt.status.in_progress": "进行中",
     "receipt.status.completed": "已完成",
@@ -212,7 +218,8 @@ export const dict: Record<Lang, Record<string, string>> = {
     "public.evidence.receiptNo": "验货单号",
     "public.evidence.supplier": "供应商",
     "public.evidence.photos": "证据照片",
-    "public.evidence.noPricingNote": "公开页面仅展示证据，不展示价格/折扣/金额等商业信息。",
+    "public.evidence.noPricingNote":
+      "公开页面仅展示证据，不展示价格/折扣/金额等商业信息。",
 
     // =========================
     // Import Wizard (Validate -> Commit)
@@ -235,7 +242,8 @@ export const dict: Record<Lang, Record<string, string>> = {
     "import.errors.field": "字段",
     "import.errors.message": "原因",
     "import.preview.title": "预览",
-    "import.requiredColumns": "必需字段：SKU、条码、中文名、西文名、中包数、商品总数量、商品卖价、折扣、金额合计",
+    "import.requiredColumns":
+      "必需字段：SKU、条码、中文名、西文名、中包数、商品总数量、商品卖价、折扣、金额合计",
 
     // =========================
     // Export / Billing (Merge Master)
@@ -243,7 +251,8 @@ export const dict: Record<Lang, Record<string, string>> = {
     "billing.title": "对账与账单",
     "billing.subtitle": "合并多个验货单生成总账单，并支持分享与下载。",
     "billing.notReadyTitle": "功能准备中",
-    "billing.notReadyDesc": "当前版本先保证系统可部署运行；总账单（MasterReceipt）与分享下载将在补齐数据库迁移后启用。",
+    "billing.notReadyDesc":
+      "当前版本先保证系统可部署运行；总账单（MasterReceipt）与分享下载将在补齐数据库迁移后启用。",
     "billing.receipts.select": "选择要合并的验货单（已完成）",
     "billing.master.create": "生成总账单",
     "billing.master.no": "总账单号",
@@ -279,7 +288,8 @@ export const dict: Record<Lang, Record<string, string>> = {
     "public.master.shareWechat": "微信分享",
     "public.master.wechatHint": "链接已复制，请粘贴到微信发送",
     "public.master.notReadyTitle": "公开总账单准备中",
-    "public.master.notReadyDesc": "当前版本先保证系统可部署运行；总账单分享与下载会在补齐数据库迁移后启用。",
+    "public.master.notReadyDesc":
+      "当前版本先保证系统可部署运行；总账单分享与下载会在补齐数据库迁移后启用。",
 
     // =========================
     // Settings
@@ -352,13 +362,19 @@ export const dict: Record<Lang, Record<string, string>> = {
     "common.ok": "OK",
     "common.share": "Compartir",
 
+    // ✅ Status aliases (for code like t(lang, `status.${receipt.status}`))
+    "status.pending": "Pendiente",
+    "status.in_progress": "En proceso",
+    "status.completed": "Completada",
+
     // Language
     "lang.switch": "Idioma",
     "lang.zh": "Chino",
     "lang.es": "Español",
 
     // Footer / Legal
-    "footer.copyright": "© {year} BS DU S.A. DE C.V. Todos los derechos reservados",
+    "footer.copyright":
+      "© {year} BS DU S.A. DE C.V. Todos los derechos reservados",
     "footer.product": "ParksonMX Plataforma {version}",
 
     // =========================
@@ -404,7 +420,8 @@ export const dict: Record<Lang, Record<string, string>> = {
     "dashboard.table.progress": "Progreso",
     "dashboard.table.updatedAt": "Actualizado",
     "dashboard.noteTitle": "Nota",
-    "dashboard.noteDesc": "Primero aseguramos el despliegue; las métricas reales se activarán tras completar migraciones.",
+    "dashboard.noteDesc":
+      "Primero aseguramos el despliegue; las métricas reales se activarán tras completar migraciones.",
 
     // =========================
     // Receipts List
@@ -423,7 +440,7 @@ export const dict: Record<Lang, Record<string, string>> = {
     "receipts.table.open": "Abrir",
     "receipts.empty": "No hay recepciones",
 
-    // Receipt Status
+    // Receipt Status (备用)
     "receipt.status.pending": "Pendiente",
     "receipt.status.in_progress": "En proceso",
     "receipt.status.completed": "Completada",
@@ -459,10 +476,12 @@ export const dict: Record<Lang, Record<string, string>> = {
     "scan.success": "Actualizado",
     "scan.error": "Error. Intenta de nuevo.",
     "scan.locked": "La recepción está bloqueada. No se puede modificar.",
-    "scan.versionConflict": "Conflicto: se actualizó por otro usuario. Refresca e intenta de nuevo.",
+    "scan.versionConflict":
+      "Conflicto: se actualizó por otro usuario. Refresca e intenta de nuevo.",
     "scan.section.expected": "Artículos de lista",
     "scan.section.unexpected": "Artículos fuera de lista",
-    "scan.unexpected.note": "Los artículos fuera de lista no tienen precio; solo SKU/código/cantidad",
+    "scan.unexpected.note":
+      "Los artículos fuera de lista no tienen precio; solo SKU/código/cantidad",
 
     // ReceiptItem fields / columns
     "item.col.image": "Imagen",
@@ -501,9 +520,11 @@ export const dict: Record<Lang, Record<string, string>> = {
     // Evidence
     // =========================
     "evidence.title": "Evidencia",
-    "evidence.subtitle": "Cada recepción requiere 1–50 fotos. Se guardan permanentemente.",
+    "evidence.subtitle":
+      "Cada recepción requiere 1–50 fotos. Se guardan permanentemente.",
     "evidence.upload": "Subir fotos",
-    "evidence.upload.hint": "Se recomienda fotos claras de cajas/pallets/daños/documentos",
+    "evidence.upload.hint":
+      "Se recomienda fotos claras de cajas/pallets/daños/documentos",
     "evidence.count": "Subidas: {count}",
     "evidence.limit": "Máximo 50",
     "evidence.required": "Se requiere al menos 1 foto para completar",
@@ -549,7 +570,8 @@ export const dict: Record<Lang, Record<string, string>> = {
     // Export / Billing (Merge Master)
     // =========================
     "billing.title": "Facturación y Cuenta",
-    "billing.subtitle": "Combina varias recepciones para generar una factura maestra y compartir/descargar.",
+    "billing.subtitle":
+      "Combina varias recepciones para generar una factura maestra y compartir/descargar.",
     "billing.notReadyTitle": "Función en preparación",
     "billing.notReadyDesc":
       "En esta versión primero aseguramos el despliegue; la factura maestra (MasterReceipt) se activará después de completar las migraciones.",
@@ -581,14 +603,16 @@ export const dict: Record<Lang, Record<string, string>> = {
     "public.master.th.supplier": "Proveedor",
     "public.master.th.status": "Estado",
     "public.master.downloadXlsx": "Descargar Liquidación Completa (XLSX)",
-    "public.master.noPricingNote": "La página pública no muestra registros internos ni info sensible.",
+    "public.master.noPricingNote":
+      "La página pública no muestra registros internos ni info sensible.",
     "public.master.copyLink": "Copiar enlace",
     "public.master.copied": "Enlace copiado",
     "public.master.copyFailed":
       "No se pudo copiar. Copia el enlace desde la barra de direcciones.",
     "public.master.shareWhatsapp": "Compartir por WhatsApp",
     "public.master.shareWechat": "Compartir en WeChat",
-    "public.master.wechatHint": "Enlace copiado. Pégalo en WeChat para enviarlo.",
+    "public.master.wechatHint":
+      "Enlace copiado. Pégalo en WeChat para enviarlo.",
     "public.master.notReadyTitle": "Factura pública en preparación",
     "public.master.notReadyDesc":
       "Primero aseguramos el despliegue; el enlace público y la descarga se activarán tras completar migraciones.",
@@ -610,8 +634,10 @@ export const dict: Record<Lang, Record<string, string>> = {
     // =========================
     // Errors (API / UI)
     // =========================
-    "error.IDEMPOTENCY_KEY_REQUIRED": "Falta Idempotency-Key. Intenta de nuevo.",
-    "error.VERSION_CONFLICT": "Conflicto: actualizado por otro usuario. Refresca e intenta de nuevo.",
+    "error.IDEMPOTENCY_KEY_REQUIRED":
+      "Falta Idempotency-Key. Intenta de nuevo.",
+    "error.VERSION_CONFLICT":
+      "Conflicto: actualizado por otro usuario. Refresca e intenta de nuevo.",
     "error.LOCKED": "Bloqueado: no se puede modificar.",
     "error.FORBIDDEN": "Sin permiso.",
     "error.NOT_FOUND": "No encontrado.",
@@ -620,8 +646,20 @@ export const dict: Record<Lang, Record<string, string>> = {
   },
 };
 
-export function t(lang: Lang, key: string): string {
-  const v = dict[lang]?.[key];
+export function t(
+  lang: Lang,
+  key: string,
+  vars?: Record<string, string | number>
+): string {
+  const template = dict[lang]?.[key];
   // ✅ No cross-language fallback to avoid mixed-language pages.
-  return v ?? `[MISSING:${key}]`;
+  const raw = template ?? `[MISSING:${key}]`;
+
+  if (!vars) return raw;
+
+  // Simple {var} interpolation
+  return raw.replace(/\{(\w+)\}/g, (_m, k: string) => {
+    const v = vars[k];
+    return v === undefined ? `{${k}}` : String(v);
+  });
 }
