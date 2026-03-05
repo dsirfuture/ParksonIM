@@ -45,21 +45,6 @@ export const dict: Record<Lang, Record<string, string>> = {
     "common.total": "合计",
     "common.ok": "确定",
     "common.share": "分享",
-    "receipt.detail.progress": "进度",
-    "billing.title": "对账与账单",
-    "billing.subtitle": "合并多个验货单生成总账单，并支持分享与下载。",
-    "billing.notReadyTitle": "功能准备中",
-    "billing.notReadyDesc": "当前版本先保证系统可部署运行；总账单（MasterReceipt）与分享下载将在补齐数据库迁移后启用。",
-    "dashboard.title": "验货单管理中心",
-    "dashboard.subtitle": "实时监控验货单进度与状态（当前为占位数据）。",
-    "dashboard.cards.totalReceipts": "总验货单",
-    "dashboard.cards.pending": "待处理",
-    "dashboard.cards.inProgress": "验货中",
-    "dashboard.cards.completed": "已完成",
-    "dashboard.noteTitle": "提示",
-    "dashboard.noteDesc": "当前版本先保证系统可部署运行；统计汇总会在补齐数据库迁移后启用真实数据。",
-    "public.master.notReadyTitle": "公开总账单准备中",
-    "public.master.notReadyDesc": "当前版本先保证系统可部署运行；总账单分享与下载会在补齐数据库迁移后启用。",
 
     // Language
     "lang.switch": "语言",
@@ -100,16 +85,20 @@ export const dict: Record<Lang, Record<string, string>> = {
     // =========================
     // Dashboard
     // =========================
+    "dashboard.title": "验货单管理中心",
+    "dashboard.subtitle": "实时监控验货单进度与状态（当前为占位数据）。",
     "dashboard.cards.totalReceipts": "验货单总数",
+    "dashboard.cards.pending": "待开始",
     "dashboard.cards.inProgress": "进行中",
     "dashboard.cards.completed": "已完成",
-    "dashboard.cards.pending": "待开始",
     "dashboard.cards.lastActivity": "最近更新",
     "dashboard.table.title": "最新验货单",
     "dashboard.table.receiptNo": "单号",
     "dashboard.table.supplier": "供应商",
     "dashboard.table.progress": "进度",
     "dashboard.table.updatedAt": "更新时间",
+    "dashboard.noteTitle": "提示",
+    "dashboard.noteDesc": "当前版本先保证系统可部署运行；统计汇总会在补齐数据库迁移后启用真实数据。",
 
     // =========================
     // Receipts List
@@ -251,7 +240,10 @@ export const dict: Record<Lang, Record<string, string>> = {
     // =========================
     // Export / Billing (Merge Master)
     // =========================
-    "billing.title": "导出与对账",
+    "billing.title": "对账与账单",
+    "billing.subtitle": "合并多个验货单生成总账单，并支持分享与下载。",
+    "billing.notReadyTitle": "功能准备中",
+    "billing.notReadyDesc": "当前版本先保证系统可部署运行；总账单（MasterReceipt）与分享下载将在补齐数据库迁移后启用。",
     "billing.receipts.select": "选择要合并的验货单（已完成）",
     "billing.master.create": "生成总账单",
     "billing.master.no": "总账单号",
@@ -286,6 +278,8 @@ export const dict: Record<Lang, Record<string, string>> = {
     "public.master.shareWhatsapp": "WhatsApp 分享",
     "public.master.shareWechat": "微信分享",
     "public.master.wechatHint": "链接已复制，请粘贴到微信发送",
+    "public.master.notReadyTitle": "公开总账单准备中",
+    "public.master.notReadyDesc": "当前版本先保证系统可部署运行；总账单分享与下载会在补齐数据库迁移后启用。",
 
     // =========================
     // Settings
@@ -357,22 +351,7 @@ export const dict: Record<Lang, Record<string, string>> = {
     "common.total": "Total",
     "common.ok": "OK",
     "common.share": "Compartir",
-    "receipt.detail.progress": "Progreso",
-    "billing.title": "Facturación y Cuenta",
-    "billing.subtitle": "Combina varias recepciones para generar una factura maestra y compartir/descargar.",
-    "billing.notReadyTitle": "Función en preparación",
-    "billing.notReadyDesc": "En esta versión primero aseguramos el despliegue; la factura maestra (MasterReceipt) se activará después de completar las migraciones.",
-    "dashboard.title": "Centro de Gestión",
-    "dashboard.subtitle": "Monitorea el progreso (datos temporales).",
-    "dashboard.cards.totalReceipts": "Total de recepciones",
-    "dashboard.cards.pending": "Pendientes",
-    "dashboard.cards.inProgress": "En progreso",
-    "dashboard.cards.completed": "Completadas",
-    "dashboard.noteTitle": "Nota",
-    "dashboard.noteDesc": "Primero aseguramos el despliegue; las métricas reales se activarán tras completar migraciones.",
-    "public.master.notReadyTitle": "Factura pública en preparación",
-    "public.master.notReadyDesc": "Primero aseguramos el despliegue; el enlace público y la descarga se activarán tras completar migraciones.",
-    
+
     // Language
     "lang.switch": "Idioma",
     "lang.zh": "Chino",
@@ -413,16 +392,19 @@ export const dict: Record<Lang, Record<string, string>> = {
     // Dashboard
     // =========================
     "dashboard.title": "Panel",
+    "dashboard.subtitle": "Monitorea el progreso (datos temporales).",
     "dashboard.cards.totalReceipts": "Total de recepciones",
+    "dashboard.cards.pending": "Pendientes",
     "dashboard.cards.inProgress": "En proceso",
     "dashboard.cards.completed": "Completadas",
-    "dashboard.cards.pending": "Pendientes",
     "dashboard.cards.lastActivity": "Última actividad",
     "dashboard.table.title": "Recepciones recientes",
     "dashboard.table.receiptNo": "N°",
     "dashboard.table.supplier": "Proveedor",
     "dashboard.table.progress": "Progreso",
     "dashboard.table.updatedAt": "Actualizado",
+    "dashboard.noteTitle": "Nota",
+    "dashboard.noteDesc": "Primero aseguramos el despliegue; las métricas reales se activarán tras completar migraciones.",
 
     // =========================
     // Receipts List
@@ -566,7 +548,11 @@ export const dict: Record<Lang, Record<string, string>> = {
     // =========================
     // Export / Billing (Merge Master)
     // =========================
-    "billing.title": "Facturación",
+    "billing.title": "Facturación y Cuenta",
+    "billing.subtitle": "Combina varias recepciones para generar una factura maestra y compartir/descargar.",
+    "billing.notReadyTitle": "Función en preparación",
+    "billing.notReadyDesc":
+      "En esta versión primero aseguramos el despliegue; la factura maestra (MasterReceipt) se activará después de completar las migraciones.",
     "billing.receipts.select": "Selecciona recepciones completadas para combinar",
     "billing.master.create": "Generar liquidación total",
     "billing.master.no": "N° de liquidación",
@@ -603,6 +589,9 @@ export const dict: Record<Lang, Record<string, string>> = {
     "public.master.shareWhatsapp": "Compartir por WhatsApp",
     "public.master.shareWechat": "Compartir en WeChat",
     "public.master.wechatHint": "Enlace copiado. Pégalo en WeChat para enviarlo.",
+    "public.master.notReadyTitle": "Factura pública en preparación",
+    "public.master.notReadyDesc":
+      "Primero aseguramos el despliegue; el enlace público y la descarga se activarán tras completar migraciones.",
 
     // =========================
     // Settings
