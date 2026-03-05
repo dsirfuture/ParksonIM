@@ -46,6 +46,10 @@ export const dict: Record<Lang, Record<string, string>> = {
     "common.ok": "确定",
     "common.share": "分享",
     "receipt.detail.progress": "进度",
+    "billing.title": "对账与账单",
+    "billing.subtitle": "合并多个验货单生成总账单，并支持分享与下载。",
+    "billing.notReadyTitle": "功能准备中",
+    "billing.notReadyDesc": "当前版本先保证系统可部署运行；总账单（MasterReceipt）与分享下载将在补齐数据库迁移后启用。",
 
     // Language
     "lang.switch": "语言",
@@ -345,6 +349,10 @@ export const dict: Record<Lang, Record<string, string>> = {
     "common.ok": "OK",
     "common.share": "Compartir",
     "receipt.detail.progress": "Progreso",
+    "billing.title": "Facturación y Cuenta",
+    "billing.subtitle": "Combina varias recepciones para generar una factura maestra y compartir/descargar.",
+    "billing.notReadyTitle": "Función en preparación",
+    "billing.notReadyDesc": "En esta versión primero aseguramos el despliegue; la factura maestra (MasterReceipt) se activará después de completar las migraciones.",
     
     // Language
     "lang.switch": "Idioma",
