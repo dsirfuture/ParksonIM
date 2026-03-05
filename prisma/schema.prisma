@@ -7,49 +7,42 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum UserRole {
-  admin
-  worker
-}
-
-enum ReceiptStatus {
-  pending
-  in_progress
-  completed
-}
-
-enum ItemStatus {
-  pending
-  in_progress
-  completed
-}
-
-enum EvidenceType {
-  photo
-}
-
 model Tenant {
-  id         String    @id @default(uuid()) @db.Uuid
-  name       String
-  created_at DateTime  @default(now())
+  id                 String              @id @default(uuid()) @db.Uuid
+  name               String              @default("Default Tenant")
+  created_at         DateTime            @default(now())
 
-  companies  Company[]
-  users      User[]
-  receipts   Receipt[]
-  masters    MasterReceipt[]
+  companies          Company[]
+  users              User[]
+  receipts           Receipt[]
+  masterReceipts     MasterReceipt[]
+  masterShareLinks   MasterShareLink[]
+  shareTokens        ShareToken[]
+  scanLogs           ScanLog[]
+  evidences          Evidence[]
+  importBatches      ImportBatch[]
+  idempotencyRecords IdempotencyRecord[]
 }
 
 model Company {
-  id          String   @id @default(uuid()) @db.Uuid
-  tenant_id   String   @db.Uuid
-  name        String
-  created_at  DateTime @default(now())
+  id                 String              @id @default(uuid()) @db.Uuid
+  tenant_id          String              @db.Uuid
+  name               String              @default("Default Company")
+  created_at         DateTime            @default(now())
 
-  tenant      Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  tenant             Tenant              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
-  users       User[]
-  receipts    Receipt[]        // ✅ 反向字段在 Receipt.company
-  masterReceipts MasterReceipt[] // ✅ 反向字段在 MasterReceipt.company
+  users              User[]
+  receipts           Receipt[]
+  masterReceipts     MasterReceipt[]
+  masterShareLinks   MasterShareLink[]
+  shareTokens        ShareToken[]
+  scanLogs           ScanLog[]
+  evidences          Evidence[]
+  importBatches      ImportBatch[]
+  idempotencyRecords IdempotencyRecord[]
+
+  @@index([tenant_id])
 }
 
 model User {
@@ -57,9 +50,9 @@ model User {
   tenant_id  String   @db.Uuid
   company_id String   @db.Uuid
 
-  user_id    String
+  user_id    String   @unique
   name       String
-  role       UserRole @default(worker)
+  role       String   @default("worker") // admin | worker
   active     Boolean  @default(true)
 
   created_at DateTime @default(now())
@@ -67,139 +60,163 @@ model User {
   tenant     Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   company    Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
-  @@unique([tenant_id, company_id, user_id])
+  @@index([tenant_id, company_id])
 }
 
 model Receipt {
-  id               String        @id @default(uuid()) @db.Uuid
-  tenant_id        String        @db.Uuid
-  company_id       String        @db.Uuid
+  id               String   @id @default(uuid()) @db.Uuid
+  tenant_id        String   @db.Uuid
+  company_id       String   @db.Uuid
 
   receipt_no       String
   supplier_name    String?
-  status           ReceiptStatus @default(pending)
-  locked           Boolean       @default(false)
+  status           String   @default("pending") // pending | in_progress | completed
+  locked           Boolean  @default(false)
 
-  public_share_id  String?       @unique
+  total_items      Int      @default(0)
+  completed_items  Int      @default(0)
+  progress_percent Float    @default(0)
 
-  total_items      Int           @default(0)
-  completed_items  Int           @default(0)
-  progress_percent Float         @default(0)
+  // 给“公开证据页”用（你代码里用过 public_share_id）
+  public_share_id  String?  @unique
 
-  last_activity_at DateTime      @default(now())
-  created_by       String?
-  created_at       DateTime      @default(now())
-  updated_at       DateTime      @updatedAt
+  last_activity_at DateTime @default(now())
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
 
-  tenant           Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  company          Company       @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  tenant           Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company          Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   items            ReceiptItem[]
   evidences        Evidence[]
   logs             ScanLog[]
-  masterSources    MasterReceiptSource[]
   importBatches    ImportBatch[]
+  shareTokens      ShareToken[]
+  masterSources    MasterReceiptSource[]
 
-  @@unique([tenant_id, company_id, receipt_no])
   @@index([tenant_id, company_id])
+  @@index([receipt_no])
 }
 
 model ReceiptItem {
-  id          String     @id @default(uuid()) @db.Uuid
-  tenant_id   String     @db.Uuid
-  company_id  String     @db.Uuid
-  receipt_id  String     @db.Uuid
+  id           String   @id @default(uuid()) @db.Uuid
+  tenant_id    String   @db.Uuid
+  company_id   String   @db.Uuid
+  receipt_id   String   @db.Uuid
 
-  sku         String
-  barcode     String?
-  name_zh     String?
-  name_es     String?
+  sku          String
+  barcode      String?
+  name_zh      String?
+  name_es      String?
 
-  case_pack   Int?
+  case_pack    Int?
   expected_qty Int      @default(0)
   good_qty     Int      @default(0)
   damaged_qty  Int      @default(0)
+  over_qty     Int      @default(0)
 
-  // ✅ Postgres 用 Decimal + @db.Decimal，不要用 @db.Numeric
-  sell_price  Decimal?  @db.Decimal(12, 2)
-  discount    Decimal?  @db.Decimal(12, 2)
-  line_total  Decimal?  @db.Decimal(14, 2)
+  status       String   @default("pending") // pending | in_progress | completed
+  unexpected   Boolean  @default(false)
 
-  status      ItemStatus @default(pending)
-  unexpected  Boolean    @default(false)
+  // ✅ 关键：别用 @db.Numeric，Postgres 这里用 @db.Decimal
+  sell_price   Decimal? @db.Decimal(12, 2)
+  discount     Decimal? @db.Decimal(12, 2)
+  line_total   Decimal? @db.Decimal(14, 2)
 
-  created_at  DateTime   @default(now())
-  updated_at  DateTime   @updatedAt
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
 
-  receipt     Receipt    @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
+  tenant       Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company      Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  receipt      Receipt  @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
 
-  evidences   Evidence[]
-  scanLogs    ScanLog[]
-  shareTokens ShareToken[]
+  evidences    Evidence[]
+  logs         ScanLog[]
+  shareTokens  ShareToken[]
 
-  @@unique([receipt_id, sku])
   @@index([receipt_id])
+  @@index([sku])
   @@index([barcode])
 }
 
 model Evidence {
-  id         String       @id @default(uuid()) @db.Uuid
-  tenant_id  String       @db.Uuid
-  company_id String       @db.Uuid
-  receipt_id String       @db.Uuid
-  item_id    String?      @db.Uuid
-
-  type       EvidenceType @default(photo)
-  file_url   String
-  file_size  Int?
-  mime_type  String?
-  checksum   String?
-  created_by String?
-  created_at DateTime     @default(now())
-
-  receipt    Receipt      @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
-  item       ReceiptItem? @relation(fields: [item_id], references: [id], onDelete: SetNull)
-
-  @@index([receipt_id])
-  @@index([item_id])
-}
-
-model ScanLog {
   id         String   @id @default(uuid()) @db.Uuid
   tenant_id  String   @db.Uuid
   company_id String   @db.Uuid
   receipt_id String   @db.Uuid
   item_id    String?  @db.Uuid
 
-  action     String
-  barcode    String?
-  sku        String?
-  message    String?
-  device_id  String?
+  type       String   @default("photo")
+  file_url   String
+  file_size  Int?
+  mime_type  String?
+  checksum   String?
   created_by String?
-
   created_at DateTime @default(now())
 
-  receipt    Receipt     @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
+  tenant     Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company    Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  receipt    Receipt  @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
   item       ReceiptItem? @relation(fields: [item_id], references: [id], onDelete: SetNull)
 
   @@index([receipt_id])
-  @@index([item_id])
+}
+
+model ScanLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenant_id     String   @db.Uuid
+  company_id    String   @db.Uuid
+  receipt_id    String   @db.Uuid
+  item_id       String?  @db.Uuid
+
+  action        String
+  barcode       String?
+  sku           String?
+  good_delta    Int?
+  damaged_delta Int?
+  device_id     String?
+  created_by    String?
+  created_at    DateTime @default(now())
+
+  tenant        Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company       Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  receipt       Receipt  @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
+  item          ReceiptItem? @relation(fields: [item_id], references: [id], onDelete: SetNull)
+
+  @@index([receipt_id])
+}
+
+model IdempotencyRecord {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenant_id        String   @db.Uuid
+  company_id       String   @db.Uuid
+
+  idempotency_key  String
+  request_hash     String
+  response_status  Int?
+  response_body    String?
+  created_at       DateTime @default(now())
+
+  tenant           Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company          Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, company_id, idempotency_key])
 }
 
 model ImportBatch {
   id         String   @id @default(uuid()) @db.Uuid
   tenant_id  String   @db.Uuid
   company_id String   @db.Uuid
-  receipt_id String?  @db.Uuid
+  receipt_id String   @db.Uuid
 
+  status     String   @default("validated") // validated | committed | failed
   file_name  String?
-  status     String   @default("validated")
-  errors_json Json?
   created_by String?
   created_at DateTime @default(now())
 
-  receipt    Receipt? @relation(fields: [receipt_id], references: [id], onDelete: SetNull)
+  tenant     Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company    Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  receipt    Receipt  @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
 
   @@index([receipt_id])
 }
@@ -209,10 +226,9 @@ model MasterReceipt {
   tenant_id  String   @db.Uuid
   company_id String   @db.Uuid
 
-  master_no  String
-  status     String   @default("draft")
+  master_no  String   @unique
+  status     String   @default("draft") // draft | completed | ...
 
-  created_by String?
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -222,16 +238,20 @@ model MasterReceipt {
   sources    MasterReceiptSource[]
   shareLinks MasterShareLink[]
 
-  @@unique([tenant_id, company_id, master_no])
   @@index([tenant_id, company_id])
 }
 
 model MasterReceiptSource {
   id         String   @id @default(uuid()) @db.Uuid
+  tenant_id  String   @db.Uuid
+  company_id String   @db.Uuid
   master_id  String   @db.Uuid
   receipt_id String   @db.Uuid
+
   created_at DateTime @default(now())
 
+  tenant     Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company    Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
   master     MasterReceipt @relation(fields: [master_id], references: [id], onDelete: Cascade)
   receipt    Receipt       @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
 
@@ -241,52 +261,38 @@ model MasterReceiptSource {
 
 model MasterShareLink {
   id             String   @id @default(uuid()) @db.Uuid
-  tenant_id       String  @db.Uuid
-  company_id      String  @db.Uuid
-  master_id       String  @db.Uuid
+  tenant_id       String   @db.Uuid
+  company_id      String   @db.Uuid
+  master_id       String   @db.Uuid
 
-  share_public_id String  @unique
-  active          Boolean @default(true)
+  share_public_id String   @unique
+  active          Boolean  @default(true)
   expires_at      DateTime?
-
-  created_by      String?
   created_at      DateTime @default(now())
 
-  tenant          Tenant       @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  company         Company      @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  tenant          Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company         Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
   master          MasterReceipt @relation(fields: [master_id], references: [id], onDelete: Cascade)
 
   @@index([master_id])
 }
 
-model IdempotencyRecord {
-  id              String   @id @default(uuid()) @db.Uuid
-  tenant_id        String  @db.Uuid
-  company_id       String  @db.Uuid
-  idempotency_key  String
-  request_hash     String
-  response_status  Int?
-  response_body    Json?
-  created_at       DateTime @default(now())
-
-  @@unique([tenant_id, company_id, idempotency_key])
-}
-
 model ShareToken {
-  id             String   @id @default(uuid()) @db.Uuid
-  tenant_id       String  @db.Uuid
-  company_id      String  @db.Uuid
-  receipt_id      String? @db.Uuid
-  item_id         String? @db.Uuid
+  id         String   @id @default(uuid()) @db.Uuid
+  tenant_id  String   @db.Uuid
+  company_id String   @db.Uuid
 
-  public_share_id String  @unique
-  active          Boolean @default(true)
-  expires_at      DateTime?
-  created_at      DateTime @default(now())
+  receipt_id String?  @db.Uuid
+  item_id    String?  @db.Uuid
 
-  receipt         Receipt?    @relation(fields: [receipt_id], references: [id], onDelete: SetNull)
-  item            ReceiptItem? @relation(fields: [item_id], references: [id], onDelete: SetNull)
+  token      String   @unique
+  purpose    String   @default("public")
+  active     Boolean  @default(true)
+  expires_at DateTime?
+  created_at DateTime @default(now())
 
-  @@index([receipt_id])
-  @@index([item_id])
+  tenant     Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company    Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  receipt    Receipt? @relation(fields: [receipt_id], references: [id], onDelete: SetNull)
+  item       ReceiptItem? @relation(fields: [item_id], references: [id], onDelete: SetNull)
 }
