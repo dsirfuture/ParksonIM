@@ -5,14 +5,12 @@ import { notFound } from "next/navigation";
 import { ShareActions } from "./ShareActions";
 
 type Props = {
-  params: Promise<{
-    sharePublicId: string;
-  }>;
+  params: Promise<{ sharePublicId: string }>;
 };
 
 export default async function PublicMasterPage({ params }: Props) {
-  const { sharePublicId } = await params;
   const lang = await getLang();
+  const { sharePublicId } = await params;
 
   const share = await prisma.masterShareLink.findUnique({
     where: { share_public_id: sharePublicId },
