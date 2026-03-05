@@ -4,11 +4,13 @@ import { t } from "@/lib/i18n";
 import { notFound } from "next/navigation";
 import { ShareActions } from "./ShareActions";
 
-export default async function PublicMasterPage({
-  params,
-}: {
-  params: { sharePublicId: string };
-}) {
+type Props = Readonly<{
+  params: {
+    sharePublicId: string;
+  };
+}>;
+
+export default async function PublicMasterPage({ params }: Props) {
   const lang = getLang();
   const sharePublicId = params.sharePublicId;
 
@@ -32,18 +34,15 @@ export default async function PublicMasterPage({
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 py-8">
-      {/* Header */}
       <div className="text-center space-y-2">
         <h1 className="text-3xl font-bold text-[#2f3c7e]">
           {t(lang, "public.master.title")}
         </h1>
         <p className="text-slate-500 font-mono">{share.master.master_no}</p>
 
-        {/* ✅ Client component for share/copy actions */}
         <ShareActions lang={lang} publicPath={publicPath} />
       </div>
 
-      {/* Table */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-4 border-b border-slate-100 bg-slate-50 font-bold text-slate-700">
           {t(lang, "public.master.linkedReceipts")}
@@ -73,7 +72,6 @@ export default async function PublicMasterPage({
         </table>
       </div>
 
-      {/* Download */}
       <div className="flex justify-center">
         <a
           href={downloadPath}
@@ -83,7 +81,6 @@ export default async function PublicMasterPage({
         </a>
       </div>
 
-      {/* Note */}
       <div className="text-center text-xs text-slate-400">
         {t(lang, "public.master.noPricingNote")}
       </div>
