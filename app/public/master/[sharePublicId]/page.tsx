@@ -4,6 +4,8 @@ import { t } from "@/lib/i18n";
 import { notFound } from "next/navigation";
 import { ShareActions } from "./ShareActions";
 
+export const runtime = "nodejs";
+
 type Props = Readonly<{
   params: {
     sharePublicId: string;
@@ -12,14 +14,31 @@ type Props = Readonly<{
 
 export default async function PublicMasterPage({ params }: Props) {
   const lang = getLang();
-  const sharePublicId = params.sharePublicId;
 
+  const sharePublicId = params?.sharePublicId?.trim();
+  if (!sharePublicId) notFound();
+
+  // ✅ 公共页只取需要展示的字段，减少 DB 负担
   const share = await prisma.masterShareLink.findUnique({
     where: { share_public_id: sharePublicId },
-    include: {
+    select: {
+      active: true,
+      expires_at: true,
       master: {
-        include: {
-          sources: { include: { receipt: true } },
+        select: {
+          master_no: true,
+          sources: {
+            select: {
+              id: true,
+              receipt: {
+                select: {
+                  receipt_no: true,
+                  supplier_name: true,
+                  status: true,
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -40,6 +59,7 @@ export default async function PublicMasterPage({ params }: Props) {
         </h1>
         <p className="text-slate-500 font-mono">{share.master.master_no}</p>
 
+        {/* ✅ Client component for share/copy actions */}
         <ShareActions lang={lang} publicPath={publicPath} />
       </div>
 
@@ -63,7 +83,7 @@ export default async function PublicMasterPage({ params }: Props) {
                 <td className="p-4 text-sm">{s.receipt.supplier_name || "-"}</td>
                 <td className="p-4">
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold">
-                    {s.receipt.status}
+                    {s.receipt.status || "-"}
                   </span>
                 </td>
               </tr>
