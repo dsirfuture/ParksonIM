@@ -1,19 +1,24 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { getSession } from '@/lib/tenant';
-import { errorResponse } from '@/lib/errors';
+import { NextResponse } from "next/server";
+import { getSession } from "@/lib/tenant";
+import { errorResponse } from "@/lib/errors";
 
-export async function GET(req: NextRequest) {
+export const runtime = "nodejs";
+
+/**
+ * Temporary no-op users endpoint.
+ * Reason: Prisma schema/client does not expose User model yet.
+ * We'll enable real DB query after migrations.
+ */
+export async function GET() {
   const session = await getSession();
-  if (!session) return errorResponse('FORBIDDEN', 'Auth required', 403);
+  if (!session || session.role !== "admin") {
+    return errorResponse("FORBIDDEN", "Admin required", 403);
+  }
 
-  const users = await prisma.user.findMany({
-    where: {
-      tenant_id: session.tenantId,
-      company_id: session.companyId,
-    },
-    orderBy: { created_at: 'desc' }
+  return NextResponse.json({
+    ok: true,
+    skipped: true,
+    reason: "User model not enabled in Prisma client yet",
+    data: [],
   });
-
-  return NextResponse.json(users);
 }
