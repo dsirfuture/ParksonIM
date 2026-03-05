@@ -1,36 +1,18 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { errorResponse } from '@/lib/errors';
+import { NextResponse } from "next/server";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ sharePublicId: string }> }
-) {
-  const { sharePublicId } = await params;
-  const share = await prisma.masterShareLink.findUnique({
-    where: { share_public_id: sharePublicId },
-    include: {
-      master: {
-        include: {
-          sources: {
-            include: {
-              receipt: {
-                select: {
-                  receipt_no: true,
-                  supplier_name: true,
-                  status: true,
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+/**
+ * Temporary no-op public master info endpoint.
+ * Reason: Prisma schema/client does not expose MasterShareLink model yet.
+ * We'll enable real DB query after migrations.
+ */
+export async function GET(_req: Request, ctx: any) {
+  const sharePublicId = (ctx?.params?.sharePublicId as string | undefined)?.trim();
+
+  return NextResponse.json({
+    ok: true,
+    skipped: true,
+    reason: "MasterShareLink model not enabled in Prisma client yet",
+    sharePublicId: sharePublicId || null,
+    data: null,
   });
-
-  if (!share || !share.active || (share.expires_at && new Date() > share.expires_at)) {
-    return errorResponse('NOT_FOUND', 'Link invalid or expired', 404);
-  }
-
-  return NextResponse.json(share);
 }
