@@ -1,21 +1,26 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { getSession } from '@/lib/tenant';
-import { errorResponse } from '@/lib/errors';
+import { NextResponse } from "next/server";
+import { getSession } from "@/lib/tenant";
+import { errorResponse } from "@/lib/errors";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
+export const runtime = "nodejs";
+
+/**
+ * Temporary no-op receipt logs endpoint.
+ * Reason: Prisma schema/client does not expose ScanLog model yet.
+ * We'll enable real DB query after migrations.
+ */
+export async function GET(_req: Request, ctx: any) {
   const session = await getSession();
-  if (!session) return errorResponse('FORBIDDEN', 'Auth required', 403);
+  if (!session) return errorResponse("FORBIDDEN", "Auth required", 403);
 
-  const logs = await prisma.scanLog.findMany({
-    where: { receipt_id: id },
-    orderBy: { created_at: 'desc' },
-    take: 100
+  const id = (ctx?.params?.id as string | undefined)?.trim();
+  if (!id) return errorResponse("VALIDATION_FAILED", "id required", 400);
+
+  return NextResponse.json({
+    ok: true,
+    skipped: true,
+    reason: "ScanLog model not enabled in Prisma client yet",
+    receiptId: id,
+    data: [],
   });
-
-  return NextResponse.json(logs);
 }
