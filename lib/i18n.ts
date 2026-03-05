@@ -50,6 +50,14 @@ export const dict: Record<Lang, Record<string, string>> = {
     "billing.subtitle": "合并多个验货单生成总账单，并支持分享与下载。",
     "billing.notReadyTitle": "功能准备中",
     "billing.notReadyDesc": "当前版本先保证系统可部署运行；总账单（MasterReceipt）与分享下载将在补齐数据库迁移后启用。",
+    "dashboard.title": "验货单管理中心",
+    "dashboard.subtitle": "实时监控验货单进度与状态（当前为占位数据）。",
+    "dashboard.cards.totalReceipts": "总验货单",
+    "dashboard.cards.pending": "待处理",
+    "dashboard.cards.inProgress": "验货中",
+    "dashboard.cards.completed": "已完成",
+    "dashboard.noteTitle": "提示",
+    "dashboard.noteDesc": "当前版本先保证系统可部署运行；统计汇总会在补齐数据库迁移后启用真实数据。",
 
     // Language
     "lang.switch": "语言",
@@ -353,6 +361,14 @@ export const dict: Record<Lang, Record<string, string>> = {
     "billing.subtitle": "Combina varias recepciones para generar una factura maestra y compartir/descargar.",
     "billing.notReadyTitle": "Función en preparación",
     "billing.notReadyDesc": "En esta versión primero aseguramos el despliegue; la factura maestra (MasterReceipt) se activará después de completar las migraciones.",
+    "dashboard.title": "Centro de Gestión",
+    "dashboard.subtitle": "Monitorea el progreso (datos temporales).",
+    "dashboard.cards.totalReceipts": "Total de recepciones",
+    "dashboard.cards.pending": "Pendientes",
+    "dashboard.cards.inProgress": "En progreso",
+    "dashboard.cards.completed": "Completadas",
+    "dashboard.noteTitle": "Nota",
+    "dashboard.noteDesc": "Primero aseguramos el despliegue; las métricas reales se activarán tras completar migraciones.",
     
     // Language
     "lang.switch": "Idioma",
