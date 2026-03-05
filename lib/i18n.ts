@@ -58,6 +58,8 @@ export const dict: Record<Lang, Record<string, string>> = {
     "dashboard.cards.completed": "已完成",
     "dashboard.noteTitle": "提示",
     "dashboard.noteDesc": "当前版本先保证系统可部署运行；统计汇总会在补齐数据库迁移后启用真实数据。",
+    "public.master.notReadyTitle": "公开总账单准备中",
+    "public.master.notReadyDesc": "当前版本先保证系统可部署运行；总账单分享与下载会在补齐数据库迁移后启用。",
 
     // Language
     "lang.switch": "语言",
@@ -369,6 +371,8 @@ export const dict: Record<Lang, Record<string, string>> = {
     "dashboard.cards.completed": "Completadas",
     "dashboard.noteTitle": "Nota",
     "dashboard.noteDesc": "Primero aseguramos el despliegue; las métricas reales se activarán tras completar migraciones.",
+    "public.master.notReadyTitle": "Factura pública en preparación",
+    "public.master.notReadyDesc": "Primero aseguramos el despliegue; el enlace público y la descarga se activarán tras completar migraciones.",
     
     // Language
     "lang.switch": "Idioma",
