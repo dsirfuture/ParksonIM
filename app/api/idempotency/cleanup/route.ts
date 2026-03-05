@@ -1,15 +1,22 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { NextResponse } from "next/server";
 
-export async function POST(req: NextRequest) {
-  // Simple cleanup: delete records older than 24 hours
-  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  
-  const deleted = await prisma.idempotencyRecord.deleteMany({
-    where: {
-      created_at: { lt: yesterday }
-    }
+/**
+ * Temporary no-op cleanup route.
+ * Reason: Prisma schema does not contain IdempotencyRecord model yet.
+ * This route is not required for core flow; we enable real DB cleanup later.
+ */
+export async function POST() {
+  return NextResponse.json({
+    ok: true,
+    skipped: true,
+    reason: "IdempotencyRecord model not enabled yet",
   });
+}
 
-  return NextResponse.json({ deleted_count: deleted.count });
+export async function GET() {
+  return NextResponse.json({
+    ok: true,
+    skipped: true,
+    reason: "IdempotencyRecord model not enabled yet",
+  });
 }
