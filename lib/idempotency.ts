@@ -81,3 +81,5 @@ export async function idempotencyStore(params: {
     },
   });
 }
+// Backward-compatible exports (some routes import these names)
+export const saveIdempotency = idempotencyStore;
