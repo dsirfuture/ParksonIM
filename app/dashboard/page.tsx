@@ -1,37 +1,57 @@
-import { getLang } from '@/lib/i18n-server';
-import { t } from '@/lib/i18n';
-import { prisma } from '@/lib/prisma';
-import { getSession } from '@/lib/tenant';
+import { getSession } from "@/lib/tenant";
+import { getLang } from "@/lib/i18n-server";
+import { t } from "@/lib/i18n";
 
 export default async function DashboardPage() {
-  const lang = await getLang();
   const session = await getSession();
+  const lang = await getLang();
 
-  if (!session) return null;
+  if (!session) return <div>Access Denied</div>;
 
-  const stats = await prisma.receipt.aggregate({
-    where: { tenant_id: session.tenantId },
-    _count: { id: true },
-    _sum: { completed_items: true, total_items: true }
-  });
+  // Temporary placeholder numbers (until Prisma schema/migrations align)
+  const data = {
+    total_receipts: 0,
+    pending: 0,
+    in_progress: 0,
+    completed: 0,
+    total_items_sum: 0,
+    completed_items_sum: 0,
+  };
 
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-bold text-[#2f3c7e]">{t(lang, "dashboard.title")}</h1>
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-[#2f3c7e]">{t(lang, "dashboard.title")}</h1>
+          <p className="text-slate-500">{t(lang, "dashboard.subtitle")}</p>
+        </div>
+      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-          <div className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-2">总验货单</div>
-          <div className="text-4xl font-black text-[#2f3c7e]">{stats._count.id}</div>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          <div className="text-sm text-slate-500 mb-1">{t(lang, "dashboard.cards.totalReceipts")}</div>
+          <div className="text-2xl font-bold">{data.total_receipts}</div>
         </div>
-        <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-          <div className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-2">已扫描商品</div>
-          <div className="text-4xl font-black text-emerald-600">{stats._sum.completed_items || 0}</div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          <div className="text-sm text-slate-500 mb-1">{t(lang, "dashboard.cards.pending")}</div>
+          <div className="text-2xl font-bold">{data.pending}</div>
         </div>
-        <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-          <div className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-2">预期商品</div>
-          <div className="text-4xl font-black text-slate-800">{stats._sum.total_items || 0}</div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          <div className="text-sm text-slate-500 mb-1">{t(lang, "dashboard.cards.inProgress")}</div>
+          <div className="text-2xl font-bold">{data.in_progress}</div>
         </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          <div className="text-sm text-slate-500 mb-1">{t(lang, "dashboard.cards.completed")}</div>
+          <div className="text-2xl font-bold">{data.completed}</div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200 p-6">
+        <div className="font-semibold text-slate-700">{t(lang, "dashboard.noteTitle")}</div>
+        <p className="text-sm text-slate-500 mt-2">{t(lang, "dashboard.noteDesc")}</p>
       </div>
     </div>
   );
