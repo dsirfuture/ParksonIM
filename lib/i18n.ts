@@ -100,7 +100,6 @@ export const dict: Record<Lang, Record<string, string>> = {
     // =========================
     // Dashboard
     // =========================
-    "dashboard.title": "仪表盘",
     "dashboard.cards.totalReceipts": "验货单总数",
     "dashboard.cards.inProgress": "进行中",
     "dashboard.cards.completed": "已完成",
