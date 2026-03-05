@@ -42,7 +42,7 @@ export default async function LoginPage() {
       </div>
 
       <p className="text-center text-xs text-slate-400">
-        {BRAND.legalName}
+        {BRAND.companyLegal}
       </p>
     </div>
   );
