@@ -44,6 +44,8 @@ export const dict: Record<Lang, Record<string, string>> = {
     "common.page": "页",
     "common.total": "合计",
     "common.ok": "确定",
+    "common.share": "分享",
+    "receipt.detail.progress": "进度",
 
     // Language
     "lang.switch": "语言",
@@ -341,7 +343,9 @@ export const dict: Record<Lang, Record<string, string>> = {
     "common.page": "Página",
     "common.total": "Total",
     "common.ok": "OK",
-
+    "common.share": "Compartir",
+    "receipt.detail.progress": "Progreso",
+    
     // Language
     "lang.switch": "Idioma",
     "lang.zh": "Chino",
