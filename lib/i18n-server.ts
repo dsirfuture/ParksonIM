@@ -15,3 +15,4 @@ export function setLangCookieValue(lang: Lang) {
   // In most pages, you only need getServerLang().
   cookies().set(LANG_COOKIE, lang, { path: "/" });
 }
+export { getServerLang as getLang };
