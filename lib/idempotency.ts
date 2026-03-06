@@ -1,86 +1,68 @@
-// lib/idempotency.ts
 import { prisma } from "@/lib/prisma";
-import { apiError } from "@/lib/errors";
-import { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import crypto from "crypto";
+import { errorResponse } from "@/lib/errors";
 
-export type IdempotencyResult =
-  | { kind: "replay"; status: number; body: any }
-  | { kind: "proceed"; requestHash: string };
-
-export function requireIdempotencyKey(req: NextRequest): string {
-  const key = req.headers.get("Idempotency-Key");
-  if (!key) throw new Error("IDEMPOTENCY_KEY_REQUIRED");
-  return key;
-}
-
-export function hashRequest(payload: unknown): string {
-  const raw = JSON.stringify(payload ?? {});
-  return crypto.createHash("sha256").update(raw).digest("hex");
+export function hashJson(input: unknown): string {
+  const s = typeof input === "string" ? input : JSON.stringify(input ?? null);
+  return crypto.createHash("sha256").update(s).digest("hex");
 }
 
 /**
- * Check if we have a stored response for (tenant/company, key, route).
- * If request hash differs, treat as conflict (client re-used key for different payload).
+ * ✅ 兼容你现在的调用方式：checkIdempotency(tenantId, companyId, key, requestHash)
  */
-export async function idempotencyCheck(params: {
-  tenant_id: string;
-  company_id: string;
-  route: string;
-  key: string;
-  requestHash: string;
-}): Promise<IdempotencyResult> {
+export async function checkIdempotency(
+  tenantId: string,
+  companyId: string,
+  key: string | null,
+  requestHash: string
+): Promise<{ error?: NextResponse; response?: NextResponse }> {
+  if (!key) {
+    return { error: errorResponse("IDEMPOTENCY_KEY_REQUIRED", "Missing Idempotency-Key", 400) };
+  }
+
   const existing = await prisma.idempotencyRecord.findFirst({
     where: {
-      tenant_id: params.tenant_id,
-      company_id: params.company_id,
-      route: params.route,
-      key: params.key,
+      tenant_id: tenantId,
+      company_id: companyId,
+      key,
+      request_hash: requestHash,
     },
+    orderBy: { created_at: "desc" },
   });
 
-  if (!existing) return { kind: "proceed", requestHash: params.requestHash };
+  if (!existing) return {};
 
-  if (existing.request_hash !== params.requestHash) {
-    // same key, different payload => reject
+  if (existing.response_json) {
     return {
-      kind: "replay",
-      status: 409,
-      body: apiError(
-        "VERSION_CONFLICT",
-        "Idempotency-Key reused with different request payload."
-      ),
+      response: new NextResponse(existing.response_json, {
+        status: existing.status_code ?? 200,
+        headers: { "Content-Type": "application/json" },
+      }),
     };
   }
 
-  return {
-    kind: "replay",
-    status: existing.status_code,
-    body: existing.response_body,
-  };
+  return {};
 }
 
-export async function idempotencyStore(params: {
-  tenant_id: string;
-  company_id: string;
-  route: string;
+export async function saveIdempotency(params: {
+  tenantId: string;
+  companyId: string;
   key: string;
   requestHash: string;
-  status: number;
-  body: any;
-}): Promise<void> {
+  statusCode: number;
+  responseBody: unknown;
+}) {
+  const { tenantId, companyId, key, requestHash, statusCode, responseBody } = params;
+
   await prisma.idempotencyRecord.create({
     data: {
-      tenant_id: params.tenant_id,
-      company_id: params.company_id,
-      route: params.route,
-      key: params.key,
-      request_hash: params.requestHash,
-      status_code: params.status,
-      response_body: params.body,
+      tenant_id: tenantId,
+      company_id: companyId,
+      key,
+      request_hash: requestHash,
+      status_code: statusCode,
+      response_json: JSON.stringify(responseBody ?? null),
     },
   });
 }
-// Backward-compatible exports (some routes import these names)
-export const checkIdempotency = idempotencyCheck;
-export const saveIdempotency = idempotencyStore;
