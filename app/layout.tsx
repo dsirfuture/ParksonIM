@@ -1,17 +1,22 @@
-// app/layout.tsx
 import type { Metadata } from "next";
+import "./globals.css";
+import { getLang } from "@/lib/i18n-server";
 
 export const metadata: Metadata = {
-  title: "ParksonMX 验货平台",
-  description: "ParksonMX Web Inspection Platform",
+  title: "ParksonIM",
+  description: "Parkson Inspection Management Platform",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const lang = await getLang();
+
   return (
-    <html lang="zh">
-      <body>{children}</body>
+    <html lang={lang} suppressHydrationWarning>
+      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">
+        {children}
+      </body>
     </html>
   );
 }

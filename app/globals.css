@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --app-font-family: "Noto Sans SC", "Inter", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--app-font-family);
+  background: #f6f6f8;
+  color: #0f172a;
+}
+
+html[lang="es"] {
+  --app-font-family: "Inter", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+html[lang="zh"] {
+  --app-font-family: "Noto Sans SC", "Inter", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+input,
+button,
+select,
+textarea {
+  font: inherit;
+}
+/* ---- global visual tuning ---- */
+.rounded-\[28px\] {
+  border-radius: 0.9rem;
+}
+
+.rounded-2xl {
+  border-radius: 0.85rem;
+}
+
+.rounded-xl {
+  border-radius: 0.75rem;
+}
+
+table tbody tr {
+  transition: background-color 160ms ease;
+}
+
+table tbody tr:hover {
+  background: rgba(253, 242, 248, 0.9);
+}

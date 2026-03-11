@@ -1,52 +1,335 @@
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
-import { errorResponse } from "@/lib/errors";
-import { nanoid } from "nanoid";
+import { z } from "zod";
 
-export const runtime = "nodejs";
+const RowSchema = z.object({
+  receipt_no: z.string().trim().min(1),
+  supplier_name: z.string().trim().optional(),
+  sku: z.string().trim().min(1),
+  barcode: z.string().trim().optional(),
+  name_zh: z.string().trim().optional(),
+  name_es: z.string().trim().optional(),
+  case_pack: z.number().int().nonnegative().optional(),
+  expected_qty: z.number().int().positive(),
+  sell_price: z.number().nonnegative().optional(),
+  discount: z.number().min(0).max(1).optional(),
+  normal_discount: z.number().min(0).max(1).optional(),
+  vip_discount: z.number().min(0).max(1).optional(),
+  line_total: z.number().nonnegative().optional(),
+});
 
-/**
- * Temporary no-op import validate endpoint.
- * Reason: Prisma schema/client does not expose ImportBatch model yet.
- * We'll restore real validate->commit workflow after migrations.
- */
+const BodySchema = z.object({
+  headers: z.array(z.string()).optional(),
+  rows: z.array(z.any()).min(1),
+});
+
+const HEADER_ALIASES = {
+  receipt_no: ["receipt_no", "单号", "receipt no"],
+  supplier_name: ["supplier_name", "供应商", "supplier"],
+  sku: ["sku", "商品编码", "商品编号", "编码"],
+  barcode: ["barcode", "条码"],
+  name_zh: ["name_zh", "中文名"],
+  name_es: ["name_es", "西文名"],
+  case_pack: ["case_pack", "包装数", "箱规"],
+  expected_qty: ["expected_qty", "应收数量", "数量"],
+  sell_price: ["sell_price", "单价", "price"],
+  normal_discount: ["normal_discount", "普通折扣", "discount", "折扣"],
+  vip_discount: ["vip_discount", "VIP折扣", "VIP 折扣", "vip折扣", "vip 折扣"],
+  line_total: ["line_total", "金额", "行总额"],
+} as const;
+
+const REQUIRED_KEYS = ["receipt_no", "sku", "expected_qty"] as const;
+
+function normalize(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function isAllowedHeader(title: string) {
+  const n = normalize(title);
+  return Object.values(HEADER_ALIASES).some((aliases) =>
+    aliases.some((item) => normalize(item) === n),
+  );
+}
+
+function hasRequiredHeader(
+  headers: string[],
+  key: (typeof REQUIRED_KEYS)[number],
+) {
+  const aliases = HEADER_ALIASES[key];
+  return headers.some((h) =>
+    aliases.some((alias) => normalize(alias) === normalize(h)),
+  );
+}
+
+function getRequiredHeaderLabel(key: (typeof REQUIRED_KEYS)[number]) {
+  if (key === "receipt_no") return "单号";
+  if (key === "sku") return "商品编码";
+  return "应收数量";
+}
+
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session || session.role !== "admin") {
-    return errorResponse("FORBIDDEN", "Admin required", 403);
-  }
-
-  // Accept either multipart file or JSON body; do minimal validation only.
-  const contentType = req.headers.get("content-type") || "";
-  let rowsCount = 0;
-
   try {
-    if (contentType.includes("multipart/form-data")) {
-      const fd = await req.formData();
-      const file = fd.get("file") as File | null;
-      if (!file) return errorResponse("VALIDATION_FAILED", "File required", 400);
-      // We skip parsing for now to keep build + flow alive
-      rowsCount = 0;
-    } else {
-      const body = await req.json().catch(() => ({} as any));
-      rowsCount = Array.isArray(body?.rows) ? body.rows.length : 0;
+    const session = await getSession();
+
+    if (!session?.tenantId || !session?.companyId) {
+      return NextResponse.json(
+        {
+          ok: false,
+          errorCode: "SERVER_ERROR",
+          errors: [
+            { row: 0, field: "session", message: "DEV_SESSION_NOT_CONFIGURED" },
+          ],
+        },
+        { status: 401 },
+      );
     }
+
+    const body = await req.json();
+    const parsedBody = BodySchema.safeParse(body);
+
+    if (!parsedBody.success) {
+      return NextResponse.json(
+        {
+          ok: false,
+          errorCode: "INVALID_PAYLOAD",
+          errors: [{ row: 0, field: "rows", message: "文件内容无法识别" }],
+        },
+        { status: 400 },
+      );
+    }
+
+    const { headers = [], rows } = parsedBody.data;
+
+    const normalizedHeaders = headers.map((h) => String(h ?? "").trim());
+    const nonEmptyHeaders = normalizedHeaders.filter((h) => h.length > 0);
+
+    if (normalizedHeaders.length === 0 || nonEmptyHeaders.length === 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          errorCode: "HEADER_INVALID",
+          errors: [
+            {
+              row: 1,
+              field: "headers_summary",
+              message: "请调整表格规范",
+            },
+            {
+              row: 1,
+              field: "headers_empty",
+              message: "未读取到表头 请确认首行是否为标题行",
+            },
+          ],
+        },
+        { status: 400 },
+      );
+    }
+
+    const headerErrors: Array<{ row: number; field: string; message: string }> =
+      [];
+    const blankHeaderIndexes: number[] = [];
+    const extraHeaders: string[] = [];
+
+    normalizedHeaders.forEach((header, index) => {
+      if (!header) {
+        blankHeaderIndexes.push(index + 1);
+        return;
+      }
+
+      if (!isAllowedHeader(header)) {
+        extraHeaders.push(header);
+      }
+    });
+
+    const missingRequiredHeaders: string[] = [];
+
+    REQUIRED_KEYS.forEach((key) => {
+      if (!hasRequiredHeader(normalizedHeaders, key)) {
+        missingRequiredHeaders.push(getRequiredHeaderLabel(key));
+      }
+    });
+
+    if (blankHeaderIndexes.length > 0) {
+      headerErrors.push({
+        row: 1,
+        field: "headers_blank",
+        message: `第 ${blankHeaderIndexes.join("、")} 列表头为空 请补齐后再导入`,
+      });
+    }
+
+    if (extraHeaders.length > 0) {
+      const labels = [...new Set(extraHeaders)];
+      headerErrors.push({
+        row: 1,
+        field: "headers_extra",
+        message: `检测到多余表头：${labels.join("、")}`,
+      });
+      headerErrors.push({
+        row: 1,
+        field: "headers_extra_remove",
+        message: `请删除以下表头后再导入：${labels.join("、")}`,
+      });
+    }
+
+    if (missingRequiredHeaders.length > 0) {
+      headerErrors.push({
+        row: 1,
+        field: "headers_missing",
+        message: `缺少必填表头：${missingRequiredHeaders.join("、")}`,
+      });
+    }
+
+    if (headerErrors.length > 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          errorCode: "HEADER_INVALID",
+          errors: [
+            {
+              row: 1,
+              field: "headers_summary",
+              message: "请调整表格规范",
+            },
+            ...headerErrors,
+          ],
+        },
+        { status: 400 },
+      );
+    }
+
+    const rowErrors: Array<{ row: number; field: string; message: string }> =
+      [];
+    const normalizedRows: Array<z.infer<typeof RowSchema>> = [];
+
+    rows.forEach((row, index) => {
+      const result = RowSchema.safeParse(row);
+
+      if (!result.success) {
+        result.error.issues.forEach((issue) => {
+          rowErrors.push({
+            row: index + 2,
+            field: issue.path.join(".") || "row",
+            message: `第 ${index + 2} 行字段错误：${issue.path.join(".") || "row"}`,
+          });
+        });
+        return;
+      }
+
+      normalizedRows.push(result.data);
+    });
+
+    if (rowErrors.length > 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          errorCode: "INVALID_PAYLOAD",
+          errors: rowErrors,
+        },
+        { status: 400 },
+      );
+    }
+
+    const duplicateKeyMap = new Map<string, number[]>();
+
+    normalizedRows.forEach((row, index) => {
+      const key = `${row.receipt_no}__${row.sku}`;
+      const list = duplicateKeyMap.get(key) || [];
+      list.push(index + 2);
+      duplicateKeyMap.set(key, list);
+    });
+
+    const duplicateErrors: Array<{
+      row: number;
+      field: string;
+      message: string;
+    }> = [];
+
+    for (const [key, rowNos] of duplicateKeyMap.entries()) {
+      if (rowNos.length > 1) {
+        const [receiptNo, sku] = key.split("__");
+        duplicateErrors.push({
+          row: rowNos[0],
+          field: "receipt_no+sku",
+          message: `表格中重复：单号 ${receiptNo} / SKU ${sku}`,
+        });
+      }
+    }
+
+    if (duplicateErrors.length > 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          errorCode: "FILE_DUPLICATE",
+          errors: duplicateErrors,
+        },
+        { status: 400 },
+      );
+    }
+
+    const receiptNos = [
+      ...new Set(normalizedRows.map((row) => row.receipt_no)),
+    ];
+
+    if (receiptNos.length > 0) {
+      const existingReceipts = await prisma.receipt.findMany({
+        where: {
+          tenant_id: session.tenantId,
+          company_id: session.companyId,
+          receipt_no: { in: receiptNos },
+        },
+        select: { receipt_no: true },
+      });
+
+      if (existingReceipts.length > 0) {
+        const uniqueNos = [
+          ...new Set(existingReceipts.map((item) => item.receipt_no)),
+        ];
+
+        const existsErrors = uniqueNos.map((no) => ({
+          row: 0,
+          field: "receipt_no",
+          message: `此验货单已存在：${no}`,
+        }));
+
+        return NextResponse.json(
+          {
+            ok: false,
+            errorCode: "RECEIPT_EXISTS",
+            errors: existsErrors,
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    const receiptSet = new Set(normalizedRows.map((row) => row.receipt_no));
+    const skuSet = new Set(normalizedRows.map((row) => row.sku));
+    const totalExpectedQty = normalizedRows.reduce(
+      (sum, row) => sum + (row.expected_qty || 0),
+      0,
+    );
+
+    return NextResponse.json({
+      ok: true,
+      summary: {
+        totalRows: rows.length,
+        receiptCount: receiptSet.size,
+        skuCount: skuSet.size,
+        totalExpectedQty,
+      },
+      normalizedRows,
+    });
   } catch {
-    // ignore
+    return NextResponse.json(
+      {
+        ok: false,
+        errorCode: "SERVER_ERROR",
+        errors: [
+          { row: 0, field: "server", message: "当前未能完成处理 请稍后再试" },
+        ],
+      },
+      { status: 500 },
+    );
   }
-
-  const batch_id = `mock_${nanoid()}`;
-
-  return NextResponse.json({
-    ok: true,
-    skipped: true,
-    reason: "ImportBatch model not enabled in Prisma client yet",
-    batch_id,
-    stats: {
-      rows: rowsCount,
-      valid: rowsCount,
-      invalid: 0,
-    },
-    errors: [],
-  });
 }
