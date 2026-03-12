@@ -713,6 +713,8 @@ model YogoProductSource {
   subcategory_id    String?
   subcategory_name  String?
   supplier          String?
+  case_pack         Int?
+  carton_pack       Int?
   source_price      Decimal?  @db.Decimal(14, 2)
   source_discount   Decimal?  @db.Decimal(8, 4)
   source_disabled   Boolean   @default(false)

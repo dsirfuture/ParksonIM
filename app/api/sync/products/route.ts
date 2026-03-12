@@ -15,6 +15,12 @@ type YogoPayload = {
   subcategory_id?: unknown;
   subcategory_name?: unknown;
   supplier?: unknown;
+  baozhuangshu?: unknown;
+  zhuangxiangshu?: unknown;
+  case_pack?: unknown;
+  carton_pack?: unknown;
+  casePack?: unknown;
+  cartonPack?: unknown;
   source_price?: unknown;
   source_discount?: unknown;
   source_disabled?: unknown;
@@ -33,6 +39,8 @@ type NormalizedProduct = {
   subcategory_id: string | null;
   subcategory_name: string | null;
   supplier: string | null;
+  case_pack: number | null;
+  carton_pack: number | null;
   source_price: number | null;
   source_discount: number | null;
   source_disabled: boolean;
@@ -53,6 +61,12 @@ function numberOrNull(value: unknown) {
   if (value === null || value === undefined || value === "") return null;
   const parsed = Number(String(value).trim());
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function intOrNull(value: unknown) {
+  const parsed = numberOrNull(value);
+  if (parsed === null) return null;
+  return Number.isInteger(parsed) ? parsed : Math.trunc(parsed);
 }
 
 function booleanOrDefault(value: unknown, defaultValue = false) {
@@ -116,6 +130,10 @@ function normalizeProduct(input: YogoPayload, index: number): NormalizedProduct 
     subcategory_id: text(input.subcategory_id),
     subcategory_name: text(input.subcategory_name),
     supplier: text(input.supplier),
+    case_pack: intOrNull(input.baozhuangshu ?? input.case_pack ?? input.casePack),
+    carton_pack: intOrNull(
+      input.zhuangxiangshu ?? input.carton_pack ?? input.cartonPack,
+    ),
     source_price: numberOrNull(input.source_price),
     source_discount: numberOrNull(input.source_discount),
     source_disabled: booleanOrDefault(input.source_disabled, false),
@@ -201,6 +219,8 @@ export async function POST(request: Request) {
             subcategory_id: item.subcategory_id,
             subcategory_name: item.subcategory_name,
             supplier: item.supplier,
+            case_pack: item.case_pack,
+            carton_pack: item.carton_pack,
             source_price: item.source_price,
             source_discount: item.source_discount,
             source_disabled: item.source_disabled,
@@ -218,6 +238,8 @@ export async function POST(request: Request) {
             subcategory_id: item.subcategory_id,
             subcategory_name: item.subcategory_name,
             supplier: item.supplier,
+            case_pack: item.case_pack,
+            carton_pack: item.carton_pack,
             source_price: item.source_price,
             source_discount: item.source_discount,
             source_disabled: item.source_disabled,
