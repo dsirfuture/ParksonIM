@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+﻿import { redirect } from "next/navigation";
 import fs from "node:fs";
 import path from "node:path";
 import { AppShell } from "@/components/app-shell";
@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { withPrismaRetry } from "@/lib/prisma-retry";
 import { hasPermission } from "@/lib/permissions";
 import { getSession } from "@/lib/tenant";
+import { parseYogoDiscountParts, stripLeadingCategoryCode } from "@/lib/yogo-product-utils";
 import { ProductsManagementClient } from "./ProductsManagementClient";
 
 function toNumber(value: unknown) {
@@ -30,12 +31,6 @@ function toNumber(value: unknown) {
   return null;
 }
 
-function pctText(value: unknown) {
-  const num = toNumber(value);
-  if (num === null) return "-";
-  return `${Number.isInteger(num) ? num : num.toFixed(2)}%`;
-}
-
 function categoryText(value: string | null) {
   if (!value) return "";
   return value.replace(/\s+/g, " ").trim();
@@ -48,52 +43,91 @@ function hasProductImage(sku: string) {
   return fs.existsSync(imagePath);
 }
 
+function formatZhDateTime(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  return `${y}年${m}月${d}日 ${hh}:${mm}`;
+}
+
 export default async function ProductsManagementPage() {
   const session = await getSession();
   if (!session) redirect("/login");
   if (!(await hasPermission(session, "manageProducts"))) redirect("/dashboard");
 
-  const rows = await withPrismaRetry(() =>
-    prisma.productCatalog.findMany({
+  const yogoRows = await withPrismaRetry(() =>
+    prisma.yogoProductSource.findMany({
       where: {
         tenant_id: session.tenantId,
         company_id: session.companyId,
       },
-      orderBy: [{ updated_at: "desc" }, { sku: "asc" }],
+      orderBy: [{ updated_at: "desc" }, { product_code: "asc" }],
     }),
   );
 
-  const initialRows = rows.map((row) => ({
-    id: row.id,
-    sku: row.sku,
-    barcode: row.barcode || "",
-    nameZh: row.name_zh || "",
-    nameEs: row.name_es || "",
-    casePack: row.case_pack ?? null,
-    cartonPack: row.carton_pack ?? null,
-    priceText: toNumber(row.price)?.toFixed(2) || "-",
-    normalDiscountText: pctText(row.normal_discount),
-    vipDiscountText: pctText(row.vip_discount),
-    category: categoryText(row.category),
-    supplier: row.supplier || "",
-    hasImage: hasProductImage(row.sku),
-    available: row.available,
-    statusText: row.status_text,
-    isNewProduct: row.is_new_product,
-    changedFields:
-      Array.isArray(row.changed_fields)
-        ? row.changed_fields.filter(
-            (item): item is string =>
-              typeof item === "string" && item.trim() !== "新增产品",
-          )
-        : [],
-    inventory: row.inventory ?? null,
-    updatedAt: row.updated_at.toISOString(),
-  }));
+  const skuList = yogoRows.map((row) => row.product_code);
+  const inventoryRows = skuList.length
+    ? await withPrismaRetry(() =>
+        prisma.productCatalog.findMany({
+          where: {
+            tenant_id: session.tenantId,
+            company_id: session.companyId,
+            sku: { in: skuList },
+            inventory: { gt: 5000 },
+          },
+          select: { sku: true },
+        }),
+      )
+    : [];
+
+  const blockedSkuSet = new Set(inventoryRows.map((row) => row.sku));
+  const visibleRows = yogoRows.filter((row) => !blockedSkuSet.has(row.product_code));
+  // Use `last_received_at` as the primary YOGO sync timestamp because it is
+  // written on every successful upsert from /api/sync/products.
+  const latestYogoUpdatedAt =
+    yogoRows.length > 0
+      ? yogoRows.reduce(
+          (latest, row) =>
+            row.last_received_at > latest ? row.last_received_at : latest,
+          yogoRows[0].last_received_at,
+        )
+      : null;
+  const yogoLastUpdatedText = latestYogoUpdatedAt
+    ? `最近一次友购产品更新时间是：${formatZhDateTime(latestYogoUpdatedAt)}`
+    : "最近一次友购产品更新时间是：暂无";
+
+  const initialRows = visibleRows.map((row) => {
+    const discount = parseYogoDiscountParts(row.category_name, row.source_discount);
+    return {
+      id: row.id,
+      sku: row.product_code,
+      barcode: row.product_no || "",
+      nameZh: row.name_cn || "",
+      nameEs: row.name_es || "",
+      casePack: null,
+      cartonPack: null,
+      priceText: toNumber(row.source_price)?.toFixed(2) || "-",
+      normalDiscountText: discount.normal,
+      vipDiscountText: discount.vip,
+      category: categoryText(row.category_name),
+      subcategory: stripLeadingCategoryCode(row.subcategory_name),
+      supplier: row.supplier || "",
+      hasImage: hasProductImage(row.product_code),
+      available: row.source_disabled ? 1 : 0,
+      statusText: row.source_disabled ? "下架" : "上架",
+      isNewProduct: null,
+    };
+  });
 
   return (
     <AppShell>
-      <ProductsManagementClient initialRows={initialRows} />
+      <ProductsManagementClient
+        initialRows={initialRows}
+        readOnlyMode
+        yogoLastUpdatedText={yogoLastUpdatedText}
+      />
     </AppShell>
   );
 }

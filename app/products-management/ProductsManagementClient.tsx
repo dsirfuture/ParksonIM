@@ -20,14 +20,15 @@ type ProductRow = {
   normalDiscountText: string;
   vipDiscountText: string;
   category: string;
+  subcategory: string;
   supplier: string;
   hasImage: boolean;
   available: number;
   statusText: string;
-  isNewProduct: boolean;
+  isNewProduct: boolean | null;
 };
 
-type Props = { initialRows: ProductRow[] };
+type Props = { initialRows: ProductRow[]; readOnlyMode?: boolean; yogoLastUpdatedText?: string };
 
 type EditState = {
   id: string;
@@ -68,7 +69,7 @@ type ImportRecord = {
   createdAt: string;
 };
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 50;
 
 const vipLast = (s: string) => {
   const m = s.match(/(\d+)\s*%/);
@@ -99,7 +100,11 @@ const QUICK_LABELS: Record<string, { zh: string; es: string }> = {
   isBlankChange: { zh: "无新增", es: "Sin nuevo" },
 };
 
-export function ProductsManagementClient({ initialRows }: Props) {
+export function ProductsManagementClient({
+  initialRows,
+  readOnlyMode = false,
+  yogoLastUpdatedText = "最近一次友购产品更新时间是：暂无",
+}: Props) {
   const [lang, setLang] = useState<"zh" | "es">("zh");
   const [rows, setRows] = useState(initialRows);
   const [keyword, setKeyword] = useState("");
@@ -235,6 +240,7 @@ export function ProductsManagementClient({ initialRows }: Props) {
     "No cat data": "暂无分类数据",
     "No prov data": "暂无供应商数据",
     "Cat": "分类",
+    "Subcat": "子分类",
     "No chg": "不改",
     "Prov": "供应商",
     "VIP": "VIP折扣",
@@ -259,6 +265,7 @@ export function ProductsManagementClient({ initialRows }: Props) {
     "Paste copied link in WeChat": "微信请粘贴已复制链接",
     "Share WeChat": "分享到微信",
     "Close": "关闭",
+    "Read only source": "当前为 YOGO 同步源，只读预览模式",
   };
   const tx = (zh: string, es: string) => {
     if (lang !== "zh") return es;
@@ -361,8 +368,8 @@ export function ProductsManagementClient({ initialRows }: Props) {
           if (key === "noVipDiscount") return r.vipDiscountText === "-" || vipLast(r.vipDiscountText) === "0%";
           if (key === "onShelf") return r.statusText === "上架";
           if (key === "offShelf") return r.statusText !== "上架";
-          if (key === "isNew") return r.isNewProduct;
-          if (key === "isBlankChange") return !r.isNewProduct;
+          if (key === "isNew") return r.isNewProduct === true;
+          if (key === "isBlankChange") return r.isNewProduct !== true;
           return true;
         });
 
@@ -422,6 +429,10 @@ export function ProductsManagementClient({ initialRows }: Props) {
   }
 
   async function uploadFile(file: File, duplicateStrategy?: "first" | "last") {
+    if (readOnlyMode) {
+      setError(tx("当前为 YOGO 同步源，只读预览模式", "Read only source"));
+      return;
+    }
     try {
       setUploading(true); setProgress(8); setError("");
       const form = new FormData();
@@ -448,6 +459,10 @@ export function ProductsManagementClient({ initialRows }: Props) {
   }
 
   async function saveEdit() {
+    if (readOnlyMode) {
+      setError(tx("当前为 YOGO 同步源，只读预览模式", "Read only source"));
+      return;
+    }
     if (!edit) return;
     try {
       setSaving(true);
@@ -469,6 +484,10 @@ export function ProductsManagementClient({ initialRows }: Props) {
   }
 
   async function applyBatchUpdate() {
+    if (readOnlyMode) {
+      setError(tx("当前为 YOGO 同步源，只读预览模式", "Read only source"));
+      return;
+    }
     if (filtered.length === 0) {
       setError(tx("暂无可编辑数据", "No rows to edit"));
       return;
@@ -515,6 +534,10 @@ export function ProductsManagementClient({ initialRows }: Props) {
   }
 
   async function deleteProduct(id: string, sku: string) {
+    if (readOnlyMode) {
+      setError(tx("当前为 YOGO 同步源，只读预览模式", "Read only source"));
+      return;
+    }
     const confirmText = window.prompt(lang === "zh" ? `请输入完整 SKU 确认删除：${sku}` : `Type full SKU to delete: ${sku}`);
     if (confirmText !== sku) return;
     try {
@@ -529,6 +552,10 @@ export function ProductsManagementClient({ initialRows }: Props) {
   }
 
   async function deleteFilteredRows() {
+    if (readOnlyMode) {
+      setError(tx("当前为 YOGO 同步源，只读预览模式", "Read only source"));
+      return;
+    }
     if (filtered.length === 0) {
       setError(tx("当前筛选结果为空", "Filtered list is empty"));
       return;
@@ -570,9 +597,10 @@ export function ProductsManagementClient({ initialRows }: Props) {
       普通折扣: r.normalDiscountText,
       VIP折扣: vipLast(r.vipDiscountText),
       分类: r.category || "",
+      子分类: r.subcategory || "",
       供应商: r.supplier || "",
       是否上架: r.statusText === "上架" ? "上架" : "下架",
-      是否新增: r.isNewProduct ? "新" : "",
+      是否新增: r.isNewProduct === null ? "-" : r.isNewProduct ? "新" : "无",
     }));
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(data);
@@ -607,9 +635,10 @@ export function ProductsManagementClient({ initialRows }: Props) {
       普通折扣: r.normalDiscountText,
       VIP折扣: vipLast(r.vipDiscountText),
       分类: r.category || "",
+      子分类: r.subcategory || "",
       供应商: r.supplier || "",
       是否上架: r.statusText === "上架" ? "上架" : "下架",
-      是否新增: r.isNewProduct ? "新" : "",
+      是否新增: r.isNewProduct === null ? "-" : r.isNewProduct ? "新" : "无",
     }));
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(data);
@@ -618,6 +647,10 @@ export function ProductsManagementClient({ initialRows }: Props) {
   }
 
   async function repairProductsFromFile(file: File) {
+    if (readOnlyMode) {
+      setError(tx("当前为 YOGO 同步源，只读预览模式", "Read only source"));
+      return;
+    }
     try {
       setRepairing(true);
       setError("");
@@ -659,7 +692,7 @@ export function ProductsManagementClient({ initialRows }: Props) {
           <div className="overflow-x-auto">
             <div className="grid min-w-[1280px] grid-cols-[auto_400px_auto] items-center gap-3">
               <div className="flex items-center gap-2 whitespace-nowrap">
-              <button type="button" onClick={() => { setImportMode("compare"); fileRef.current?.click(); }} disabled={uploading} className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{uploading ? tx("处理中...", "Proc...") : tx("对比数据导入", "Imp cmp")}</button>
+              <button type="button" onClick={() => { setImportMode("compare"); fileRef.current?.click(); }} disabled={uploading || readOnlyMode} className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{uploading ? tx("处理中...", "Proc...") : tx("对比数据导入", "Imp cmp")}</button>
               <input ref={fileRef} type="file" accept=".xls,.xlsx" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadFile(f); }} />
               <button type="button" onClick={openQuickModal} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700">
                 {lang === "zh" ? `批量筛选（${filtered.length}）` : `Filt (${filtered.length})`}
@@ -684,7 +717,8 @@ export function ProductsManagementClient({ initialRows }: Props) {
                     isNewProduct: true,
                   })
                 }
-                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
+                disabled={readOnlyMode}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {tx("新增产品", "Alta")}
               </button>
@@ -711,7 +745,7 @@ export function ProductsManagementClient({ initialRows }: Props) {
               <button
                 type="button"
                 onClick={() => repairFileRef.current?.click()}
-                disabled={repairing}
+                disabled={repairing || readOnlyMode}
                 className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {repairing ? tx("修复中...", "Fix...") : tx("修复商品数据", "Fix")}
@@ -741,19 +775,27 @@ export function ProductsManagementClient({ initialRows }: Props) {
             </div>
           </div>
           {error ? <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-600">{error}</div> : null}
+          {readOnlyMode ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+              {tx("当前为 YOGO 同步源，只读预览模式", "Read only source")}
+            </div>
+          ) : null}
         </div>
       </TableCard>
 
       <TableCard
         title={tx("产品目录", "Cat prod")}
         titleRight={
-          <button
-            type="button"
-            onClick={() => setCatalogShareOpen(true)}
-            className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700"
-          >
-            {tx("分享客户产品清单", "Share catalog")}
-          </button>
+          <div className="flex items-center gap-3">
+            <p className="text-xs text-slate-500">{yogoLastUpdatedText}</p>
+            <button
+              type="button"
+              onClick={() => setCatalogShareOpen(true)}
+              className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700"
+            >
+              {tx("分享客户产品清单", "Share catalog")}
+            </button>
+          </div>
         }
       >
         {viewMode === "catalog" ? (
@@ -773,6 +815,7 @@ export function ProductsManagementClient({ initialRows }: Props) {
                 <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold">{tx("普通折扣", "Dsc")}</th>
                 <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold">{tx("VIP折扣", "VIP Dsc")}</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold">{tx("分类", "Cat")}</th>
+                <th className="whitespace-nowrap px-3 py-2.5 font-semibold">{tx("子分类", "Subcat")}</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold">{tx("供应商", "Prov")}</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold">{tx("是否上架", "On?")}</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold">{tx("是否新增", "New?")}</th>
@@ -810,6 +853,7 @@ export function ProductsManagementClient({ initialRows }: Props) {
                   <td className="px-3 py-2 text-right tabular-nums text-slate-700">{r.normalDiscountText}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-slate-700">{vipLast(r.vipDiscountText)}</td>
                   <td className="px-3 py-2 text-slate-600">{r.category || "-"}</td>
+                  <td className="px-3 py-2 text-slate-600">{r.subcategory || "-"}</td>
                   <td className="px-3 py-2 text-slate-600">{r.supplier || "-"}</td>
                   <td className="px-3 py-2">
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${r.statusText === "上架" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
@@ -817,15 +861,20 @@ export function ProductsManagementClient({ initialRows }: Props) {
                     </span>
                   </td>
                   <td className="px-3 py-2">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${r.isNewProduct ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
-                      {r.isNewProduct ? tx("新", "Nuevo") : tx("无", "No")}
-                    </span>
+                    {r.isNewProduct === null ? (
+                      <span className="text-slate-400">-</span>
+                    ) : (
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${r.isNewProduct ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+                        {r.isNewProduct ? tx("新", "Nuevo") : tx("无", "No")}
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <button
                       type="button"
+                      disabled={readOnlyMode}
                       onClick={() => void deleteProduct(r.id, r.sku)}
-                      className="inline-flex h-8 w-8 items-center justify-center text-rose-500 hover:text-rose-700"
+                      className="inline-flex h-8 w-8 items-center justify-center text-rose-500 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-35"
                       title={tx("删除", "Del")}
                     >
                       <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8">
@@ -839,6 +888,7 @@ export function ProductsManagementClient({ initialRows }: Props) {
                   <td className="px-3 py-2">
                     <button
                       type="button"
+                      disabled={readOnlyMode}
                       onClick={() =>
                         setEdit({
                           id: r.id,
@@ -860,10 +910,10 @@ export function ProductsManagementClient({ initialRows }: Props) {
                           category: r.category || "",
                           supplier: r.supplier || "",
                           available: String(r.available ?? 1),
-                          isNewProduct: r.isNewProduct,
+                          isNewProduct: r.isNewProduct === true,
                         })
                       }
-                      className="inline-flex h-8 w-8 items-center justify-center text-slate-600"
+                      className="inline-flex h-8 w-8 items-center justify-center text-slate-600 disabled:cursor-not-allowed disabled:opacity-35"
                     >
                       <svg
                         viewBox="0 0 20 20"
@@ -885,6 +935,11 @@ export function ProductsManagementClient({ initialRows }: Props) {
         </div>
         {filtered.length > 0 ? (
           <div className="border-t border-slate-200 px-5 py-4">
+            <div className="mb-2 text-center text-xs text-slate-500">
+              {lang === "zh"
+                ? `当前页 ${safePage} / ${totalPages}，总记录 ${filtered.length}`
+                : `Page ${safePage}/${totalPages}, Total ${filtered.length}`}
+            </div>
             <div className="flex flex-nowrap items-center justify-center gap-2 overflow-x-auto">
               <button
                 type="button"
@@ -1234,7 +1289,7 @@ export function ProductsManagementClient({ initialRows }: Props) {
                 <button
                   type="button"
                   onClick={() => void applyBatchUpdate()}
-                  disabled={batchUpdating || filtered.length === 0}
+                  disabled={readOnlyMode || batchUpdating || filtered.length === 0}
                   className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {tx("保存修改", "Guar")}
@@ -1242,7 +1297,7 @@ export function ProductsManagementClient({ initialRows }: Props) {
                 <button
                   type="button"
                   onClick={() => void deleteFilteredRows()}
-                  disabled={filtered.length === 0}
+                  disabled={readOnlyMode || filtered.length === 0}
                   className="inline-flex h-10 items-center justify-center rounded-xl border border-rose-200 bg-rose-50 px-4 text-sm font-semibold text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {tx("删除筛选结果", "Del filt")}
