@@ -89,6 +89,7 @@ export default async function ProductsManagementPage() {
       select: {
         category_zh: true,
         category_es: true,
+        yogo_code: true,
       },
     }),
   );
@@ -124,6 +125,16 @@ export default async function ProductsManagementPage() {
   }
   const categoryCodeMap = new Map<string, string>();
   for (const item of categoryMapRows) {
+    const configuredCode = String(item.yogo_code || "").replace(/\D+/g, "").slice(0, 2);
+    if (configuredCode) {
+      const zh = String(item.category_zh || "").trim();
+      const es = String(item.category_es || "").trim();
+      const mapped = stripLeadingCategoryCode(zh) || stripLeadingCategoryCode(es);
+      if (mapped) {
+        categoryCodeMap.set(configuredCode.padStart(2, "0"), mapped);
+        continue;
+      }
+    }
     const zh = String(item.category_zh || "").trim();
     const es = String(item.category_es || "").trim();
     const zhIsPureCode = /^\d+$/u.test(zh);

@@ -256,6 +256,7 @@ model ProductCategoryMap {
 
   category_zh String
   category_es String?
+  yogo_code   String?
   active      Boolean @default(true)
 
   created_at DateTime @default(now())
@@ -265,6 +266,7 @@ model ProductCategoryMap {
   company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@unique([tenant_id, company_id, category_zh])
+  @@unique([tenant_id, company_id, yogo_code])
   @@index([tenant_id, company_id])
   @@map("product_category_maps")
 }

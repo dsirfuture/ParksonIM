@@ -691,39 +691,14 @@ export function ProductsManagementClient({
       <TableCard title={tx("产品管理", "Prod cfg")} description={tx("导入、筛选、批量修改并维护商品数据。", "Importe, filtre, edite por lote y mantenga datos de productos.")}>
         <div className="space-y-3 p-4">
           <div className="overflow-x-auto">
-            <div className="grid min-w-[1280px] grid-cols-[auto_400px_auto] items-center gap-3">
-              <div className="flex items-center gap-2 whitespace-nowrap">
-              <button type="button" onClick={() => { setImportMode("compare"); fileRef.current?.click(); }} disabled={uploading || readOnlyMode} className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{uploading ? tx("处理中...", "Proc...") : tx("对比数据导入", "Imp cmp")}</button>
-              <input ref={fileRef} type="file" accept=".xls,.xlsx" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadFile(f); }} />
-              <button type="button" onClick={openQuickModal} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700">
-                {lang === "zh" ? `批量筛选（${filtered.length}）` : `Filt (${filtered.length})`}
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setEdit({
-                    id: "",
-                    sku: "",
-                    barcode: "",
-                    nameZh: "",
-                    nameEs: "",
-                    casePack: "",
-                    cartonPack: "",
-                    price: "",
-                    normalDiscount: "",
-                    vipDiscount: "",
-                    category: "",
-                    supplier: "",
-                    available: "1",
-                    isNewProduct: true,
-                  })
-                }
-                disabled={readOnlyMode}
-                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {tx("新增产品", "Alta")}
-              </button>
-              </div>
+	            <div className="grid min-w-[1280px] grid-cols-[auto_400px_auto] items-center gap-3">
+	              <div className="flex items-center gap-2 whitespace-nowrap">
+	              <button type="button" onClick={() => { setImportMode("compare"); fileRef.current?.click(); }} disabled={uploading || readOnlyMode} className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{uploading ? tx("处理中...", "Proc...") : tx("对比数据导入", "Imp cmp")}</button>
+	              <input ref={fileRef} type="file" accept=".xls,.xlsx" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadFile(f); }} />
+	              <button type="button" onClick={openQuickModal} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700">
+	                {lang === "zh" ? `批量筛选（${filtered.length}）` : `Filt (${filtered.length})`}
+	              </button>
+	              </div>
 
               <input value={keyword} onChange={(e) => { setKeyword(e.target.value); setPage(1); }} placeholder={tx("搜索 SKU、条形码、品名、分类、供应商", "Buscar SKU/cod/nom/cat/prov")} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm" />
 
@@ -736,44 +711,15 @@ export function ProductsManagementClient({
                 <span>{tx("下架", "OFF")}</span>
                 <span className="rounded-md border border-rose-300 bg-white px-1.5 py-0.5">{off}</span>
               </div>
-              <button
-                type="button"
-                onClick={exportAllRows}
-                className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700"
-              >
-                {tx("导出全部商品", "Exp all")}
-              </button>
-              <button
-                type="button"
-                onClick={() => repairFileRef.current?.click()}
-                disabled={repairing || readOnlyMode}
-                className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {repairing ? tx("修复中...", "Fix...") : tx("修复商品数据", "Fix")}
-              </button>
-              <input
-                ref={repairFileRef}
-                type="file"
-                accept=".xls,.xlsx"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) void repairProductsFromFile(f);
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  const next = viewMode === "catalog" ? "imports" : "catalog";
-                  setViewMode(next);
-                  if (next === "imports" && importRecords.length === 0) void loadImportRecords();
-                }}
-                className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700"
-              >
-                {viewMode === "catalog" ? tx("导入记录", "Hist") : tx("返回目录", "Back")}
-              </button>
-              </div>
-            </div>
+	              <button
+	                type="button"
+	                onClick={exportAllRows}
+	                className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700"
+	              >
+	                {tx("导出全部商品", "Exp all")}
+	              </button>
+	              </div>
+	            </div>
           </div>
           {error ? <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-600">{error}</div> : null}
         </div>

@@ -98,6 +98,7 @@ type CategoryMap = {
   id: string;
   categoryZh: string;
   categoryEs: string;
+  yogoCode: string;
   active: boolean;
 };
 
@@ -162,6 +163,7 @@ const EMPTY_CATEGORY_MAP: CategoryMapForm = {
   id: "",
   categoryZh: "",
   categoryEs: "",
+  yogoCode: "",
   active: true,
 };
 
@@ -673,7 +675,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
     () =>
       categoryMaps.filter((item) =>
         item.categoryZh.trim() !== "0" &&
-        [item.categoryZh, item.categoryEs]
+        [item.categoryZh, item.categoryEs, item.yogoCode]
           .join(" ")
           .toLowerCase()
           .includes(categoryKeyword.trim().toLowerCase()),
@@ -1271,6 +1273,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       <tr>
                         <th className="px-3 py-2 text-left">{tx("中文分类", "Categoria ZH")}</th>
                         <th className="px-3 py-2 text-left">{tx("西语分类", "Categoria ES")}</th>
+                        <th className="px-3 py-2 text-left">{tx("友购序号", "YG Code")}</th>
                         <th className="px-3 py-2 text-left">{tx("状态", "Estado")}</th>
                         <th className="px-3 py-2 text-left w-[92px]"></th>
                       </tr>
@@ -1287,6 +1290,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                         >
                           <td className="px-3 py-2 font-semibold text-slate-900">{item.categoryZh}</td>
                           <td className="px-3 py-2 text-slate-700">{item.categoryEs || tx("未设置", "Sin configurar")}</td>
+                          <td className="px-3 py-2 text-slate-700">{item.yogoCode || "-"}</td>
                           <td className="px-3 py-2">
                             <span
                               className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -1393,6 +1397,15 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                         value={categoryForm.categoryEs}
                         onChange={(e) => setCategoryForm((p) => ({ ...p, categoryEs: e.target.value }))}
                         placeholder={tx("请输入西语分类", "Ingrese categoria ES")}
+                        className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-slate-600">{tx("友购序号", "YG Code")}</label>
+                      <input
+                        value={categoryForm.yogoCode}
+                        onChange={(e) => setCategoryForm((p) => ({ ...p, yogoCode: e.target.value }))}
+                        placeholder={tx("例如 19", "Ej. 19")}
                         className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm"
                       />
                     </div>

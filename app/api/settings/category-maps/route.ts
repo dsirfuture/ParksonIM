@@ -9,6 +9,14 @@ function normalizeText(value: unknown) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function normalizeYogoCode(value: unknown) {
+  const raw = normalizeText(value);
+  if (!raw) return "";
+  const digits = raw.replace(/\D+/g, "");
+  if (!digits) return "";
+  return digits.slice(0, 2).padStart(2, "0");
+}
+
 function isInvalidCategory(value: string) {
   const v = normalizeText(value).toLowerCase();
   return !v || v === "0" || v === "-" || v === "--" || v === "n/a" || v === "na";
@@ -86,6 +94,7 @@ export async function GET() {
           id: row.id,
           categoryZh: row.category_zh,
           categoryEs: row.category_es || "",
+          yogoCode: row.yogo_code || "",
           active: row.active,
           updatedAt: row.updated_at.toISOString(),
         })),
@@ -109,6 +118,7 @@ export async function POST(request: Request) {
     const id = normalizeText(body.id);
     const categoryZh = normalizeText(body.categoryZh);
     const categoryEs = normalizeText(body.categoryEs);
+    const yogoCode = normalizeYogoCode(body.yogoCode);
     const active = Boolean(body.active ?? true);
 
     if (!categoryZh || isInvalidCategory(categoryZh)) {
@@ -130,6 +140,7 @@ export async function POST(request: Request) {
           data: {
             category_zh: categoryZh,
             category_es: categoryEs || null,
+            yogo_code: yogoCode || null,
             active,
           },
         }),
@@ -144,6 +155,7 @@ export async function POST(request: Request) {
           company_id: session.companyId,
           category_zh: categoryZh,
           category_es: categoryEs || null,
+          yogo_code: yogoCode || null,
           active,
         },
         select: { id: true },
