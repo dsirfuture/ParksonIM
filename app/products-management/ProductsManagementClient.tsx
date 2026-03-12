@@ -814,13 +814,10 @@ export function ProductsManagementClient({
                 <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold">{tx("卖价", "PV")}</th>
                 <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold">{tx("普通折扣", "Dsc")}</th>
                 <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold">{tx("VIP折扣", "VIP Dsc")}</th>
-                <th className="whitespace-nowrap px-3 py-2.5 font-semibold">{tx("分类", "Cat")}</th>
+                <th className="whitespace-nowrap px-3 py-2.5 font-semibold">{tx("友购序号", "YG Code")}</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold">{tx("子分类", "Subcat")}</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold">{tx("供应商", "Prov")}</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold">{tx("是否上架", "On?")}</th>
-                <th className="whitespace-nowrap px-3 py-2.5 font-semibold">{tx("是否新增", "New?")}</th>
-                <th className="whitespace-nowrap px-3 py-2.5 font-semibold"></th>
-                <th className="whitespace-nowrap px-3 py-2.5 font-semibold"></th>
               </tr>
             </thead>
             <tbody className="text-[13px]">
@@ -859,74 +856,6 @@ export function ProductsManagementClient({
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${r.statusText === "上架" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
                       {r.statusText === "上架" ? tx("上架", "ON") : tx("下架", "OFF")}
                     </span>
-                  </td>
-                  <td className="px-3 py-2">
-                    {r.isNewProduct === null ? (
-                      <span className="text-slate-400">-</span>
-                    ) : (
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${r.isNewProduct ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
-                        {r.isNewProduct ? tx("新", "Nuevo") : tx("无", "No")}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    <button
-                      type="button"
-                      disabled={readOnlyMode}
-                      onClick={() => void deleteProduct(r.id, r.sku)}
-                      className="inline-flex h-8 w-8 items-center justify-center text-rose-500 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-35"
-                      title={tx("删除", "Del")}
-                    >
-                      <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8">
-                        <path d="M4.5 5.5h11" />
-                        <path d="M7.5 5.5V4.25h5V5.5" />
-                        <path d="M6.5 7.5v7.25h7V7.5" />
-                        <path d="M8.75 9.25v4.5M11.25 9.25v4.5" />
-                      </svg>
-                    </button>
-                  </td>
-                  <td className="px-3 py-2">
-                    <button
-                      type="button"
-                      disabled={readOnlyMode}
-                      onClick={() =>
-                        setEdit({
-                          id: r.id,
-                          sku: r.sku,
-                          barcode: r.barcode || "",
-                          nameZh: r.nameZh || "",
-                          nameEs: r.nameEs || "",
-                          casePack: r.casePack === null ? "" : String(r.casePack),
-                          cartonPack: r.cartonPack === null ? "" : String(r.cartonPack),
-                          price: r.priceText === "-" ? "" : r.priceText,
-                          normalDiscount:
-                            r.normalDiscountText === "-"
-                              ? ""
-                              : r.normalDiscountText.replace("%", ""),
-                          vipDiscount:
-                            r.vipDiscountText === "-"
-                              ? ""
-                              : vipLast(r.vipDiscountText).replace("%", ""),
-                          category: r.category || "",
-                          supplier: r.supplier || "",
-                          available: String(r.available ?? 1),
-                          isNewProduct: r.isNewProduct === true,
-                        })
-                      }
-                      className="inline-flex h-8 w-8 items-center justify-center text-slate-600 disabled:cursor-not-allowed disabled:opacity-35"
-                    >
-                      <svg
-                        viewBox="0 0 20 20"
-                        fill="none"
-                        className="h-4 w-4"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                      >
-                        <path d="M3.5 13.75V16.5h2.75L15 7.75 12.25 5 3.5 13.75Z" />
-                        <path d="M10.75 6.5 13.5 9.25" />
-                        <path d="M11.5 3.75 16.25 8.5" />
-                      </svg>
-                    </button>
                   </td>
                 </tr>
               ))}

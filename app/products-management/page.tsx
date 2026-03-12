@@ -6,7 +6,11 @@ import { prisma } from "@/lib/prisma";
 import { withPrismaRetry } from "@/lib/prisma-retry";
 import { hasPermission } from "@/lib/permissions";
 import { getSession } from "@/lib/tenant";
-import { parseYogoDiscountParts, stripLeadingCategoryCode } from "@/lib/yogo-product-utils";
+import {
+  extractCategoryCode,
+  parseYogoDiscountParts,
+  stripLeadingCategoryCode,
+} from "@/lib/yogo-product-utils";
 import { ProductsManagementClient } from "./ProductsManagementClient";
 
 function toNumber(value: unknown) {
@@ -31,11 +35,6 @@ function toNumber(value: unknown) {
   return null;
 }
 
-function categoryText(value: string | null) {
-  if (!value) return "";
-  return value.replace(/\s+/g, " ").trim();
-}
-
 function hasProductImage(sku: string) {
   const normalized = String(sku || "").trim();
   if (!normalized) return false;
@@ -50,6 +49,15 @@ function formatZhDateTime(date: Date) {
   const hh = String(date.getHours()).padStart(2, "0");
   const mm = String(date.getMinutes()).padStart(2, "0");
   return `${y}年${m}月${d}日 ${hh}:${mm}`;
+}
+
+function maxDate(values: Array<Date | null | undefined>) {
+  let latest: Date | null = null;
+  for (const value of values) {
+    if (!value) continue;
+    if (!latest || value > latest) latest = value;
+  }
+  return latest;
 }
 
 export default async function ProductsManagementPage() {
@@ -84,22 +92,18 @@ export default async function ProductsManagementPage() {
 
   const blockedSkuSet = new Set(inventoryRows.map((row) => row.sku));
   const visibleRows = yogoRows.filter((row) => !blockedSkuSet.has(row.product_code));
-  // Use `last_received_at` as the primary YOGO sync timestamp because it is
-  // written on every successful upsert from /api/sync/products.
-  const latestYogoUpdatedAt =
-    yogoRows.length > 0
-      ? yogoRows.reduce(
-          (latest, row) =>
-            row.last_received_at > latest ? row.last_received_at : latest,
-          yogoRows[0].last_received_at,
-        )
-      : null;
+  // Use the real latest valid timestamp from current tenant/company YOGO source rows.
+  // We compare all available sync-related fields and take the global max value.
+  const latestYogoUpdatedAt = maxDate(
+    yogoRows.flatMap((row) => [row.source_updated_at, row.synced_at, row.updated_at]),
+  );
   const yogoLastUpdatedText = latestYogoUpdatedAt
     ? `最近一次友购产品更新时间是：${formatZhDateTime(latestYogoUpdatedAt)}`
     : "最近一次友购产品更新时间是：暂无";
 
   const initialRows = visibleRows.map((row) => {
     const discount = parseYogoDiscountParts(row.category_name, row.source_discount);
+    const categoryCode = extractCategoryCode(row.category_name);
     return {
       id: row.id,
       sku: row.product_code,
@@ -111,7 +115,7 @@ export default async function ProductsManagementPage() {
       priceText: toNumber(row.source_price)?.toFixed(2) || "-",
       normalDiscountText: discount.normal,
       vipDiscountText: discount.vip,
-      category: categoryText(row.category_name),
+      category: categoryCode ? categoryCode.slice(0, 2).padStart(2, "0") : "-",
       subcategory: stripLeadingCategoryCode(row.subcategory_name),
       supplier: row.supplier || "",
       hasImage: hasProductImage(row.product_code),
