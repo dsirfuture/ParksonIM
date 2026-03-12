@@ -43,12 +43,17 @@ function hasProductImage(sku: string) {
 }
 
 function formatZhDateTime(date: Date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  const hh = String(date.getHours()).padStart(2, "0");
-  const mm = String(date.getMinutes()).padStart(2, "0");
-  return `${y}年${m}月${d}日 ${hh}:${mm}`;
+  const parts = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}年${values.month}月${values.day}日 ${values.hour}:${values.minute}`;
 }
 
 function maxDate(values: Array<Date | null | undefined>) {
@@ -105,14 +110,18 @@ export default async function ProductsManagementPage() {
 
   const blockedSkuSet = new Set(inventoryRows.map((row) => row.sku));
   const visibleRows = yogoRows.filter((row) => !blockedSkuSet.has(row.product_code));
-  // Use the real latest valid timestamp from current tenant/company YOGO source rows.
-  // We compare all available sync-related fields and take the global max value.
-  const latestYogoUpdatedAt = maxDate(
-    yogoRows.flatMap((row) => [row.source_updated_at, row.synced_at, row.updated_at]),
-  );
-  const yogoLastUpdatedText = latestYogoUpdatedAt
-    ? `最近一次友购产品更新时间是：${formatZhDateTime(latestYogoUpdatedAt)}`
-    : "最近一次友购产品更新时间是：暂无";
+  // For "latest sync to website", always use synced_at first (all rows in tenant/company scope).
+  const latestSyncedAt = maxDate(yogoRows.map((row) => row.synced_at));
+  const fallbackSourceUpdatedAt = maxDate(yogoRows.map((row) => row.source_updated_at));
+  const fallbackUpdatedAt = maxDate(yogoRows.map((row) => row.updated_at));
+  let yogoLastUpdatedText = "最近一次友购产品更新时间是：暂无";
+  if (latestSyncedAt) {
+    yogoLastUpdatedText = `最近一次友购产品更新时间是：${formatZhDateTime(latestSyncedAt)}`;
+  } else if (fallbackSourceUpdatedAt) {
+    yogoLastUpdatedText = `最近一次友购产品更新时间是：${formatZhDateTime(fallbackSourceUpdatedAt)}（回退：source_updated_at）`;
+  } else if (fallbackUpdatedAt) {
+    yogoLastUpdatedText = `最近一次友购产品更新时间是：${formatZhDateTime(fallbackUpdatedAt)}（回退：updated_at）`;
+  }
   const categoryCodeMap = new Map<string, string>();
   for (const item of categoryMapRows) {
     const zh = String(item.category_zh || "").trim();
