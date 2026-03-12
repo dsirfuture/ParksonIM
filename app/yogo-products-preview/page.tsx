@@ -13,7 +13,7 @@ type SearchParams = {
 };
 
 type PageProps = {
-  searchParams?: SearchParams | Promise<SearchParams>;
+  searchParams?: Promise<SearchParams>;
 };
 
 function parsePage(input: string | string[] | undefined) {
@@ -62,7 +62,7 @@ export default async function YogoProductsPreviewPage({ searchParams }: PageProp
   if (!session) redirect("/login");
   if (!(await hasPermission(session, "manageProducts"))) redirect("/dashboard");
 
-  const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
+  const resolvedSearchParams = (await searchParams) ?? {};
   const requestedPage = parsePage(resolvedSearchParams.page);
 
   const where = {
