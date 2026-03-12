@@ -20,6 +20,7 @@ type ProductRow = {
   normalDiscountText: string;
   vipDiscountText: string;
   category: string;
+  categoryName: string;
   subcategory: string;
   supplier: string;
   hasImage: boolean;
@@ -342,7 +343,7 @@ export function ProductsManagementClient({
         const v = keyword.trim().toLowerCase();
         const kw =
           !v ||
-          [r.sku, r.barcode, r.nameZh, r.nameEs, r.category, r.supplier]
+          [r.sku, r.barcode, r.nameZh, r.nameEs, r.category, r.categoryName, r.supplier]
             .join(" ")
             .toLowerCase()
             .includes(v);
@@ -775,11 +776,6 @@ export function ProductsManagementClient({
             </div>
           </div>
           {error ? <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-600">{error}</div> : null}
-          {readOnlyMode ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-              {tx("当前为 YOGO 同步源，只读预览模式", "Read only source")}
-            </div>
-          ) : null}
         </div>
       </TableCard>
 
@@ -815,6 +811,7 @@ export function ProductsManagementClient({
                 <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold">{tx("普通折扣", "Dsc")}</th>
                 <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold">{tx("VIP折扣", "VIP Dsc")}</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold">{tx("友购序号", "YG Code")}</th>
+                <th className="whitespace-nowrap px-3 py-2.5 font-semibold">{tx("分类", "Cat")}</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold">{tx("子分类", "Subcat")}</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold">{tx("供应商", "Prov")}</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold">{tx("是否上架", "On?")}</th>
@@ -850,6 +847,7 @@ export function ProductsManagementClient({
                   <td className="px-3 py-2 text-right tabular-nums text-slate-700">{r.normalDiscountText}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-slate-700">{vipLast(r.vipDiscountText)}</td>
                   <td className="px-3 py-2 text-slate-600">{r.category || "-"}</td>
+                  <td className="px-3 py-2 text-slate-600">{r.categoryName || "-"}</td>
                   <td className="px-3 py-2 text-slate-600">{r.subcategory || "-"}</td>
                   <td className="px-3 py-2 text-slate-600">{r.supplier || "-"}</td>
                   <td className="px-3 py-2">

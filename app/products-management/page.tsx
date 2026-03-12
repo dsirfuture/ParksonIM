@@ -74,6 +74,19 @@ export default async function ProductsManagementPage() {
       orderBy: [{ updated_at: "desc" }, { product_code: "asc" }],
     }),
   );
+  const categoryMapRows = await withPrismaRetry(() =>
+    prisma.productCategoryMap.findMany({
+      where: {
+        tenant_id: session.tenantId,
+        company_id: session.companyId,
+        active: true,
+      },
+      select: {
+        category_zh: true,
+        category_es: true,
+      },
+    }),
+  );
 
   const skuList = yogoRows.map((row) => row.product_code);
   const inventoryRows = skuList.length
@@ -100,10 +113,35 @@ export default async function ProductsManagementPage() {
   const yogoLastUpdatedText = latestYogoUpdatedAt
     ? `最近一次友购产品更新时间是：${formatZhDateTime(latestYogoUpdatedAt)}`
     : "最近一次友购产品更新时间是：暂无";
+  const categoryCodeMap = new Map<string, string>();
+  for (const item of categoryMapRows) {
+    const zh = String(item.category_zh || "").trim();
+    const es = String(item.category_es || "").trim();
+    const zhIsPureCode = /^\d+$/u.test(zh);
+    const esIsPureCode = /^\d+$/u.test(es);
+    if (zhIsPureCode && es && !esIsPureCode) {
+      categoryCodeMap.set(zh.padStart(2, "0"), stripLeadingCategoryCode(es));
+      continue;
+    }
+    if (esIsPureCode && zh && !zhIsPureCode) {
+      categoryCodeMap.set(es.padStart(2, "0"), stripLeadingCategoryCode(zh));
+      continue;
+    }
+    const zhCode = extractCategoryCode(zh);
+    if (zhCode && !zhIsPureCode) {
+      categoryCodeMap.set(zhCode.slice(0, 2).padStart(2, "0"), stripLeadingCategoryCode(zh));
+      continue;
+    }
+    const esCode = extractCategoryCode(es);
+    if (esCode && !esIsPureCode) {
+      categoryCodeMap.set(esCode.slice(0, 2).padStart(2, "0"), stripLeadingCategoryCode(es));
+    }
+  }
 
   const initialRows = visibleRows.map((row) => {
     const discount = parseYogoDiscountParts(row.category_name, row.source_discount);
     const categoryCode = extractCategoryCode(row.category_name);
+    const yogoCode = categoryCode ? categoryCode.slice(0, 2).padStart(2, "0") : "-";
     return {
       id: row.id,
       sku: row.product_code,
@@ -115,7 +153,8 @@ export default async function ProductsManagementPage() {
       priceText: toNumber(row.source_price)?.toFixed(2) || "-",
       normalDiscountText: discount.normal,
       vipDiscountText: discount.vip,
-      category: categoryCode ? categoryCode.slice(0, 2).padStart(2, "0") : "-",
+      category: yogoCode,
+      categoryName: yogoCode === "-" ? "-" : categoryCodeMap.get(yogoCode) || "-",
       subcategory: stripLeadingCategoryCode(row.subcategory_name),
       supplier: row.supplier || "",
       hasImage: hasProductImage(row.product_code),
