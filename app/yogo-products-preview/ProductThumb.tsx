@@ -14,6 +14,7 @@ function normalizeSku(sku?: string | null) {
 
 export function ProductThumb({ sku, size = 56 }: ProductThumbProps) {
   const [failed, setFailed] = useState(false);
+  const [open, setOpen] = useState(false);
   const normalizedSku = useMemo(() => normalizeSku(sku), [sku]);
   const src = normalizedSku ? buildProductImageUrl(normalizedSku, "jpg") : "";
 
@@ -29,18 +30,38 @@ export function ProductThumb({ sku, size = 56 }: ProductThumbProps) {
   }
 
   return (
-    <div
-      className="overflow-hidden rounded-md border border-slate-200 bg-slate-50"
-      style={{ width: size, height: size }}
-    >
-      <img
-        src={src}
-        alt={normalizedSku}
-        width={size}
-        height={size}
-        className="h-full w-full object-cover"
-        onError={() => setFailed(true)}
-      />
-    </div>
+    <>
+      <button
+        type="button"
+        className="overflow-hidden rounded-md border border-slate-200 bg-slate-50"
+        style={{ width: size, height: size }}
+        onClick={() => setOpen(true)}
+        aria-label={`预览图片 ${normalizedSku}`}
+      >
+        <img
+          src={src}
+          alt={normalizedSku}
+          width={size}
+          height={size}
+          className="h-full w-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      </button>
+
+      {open ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setOpen(false)}
+          aria-label="关闭图片预览"
+        >
+          <img
+            src={src}
+            alt={normalizedSku}
+            className="max-h-[85vh] max-w-[85vw] rounded-lg border border-slate-200 bg-white object-contain shadow-xl"
+          />
+        </button>
+      ) : null}
+    </>
   );
 }
