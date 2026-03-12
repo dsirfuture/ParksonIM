@@ -2,6 +2,8 @@ const PRODUCT_IMAGE_BASE_URL = (process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL |
   .trim()
   .replace(/\/+$/, "");
 
+export const HAS_REMOTE_PRODUCT_IMAGE_BASE = Boolean(PRODUCT_IMAGE_BASE_URL);
+
 function normalizeKey(value: string) {
   return String(value || "").trim();
 }

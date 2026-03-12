@@ -6,7 +6,7 @@ import { ProductImage } from "@/components/product-image";
 import { ImageLightbox } from "@/components/image-lightbox";
 import * as XLSX from "xlsx";
 import { getClientLang } from "@/lib/lang-client";
-import { buildProductImageUrl } from "@/lib/product-image-url";
+import { buildProductImageUrl, HAS_REMOTE_PRODUCT_IMAGE_BASE } from "@/lib/product-image-url";
 
 type ProductRow = {
   id: string;
@@ -790,7 +790,7 @@ export function ProductsManagementClient({ initialRows }: Props) {
                       size={40}
                       roundedClassName="rounded-md"
                       onClick={() =>
-                        r.hasImage
+                        (r.hasImage || HAS_REMOTE_PRODUCT_IMAGE_BASE)
                           ? setPreview({
                               open: true,
                               src: buildProductImageUrl(r.sku, "jpg"),

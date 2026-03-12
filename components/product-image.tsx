@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { buildProductImageUrl } from "@/lib/product-image-url";
+import { buildProductImageUrl, HAS_REMOTE_PRODUCT_IMAGE_BASE } from "@/lib/product-image-url";
 
 type ProductImageProps = {
   sku?: string | null;
@@ -40,7 +40,9 @@ export function ProductImage({
     </div>
   );
 
-  if (!normalizedSku || failed || !hasImage) {
+  const shouldTryLoad = hasImage || HAS_REMOTE_PRODUCT_IMAGE_BASE;
+
+  if (!normalizedSku || failed || !shouldTryLoad) {
     return placeholder;
   }
 
