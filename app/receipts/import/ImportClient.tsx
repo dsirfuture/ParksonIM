@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { ProductImage } from "@/components/product-image";
 import { ImageLightbox } from "@/components/image-lightbox";
+import { buildProductImageUrl } from "@/lib/product-image-url";
 
 type Lang = "zh" | "es";
 
@@ -1044,7 +1045,7 @@ export function ImportClient({
                     <tbody>
                       {rows.slice(0, 5).map((row, index) => {
                         const imageSrc = row.sku
-                          ? `/products/${encodeURIComponent(row.sku)}.jpg`
+                          ? buildProductImageUrl(row.sku, "jpg")
                           : "";
 
                         return (

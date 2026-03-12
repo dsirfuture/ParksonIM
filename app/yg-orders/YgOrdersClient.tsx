@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { TableCard } from "@/components/table-card";
 import { getClientLang } from "@/lib/lang-client";
+import { buildProductImageUrls } from "@/lib/product-image-url";
 
 
 
@@ -349,7 +350,7 @@ function PreviewProductImage({
     const keys = [itemNo, barcode].map((item) => item.trim()).filter(Boolean);
     const exts = ["jpg", "jpeg", "png", "webp"];
     return keys.flatMap((key) =>
-      exts.map((ext) => `/products/${encodeURIComponent(key)}.${ext}`),
+      buildProductImageUrls(key, exts),
     );
   }, [itemNo, barcode]);
 

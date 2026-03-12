@@ -4,6 +4,7 @@ dist/
 coverage/
 .next/
 .vercel/
+.wrangler/
 *.tsbuildinfo
 .DS_Store
 *.log

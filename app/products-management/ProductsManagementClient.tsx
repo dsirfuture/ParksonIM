@@ -6,6 +6,7 @@ import { ProductImage } from "@/components/product-image";
 import { ImageLightbox } from "@/components/image-lightbox";
 import * as XLSX from "xlsx";
 import { getClientLang } from "@/lib/lang-client";
+import { buildProductImageUrl } from "@/lib/product-image-url";
 
 type ProductRow = {
   id: string;
@@ -792,7 +793,7 @@ export function ProductsManagementClient({ initialRows }: Props) {
                         r.hasImage
                           ? setPreview({
                               open: true,
-                              src: `/products/${encodeURIComponent(r.sku)}.jpg`,
+                              src: buildProductImageUrl(r.sku, "jpg"),
                               title: r.sku,
                             })
                           : null

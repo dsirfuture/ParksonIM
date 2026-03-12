@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { buildProductImageUrl } from "@/lib/product-image-url";
 
 type ProductImageProps = {
   sku?: string | null;
@@ -28,9 +29,7 @@ export function ProductImage({
   const [failed, setFailed] = useState(false);
 
   const normalizedSku = useMemo(() => normalizeSku(sku), [sku]);
-  const src = normalizedSku
-    ? `/products/${encodeURIComponent(normalizedSku)}.jpg`
-    : "";
+  const src = normalizedSku ? buildProductImageUrl(normalizedSku, "jpg") : "";
 
   const placeholder = (
     <div

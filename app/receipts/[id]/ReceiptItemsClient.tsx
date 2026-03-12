@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ProductImage } from "@/components/product-image";
 import { ImageLightbox } from "@/components/image-lightbox";
+import { buildProductImageUrl } from "@/lib/product-image-url";
 
 type ItemStatus = "pending" | "in_progress" | "completed";
 
@@ -193,7 +194,7 @@ export function ReceiptItemsClient({
 
     setLightbox({
       open: true,
-      src: `/products/${encodeURIComponent(sku)}.jpg`,
+      src: buildProductImageUrl(sku, "jpg"),
       alt: titleText || sku,
       title: `${text.imagePreviewTitle} · ${sku}`,
     });

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ProductImage } from "@/components/product-image";
 import { ImageLightbox } from "@/components/image-lightbox";
+import { buildProductImageUrl } from "@/lib/product-image-url";
 
 type ItemStatus = "pending" | "in_progress" | "completed";
 
@@ -278,9 +279,7 @@ function SkuPreviewImage({
 }) {
   const [error, setError] = useState(false);
   const normalizedSku = sku.trim();
-  const src = normalizedSku
-    ? `/products/${encodeURIComponent(normalizedSku)}.jpg`
-    : "";
+  const src = normalizedSku ? buildProductImageUrl(normalizedSku, "jpg") : "";
 
   useEffect(() => {
     setError(false);
@@ -534,7 +533,7 @@ export function ScanClient({
   }, [scanInput, items]);
 
   function openImage(item: ItemRow) {
-    const src = item.sku ? `/products/${encodeURIComponent(item.sku)}.jpg` : "";
+    const src = item.sku ? buildProductImageUrl(item.sku, "jpg") : "";
     if (!src) return;
 
     setLightbox({
