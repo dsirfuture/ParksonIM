@@ -343,8 +343,8 @@ export function ProductsManagementClient({ initialRows }: Props) {
         const quickMatched = quickSelected.every((key) => {
           if (key.startsWith("cat:")) return r.category === key.slice(4);
           if (key.startsWith("supplier:")) return r.supplier === key.slice(9);
-          if (key === "hasImage") return r.hasImage;
-          if (key === "noImage") return !r.hasImage;
+          if (key === "hasImage") return imageFlag(r);
+          if (key === "noImage") return !imageFlag(r);
           if (key === "hasBarcode") return Boolean(r.barcode);
           if (key === "noBarcode") return !r.barcode;
           if (key === "hasZh") return Boolean(r.nameZh);
@@ -559,7 +559,7 @@ export function ProductsManagementClient({ initialRows }: Props) {
       return;
     }
     const data = filtered.map((r) => ({
-      图片: r.hasImage ? "有图" : "无图",
+      图片: imageFlag(r) ? "有图" : "无图",
       编号: r.sku,
       条形码: r.barcode || "",
       中文名: r.nameZh || "",
@@ -596,7 +596,7 @@ export function ProductsManagementClient({ initialRows }: Props) {
       return;
     }
     const data = rows.map((r) => ({
-      图片: r.hasImage ? "有图" : "无图",
+      图片: imageFlag(r) ? "有图" : "无图",
       编号: r.sku,
       条形码: r.barcode || "",
       中文名: r.nameZh || "",
@@ -1405,3 +1405,5 @@ export function ProductsManagementClient({ initialRows }: Props) {
 }
 
 
+  const imageFlag = (row: ProductRow) =>
+    HAS_REMOTE_PRODUCT_IMAGE_BASE ? true : row.hasImage;
