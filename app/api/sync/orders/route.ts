@@ -114,6 +114,13 @@ function text(value: unknown) {
   return v ? v : null;
 }
 
+function firstNonNull<T>(...values: Array<T | null | undefined>) {
+  for (const value of values) {
+    if (value !== null && value !== undefined) return value;
+  }
+  return null;
+}
+
 function numberOrNull(value: unknown) {
   if (value === null || value === undefined || value === "") return null;
   const parsed = Number(String(value).trim());
@@ -185,11 +192,16 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
     input.header && typeof input.header === "object"
       ? (input.header as Record<string, unknown>)
       : null;
-  const orderNo =
-    text(input.order_no) ||
-    text(input.orderNo) ||
-    text(input.order_key) ||
-    text(input.orderKey);
+  const orderNo = firstNonNull(
+    text(input.order_no),
+    text(input.orderNo),
+    text(input.order_key),
+    text(input.orderKey),
+    text(header?.order_no),
+    text(header?.orderNo),
+    text(header?.order_key),
+    text(header?.orderKey),
+  );
   if (!orderNo) {
     throw new Error(`Row ${index + 1}: order_no or order_key is required`);
   }
@@ -197,57 +209,118 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
   const items = rawItems.map(parseOrderItem);
   return {
     orderNo,
-    orderCreatedAt: dateOrNull(
-      input.order_created_at ??
-        input.orderCreatedAt ??
-        header?.order_created_at ??
-        header?.orderCreatedAt,
+    orderCreatedAt: firstNonNull(
+      dateOrNull(input.order_created_at),
+      dateOrNull(input.orderCreatedAt),
+      dateOrNull((input as Record<string, unknown>).created_at),
+      dateOrNull((input as Record<string, unknown>).order_date),
+      dateOrNull(header?.order_created_at),
+      dateOrNull(header?.orderCreatedAt),
+      dateOrNull(header?.created_at),
+      dateOrNull(header?.order_date),
     ),
-    customerId: text(input.customer_id) || text(input.customerId),
+    customerId: firstNonNull(
+      text(input.customer_id),
+      text(input.customerId),
+      text(header?.customer_id),
+      text(header?.customerId),
+    ),
     orderAmount: numberOrNull(
-      input.header_amount ??
-        input.headerAmount ??
-        input.order_amount ??
-        input.orderAmount ??
-        input.amount ??
-        header?.header_amount ??
+      firstNonNull(
+        input.header_amount,
+        input.headerAmount,
+        input.order_amount,
+        input.orderAmount,
+        input.amount,
+        (input as Record<string, unknown>).total_amount,
+        (input as Record<string, unknown>).totalAmount,
+        header?.header_amount,
         header?.headerAmount,
+        header?.order_amount,
+        header?.orderAmount,
+        header?.amount,
+        header?.total_amount,
+        header?.totalAmount,
+      ),
     ),
-    companyName:
-      text(input.company_name) ||
-      text(input.companyName) ||
+    companyName: firstNonNull(
+      text(input.company_name),
+      text(input.companyName),
       text(input.company),
-    customerName:
-      text(input.customer_name) ||
-      text(input.customerName) ||
+      text(header?.company_name),
+      text(header?.companyName),
+      text(header?.company),
+    ),
+    customerName: firstNonNull(
+      text(input.customer_name),
+      text(input.customerName),
       text(input.customer),
-    contactName:
-      text(input.contact_name) ||
-      text(input.contactName) ||
+      text(header?.customer_name),
+      text(header?.customerName),
+      text(header?.customer),
+    ),
+    contactName: firstNonNull(
+      text(input.contact_name),
+      text(input.contactName),
       text(input.contact),
-    contactPhone: text(input.contact_phone) || text(input.contactPhone),
-    addressText: text(input.address_text) || text(input.addressText),
-    remarkText:
-      text(input.order_remark) ||
-      text(input.orderRemark) ||
-      text(input.note) ||
+      text(header?.contact_name),
+      text(header?.contactName),
+      text(header?.contact),
+    ),
+    contactPhone: firstNonNull(
+      text(input.contact_phone),
+      text(input.contactPhone),
+      text(header?.contact_phone),
+      text(header?.contactPhone),
+    ),
+    addressText: firstNonNull(
+      text(input.address_text),
+      text(input.addressText),
+      text(header?.address_text),
+      text(header?.addressText),
+    ),
+    remarkText: firstNonNull(
+      text(input.order_remark),
+      text(input.orderRemark),
+      text(input.note),
       text(input.remark),
-    storeLabel: text(input.store_label) || text(input.storeLabel),
-    headerStatusId:
-      text(input.header_status_id) ||
-      text(input.headerStatusId) ||
-      text(header?.header_status_id) ||
+      text(header?.order_remark),
+      text(header?.orderRemark),
+      text(header?.note),
+      text(header?.remark),
+    ),
+    storeLabel: firstNonNull(
+      text(input.store_label),
+      text(input.storeLabel),
+      text(header?.store_label),
+      text(header?.storeLabel),
+    ),
+    headerStatusId: firstNonNull(
+      text(input.header_status_id),
+      text(input.headerStatusId),
+      text((input as Record<string, unknown>).status_id),
+      text((input as Record<string, unknown>).statusId),
+      text(header?.header_status_id),
       text(header?.headerStatusId),
-    headerStatus:
-      text(input.header_status) ||
-      text(input.headerStatus) ||
-      text(header?.header_status) ||
+      text(header?.status_id),
+      text(header?.statusId),
+    ),
+    headerStatus: firstNonNull(
+      text(input.header_status),
+      text(input.headerStatus),
+      text((input as Record<string, unknown>).status),
+      text((input as Record<string, unknown>).zhuangtai),
+      text(header?.header_status),
       text(header?.headerStatus),
-    latestStatus:
-      text(input.latest_status) ||
-      text(input.latestStatus) ||
-      text(header?.latest_status) ||
+      text(header?.status),
+      text(header?.zhuangtai),
+    ),
+    latestStatus: firstNonNull(
+      text(input.latest_status),
+      text(input.latestStatus),
+      text(header?.latest_status),
       text(header?.latestStatus),
+    ),
     headerUpdatedAt: dateOrNull(
       input.header_updated_at ??
         input.headerUpdatedAt ??
