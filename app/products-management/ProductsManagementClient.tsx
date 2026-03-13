@@ -1126,48 +1126,45 @@ export function ProductsManagementClient({
               <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
                 <p className="text-[13px] font-bold text-slate-900">{lang === "zh" ? `批量修改（当前筛选 ${filtered.length} 条）` : `Batch edit (${filtered.length})`}</p>
                 <p className="mb-3 mt-1 text-xs text-slate-500">{tx("未填写或未选择的字段将保持不变。", "Empty keep")}</p>
-                <div className="space-y-3">
-                  <div className="grid gap-3 md:grid-cols-[1fr_1fr_180px]">
-                    <div className="space-y-1">
-                      <p className="text-xs text-slate-500">{tx("分类", "Cat")}</p>
+                <div className="grid gap-3 md:grid-cols-[1fr_1fr_180px_220px_220px]">
+                  <div className="space-y-1">
+                    <p className="text-xs text-slate-500">{tx("分类", "Cat")}</p>
+                    {categoryChoices.length > 0 ? (
                       <select value={batchUpdate.category} onChange={(e) => setBatchUpdate((p) => ({ ...p, category: e.target.value }))} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm">
                         <option value="">{tx("不改", "No chg")}</option>
                         {categoryChoices.map((x) => <option key={x} value={x}>{x}</option>)}
                       </select>
-                      {categoryChoices.length === 0 ? (
-                        <input
-                          value={batchUpdate.category}
-                          onChange={(e) => setBatchUpdate((p) => ({ ...p, category: e.target.value }))}
-                          className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                          placeholder={tx("暂无分类数据，可手动输入", "No cat, input")}
-                        />
-                      ) : null}
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs text-slate-500">{tx("供应商", "Prov")}</p>
-                      <select value={batchUpdate.supplier} onChange={(e) => setBatchUpdate((p) => ({ ...p, supplier: e.target.value }))} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm">
-                        <option value="">{tx("不改", "No chg")}</option>
-                        {supplierChoices.map((x) => <option key={x} value={x}>{x}</option>)}
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs text-slate-500">{tx("状态", "Estado")}</p>
-                      <select value={batchUpdate.available} onChange={(e) => setBatchUpdate((p) => ({ ...p, available: e.target.value as BatchUpdateState["available"] }))} className="h-10 w-full max-w-[180px] rounded-xl border border-slate-200 bg-white px-3 text-sm">
-                        <option value="">{tx("不改", "No chg")}</option>
-                        <option value="0">{tx("上架", "ON")}</option>
-                        <option value="1">{tx("下架", "OFF")}</option>
-                      </select>
-                    </div>
+                    ) : (
+                      <input
+                        value={batchUpdate.category}
+                        onChange={(e) => setBatchUpdate((p) => ({ ...p, category: e.target.value }))}
+                        className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                        placeholder={tx("暂无分类数据，可手动输入", "No cat, input")}
+                      />
+                    )}
                   </div>
-                  <div className="grid gap-3 md:grid-cols-[220px_220px]">
-                    <div className="space-y-1">
-                      <p className="text-xs text-slate-500">{tx("普通折扣", "Dsc")}</p>
-                      <input value={batchUpdate.normalDiscount} onChange={(e) => setBatchUpdate((p) => ({ ...p, normalDiscount: e.target.value }))} className="h-10 w-full max-w-[220px] rounded-xl border border-slate-200 bg-white px-3 text-sm" />
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs text-slate-500">{tx("VIP折扣", "VIP")}</p>
-                      <input value={batchUpdate.vipDiscount} onChange={(e) => setBatchUpdate((p) => ({ ...p, vipDiscount: e.target.value }))} className="h-10 w-full max-w-[220px] rounded-xl border border-slate-200 bg-white px-3 text-sm" />
-                    </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-slate-500">{tx("供应商", "Prov")}</p>
+                    <select value={batchUpdate.supplier} onChange={(e) => setBatchUpdate((p) => ({ ...p, supplier: e.target.value }))} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm">
+                      <option value="">{tx("不改", "No chg")}</option>
+                      {supplierChoices.map((x) => <option key={x} value={x}>{x}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-slate-500">{tx("状态", "Estado")}</p>
+                    <select value={batchUpdate.available} onChange={(e) => setBatchUpdate((p) => ({ ...p, available: e.target.value as BatchUpdateState["available"] }))} className="h-10 w-full max-w-[180px] rounded-xl border border-slate-200 bg-white px-3 text-sm">
+                      <option value="">{tx("不改", "No chg")}</option>
+                      <option value="0">{tx("上架", "ON")}</option>
+                      <option value="1">{tx("下架", "OFF")}</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-slate-500">{tx("普通折扣", "Dsc")}</p>
+                    <input value={batchUpdate.normalDiscount} onChange={(e) => setBatchUpdate((p) => ({ ...p, normalDiscount: e.target.value }))} className="h-10 w-full max-w-[220px] rounded-xl border border-slate-200 bg-white px-3 text-sm" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-slate-500">{tx("VIP折扣", "VIP")}</p>
+                    <input value={batchUpdate.vipDiscount} onChange={(e) => setBatchUpdate((p) => ({ ...p, vipDiscount: e.target.value }))} className="h-10 w-full max-w-[220px] rounded-xl border border-slate-200 bg-white px-3 text-sm" />
                   </div>
                 </div>
               </div>
