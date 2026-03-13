@@ -1127,7 +1127,7 @@ export function ProductsManagementClient({
                 <p className="text-[13px] font-bold text-slate-900">{lang === "zh" ? `批量修改（当前筛选 ${filtered.length} 条）` : `Batch edit (${filtered.length})`}</p>
                 <p className="mb-3 mt-1 text-xs text-slate-500">{tx("未填写或未选择的字段将保持不变。", "Empty keep")}</p>
                 <div className="space-y-3">
-                  <div className="grid gap-3 md:grid-cols-3">
+                  <div className="grid gap-3 md:grid-cols-[1fr_1fr_180px]">
                     <div className="space-y-1">
                       <p className="text-xs text-slate-500">{tx("分类", "Cat")}</p>
                       <select value={batchUpdate.category} onChange={(e) => setBatchUpdate((p) => ({ ...p, category: e.target.value }))} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm">
@@ -1152,21 +1152,21 @@ export function ProductsManagementClient({
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs text-slate-500">{tx("状态", "Estado")}</p>
-                      <select value={batchUpdate.available} onChange={(e) => setBatchUpdate((p) => ({ ...p, available: e.target.value as BatchUpdateState["available"] }))} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm">
+                      <select value={batchUpdate.available} onChange={(e) => setBatchUpdate((p) => ({ ...p, available: e.target.value as BatchUpdateState["available"] }))} className="h-10 w-full max-w-[180px] rounded-xl border border-slate-200 bg-white px-3 text-sm">
                         <option value="">{tx("不改", "No chg")}</option>
                         <option value="0">{tx("上架", "ON")}</option>
                         <option value="1">{tx("下架", "OFF")}</option>
                       </select>
                     </div>
                   </div>
-                  <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid gap-3 md:grid-cols-[220px_220px]">
                     <div className="space-y-1">
                       <p className="text-xs text-slate-500">{tx("普通折扣", "Dsc")}</p>
-                      <input value={batchUpdate.normalDiscount} onChange={(e) => setBatchUpdate((p) => ({ ...p, normalDiscount: e.target.value }))} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm" />
+                      <input value={batchUpdate.normalDiscount} onChange={(e) => setBatchUpdate((p) => ({ ...p, normalDiscount: e.target.value }))} className="h-10 w-full max-w-[220px] rounded-xl border border-slate-200 bg-white px-3 text-sm" />
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs text-slate-500">{tx("VIP折扣", "VIP")}</p>
-                      <input value={batchUpdate.vipDiscount} onChange={(e) => setBatchUpdate((p) => ({ ...p, vipDiscount: e.target.value }))} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm" />
+                      <input value={batchUpdate.vipDiscount} onChange={(e) => setBatchUpdate((p) => ({ ...p, vipDiscount: e.target.value }))} className="h-10 w-full max-w-[220px] rounded-xl border border-slate-200 bg-white px-3 text-sm" />
                     </div>
                   </div>
                 </div>
