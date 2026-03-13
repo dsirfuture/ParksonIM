@@ -79,6 +79,18 @@ function normalizePhone(value: string | null | undefined) {
   return cleaned || "-";
 }
 
+function extractPhone(...values: Array<string | null | undefined>) {
+  for (const value of values) {
+    const text = String(value || "");
+    if (!text) continue;
+    const match = text.match(/\+?\d{8,15}/g);
+    if (match && match.length > 0) {
+      return normalizePhone(match[0]);
+    }
+  }
+  return "-";
+}
+
 type SearchParams = Record<string, string | string[] | undefined>;
 
 function firstValue(value: string | string[] | undefined) {
@@ -129,6 +141,30 @@ export default async function YogoOrdersPreviewPage(props: {
       : [];
   const supplierAmountByImportId = new Map(
     supplierOrderAmountSums.map((r) => [r.import_id, r._sum.order_amount]),
+  );
+  const itemLineTotalRows =
+    rowIds.length > 0
+      ? await prisma.$queryRawUnsafe<Array<{ import_id: string; line_sum: number | null }>>(
+          `
+            SELECT
+              CAST(so.import_id AS text) AS import_id,
+              SUM(
+                COALESCE(i.line_total, (COALESCE(i.unit_price, 0) * COALESCE(i.total_qty, 0)))
+              )::float AS line_sum
+            FROM yg_supplier_orders so
+            LEFT JOIN yg_supplier_order_items i ON i.supplier_order_id = so.id
+            WHERE so.tenant_id = $1::uuid
+              AND so.company_id = $2::uuid
+              AND so.import_id = ANY($3::uuid[])
+            GROUP BY so.import_id
+          `,
+          session.tenantId,
+          session.companyId,
+          rowIds,
+        )
+      : [];
+  const itemLineSumByImportId = new Map(
+    itemLineTotalRows.map((r) => [r.import_id, r.line_sum]),
   );
 
   const statusColumns = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(
@@ -346,10 +382,15 @@ export default async function YogoOrdersPreviewPage(props: {
                       {row.contact_name || row.customer_name || "-"}
                     </td>
                     <td className="px-3 py-2 text-slate-700">
-                      {normalizePhone(row.contact_phone)}
+                      {extractPhone(row.contact_phone, row.contact_name, row.order_remark)}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-700">
-                      {toMoney(row.order_amount ?? supplierAmountByImportId.get(row.id) ?? null)}
+                      {toMoney(
+                        row.order_amount ??
+                          supplierAmountByImportId.get(row.id) ??
+                          itemLineSumByImportId.get(row.id) ??
+                          null,
+                      )}
                     </td>
                     <td className="max-w-[240px] truncate px-3 py-2 text-slate-600">
                       {row.order_remark || "-"}
