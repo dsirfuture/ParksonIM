@@ -188,6 +188,12 @@ function resolveDisplayNames(item: ProductRow) {
 async function loadPdfFont() {
   const candidates = [
     path.join(process.cwd(), "public", "fonts", "NotoSansSC-Regular.ttf"),
+    "/usr/share/fonts/truetype/noto/NotoSansSC-Regular.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf",
+    "/usr/share/fonts/truetype/arphic/ukai.ttc",
+    "/usr/share/fonts/truetype/arphic/uming.ttc",
     "C:\\Windows\\Fonts\\msyh.ttf",
     "C:\\Windows\\Fonts\\simhei.ttf",
   ];
@@ -204,6 +210,12 @@ async function loadPdfFont() {
 async function loadPdfBoldFont() {
   const candidates = [
     path.join(process.cwd(), "public", "fonts", "NotoSansSC-Bold.ttf"),
+    "/usr/share/fonts/truetype/noto/NotoSansSC-Bold.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Bold.otf",
+    "/usr/share/fonts/truetype/arphic/ukai.ttc",
+    "/usr/share/fonts/truetype/arphic/uming.ttc",
     "C:\\Windows\\Fonts\\msyhbd.ttf",
     "C:\\Windows\\Fonts\\simhei.ttf",
   ];
@@ -844,7 +856,7 @@ async function buildCatalogPdf(
     textY -= metaLineGap;
     const metaPrefix = unicodeSafe
       ? `包装数 ${casePack}  装箱数 ${cartonPack}  `
-      : `${casePack}  ${cartonPack}  `;
+      : `PACK ${casePack}  CARTON ${cartonPack}  `;
     const metaPrefixFont = fontForText(metaPrefix);
     const metaPrefixW = metaPrefixFont.widthOfTextAtSize(metaPrefix, 7.5);
     page.drawText(metaPrefix, {
