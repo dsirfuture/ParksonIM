@@ -110,20 +110,16 @@ export default async function ProductsManagementPage() {
     }),
   );
 
-  const skuList = Array.from(new Set(yogoRows.map((row) => normalizeSku(row.product_code)).filter(Boolean)));
-  const inventoryRows = skuList.length
-    ? await withPrismaRetry(() =>
-        prisma.productCatalog.findMany({
-          where: {
-            tenant_id: session.tenantId,
-            company_id: session.companyId,
-            sku: { in: skuList },
-            inventory: { gt: 5000 },
-          },
-          select: { sku: true },
-        }),
-      )
-    : [];
+  const inventoryRows = await withPrismaRetry(() =>
+    prisma.productCatalog.findMany({
+      where: {
+        tenant_id: session.tenantId,
+        company_id: session.companyId,
+        inventory: { gt: 5000 },
+      },
+      select: { sku: true },
+    }),
+  );
 
   const blockedSkuSet = new Set(inventoryRows.map((row) => normalizeSku(row.sku)).filter(Boolean));
   const visibleRows = yogoRows.filter((row) => !blockedSkuSet.has(normalizeSku(row.product_code)));
