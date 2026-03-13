@@ -1126,7 +1126,7 @@ export function ProductsManagementClient({
               <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
                 <p className="text-[13px] font-bold text-slate-900">{lang === "zh" ? `批量修改（当前筛选 ${filtered.length} 条）` : `Batch edit (${filtered.length})`}</p>
                 <p className="mb-3 mt-1 text-xs text-slate-500">{tx("未填写或未选择的字段将保持不变。", "Empty keep")}</p>
-                <div className="grid gap-3 md:grid-cols-[1fr_1fr_180px_220px_220px]">
+                <div className="grid gap-3 md:grid-cols-[1fr_1fr_140px_120px_120px]">
                   <div className="space-y-1">
                     <p className="text-xs text-slate-500">{tx("分类", "Cat")}</p>
                     {categoryChoices.length > 0 ? (
@@ -1160,11 +1160,33 @@ export function ProductsManagementClient({
                   </div>
                   <div className="space-y-1">
                     <p className="text-xs text-slate-500">{tx("普通折扣", "Dsc")}</p>
-                    <input value={batchUpdate.normalDiscount} onChange={(e) => setBatchUpdate((p) => ({ ...p, normalDiscount: e.target.value }))} className="h-10 w-full max-w-[220px] rounded-xl border border-slate-200 bg-white px-3 text-sm" />
+                    <input
+                      value={batchUpdate.normalDiscount}
+                      onChange={(e) =>
+                        setBatchUpdate((p) => ({
+                          ...p,
+                          normalDiscount: e.target.value.replace(/[^\d]/g, ""),
+                        }))
+                      }
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className="h-10 w-full max-w-[120px] rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                    />
                   </div>
                   <div className="space-y-1">
                     <p className="text-xs text-slate-500">{tx("VIP折扣", "VIP")}</p>
-                    <input value={batchUpdate.vipDiscount} onChange={(e) => setBatchUpdate((p) => ({ ...p, vipDiscount: e.target.value }))} className="h-10 w-full max-w-[220px] rounded-xl border border-slate-200 bg-white px-3 text-sm" />
+                    <input
+                      value={batchUpdate.vipDiscount}
+                      onChange={(e) =>
+                        setBatchUpdate((p) => ({
+                          ...p,
+                          vipDiscount: e.target.value.replace(/[^\d]/g, ""),
+                        }))
+                      }
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className="h-10 w-full max-w-[120px] rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                    />
                   </div>
                 </div>
               </div>
