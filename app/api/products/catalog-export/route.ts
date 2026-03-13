@@ -107,6 +107,21 @@ function normalizeCategory(value: string | null | undefined) {
     .toLowerCase();
 }
 
+function extractYogoCategoryCode(value: string | null | undefined) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const match = text.match(/^(\d{1,2})/u);
+  return match ? match[1].padStart(2, "0") : "";
+}
+
+function parseYogoCodeList(value: string | null | undefined) {
+  return String(value || "")
+    .split(/[,\s，、;；]+/u)
+    .map((item) => item.replace(/\D+/g, "").slice(0, 2))
+    .filter(Boolean)
+    .map((item) => item.padStart(2, "0"));
+}
+
 function safeName(value: string) {
   return value.replace(/[\\/:*?"<>|]+/g, "_");
 }
@@ -864,22 +879,27 @@ export async function GET(request: Request) {
     let categoryZh = searchParams.get("categoryZh") || parsedCategory.zh;
     let categoryEs = searchParams.get("categoryEs") || parsedCategory.es;
 
-    if (category !== "all") {
-      const mapping = await withPrismaRetry(() =>
-        prisma.productCategoryMap.findFirst({
-          where: {
-            tenant_id: session.tenantId,
-            company_id: session.companyId,
-            category_zh: category,
-            active: true,
-          },
-          select: { category_zh: true, category_es: true },
-        }),
-      );
-      if (mapping) {
-        categoryZh = mapping.category_zh;
-        categoryEs = mapping.category_es || mapping.category_zh;
-      }
+    const activeCategoryMaps = await withPrismaRetry(() =>
+      prisma.productCategoryMap.findMany({
+        where: {
+          tenant_id: session.tenantId,
+          company_id: session.companyId,
+          active: true,
+        },
+        select: { category_zh: true, category_es: true, yogo_code: true },
+      }),
+    );
+    const selectedCategoryMap =
+      category === "all"
+        ? null
+        : activeCategoryMaps.find(
+            (item) =>
+              normalizeCategory(item.category_zh) === normalizeCategory(category) ||
+              normalizeCategory(item.category_es) === normalizeCategory(category),
+          ) || null;
+    if (selectedCategoryMap) {
+      categoryZh = selectedCategoryMap.category_zh;
+      categoryEs = selectedCategoryMap.category_es || selectedCategoryMap.category_zh;
     }
 
     const cfg = await withPrismaRetry(() =>
@@ -940,35 +960,56 @@ export async function GET(request: Request) {
     };
 
     const rowsRaw = await withPrismaRetry(() =>
-      prisma.productCatalog.findMany({
+      prisma.yogoProductSource.findMany({
         where: {
           tenant_id: session.tenantId,
           company_id: session.companyId,
-          ...(onShelfOnly ? { available: 0 } : {}),
+          ...(onShelfOnly ? { source_disabled: false } : {}),
         },
-        orderBy: [{ category: "asc" }, { sku: "asc" }],
+        orderBy: [{ category_name: "asc" }, { product_code: "asc" }],
         select: {
-          sku: true,
-          barcode: true,
-          name_zh: true,
+          product_code: true,
+          product_no: true,
+          name_cn: true,
           name_es: true,
-          category: true,
+          category_name: true,
           case_pack: true,
           carton_pack: true,
-          price: true,
+          source_price: true,
         },
       }),
     );
 
-    const normalizedSelected = normalizeCategory(category);
-    const rows =
-      category === "all"
-        ? rowsRaw
-        : rowsRaw.filter(
-            (row) =>
-              normalizeCategory(row.category) === normalizedSelected ||
-              String(row.category || "").includes(category),
+    let selectedRows = rowsRaw;
+    if (category !== "all") {
+      const selectedCode = category.replace(/\D+/g, "").slice(0, 2).padStart(2, "0");
+      const mappedCodes = selectedCategoryMap ? parseYogoCodeList(selectedCategoryMap.yogo_code) : [];
+      if (mappedCodes.length > 0) {
+        const mappedCodeSet = new Set(mappedCodes);
+        selectedRows = rowsRaw.filter((row) =>
+          mappedCodeSet.has(extractYogoCategoryCode(row.category_name)),
+        );
+      } else {
+        const normalizedSelected = normalizeCategory(category);
+        selectedRows = rowsRaw.filter((row) => {
+          const normalizedCategoryName = normalizeCategory(row.category_name);
+          const code = extractYogoCategoryCode(row.category_name);
+          return (
+            normalizedCategoryName.includes(normalizedSelected) ||
+            (selectedCode && code === selectedCode)
           );
+        });
+      }
+    }
+    const rows: ProductRow[] = selectedRows.map((row) => ({
+      sku: row.product_code,
+      barcode: row.product_no,
+      name_zh: row.name_cn,
+      name_es: row.name_es,
+      case_pack: row.case_pack ?? null,
+      carton_pack: row.carton_pack ?? null,
+      price: row.source_price,
+    }));
 
     if (format === "pdf") {
       const bytes = await buildCatalogPdf(

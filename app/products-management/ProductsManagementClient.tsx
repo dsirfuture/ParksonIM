@@ -318,8 +318,27 @@ export function ProductsManagementClient({
     () => ["all", ...new Set(rows.map((r) => (r.supplier || "").trim()).filter(Boolean))],
     [rows],
   );
+  const shareCategoryOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          rows
+            .map((r) => (r.categoryName || "").trim())
+            .filter((name) => name && name !== "-"),
+        ),
+      ),
+    [rows],
+  );
   const categoryOptions = useMemo(
-    () => ["all", ...new Set(rows.map((r) => (r.category || "").trim()).filter(Boolean))],
+    () =>
+      [
+        "all",
+        ...new Set(
+          rows
+            .map((r) => (r.categoryName && r.categoryName !== "-" ? r.categoryName : r.category).trim())
+            .filter(Boolean),
+        ),
+      ],
     [rows],
   );
   const supplierChoices = supplierOptions.filter((s) => s !== "all");
@@ -349,7 +368,10 @@ export function ProductsManagementClient({
             .includes(v);
 
         const quickMatched = quickSelected.every((key) => {
-          if (key.startsWith("cat:")) return r.category === key.slice(4);
+          if (key.startsWith("cat:")) {
+            const categoryText = (r.categoryName && r.categoryName !== "-" ? r.categoryName : r.category).trim();
+            return categoryText === key.slice(4);
+          }
           if (key.startsWith("supplier:")) return r.supplier === key.slice(9);
           if (key === "hasImage") return imageFlag(r);
           if (key === "noImage") return !imageFlag(r);
@@ -1204,7 +1226,7 @@ export function ProductsManagementClient({
                   className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
                 >
                   <option value="all">{tx("全部", "All")}</option>
-                  {categoryChoices.map((x) => (
+                  {shareCategoryOptions.map((x) => (
                     <option key={x} value={x}>
                       {x}
                     </option>

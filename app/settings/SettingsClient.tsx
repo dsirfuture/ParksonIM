@@ -226,6 +226,15 @@ function toSupplierDiscountRuleText(rules: SupplierDiscountRule[]) {
   );
 }
 
+function normalizeYogoCodeInput(value: string) {
+  const segments = String(value || "")
+    .split(/[^\d]+/u)
+    .map((item) => item.replace(/\D+/g, "").slice(0, 2))
+    .filter(Boolean)
+    .map((item) => item.padStart(2, "0"));
+  return Array.from(new Set(segments)).join(",");
+}
+
 export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientProps) {
   const [lang, setLang] = useState<"zh" | "es">("zh");
   const [tab, setTab] = useState<TabKey>("perm");
@@ -1405,10 +1414,23 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       <input
                         value={categoryForm.yogoCode}
                         onChange={(e) => setCategoryForm((p) => ({ ...p, yogoCode: e.target.value }))}
-                        placeholder={tx("例如 10,11,12", "Ej. 10,11,12")}
+                        onBlur={(e) =>
+                          setCategoryForm((p) => ({
+                            ...p,
+                            yogoCode: normalizeYogoCodeInput(e.target.value),
+                          }))
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            const normalized = normalizeYogoCodeInput((e.currentTarget as HTMLInputElement).value);
+                            setCategoryForm((p) => ({ ...p, yogoCode: normalized }));
+                          }
+                        }}
+                        placeholder={tx("例如 10 11 12", "Ej. 10 11 12")}
                         className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm"
                       />
-                      <p className="mt-1 text-[10px] text-slate-500">{tx("可填写多个序号，用逗号分隔", "Multiples codigos separados por coma")}</p>
+                      <p className="mt-1 text-[10px] text-slate-500">{tx("可输入多个序号（空格/换行都可），系统会自动识别并规范化", "Puede ingresar multiples codigos y el sistema los normaliza automaticamente")}</p>
                     </div>
                     <div className="sm:col-span-2">
                       <label className="mb-1 block text-[11px] font-medium text-slate-600">{tx("启用状态", "Estado habilitado")}</label>
