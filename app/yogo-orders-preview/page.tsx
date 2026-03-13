@@ -147,6 +147,7 @@ export default async function YogoOrdersPreviewPage(props: {
             orderBy: [{ supplier_code: "asc" }],
             select: {
               id: true,
+              supplier_code: true,
               items: {
                 orderBy: [{ line_no: "asc" }],
                 select: {
@@ -167,7 +168,12 @@ export default async function YogoOrdersPreviewPage(props: {
     : null;
 
   const detailItems =
-    selectedOrder?.supplierOrders.flatMap((supplierOrder) => supplierOrder.items) || [];
+    selectedOrder?.supplierOrders.flatMap((supplierOrder) =>
+      supplierOrder.items.map((item) => ({
+        ...item,
+        supplier_code: supplierOrder.supplier_code,
+      })),
+    ) || [];
 
   const skuSet = new Set(
     detailItems.map((item) => String(item.item_no || "").trim()).filter(Boolean),
@@ -219,6 +225,11 @@ export default async function YogoOrdersPreviewPage(props: {
           ...parseYogoDiscountParts(row.category_name, row.source_discount),
         },
       ]),
+  );
+  const skuByBarcode = new Map(
+    yogoNameRows
+      .filter((row) => row.product_no && row.product_code)
+      .map((row) => [String(row.product_no || "").trim(), String(row.product_code || "").trim()]),
   );
 
   const detailSum = detailItems.reduce((sum, item) => {
@@ -324,6 +335,7 @@ export default async function YogoOrdersPreviewPage(props: {
               <tr className="bg-slate-50 text-left text-xs text-slate-500">
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">产品图片</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">商品</th>
+                <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">条形码</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">供应商</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">中文名</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">西文名</th>
@@ -337,13 +349,13 @@ export default async function YogoOrdersPreviewPage(props: {
             <tbody className="text-[13px]">
               {!selectedOrder ? (
                 <tr>
-                  <td colSpan={10} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={11} className="px-3 py-10 text-center text-slate-500">
                     暂未选择订单
                   </td>
                 </tr>
               ) : detailItems.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={11} className="px-3 py-10 text-center text-slate-500">
                     当前订单暂无明细
                   </td>
                 </tr>
@@ -354,17 +366,53 @@ export default async function YogoOrdersPreviewPage(props: {
                   const mapped =
                     nameBySku.get(sku) ||
                     nameByBarcode.get(barcode) || { zh: "", es: "", normal: "-", vip: "-" };
+                  const safeQty = Number(item.total_qty || 0);
+                  const safeUnitPrice =
+                    typeof item.unit_price === "object" &&
+                    item.unit_price !== null &&
+                    "toNumber" in item.unit_price &&
+                    typeof (item.unit_price as { toNumber: unknown }).toNumber === "function"
+                      ? (item.unit_price as { toNumber: () => number }).toNumber()
+                      : Number(item.unit_price || 0);
+                  const safeLineTotal =
+                    typeof item.line_total === "object" &&
+                    item.line_total !== null &&
+                    "toNumber" in item.line_total &&
+                    typeof (item.line_total as { toNumber: unknown }).toNumber === "function"
+                      ? (item.line_total as { toNumber: () => number }).toNumber()
+                      : Number(item.line_total || 0);
+                  const computedLineTotal =
+                    Number.isFinite(safeLineTotal) && safeLineTotal > 0
+                      ? safeLineTotal
+                      : Number.isFinite(safeQty) && Number.isFinite(safeUnitPrice)
+                        ? safeQty * safeUnitPrice
+                        : 0;
+                  const displayLineTotal =
+                    computedLineTotal > 0 ? computedLineTotal : item.line_total;
+                  const imageSku = sku || skuByBarcode.get(barcode) || "";
                   return (
                     <tr key={item.id} className="border-t border-slate-100">
                       <td className="px-3 py-2">
-                        <ProductImage sku={sku || undefined} hasImage size={40} roundedClassName="rounded-md" />
+                        <ProductImage
+                          sku={imageSku || undefined}
+                          hasImage={Boolean(imageSku)}
+                          size={40}
+                          roundedClassName="rounded-md"
+                        />
                       </td>
                       <td className="px-3 py-2 text-slate-700">
                         {item.product_name || item.item_no || item.barcode || "-"}
                       </td>
-                      <td className="px-3 py-2 text-slate-700">{item.location || "-"}</td>
-                      <td className="px-3 py-2 text-slate-700">{mapped.zh || "-"}</td>
-                      <td className="px-3 py-2 text-slate-700">{mapped.es || "-"}</td>
+                      <td className="px-3 py-2 text-slate-700">{item.barcode || "-"}</td>
+                      <td className="px-3 py-2 text-slate-700">
+                        {item.location || item.supplier_code || "-"}
+                      </td>
+                      <td className="px-3 py-2 text-slate-700">
+                        {mapped.zh || item.product_name || "-"}
+                      </td>
+                      <td className="px-3 py-2 text-slate-700">
+                        {mapped.es || item.product_name || "-"}
+                      </td>
                       <td className="px-3 py-2 text-right tabular-nums text-slate-700">{item.total_qty}</td>
                       <td className="px-3 py-2 text-right tabular-nums text-slate-700">
                         {toMoney(item.unit_price)}
@@ -372,7 +420,7 @@ export default async function YogoOrdersPreviewPage(props: {
                       <td className="px-3 py-2 text-right tabular-nums text-slate-700">{mapped.normal || "-"}</td>
                       <td className="px-3 py-2 text-right tabular-nums text-slate-700">{mapped.vip || "-"}</td>
                       <td className="px-3 py-2 text-right tabular-nums text-slate-700">
-                        {toMoney(item.line_total)}
+                        {toMoney(displayLineTotal)}
                       </td>
                     </tr>
                   );

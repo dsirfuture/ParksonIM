@@ -9,23 +9,53 @@ const UUID_RE =
 
 type RawOrderItem = {
   line_no?: unknown;
+  lineNo?: unknown;
   location?: unknown;
+  weizhi?: unknown;
   supplier?: unknown;
+  supplier_name?: unknown;
+  supplierName?: unknown;
+  gongyingshang?: unknown;
   item_no?: unknown;
+  itemNo?: unknown;
   sku?: unknown;
+  sku_no?: unknown;
+  skuNo?: unknown;
+  code?: unknown;
+  product_sku?: unknown;
+  productSku?: unknown;
   product_code?: unknown;
   barcode?: unknown;
+  bar_code?: unknown;
+  barCode?: unknown;
+  tiaoxingma?: unknown;
   product_no?: unknown;
+  productNo?: unknown;
   product_name?: unknown;
+  productName?: unknown;
+  name_cn?: unknown;
+  name_es?: unknown;
+  product_name_cn?: unknown;
+  product_name_es?: unknown;
   name?: unknown;
+  title?: unknown;
   qty?: unknown;
   quantity?: unknown;
   total_qty?: unknown;
+  totalQty?: unknown;
+  num?: unknown;
+  shuliang?: unknown;
   unit_price?: unknown;
+  unitPrice?: unknown;
   price?: unknown;
+  danjia?: unknown;
   line_total?: unknown;
+  lineTotal?: unknown;
   subtotal?: unknown;
+  xiaoji?: unknown;
+  amount?: unknown;
   line_amount?: unknown;
+  lineAmount?: unknown;
 };
 
 type RawOrder = {
@@ -196,16 +226,56 @@ function tailThree(orderNo: string) {
 }
 
 function parseOrderItem(input: RawOrderItem, index: number): ParsedOrderItem {
-  const lineNo = intOrZero(input.line_no) || index + 1;
-  const location = text(input.location) || text(input.supplier) || "-";
+  const lineNo = intOrZero(input.line_no ?? input.lineNo) || index + 1;
+  const location =
+    text(input.location) ||
+    text(input.weizhi) ||
+    text(input.supplier) ||
+    text(input.supplier_name) ||
+    text(input.supplierName) ||
+    text(input.gongyingshang) ||
+    "-";
   const itemNo =
-    text(input.item_no) || text(input.sku) || text(input.product_code) || null;
-  const barcode = text(input.barcode) || text(input.product_no) || null;
-  const productName = text(input.product_name) || text(input.name) || null;
-  const qty = intOrZero(input.total_qty ?? input.qty ?? input.quantity);
-  const unitPrice = numberOrNull(input.unit_price ?? input.price);
+    text(input.item_no) ||
+    text(input.itemNo) ||
+    text(input.sku) ||
+    text(input.sku_no) ||
+    text(input.skuNo) ||
+    text(input.code) ||
+    text(input.product_sku) ||
+    text(input.productSku) ||
+    text(input.product_code) ||
+    null;
+  const barcode =
+    text(input.barcode) ||
+    text(input.bar_code) ||
+    text(input.barCode) ||
+    text(input.tiaoxingma) ||
+    text(input.product_no) ||
+    text(input.productNo) ||
+    null;
+  const productName =
+    text(input.product_name) ||
+    text(input.productName) ||
+    text(input.name_cn) ||
+    text(input.product_name_cn) ||
+    text(input.name_es) ||
+    text(input.product_name_es) ||
+    text(input.name) ||
+    text(input.title) ||
+    null;
+  const qty = intOrZero(
+    input.total_qty ?? input.totalQty ?? input.qty ?? input.quantity ?? input.num ?? input.shuliang,
+  );
+  const unitPrice = numberOrNull(input.unit_price ?? input.unitPrice ?? input.price ?? input.danjia);
   const lineTotal = numberOrNull(
-    input.line_total ?? input.subtotal ?? input.line_amount,
+    input.line_total ??
+      input.lineTotal ??
+      input.subtotal ??
+      input.xiaoji ??
+      input.amount ??
+      input.line_amount ??
+      input.lineAmount,
   );
   return { lineNo, location, itemNo, barcode, productName, qty, unitPrice, lineTotal };
 }
@@ -365,6 +435,10 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
     contactPhone: firstNonNull(
       text(input.contact_phone),
       text(input.contactPhone),
+      text((input as Record<string, unknown>).contact_tel),
+      text((input as Record<string, unknown>).contact_mobile),
+      text((input as Record<string, unknown>).customer_phone),
+      text((input as Record<string, unknown>).customer_mobile),
       text((input as Record<string, unknown>).phone),
       text((input as Record<string, unknown>).mobile),
       text((input as Record<string, unknown>).telephone),
@@ -373,6 +447,10 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
       text((input as Record<string, unknown>)["联系电话"]),
       text(header?.contact_phone),
       text(header?.contactPhone),
+      text(header?.contact_tel),
+      text(header?.contact_mobile),
+      text(header?.customer_phone),
+      text(header?.customer_mobile),
       text(header?.phone),
       text(header?.mobile),
       text(header?.telephone),
