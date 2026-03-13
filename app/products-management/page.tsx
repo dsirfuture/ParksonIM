@@ -39,6 +39,12 @@ function normalizeSku(value: string | null | undefined) {
   return String(value || "").trim().toUpperCase();
 }
 
+function trailing3Digits(value: string | null | undefined) {
+  const text = normalizeSku(value);
+  const match = text.match(/(\d{3})$/);
+  return match ? match[1] : "";
+}
+
 function hasProductImage(sku: string) {
   const normalized = String(sku || "").trim();
   if (!normalized) return false;
@@ -121,8 +127,16 @@ export default async function ProductsManagementPage() {
     }),
   );
 
-  const blockedSkuSet = new Set(inventoryRows.map((row) => normalizeSku(row.sku)).filter(Boolean));
-  const visibleRows = yogoRows.filter((row) => !blockedSkuSet.has(normalizeSku(row.product_code)));
+  const blockedTail3Set = new Set(
+    inventoryRows
+      .map((row) => trailing3Digits(row.sku))
+      .filter(Boolean),
+  );
+  const visibleRows = yogoRows.filter((row) => {
+    const tail3 = trailing3Digits(row.product_code);
+    if (!tail3) return true;
+    return !blockedTail3Set.has(tail3);
+  });
   // For "latest sync to website", always use synced_at first (all rows in tenant/company scope).
   const latestSyncedAt = maxDate(yogoRows.map((row) => row.synced_at));
   const fallbackSourceUpdatedAt = maxDate(yogoRows.map((row) => row.source_updated_at));
