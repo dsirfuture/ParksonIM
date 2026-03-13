@@ -189,6 +189,18 @@ async function columnExists(name: string) {
   return rows.length > 0;
 }
 
+async function ensurePreviewStatusColumns() {
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE yg_order_imports
+    ADD COLUMN IF NOT EXISTS header_status_id text,
+    ADD COLUMN IF NOT EXISTS header_status text,
+    ADD COLUMN IF NOT EXISTS latest_status text,
+    ADD COLUMN IF NOT EXISTS header_updated_at timestamptz,
+    ADD COLUMN IF NOT EXISTS order_key text,
+    ADD COLUMN IF NOT EXISTS customer_id text
+  `);
+}
+
 export async function POST(request: Request) {
   const expectedApiKey = process.env.YOGO_SYNC_API_KEY?.trim() || "";
   const tenantId = process.env.YOGO_SYNC_TENANT_ID?.trim() || "";
@@ -223,6 +235,8 @@ export async function POST(request: Request) {
     const deduped = new Map<string, ParsedOrder>();
     for (const order of parsedOrders) deduped.set(order.orderNo, order);
     const orders = Array.from(deduped.values());
+
+    await ensurePreviewStatusColumns();
 
     const hasHeaderStatus = await columnExists("header_status");
     const hasHeaderStatusId = await columnExists("header_status_id");
@@ -367,4 +381,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
