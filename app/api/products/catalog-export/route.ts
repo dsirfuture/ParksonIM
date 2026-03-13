@@ -12,6 +12,18 @@ import { buildProductImageUrls, HAS_REMOTE_PRODUCT_IMAGE_BASE } from "@/lib/prod
 
 export const runtime = "nodejs";
 const REMOTE_IMAGE_FETCH_TIMEOUT_MS = 2500;
+const REMOTE_FONT_FETCH_TIMEOUT_MS = 5000;
+
+const REMOTE_CJK_REGULAR_URLS = [
+  "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf",
+];
+
+const REMOTE_CJK_BOLD_URLS = [
+  "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Bold.otf",
+];
+
+let cachedRemoteCjkRegularFont: Buffer | null | undefined;
+let cachedRemoteCjkBoldFont: Buffer | null | undefined;
 
 type ProductRow = {
   sku: string;
@@ -204,7 +216,11 @@ async function loadPdfFont() {
       // continue
     }
   }
-  return null;
+  if (cachedRemoteCjkRegularFont !== undefined) {
+    return cachedRemoteCjkRegularFont;
+  }
+  cachedRemoteCjkRegularFont = await loadRemoteFontBytes(REMOTE_CJK_REGULAR_URLS);
+  return cachedRemoteCjkRegularFont;
 }
 
 async function loadPdfBoldFont() {
@@ -299,6 +315,32 @@ async function loadPdfLatinSansFont() {
       // continue
     }
   }
+  if (cachedRemoteCjkBoldFont !== undefined) {
+    return cachedRemoteCjkBoldFont;
+  }
+  cachedRemoteCjkBoldFont = await loadRemoteFontBytes(REMOTE_CJK_BOLD_URLS);
+  return cachedRemoteCjkBoldFont;
+}
+
+async function loadRemoteFontBytes(urls: string[]) {
+  for (const raw of urls) {
+    const url = String(raw || "").trim();
+    if (!url) continue;
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), REMOTE_FONT_FETCH_TIMEOUT_MS);
+      const res = await fetch(url, {
+        signal: controller.signal,
+        cache: "force-cache",
+      }).finally(() => clearTimeout(timeout));
+      if (!res.ok) continue;
+      const arr = await res.arrayBuffer();
+      const buf = Buffer.from(arr);
+      if (buf.length > 0) return buf;
+    } catch {
+      // continue
+    }
+  }
   return null;
 }
 
@@ -329,7 +371,7 @@ function shortText(value: string, max = 28) {
 
 function safePdfText(value: string, unicodeSafe: boolean) {
   if (unicodeSafe) return value || "";
-  return (value || "").replace(/[^\x20-\x7E]/g, " ").trim();
+  return (value || "").replace(/[^\x20-\x7E\xA0-\xFF]/g, " ").trim();
 }
 
 function formatExportDateEs(date: Date) {
@@ -674,8 +716,10 @@ async function buildCatalogPdf(
         ? `${categoryZh} / ${categoryEs}`
         : categoryZh || categoryEs || category;
   const categoryLine = safePdfText(categoryLineRaw, unicodeSafe);
-  const titleZh = safePdfText(categoryZh || "-", unicodeSafe) || "-";
-  const titleEs = safePdfText(categoryEs || categoryZh || "-", unicodeSafe) || "-";
+  const titleZhRaw = categoryZh || categoryEs || "-";
+  const titleEsRaw = categoryEs || categoryZh || "-";
+  const titleZh = safePdfText(titleZhRaw, unicodeSafe) || safePdfText(titleEsRaw, unicodeSafe) || "-";
+  const titleEs = safePdfText(titleEsRaw, unicodeSafe) || safePdfText(titleZhRaw, unicodeSafe) || "-";
   const exportDateEs = safePdfText(formatExportDateEs(new Date()), unicodeSafe);
   const spacedEs = /^[\x20-\x7E]+$/.test(titleEs)
     ? titleEs
@@ -797,8 +841,10 @@ async function buildCatalogPdf(
   for (const item of rows) {
     const sku = safePdfText(item.sku || "-", unicodeSafe) || "-";
     const names = resolveDisplayNames(item);
-    const zhLine = safePdfText(names.zh, unicodeSafe) || "-";
-    const esLine = safePdfText(names.es, unicodeSafe) || "-";
+    const zhLineSafe = safePdfText(names.zh, unicodeSafe);
+    const esLineSafe = safePdfText(names.es, unicodeSafe);
+    const zhLine = zhLineSafe || esLineSafe || "-";
+    const esLine = esLineSafe || zhLineSafe || "-";
     const casePack = String(item.case_pack ?? "-");
     const cartonPack = String(item.carton_pack ?? "-");
     const priceNum = toNumber(item.price);
