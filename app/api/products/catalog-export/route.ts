@@ -643,14 +643,9 @@ async function buildCatalogPdf(
     : fontBytes
       ? baseFont
       : await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const latinSansBytes = await loadPdfLatinSansFont();
-  const esFont = latinSansBytes
-    ? await pdfDoc.embedFont(latinSansBytes, { subset: false })
-    : await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const latinBoldBytes = await loadPdfLatinBoldFont();
-  const esBoldFont = latinBoldBytes
-    ? await pdfDoc.embedFont(latinBoldBytes, { subset: false })
-    : await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  // Use stable built-in latin fonts for SKU/footer/meta to avoid abnormal character spacing in some deployments.
+  const esFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const esBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const fontForText = (text: string, preferBold = false) => {
     if (hasChineseGlyph(text)) return preferBold ? boldFont : baseFont;
     return preferBold ? esBoldFont : esFont;
