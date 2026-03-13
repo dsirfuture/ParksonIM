@@ -70,6 +70,43 @@ export default async function YogoOrdersPreviewPage(props: {
     },
   });
 
+  const statusColumns = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(
+    `
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'yg_order_imports'
+        AND column_name IN ('header_status', 'header_status_id')
+    `,
+  );
+  const hasHeaderStatus = statusColumns.some((col) => col.column_name === "header_status");
+  const hasHeaderStatusId = statusColumns.some((col) => col.column_name === "header_status_id");
+  let statusById = new Map<string, string>();
+  if (hasHeaderStatus || hasHeaderStatusId) {
+    const statusExpr = hasHeaderStatus
+      ? "NULLIF(TRIM(CAST(header_status AS text)), '')"
+      : "NULL";
+    const statusIdExpr = hasHeaderStatusId
+      ? "NULLIF(TRIM(CAST(header_status_id AS text)), '')"
+      : "NULL";
+    const statusRows = await prisma.$queryRawUnsafe<Array<{ id: string; header_status: string | null }>>(
+      `
+        SELECT
+          CAST(id AS text) AS id,
+          COALESCE(${statusExpr}, ${statusIdExpr}) AS header_status
+        FROM yg_order_imports
+        WHERE tenant_id = $1::uuid
+          AND company_id = $2::uuid
+      `,
+      session.tenantId,
+      session.companyId,
+    );
+    statusById = new Map(
+      statusRows
+        .filter((row) => row.header_status)
+        .map((row) => [row.id, String(row.header_status || "").trim()]),
+    );
+  }
+
   const selectedOrder = selectedOrderKey
     ? await prisma.ygOrderImport.findFirst({
         where: {
@@ -212,7 +249,7 @@ export default async function YogoOrdersPreviewPage(props: {
                   >
                     <td className="px-3 py-2 font-semibold text-slate-900">{row.order_no}</td>
                     <td className="px-3 py-2 text-slate-600">
-                      {row.item_count > 0 ? "已导入" : "待导入"}
+                      {statusById.get(row.id) || "-"}
                     </td>
                     <td className="px-3 py-2 text-slate-600">{formatDateTime(row.created_at)}</td>
                     <td className="px-3 py-2 text-slate-700">{row.company_name || "-"}</td>
