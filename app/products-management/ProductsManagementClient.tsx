@@ -787,7 +787,7 @@ export function ProductsManagementClient({
       >
         {viewMode === "catalog" ? (
         <>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto overflow-y-visible">
           <table className="w-full min-w-[1400px] border-separate border-spacing-0">
             <thead>
               <tr className="bg-slate-50 text-left text-xs text-slate-500">
