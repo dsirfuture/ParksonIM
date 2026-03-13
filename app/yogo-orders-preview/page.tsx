@@ -35,6 +35,17 @@ function formatDateTime(value: Date | null) {
   }).format(value);
 }
 
+function normalizePhone(value: string | null | undefined) {
+  if (!value) return "-";
+  const cleaned = value
+    .replace(/[\[\]"]/g, " ")
+    .replace(/\s*\|\s*/g, " ")
+    .replace(/\s*,\s*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned || "-";
+}
+
 type SearchParams = Record<string, string | string[] | undefined>;
 
 function firstValue(value: string | string[] | undefined) {
@@ -64,6 +75,7 @@ export default async function YogoOrdersPreviewPage(props: {
       company_name: true,
       customer_name: true,
       contact_name: true,
+      contact_phone: true,
       order_amount: true,
       order_remark: true,
       item_count: true,
@@ -241,6 +253,7 @@ export default async function YogoOrdersPreviewPage(props: {
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">订单日期</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">公司名称</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">联系人</th>
+                <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">联系电话</th>
                 <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">订单金额</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">备注</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">详情</th>
@@ -249,7 +262,7 @@ export default async function YogoOrdersPreviewPage(props: {
             <tbody className="text-[13px]">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={9} className="px-3 py-10 text-center text-slate-500">
                     暂无订单预览数据
                   </td>
                 </tr>
@@ -266,9 +279,14 @@ export default async function YogoOrdersPreviewPage(props: {
                     <td className="px-3 py-2 text-slate-600">
                       {formatDateTime(orderCreatedAtById.get(row.id) || row.created_at)}
                     </td>
-                    <td className="px-3 py-2 text-slate-700">{row.company_name || "-"}</td>
+                    <td className="px-3 py-2 text-slate-700">
+                      {row.company_name || row.customer_name || "-"}
+                    </td>
                     <td className="px-3 py-2 text-slate-700">
                       {row.contact_name || row.customer_name || "-"}
+                    </td>
+                    <td className="px-3 py-2 text-slate-700">
+                      {normalizePhone(row.contact_phone)}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-700">
                       {toMoney(row.order_amount)}

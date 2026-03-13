@@ -76,6 +76,11 @@ type RawOrder = {
   items?: unknown;
   details?: unknown;
   lines?: unknown;
+  rows?: unknown;
+  data?: unknown;
+  list?: unknown;
+  products?: unknown;
+  product_list?: unknown;
 };
 
 type ParsedOrderItem = {
@@ -173,6 +178,15 @@ function asItemList(input: unknown): RawOrderItem[] {
   const data = input as Record<string, unknown>;
   if (Array.isArray(data.items)) return data.items as RawOrderItem[];
   if (Array.isArray(data.lines)) return data.lines as RawOrderItem[];
+  if (Array.isArray(data.details)) return data.details as RawOrderItem[];
+  if (Array.isArray(data.rows)) return data.rows as RawOrderItem[];
+  if (Array.isArray(data.data)) return data.data as RawOrderItem[];
+  if (Array.isArray(data.list)) return data.list as RawOrderItem[];
+  if (Array.isArray(data.products)) return data.products as RawOrderItem[];
+  if (Array.isArray(data.product_list)) return data.product_list as RawOrderItem[];
+  if ("item_no" in data || "sku" in data || "product_code" in data || "barcode" in data) {
+    return [data as RawOrderItem];
+  }
   return [];
 }
 
@@ -223,7 +237,24 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
   if (!orderNo) {
     throw new Error(`Row ${index + 1}: order_no or order_key is required`);
   }
-  const rawItems = asItemList(input.items ?? input.details ?? input.lines);
+  const rawItems = asItemList(
+    input.items ??
+      input.details ??
+      input.lines ??
+      input.rows ??
+      input.data ??
+      input.list ??
+      input.products ??
+      input.product_list ??
+      header?.items ??
+      header?.details ??
+      header?.lines ??
+      header?.rows ??
+      header?.data ??
+      header?.list ??
+      header?.products ??
+      header?.product_list,
+  );
   const items = rawItems.map(parseOrderItem);
   return {
     orderNo,
@@ -264,7 +295,11 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
         input.amount,
         (input as Record<string, unknown>).order_total,
         (input as Record<string, unknown>).total,
+        (input as Record<string, unknown>).total_price,
+        (input as Record<string, unknown>).price_total,
+        (input as Record<string, unknown>).sum_amount,
         (input as Record<string, unknown>).jine,
+        (input as Record<string, unknown>)["金额"],
         (input as Record<string, unknown>)["订单金额"],
         (input as Record<string, unknown>).total_amount,
         (input as Record<string, unknown>).totalAmount,
@@ -275,7 +310,11 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
         header?.amount,
         header?.order_total,
         header?.total,
+        header?.total_price,
+        header?.price_total,
+        header?.sum_amount,
         header?.jine,
+        header?.["金额"],
         header?.["订单金额"],
         header?.total_amount,
         header?.totalAmount,
@@ -326,8 +365,20 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
     contactPhone: firstNonNull(
       text(input.contact_phone),
       text(input.contactPhone),
+      text((input as Record<string, unknown>).phone),
+      text((input as Record<string, unknown>).mobile),
+      text((input as Record<string, unknown>).telephone),
+      text((input as Record<string, unknown>).tel),
+      text((input as Record<string, unknown>).lianxidianhua),
+      text((input as Record<string, unknown>)["联系电话"]),
       text(header?.contact_phone),
       text(header?.contactPhone),
+      text(header?.phone),
+      text(header?.mobile),
+      text(header?.telephone),
+      text(header?.tel),
+      text(header?.lianxidianhua),
+      text(header?.["联系电话"]),
     ),
     addressText: firstNonNull(
       text(input.address_text),
