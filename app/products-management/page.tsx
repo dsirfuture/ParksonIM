@@ -132,9 +132,6 @@ export default async function ProductsManagementPage() {
       .map((row) => trailing3Digits(row.sku))
       .filter(Boolean),
   );
-  // Business fallback: current online data requires filtering suffix "001" items.
-  // Only the trailing 3 digits are matched (e.g. MAOZ001 -> 001).
-  blockedTail3Set.add("001");
   const visibleRows = yogoRows.filter((row) => {
     const tail3 = trailing3Digits(row.product_code);
     if (!tail3) return true;
