@@ -22,6 +22,39 @@ function toMoney(value: unknown) {
   return Number.isFinite(num) ? num.toFixed(2) : "-";
 }
 
+function toNumberSafe(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string") {
+    const n = Number(value.trim());
+    return Number.isFinite(n) ? n : null;
+  }
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "toNumber" in value &&
+    typeof (value as { toNumber: unknown }).toNumber === "function"
+  ) {
+    const n = (value as { toNumber: () => number }).toNumber();
+    return Number.isFinite(n) ? n : null;
+  }
+  const text = String(value);
+  const n = Number(text);
+  return Number.isFinite(n) ? n : null;
+}
+
+function splitMixedProductName(value: string | null | undefined) {
+  const raw = String(value || "").trim();
+  if (!raw) return { zh: "", es: "" };
+  const zhTokens = raw.match(/[\u4e00-\u9fff][^A-Za-z]*/g) || [];
+  const zh = zhTokens.join("").replace(/\s+/g, " ").trim();
+  const es = raw
+    .replace(/[\u4e00-\u9fff]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return { zh, es };
+}
+
 function formatDateTime(value: Date | null) {
   if (!value) return "-";
   return new Intl.DateTimeFormat("zh-CN", {
@@ -81,6 +114,22 @@ export default async function YogoOrdersPreviewPage(props: {
       item_count: true,
     },
   });
+  const rowIds = rows.map((r) => r.id);
+  const supplierOrderAmountSums =
+    rowIds.length > 0
+      ? await prisma.ygSupplierOrder.groupBy({
+          by: ["import_id"],
+          where: {
+            tenant_id: session.tenantId,
+            company_id: session.companyId,
+            import_id: { in: rowIds },
+          },
+          _sum: { order_amount: true },
+        })
+      : [];
+  const supplierAmountByImportId = new Map(
+    supplierOrderAmountSums.map((r) => [r.import_id, r._sum.order_amount]),
+  );
 
   const statusColumns = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(
     `
@@ -291,7 +340,7 @@ export default async function YogoOrdersPreviewPage(props: {
                       {formatDateTime(orderCreatedAtById.get(row.id) || row.created_at)}
                     </td>
                     <td className="px-3 py-2 text-slate-700">
-                      {row.company_name || row.customer_name || "-"}
+                      {row.company_name || row.customer_name || row.contact_name || "-"}
                     </td>
                     <td className="px-3 py-2 text-slate-700">
                       {row.contact_name || row.customer_name || "-"}
@@ -300,7 +349,7 @@ export default async function YogoOrdersPreviewPage(props: {
                       {normalizePhone(row.contact_phone)}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-700">
-                      {toMoney(row.order_amount)}
+                      {toMoney(row.order_amount ?? supplierAmountByImportId.get(row.id) ?? null)}
                     </td>
                     <td className="max-w-[240px] truncate px-3 py-2 text-slate-600">
                       {row.order_remark || "-"}
@@ -366,21 +415,10 @@ export default async function YogoOrdersPreviewPage(props: {
                   const mapped =
                     nameBySku.get(sku) ||
                     nameByBarcode.get(barcode) || { zh: "", es: "", normal: "-", vip: "-" };
-                  const safeQty = Number(item.total_qty || 0);
-                  const safeUnitPrice =
-                    typeof item.unit_price === "object" &&
-                    item.unit_price !== null &&
-                    "toNumber" in item.unit_price &&
-                    typeof (item.unit_price as { toNumber: unknown }).toNumber === "function"
-                      ? (item.unit_price as { toNumber: () => number }).toNumber()
-                      : Number(item.unit_price || 0);
-                  const safeLineTotal =
-                    typeof item.line_total === "object" &&
-                    item.line_total !== null &&
-                    "toNumber" in item.line_total &&
-                    typeof (item.line_total as { toNumber: unknown }).toNumber === "function"
-                      ? (item.line_total as { toNumber: () => number }).toNumber()
-                      : Number(item.line_total || 0);
+                  const splitName = splitMixedProductName(item.product_name || "");
+                  const safeQty = toNumberSafe(item.total_qty) ?? 0;
+                  const safeUnitPrice = toNumberSafe(item.unit_price) ?? 0;
+                  const safeLineTotal = toNumberSafe(item.line_total) ?? 0;
                   const computedLineTotal =
                     Number.isFinite(safeLineTotal) && safeLineTotal > 0
                       ? safeLineTotal
@@ -390,12 +428,13 @@ export default async function YogoOrdersPreviewPage(props: {
                   const displayLineTotal =
                     computedLineTotal > 0 ? computedLineTotal : item.line_total;
                   const imageSku = sku || skuByBarcode.get(barcode) || "";
+                  const hasImage = Boolean(imageSku && (nameBySku.has(imageSku) || nameByBarcode.has(barcode)));
                   return (
                     <tr key={item.id} className="border-t border-slate-100">
                       <td className="px-3 py-2">
                         <ProductImage
                           sku={imageSku || undefined}
-                          hasImage={Boolean(imageSku)}
+                          hasImage={hasImage}
                           size={40}
                           roundedClassName="rounded-md"
                         />
@@ -408,10 +447,10 @@ export default async function YogoOrdersPreviewPage(props: {
                         {item.location || item.supplier_code || "-"}
                       </td>
                       <td className="px-3 py-2 text-slate-700">
-                        {mapped.zh || item.product_name || "-"}
+                        {mapped.zh || splitName.zh || "-"}
                       </td>
                       <td className="px-3 py-2 text-slate-700">
-                        {mapped.es || item.product_name || "-"}
+                        {mapped.es || splitName.es || "-"}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-slate-700">{item.total_qty}</td>
                       <td className="px-3 py-2 text-right tabular-nums text-slate-700">
