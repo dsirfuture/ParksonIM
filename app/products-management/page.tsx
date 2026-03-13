@@ -35,6 +35,10 @@ function toNumber(value: unknown) {
   return null;
 }
 
+function normalizeSku(value: string | null | undefined) {
+  return String(value || "").trim().toUpperCase();
+}
+
 function hasProductImage(sku: string) {
   const normalized = String(sku || "").trim();
   if (!normalized) return false;
@@ -94,7 +98,7 @@ export default async function ProductsManagementPage() {
     }),
   );
 
-  const skuList = yogoRows.map((row) => row.product_code);
+  const skuList = Array.from(new Set(yogoRows.map((row) => normalizeSku(row.product_code)).filter(Boolean)));
   const inventoryRows = skuList.length
     ? await withPrismaRetry(() =>
         prisma.productCatalog.findMany({
@@ -109,8 +113,8 @@ export default async function ProductsManagementPage() {
       )
     : [];
 
-  const blockedSkuSet = new Set(inventoryRows.map((row) => row.sku));
-  const visibleRows = yogoRows.filter((row) => !blockedSkuSet.has(row.product_code));
+  const blockedSkuSet = new Set(inventoryRows.map((row) => normalizeSku(row.sku)).filter(Boolean));
+  const visibleRows = yogoRows.filter((row) => !blockedSkuSet.has(normalizeSku(row.product_code)));
   // For "latest sync to website", always use synced_at first (all rows in tenant/company scope).
   const latestSyncedAt = maxDate(yogoRows.map((row) => row.synced_at));
   const fallbackSourceUpdatedAt = maxDate(yogoRows.map((row) => row.source_updated_at));
