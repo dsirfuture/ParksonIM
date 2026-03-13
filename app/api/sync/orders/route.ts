@@ -109,9 +109,15 @@ type ParsedOrder = {
 };
 
 function text(value: unknown) {
-  if (typeof value !== "string") return null;
-  const v = value.trim();
-  return v ? v : null;
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string") {
+    const v = value.trim();
+    return v ? v : null;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return null;
 }
 
 function firstNonNull<T>(...values: Array<T | null | undefined>) {
@@ -154,6 +160,9 @@ function asOrderList(body: unknown): RawOrder[] {
   const data = body as Record<string, unknown>;
   if (Array.isArray(data.orders)) return data.orders as RawOrder[];
   if (Array.isArray(data.items)) return data.items as RawOrder[];
+  if (Array.isArray(data.rows)) return data.rows as RawOrder[];
+  if (Array.isArray(data.data)) return data.data as RawOrder[];
+  if (Array.isArray(data.list)) return data.list as RawOrder[];
   if ("order_no" in data || "order_key" in data) return [body as RawOrder];
   return [];
 }
@@ -188,10 +197,19 @@ function parseOrderItem(input: RawOrderItem, index: number): ParsedOrderItem {
 }
 
 function parseOrder(input: RawOrder, index: number): ParsedOrder {
-  const header =
-    input.header && typeof input.header === "object"
-      ? (input.header as Record<string, unknown>)
-      : null;
+  let header: Record<string, unknown> | null = null;
+  if (input.header && typeof input.header === "object") {
+    header = input.header as Record<string, unknown>;
+  } else if (typeof input.header === "string") {
+    try {
+      const parsed = JSON.parse(input.header);
+      if (parsed && typeof parsed === "object") {
+        header = parsed as Record<string, unknown>;
+      }
+    } catch {
+      header = null;
+    }
+  }
   const orderNo = firstNonNull(
     text(input.order_no),
     text(input.orderNo),
@@ -214,10 +232,22 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
       dateOrNull(input.orderCreatedAt),
       dateOrNull((input as Record<string, unknown>).created_at),
       dateOrNull((input as Record<string, unknown>).order_date),
+      dateOrNull((input as Record<string, unknown>).createdAt),
+      dateOrNull((input as Record<string, unknown>).create_time),
+      dateOrNull((input as Record<string, unknown>).created_time),
+      dateOrNull((input as Record<string, unknown>).riqi),
+      dateOrNull((input as Record<string, unknown>)["订单日期"]),
+      dateOrNull((input as Record<string, unknown>)["下单时间"]),
       dateOrNull(header?.order_created_at),
       dateOrNull(header?.orderCreatedAt),
       dateOrNull(header?.created_at),
       dateOrNull(header?.order_date),
+      dateOrNull(header?.createdAt),
+      dateOrNull(header?.create_time),
+      dateOrNull(header?.created_time),
+      dateOrNull(header?.riqi),
+      dateOrNull(header?.["订单日期"]),
+      dateOrNull(header?.["下单时间"]),
     ),
     customerId: firstNonNull(
       text(input.customer_id),
@@ -232,6 +262,10 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
         input.order_amount,
         input.orderAmount,
         input.amount,
+        (input as Record<string, unknown>).order_total,
+        (input as Record<string, unknown>).total,
+        (input as Record<string, unknown>).jine,
+        (input as Record<string, unknown>)["订单金额"],
         (input as Record<string, unknown>).total_amount,
         (input as Record<string, unknown>).totalAmount,
         header?.header_amount,
@@ -239,6 +273,10 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
         header?.order_amount,
         header?.orderAmount,
         header?.amount,
+        header?.order_total,
+        header?.total,
+        header?.jine,
+        header?.["订单金额"],
         header?.total_amount,
         header?.totalAmount,
       ),
@@ -247,9 +285,19 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
       text(input.company_name),
       text(input.companyName),
       text(input.company),
+      text((input as Record<string, unknown>).customer_company),
+      text((input as Record<string, unknown>).gongsi),
+      text((input as Record<string, unknown>).kehu),
+      text((input as Record<string, unknown>)["公司名称"]),
+      text((input as Record<string, unknown>)["客户公司"]),
       text(header?.company_name),
       text(header?.companyName),
       text(header?.company),
+      text(header?.customer_company),
+      text(header?.gongsi),
+      text(header?.kehu),
+      text(header?.["公司名称"]),
+      text(header?.["客户公司"]),
     ),
     customerName: firstNonNull(
       text(input.customer_name),
@@ -263,9 +311,17 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
       text(input.contact_name),
       text(input.contactName),
       text(input.contact),
+      text((input as Record<string, unknown>).contact_person),
+      text((input as Record<string, unknown>).linkman),
+      text((input as Record<string, unknown>).lianxiren),
+      text((input as Record<string, unknown>)["联系人"]),
       text(header?.contact_name),
       text(header?.contactName),
       text(header?.contact),
+      text(header?.contact_person),
+      text(header?.linkman),
+      text(header?.lianxiren),
+      text(header?.["联系人"]),
     ),
     contactPhone: firstNonNull(
       text(input.contact_phone),
@@ -284,10 +340,16 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
       text(input.orderRemark),
       text(input.note),
       text(input.remark),
+      text((input as Record<string, unknown>).memo),
+      text((input as Record<string, unknown>).beizhu),
+      text((input as Record<string, unknown>)["备注"]),
       text(header?.order_remark),
       text(header?.orderRemark),
       text(header?.note),
       text(header?.remark),
+      text(header?.memo),
+      text(header?.beizhu),
+      text(header?.["备注"]),
     ),
     storeLabel: firstNonNull(
       text(input.store_label),
@@ -300,20 +362,30 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
       text(input.headerStatusId),
       text((input as Record<string, unknown>).status_id),
       text((input as Record<string, unknown>).statusId),
+      text((input as Record<string, unknown>)["状态ID"]),
       text(header?.header_status_id),
       text(header?.headerStatusId),
       text(header?.status_id),
       text(header?.statusId),
+      text(header?.["状态ID"]),
     ),
     headerStatus: firstNonNull(
       text(input.header_status),
       text(input.headerStatus),
       text((input as Record<string, unknown>).status),
       text((input as Record<string, unknown>).zhuangtai),
+      text((input as Record<string, unknown>).status_text),
+      text((input as Record<string, unknown>).header_status_text),
+      text((input as Record<string, unknown>)["订单状态"]),
+      text((input as Record<string, unknown>)["状态"]),
       text(header?.header_status),
       text(header?.headerStatus),
       text(header?.status),
       text(header?.zhuangtai),
+      text(header?.status_text),
+      text(header?.header_status_text),
+      text(header?.["订单状态"]),
+      text(header?.["状态"]),
     ),
     latestStatus: firstNonNull(
       text(input.latest_status),
