@@ -17,6 +17,8 @@ type YogoPayload = {
   supplier?: unknown;
   baozhuangshu?: unknown;
   zhuangxiangshu?: unknown;
+  pack_size?: unknown;
+  carton_size?: unknown;
   case_pack?: unknown;
   carton_pack?: unknown;
   casePack?: unknown;
@@ -130,9 +132,14 @@ function normalizeProduct(input: YogoPayload, index: number): NormalizedProduct 
     subcategory_id: text(input.subcategory_id),
     subcategory_name: text(input.subcategory_name),
     supplier: text(input.supplier),
-    case_pack: intOrNull(input.baozhuangshu ?? input.case_pack ?? input.casePack),
+    case_pack: intOrNull(
+      input.baozhuangshu ?? input.pack_size ?? input.case_pack ?? input.casePack,
+    ),
     carton_pack: intOrNull(
-      input.zhuangxiangshu ?? input.carton_pack ?? input.cartonPack,
+      input.zhuangxiangshu ??
+        input.carton_size ??
+        input.carton_pack ??
+        input.cartonPack,
     ),
     source_price: numberOrNull(input.source_price),
     source_discount: numberOrNull(input.source_discount),
