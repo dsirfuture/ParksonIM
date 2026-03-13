@@ -250,19 +250,21 @@ export default async function YogoOrdersPreviewPage(props: {
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">西文名</th>
                 <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">数量</th>
                 <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">单价</th>
+                <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">普通折扣</th>
+                <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">VIP折扣</th>
                 <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">行金额 / 小计</th>
               </tr>
             </thead>
             <tbody className="text-[13px]">
               {!selectedOrder ? (
                 <tr>
-                  <td colSpan={8} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={10} className="px-3 py-10 text-center text-slate-500">
                     暂未选择订单
                   </td>
                 </tr>
               ) : detailItems.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={10} className="px-3 py-10 text-center text-slate-500">
                     当前订单暂无明细
                   </td>
                 </tr>
@@ -286,6 +288,8 @@ export default async function YogoOrdersPreviewPage(props: {
                       <td className="px-3 py-2 text-right tabular-nums text-slate-700">
                         {toMoney(item.unit_price)}
                       </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-700">-</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-700">-</td>
                       <td className="px-3 py-2 text-right tabular-nums text-slate-700">
                         {toMoney(item.line_total)}
                       </td>
@@ -297,7 +301,7 @@ export default async function YogoOrdersPreviewPage(props: {
             {selectedOrder ? (
               <tfoot>
                 <tr className="border-t border-slate-200 bg-slate-50">
-                  <td className="px-3 py-2.5 text-sm font-semibold text-slate-900" colSpan={7}>
+                  <td className="px-3 py-2.5 text-sm font-semibold text-slate-900" colSpan={9}>
                     订单总金额
                   </td>
                   <td className="px-3 py-2.5 text-right text-sm font-semibold text-slate-900">
