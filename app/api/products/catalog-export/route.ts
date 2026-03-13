@@ -160,8 +160,26 @@ async function loadImageBySku(sku: string) {
 }
 
 function resolveDisplayNames(item: ProductRow) {
-  const zhRaw = String(item.name_zh || "").trim();
-  const esRaw = String(item.name_es || "").trim();
+  const normalizeName = (value: string | null | undefined) => {
+    const text = String(value || "").replace(/\s+/g, " ").trim();
+    if (!text) return "";
+    const upper = text.toUpperCase();
+    if (
+      upper === "0" ||
+      upper === "-" ||
+      upper === "--" ||
+      upper === "N/A" ||
+      upper === "NA" ||
+      upper === "NULL" ||
+      upper === "SIN CONFIGURAR" ||
+      text === "未设置"
+    ) {
+      return "";
+    }
+    return text;
+  };
+  const zhRaw = normalizeName(item.name_zh);
+  const esRaw = normalizeName(item.name_es);
   const zh = zhRaw || esRaw || "-";
   const es = esRaw || zhRaw || "-";
   return { zh, es };
@@ -821,12 +839,12 @@ async function buildCatalogPdf(
       page.drawText(line, { x: x + textPad, y: textY, size: esSize, font: fontForText(line), color: rgb(0.3, 0.33, 0.38) });
       textY -= descLineGap;
     }
-    const skuLine = unicodeSafe ? `编号 ${sku}` : `NO ${sku}`;
+    const skuLine = sku;
     page.drawText(skuLine, { x: x + textPad, y: textY, size: 7.5, font: fontForText(skuLine), color: rgb(0.4, 0.42, 0.45) });
     textY -= metaLineGap;
     const metaPrefix = unicodeSafe
-      ? `包装数 ${casePack}  装箱数 ${cartonPack}  价格 `
-      : `PACK ${casePack}  CARTON ${cartonPack}  PRICE `;
+      ? `包装数 ${casePack}  装箱数 ${cartonPack}  `
+      : `${casePack}  ${cartonPack}  `;
     const metaPrefixFont = fontForText(metaPrefix);
     const metaPrefixW = metaPrefixFont.widthOfTextAtSize(metaPrefix, 7.5);
     page.drawText(metaPrefix, {
