@@ -791,21 +791,21 @@ export function ProductsManagementClient({
           <table className="w-full min-w-[1400px] border-separate border-spacing-0">
             <thead>
               <tr className="bg-slate-50 text-left text-xs text-slate-500">
-                <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 font-semibold text-slate-700">{tx("图片", "Img")}</th>
-                <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 font-semibold text-slate-700">{tx("编码", "SKU")}</th>
-                <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 font-semibold">{tx("条形码", "Barcode")}</th>
-                <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 font-semibold text-slate-700">{tx("中文名", "ZH")}</th>
-                <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 font-semibold text-slate-700">{tx("西文名", "ES")}</th>
-                <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 text-right font-semibold">{tx("包装数", "Pk")}</th>
-                <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 text-right font-semibold">{tx("装箱数", "Ct")}</th>
-                <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 text-right font-semibold">{tx("卖价", "PV")}</th>
-                <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 text-right font-semibold">{tx("普通折扣", "Dsc")}</th>
-                <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 text-right font-semibold">{tx("VIP折扣", "VIP Dsc")}</th>
-                <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 font-semibold">{tx("友购序号", "YG Code")}</th>
-                <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 font-semibold">{tx("分类", "Cat")}</th>
-                <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 font-semibold">{tx("子分类", "Subcat")}</th>
-                <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 font-semibold">{tx("供应商", "Prov")}</th>
-                <th className="sticky top-0 z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 font-semibold">{tx("是否上架", "On?")}</th>
+                <th className="sticky top-[72px] z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 font-semibold text-slate-700">{tx("图片", "Img")}</th>
+                <th className="sticky top-[72px] z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 font-semibold text-slate-700">{tx("编码", "SKU")}</th>
+                <th className="sticky top-[72px] z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 font-semibold">{tx("条形码", "Barcode")}</th>
+                <th className="sticky top-[72px] z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 font-semibold text-slate-700">{tx("中文名", "ZH")}</th>
+                <th className="sticky top-[72px] z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 font-semibold text-slate-700">{tx("西文名", "ES")}</th>
+                <th className="sticky top-[72px] z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 text-right font-semibold">{tx("包装数", "Pk")}</th>
+                <th className="sticky top-[72px] z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 text-right font-semibold">{tx("装箱数", "Ct")}</th>
+                <th className="sticky top-[72px] z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 text-right font-semibold">{tx("卖价", "PV")}</th>
+                <th className="sticky top-[72px] z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 text-right font-semibold">{tx("普通折扣", "Dsc")}</th>
+                <th className="sticky top-[72px] z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 text-right font-semibold">{tx("VIP折扣", "VIP Dsc")}</th>
+                <th className="sticky top-[72px] z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 font-semibold">{tx("友购序号", "YG Code")}</th>
+                <th className="sticky top-[72px] z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 font-semibold">{tx("分类", "Cat")}</th>
+                <th className="sticky top-[72px] z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 font-semibold">{tx("子分类", "Subcat")}</th>
+                <th className="sticky top-[72px] z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 font-semibold">{tx("供应商", "Prov")}</th>
+                <th className="sticky top-[72px] z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 font-semibold">{tx("是否上架", "On?")}</th>
               </tr>
             </thead>
             <tbody className="text-[13px]">
