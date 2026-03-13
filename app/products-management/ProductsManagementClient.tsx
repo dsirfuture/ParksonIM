@@ -771,6 +771,7 @@ export function ProductsManagementClient({
 
       <TableCard
         title={tx("产品目录", "Cat prod")}
+        className="overflow-visible"
         titleRight={
           <div className="flex items-center gap-3">
             <p className="text-xs text-slate-500">{yogoLastUpdatedText}</p>
