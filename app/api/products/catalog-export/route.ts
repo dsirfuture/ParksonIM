@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
 import { hasPermission } from "@/lib/permissions";
 import { withPrismaRetry } from "@/lib/prisma-retry";
+import { buildProductImageUrls, HAS_REMOTE_PRODUCT_IMAGE_BASE } from "@/lib/product-image-url";
 
 export const runtime = "nodejs";
 
@@ -132,6 +133,7 @@ function toExportLang(value: string | null): ExportLang {
 
 async function loadImageBySku(sku: string) {
   const exts: Array<"jpg" | "jpeg" | "png" | "webp"> = ["jpg", "jpeg", "png", "webp"];
+  // 1) local public/products fallback
   for (const ext of exts) {
     const file = path.join(process.cwd(), "public", "products", `${sku}.${ext}`);
     try {
@@ -144,7 +146,23 @@ async function loadImageBySku(sku: string) {
       // try next extension
     }
   }
+  // 2) remote CDN/R2 source for deployed environments
+  if (HAS_REMOTE_PRODUCT_IMAGE_BASE) {
+    const candidates = buildProductImageUrls(sku, exts);
+    for (const url of candidates) {
+      const remote = await loadImageFromUrl(url);
+      if (remote) return remote;
+    }
+  }
   return null;
+}
+
+function resolveDisplayNames(item: ProductRow) {
+  const zhRaw = String(item.name_zh || "").trim();
+  const esRaw = String(item.name_es || "").trim();
+  const zh = zhRaw || esRaw || "-";
+  const es = esRaw || zhRaw || "-";
+  return { zh, es };
 }
 
 async function loadPdfFont() {
@@ -445,9 +463,9 @@ async function buildCatalogXlsx(
     const item = rows[i];
     const rowNo = 6 + i;
     const priceValue = toNumber(item.price);
-    const nameZh = String(item.name_zh || "").trim();
-    const rawEs = String(item.name_es || "").trim();
-    const nameEs = rawEs && rawEs !== "0" ? rawEs : labels.unset;
+    const names = resolveDisplayNames(item);
+    const nameZh = names.zh;
+    const nameEs = names.es === "-" ? labels.unset : names.es;
     const row = ws.getRow(rowNo);
     row.values = [
       "",
@@ -746,8 +764,9 @@ async function buildCatalogPdf(
 
   for (const item of rows) {
     const sku = safePdfText(item.sku || "-", unicodeSafe) || "-";
-    const zhLine = safePdfText(item.name_zh || "-", unicodeSafe) || "-";
-    const esLine = safePdfText(item.name_es || "-", unicodeSafe) || "-";
+    const names = resolveDisplayNames(item);
+    const zhLine = safePdfText(names.zh, unicodeSafe) || "-";
+    const esLine = safePdfText(names.es, unicodeSafe) || "-";
     const casePack = String(item.case_pack ?? "-");
     const cartonPack = String(item.carton_pack ?? "-");
     const priceNum = toNumber(item.price);
@@ -803,9 +822,7 @@ async function buildCatalogPdf(
     const skuLine = unicodeSafe ? `编号 ${sku}` : `NO ${sku}`;
     page.drawText(skuLine, { x: x + textPad, y: textY, size: 7.5, font: fontForText(skuLine), color: rgb(0.4, 0.42, 0.45) });
     textY -= metaLineGap;
-    const metaPrefix = unicodeSafe
-      ? `中包 ${casePack}  装箱 ${cartonPack}  价格 `
-      : `PAQ ${casePack}  CAJA ${cartonPack}  `;
+    const metaPrefix = `包装数 ${casePack}  装箱数 ${cartonPack}  价格 `;
     const metaPrefixFont = fontForText(metaPrefix);
     const metaPrefixW = metaPrefixFont.widthOfTextAtSize(metaPrefix, 7.5);
     page.drawText(metaPrefix, {
