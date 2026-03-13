@@ -94,7 +94,19 @@ export default async function ProductsManagementPage() {
         category_zh: true,
         category_es: true,
         yogo_code: true,
+        active: true,
       },
+    }),
+  );
+  const enabledSupplierRows = await withPrismaRetry(() =>
+    prisma.supplierProfile.findMany({
+      where: {
+        tenant_id: session.tenantId,
+        company_id: session.companyId,
+        enabled: true,
+      },
+      select: { short_name: true },
+      orderBy: [{ short_name: "asc" }],
     }),
   );
 
@@ -193,6 +205,21 @@ export default async function ProductsManagementPage() {
       isNewProduct: null,
     };
   });
+  const visibleCategoryOptions = Array.from(
+    new Set(
+      categoryMapRows
+        .filter((item) => item.active)
+        .map((item) => stripLeadingCategoryCode(item.category_zh))
+        .filter((value) => value && value !== "-"),
+    ),
+  );
+  const visibleSupplierOptions = Array.from(
+    new Set(
+      enabledSupplierRows
+        .map((item) => String(item.short_name || "").trim())
+        .filter(Boolean),
+    ),
+  );
 
   return (
     <AppShell>
@@ -200,6 +227,8 @@ export default async function ProductsManagementPage() {
         initialRows={initialRows}
         readOnlyMode
         yogoLastUpdatedText={yogoLastUpdatedText}
+        visibleCategoryOptions={visibleCategoryOptions}
+        visibleSupplierOptions={visibleSupplierOptions}
       />
     </AppShell>
   );

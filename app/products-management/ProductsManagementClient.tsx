@@ -29,7 +29,13 @@ type ProductRow = {
   isNewProduct: boolean | null;
 };
 
-type Props = { initialRows: ProductRow[]; readOnlyMode?: boolean; yogoLastUpdatedText?: string };
+type Props = {
+  initialRows: ProductRow[];
+  readOnlyMode?: boolean;
+  yogoLastUpdatedText?: string;
+  visibleCategoryOptions?: string[];
+  visibleSupplierOptions?: string[];
+};
 
 type EditState = {
   id: string;
@@ -105,6 +111,8 @@ export function ProductsManagementClient({
   initialRows,
   readOnlyMode = false,
   yogoLastUpdatedText = "最近一次友购产品更新时间是：暂无",
+  visibleCategoryOptions = [],
+  visibleSupplierOptions = [],
 }: Props) {
   const [lang, setLang] = useState<"zh" | "es">("zh");
   const [rows, setRows] = useState(initialRows);
@@ -315,8 +323,17 @@ export function ProductsManagementClient({
   }, [uploading]);
 
   const supplierOptions = useMemo(
-    () => ["all", ...new Set(rows.map((r) => (r.supplier || "").trim()).filter(Boolean))],
-    [rows],
+    () => {
+      const allSuppliers = Array.from(
+        new Set(rows.map((r) => (r.supplier || "").trim()).filter(Boolean)),
+      );
+      const visibleSet = new Set(visibleSupplierOptions.map((item) => item.trim()).filter(Boolean));
+      const filtered = visibleSet.size
+        ? allSuppliers.filter((item) => visibleSet.has(item))
+        : allSuppliers;
+      return ["all", ...filtered];
+    },
+    [rows, visibleSupplierOptions],
   );
   const shareCategoryOptions = useMemo(
     () =>
@@ -330,16 +347,21 @@ export function ProductsManagementClient({
     [rows],
   );
   const categoryOptions = useMemo(
-    () =>
-      [
-        "all",
-        ...new Set(
+    () => {
+      const allCategories = Array.from(
+        new Set(
           rows
             .map((r) => (r.categoryName && r.categoryName !== "-" ? r.categoryName : r.category).trim())
             .filter(Boolean),
         ),
-      ],
-    [rows],
+      );
+      const visibleSet = new Set(visibleCategoryOptions.map((item) => item.trim()).filter(Boolean));
+      const filtered = visibleSet.size
+        ? allCategories.filter((item) => visibleSet.has(item))
+        : allCategories;
+      return ["all", ...filtered];
+    },
+    [rows, visibleCategoryOptions],
   );
   const supplierChoices = supplierOptions.filter((s) => s !== "all");
   const categoryChoices = categoryOptions.filter((c) => c !== "all");
