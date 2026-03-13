@@ -9,12 +9,16 @@ function normalizeText(value: unknown) {
   return value.replace(/\s+/g, " ").trim();
 }
 
-function normalizeYogoCode(value: unknown) {
+function normalizeYogoCodes(value: unknown) {
   const raw = normalizeText(value);
   if (!raw) return "";
-  const digits = raw.replace(/\D+/g, "");
-  if (!digits) return "";
-  return digits.slice(0, 2).padStart(2, "0");
+  const segments = raw
+    .split(/[,\s，、;；]+/u)
+    .map((item) => item.replace(/\D+/g, "").slice(0, 2))
+    .filter(Boolean)
+    .map((item) => item.padStart(2, "0"));
+  if (!segments.length) return "";
+  return Array.from(new Set(segments)).join(",");
 }
 
 function isInvalidCategory(value: string) {
@@ -118,7 +122,7 @@ export async function POST(request: Request) {
     const id = normalizeText(body.id);
     const categoryZh = normalizeText(body.categoryZh);
     const categoryEs = normalizeText(body.categoryEs);
-    const yogoCode = normalizeYogoCode(body.yogoCode);
+    const yogoCode = normalizeYogoCodes(body.yogoCode);
     const active = Boolean(body.active ?? true);
 
     if (!categoryZh || isInvalidCategory(categoryZh)) {

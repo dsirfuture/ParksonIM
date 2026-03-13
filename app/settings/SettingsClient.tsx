@@ -1405,9 +1405,10 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       <input
                         value={categoryForm.yogoCode}
                         onChange={(e) => setCategoryForm((p) => ({ ...p, yogoCode: e.target.value }))}
-                        placeholder={tx("例如 19", "Ej. 19")}
+                        placeholder={tx("例如 10,11,12", "Ej. 10,11,12")}
                         className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm"
                       />
+                      <p className="mt-1 text-[10px] text-slate-500">{tx("可填写多个序号，用逗号分隔", "Multiples codigos separados por coma")}</p>
                     </div>
                     <div className="sm:col-span-2">
                       <label className="mb-1 block text-[11px] font-medium text-slate-600">{tx("启用状态", "Estado habilitado")}</label>

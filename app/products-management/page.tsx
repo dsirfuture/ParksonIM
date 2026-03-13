@@ -125,13 +125,19 @@ export default async function ProductsManagementPage() {
   }
   const categoryCodeMap = new Map<string, string>();
   for (const item of categoryMapRows) {
-    const configuredCode = String(item.yogo_code || "").replace(/\D+/g, "").slice(0, 2);
-    if (configuredCode) {
+    const configuredCodes = String(item.yogo_code || "")
+      .split(/[,\s，、;；]+/u)
+      .map((value) => value.replace(/\D+/g, "").slice(0, 2))
+      .filter(Boolean)
+      .map((value) => value.padStart(2, "0"));
+    if (configuredCodes.length) {
       const zh = String(item.category_zh || "").trim();
       const es = String(item.category_es || "").trim();
       const mapped = stripLeadingCategoryCode(zh) || stripLeadingCategoryCode(es);
       if (mapped) {
-        categoryCodeMap.set(configuredCode.padStart(2, "0"), mapped);
+        for (const code of configuredCodes) {
+          categoryCodeMap.set(code, mapped);
+        }
         continue;
       }
     }
