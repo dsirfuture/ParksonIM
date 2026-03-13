@@ -1,6 +1,7 @@
 ﻿import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { ProductImage } from "@/components/product-image";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
 
@@ -64,6 +65,7 @@ export default async function YogoOrdersPreviewPage(props: {
       contact_name: true,
       order_amount: true,
       order_remark: true,
+      item_count: true,
     },
   });
 
@@ -102,6 +104,48 @@ export default async function YogoOrdersPreviewPage(props: {
 
   const detailItems =
     selectedOrder?.supplierOrders.flatMap((supplierOrder) => supplierOrder.items) || [];
+
+  const skuSet = new Set(
+    detailItems.map((item) => String(item.item_no || "").trim()).filter(Boolean),
+  );
+  const barcodeSet = new Set(
+    detailItems.map((item) => String(item.barcode || "").trim()).filter(Boolean),
+  );
+
+  const yogoNameRows =
+    selectedOrder && (skuSet.size > 0 || barcodeSet.size > 0)
+      ? await prisma.yogoProductSource.findMany({
+          where: {
+            tenant_id: session.tenantId,
+            company_id: session.companyId,
+            OR: [
+              ...(skuSet.size > 0 ? [{ product_code: { in: Array.from(skuSet) } }] : []),
+              ...(barcodeSet.size > 0 ? [{ product_no: { in: Array.from(barcodeSet) } }] : []),
+            ],
+          },
+          select: {
+            product_code: true,
+            product_no: true,
+            name_cn: true,
+            name_es: true,
+          },
+        })
+      : [];
+
+  const nameBySku = new Map(
+    yogoNameRows.map((row) => [
+      String(row.product_code || "").trim(),
+      { zh: row.name_cn || "", es: row.name_es || "" },
+    ]),
+  );
+  const nameByBarcode = new Map(
+    yogoNameRows
+      .filter((row) => row.product_no)
+      .map((row) => [
+        String(row.product_no || "").trim(),
+        { zh: row.name_cn || "", es: row.name_es || "" },
+      ]),
+  );
 
   const detailSum = detailItems.reduce((sum, item) => {
     const line =
@@ -155,7 +199,9 @@ export default async function YogoOrdersPreviewPage(props: {
                     className={`border-t border-slate-100 ${selectedOrderKey === row.id ? "bg-indigo-50/40" : ""}`}
                   >
                     <td className="px-3 py-2 font-semibold text-slate-900">{row.order_no}</td>
-                    <td className="px-3 py-2 text-slate-600">-</td>
+                    <td className="px-3 py-2 text-slate-600">
+                      {row.item_count > 0 ? "已导入" : "待导入"}
+                    </td>
                     <td className="px-3 py-2 text-slate-600">{formatDateTime(row.created_at)}</td>
                     <td className="px-3 py-2 text-slate-700">{row.company_name || "-"}</td>
                     <td className="px-3 py-2 text-slate-700">
@@ -193,10 +239,13 @@ export default async function YogoOrdersPreviewPage(props: {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] border-separate border-spacing-0">
+          <table className="w-full min-w-[1100px] border-separate border-spacing-0">
             <thead>
               <tr className="bg-slate-50 text-left text-xs text-slate-500">
+                <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">产品图片</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">商品</th>
+                <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">中文名</th>
+                <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">西文名</th>
                 <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">数量</th>
                 <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">单价</th>
                 <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">行金额 / 小计</th>
@@ -205,37 +254,47 @@ export default async function YogoOrdersPreviewPage(props: {
             <tbody className="text-[13px]">
               {!selectedOrder ? (
                 <tr>
-                  <td colSpan={4} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={7} className="px-3 py-10 text-center text-slate-500">
                     暂未选择订单
                   </td>
                 </tr>
               ) : detailItems.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={7} className="px-3 py-10 text-center text-slate-500">
                     当前订单暂无明细
                   </td>
                 </tr>
               ) : (
-                detailItems.map((item) => (
-                  <tr key={item.id} className="border-t border-slate-100">
-                    <td className="px-3 py-2 text-slate-700">
-                      {item.product_name || item.item_no || item.barcode || "-"}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-700">{item.total_qty}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-700">
-                      {toMoney(item.unit_price)}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-700">
-                      {toMoney(item.line_total)}
-                    </td>
-                  </tr>
-                ))
+                detailItems.map((item) => {
+                  const sku = String(item.item_no || "").trim();
+                  const barcode = String(item.barcode || "").trim();
+                  const mapped = nameBySku.get(sku) || nameByBarcode.get(barcode) || { zh: "", es: "" };
+                  return (
+                    <tr key={item.id} className="border-t border-slate-100">
+                      <td className="px-3 py-2">
+                        <ProductImage sku={sku || undefined} hasImage size={40} roundedClassName="rounded-md" />
+                      </td>
+                      <td className="px-3 py-2 text-slate-700">
+                        {item.product_name || item.item_no || item.barcode || "-"}
+                      </td>
+                      <td className="px-3 py-2 text-slate-700">{mapped.zh || "-"}</td>
+                      <td className="px-3 py-2 text-slate-700">{mapped.es || "-"}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-700">{item.total_qty}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                        {toMoney(item.unit_price)}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                        {toMoney(item.line_total)}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
             {selectedOrder ? (
               <tfoot>
                 <tr className="border-t border-slate-200 bg-slate-50">
-                  <td className="px-3 py-2.5 text-sm font-semibold text-slate-900" colSpan={3}>
+                  <td className="px-3 py-2.5 text-sm font-semibold text-slate-900" colSpan={6}>
                     订单总金额
                   </td>
                   <td className="px-3 py-2.5 text-right text-sm font-semibold text-slate-900">
