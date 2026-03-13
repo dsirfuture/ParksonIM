@@ -485,7 +485,7 @@ export default async function YogoOrdersPreviewPage(props: {
                       </td>
                       <td className="px-3 py-2 text-slate-700">{item.barcode || "-"}</td>
                       <td className="px-3 py-2 text-slate-700">
-                        {item.location || item.supplier_code || "-"}
+                        {item.location || "-"}
                       </td>
                       <td className="px-3 py-2 text-slate-700">
                         {mapped.zh || splitName.zh || "-"}
