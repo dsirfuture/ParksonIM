@@ -33,16 +33,22 @@ type RawOrder = {
   order_no?: unknown;
   customer_id?: unknown;
   customer_name?: unknown;
+  customer?: unknown;
   company_name?: unknown;
+  company?: unknown;
   contact_name?: unknown;
+  contact?: unknown;
   contact_phone?: unknown;
   address_text?: unknown;
   order_remark?: unknown;
+  note?: unknown;
+  remark?: unknown;
   store_label?: unknown;
   header_status_id?: unknown;
   header_status?: unknown;
   latest_status?: unknown;
   header_amount?: unknown;
+  amount?: unknown;
   order_amount?: unknown;
   items_count?: unknown;
   header_updated_at?: unknown;
@@ -65,6 +71,7 @@ type ParsedOrderItem = {
 
 type ParsedOrder = {
   orderNo: string;
+  customerId: string | null;
   orderAmount: number | null;
   companyName: string | null;
   customerName: string | null;
@@ -161,13 +168,14 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
   const items = rawItems.map(parseOrderItem);
   return {
     orderNo,
-    orderAmount: numberOrNull(input.header_amount ?? input.order_amount),
-    companyName: text(input.company_name),
-    customerName: text(input.customer_name),
-    contactName: text(input.contact_name),
+    customerId: text(input.customer_id),
+    orderAmount: numberOrNull(input.header_amount ?? input.order_amount ?? input.amount),
+    companyName: text(input.company_name) || text(input.company),
+    customerName: text(input.customer_name) || text(input.customer),
+    contactName: text(input.contact_name) || text(input.contact),
     contactPhone: text(input.contact_phone),
     addressText: text(input.address_text),
-    remarkText: text(input.order_remark),
+    remarkText: text(input.order_remark) || text(input.note) || text(input.remark),
     storeLabel: text(input.store_label),
     headerStatusId: text(input.header_status_id),
     headerStatus: text(input.header_status),
@@ -246,6 +254,9 @@ export async function POST(request: Request) {
     const hasCustomerId = await columnExists("customer_id");
 
     for (const order of orders) {
+      const createCompanyName = order.companyName || order.customerName;
+      const createCustomerName = order.customerName || order.companyName;
+      const createContactName = order.contactName || order.customerName || order.companyName;
       const upserted = await prisma.ygOrderImport.upsert({
         where: {
           tenant_id_company_id_order_no: {
@@ -262,9 +273,9 @@ export async function POST(request: Request) {
           sheet_name: "sync",
           order_amount: order.orderAmount,
           last_three: tailThree(order.orderNo),
-          company_name: order.companyName,
-          customer_name: order.customerName,
-          contact_name: order.contactName,
+          company_name: createCompanyName,
+          customer_name: createCustomerName,
+          contact_name: createContactName,
           contact_phone: order.contactPhone,
           address_text: order.addressText,
           order_remark: order.remarkText,
@@ -274,16 +285,17 @@ export async function POST(request: Request) {
           created_by: "yogo-sync",
         },
         update: {
-          order_amount: order.orderAmount,
-          company_name: order.companyName,
-          customer_name: order.customerName,
-          contact_name: order.contactName,
-          contact_phone: order.contactPhone,
-          address_text: order.addressText,
-          order_remark: order.remarkText,
-          store_label: order.storeLabel,
-          supplier_count: order.items.length > 0 ? 1 : 0,
-          item_count: order.items.length,
+          ...(order.orderAmount !== null ? { order_amount: order.orderAmount } : {}),
+          ...(order.companyName ? { company_name: order.companyName } : {}),
+          ...(order.customerName ? { customer_name: order.customerName } : {}),
+          ...(order.contactName ? { contact_name: order.contactName } : {}),
+          ...(order.contactPhone ? { contact_phone: order.contactPhone } : {}),
+          ...(order.addressText ? { address_text: order.addressText } : {}),
+          ...(order.remarkText ? { order_remark: order.remarkText } : {}),
+          ...(order.storeLabel ? { store_label: order.storeLabel } : {}),
+          ...(order.items.length > 0
+            ? { supplier_count: 1, item_count: order.items.length }
+            : {}),
         },
         select: { id: true },
       });
@@ -298,19 +310,19 @@ export async function POST(request: Request) {
       ) {
         const sets: string[] = [];
         const params: unknown[] = [upserted.id];
-        if (hasHeaderStatus) {
+        if (hasHeaderStatus && order.headerStatus) {
           params.push(order.headerStatus);
           sets.push(`header_status = $${params.length}`);
         }
-        if (hasHeaderStatusId) {
+        if (hasHeaderStatusId && order.headerStatusId) {
           params.push(order.headerStatusId);
           sets.push(`header_status_id = $${params.length}`);
         }
-        if (hasLatestStatus) {
+        if (hasLatestStatus && order.latestStatus) {
           params.push(order.latestStatus);
           sets.push(`latest_status = $${params.length}`);
         }
-        if (hasHeaderUpdatedAt) {
+        if (hasHeaderUpdatedAt && order.headerUpdatedAt) {
           params.push(order.headerUpdatedAt);
           sets.push(`header_updated_at = $${params.length}`);
         }
@@ -318,8 +330,8 @@ export async function POST(request: Request) {
           params.push(order.orderNo);
           sets.push(`order_key = $${params.length}`);
         }
-        if (hasCustomerId) {
-          params.push(null);
+        if (hasCustomerId && order.customerId) {
+          params.push(order.customerId);
           sets.push(`customer_id = $${params.length}`);
         }
         if (sets.length > 0) {
