@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { ProductImage } from "@/components/product-image";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
+import { parseYogoDiscountParts } from "@/lib/yogo-product-utils";
 
 function toMoney(value: unknown) {
   if (value === null || value === undefined) return "-";
@@ -129,6 +130,8 @@ export default async function YogoOrdersPreviewPage(props: {
             product_no: true,
             name_cn: true,
             name_es: true,
+            category_name: true,
+            source_discount: true,
           },
         })
       : [];
@@ -136,7 +139,11 @@ export default async function YogoOrdersPreviewPage(props: {
   const nameBySku = new Map(
     yogoNameRows.map((row) => [
       String(row.product_code || "").trim(),
-      { zh: row.name_cn || "", es: row.name_es || "" },
+      {
+        zh: row.name_cn || "",
+        es: row.name_es || "",
+        ...parseYogoDiscountParts(row.category_name, row.source_discount),
+      },
     ]),
   );
   const nameByBarcode = new Map(
@@ -144,7 +151,11 @@ export default async function YogoOrdersPreviewPage(props: {
       .filter((row) => row.product_no)
       .map((row) => [
         String(row.product_no || "").trim(),
-        { zh: row.name_cn || "", es: row.name_es || "" },
+        {
+          zh: row.name_cn || "",
+          es: row.name_es || "",
+          ...parseYogoDiscountParts(row.category_name, row.source_discount),
+        },
       ]),
   );
 
@@ -272,7 +283,9 @@ export default async function YogoOrdersPreviewPage(props: {
                 detailItems.map((item) => {
                   const sku = String(item.item_no || "").trim();
                   const barcode = String(item.barcode || "").trim();
-                  const mapped = nameBySku.get(sku) || nameByBarcode.get(barcode) || { zh: "", es: "" };
+                  const mapped =
+                    nameBySku.get(sku) ||
+                    nameByBarcode.get(barcode) || { zh: "", es: "", normal: "-", vip: "-" };
                   return (
                     <tr key={item.id} className="border-t border-slate-100">
                       <td className="px-3 py-2">
@@ -288,8 +301,8 @@ export default async function YogoOrdersPreviewPage(props: {
                       <td className="px-3 py-2 text-right tabular-nums text-slate-700">
                         {toMoney(item.unit_price)}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-slate-700">-</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-slate-700">-</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-700">{mapped.normal || "-"}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-700">{mapped.vip || "-"}</td>
                       <td className="px-3 py-2 text-right tabular-nums text-slate-700">
                         {toMoney(item.line_total)}
                       </td>
