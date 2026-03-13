@@ -190,6 +190,7 @@ export async function POST(request: Request) {
     }
     const items = Array.from(dedupedByCode.values());
     totalCount = items.length;
+    const currentCodes = items.map((item) => item.product_code);
 
     const existing = await prisma.yogoProductSource.findMany({
       where: {
@@ -256,6 +257,18 @@ export async function POST(request: Request) {
           },
         }),
       ),
+      prisma.yogoProductSource.updateMany({
+        where: {
+          tenant_id: tenantId,
+          company_id: companyId,
+          source: "yogo",
+          product_code: { notIn: currentCodes },
+          source_disabled: false,
+        },
+        data: {
+          source_disabled: true,
+        },
+      }),
       prisma.yogoProductSyncLog.create({
         data: {
           tenant_id: tenantId,
