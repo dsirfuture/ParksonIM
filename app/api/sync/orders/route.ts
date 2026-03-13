@@ -30,29 +30,49 @@ type RawOrderItem = {
 
 type RawOrder = {
   order_key?: unknown;
+  orderKey?: unknown;
   order_no?: unknown;
+  orderNo?: unknown;
+  order_created_at?: unknown;
+  orderCreatedAt?: unknown;
   customer_id?: unknown;
+  customerId?: unknown;
   customer_name?: unknown;
   customer?: unknown;
+  customerName?: unknown;
   company_name?: unknown;
   company?: unknown;
+  companyName?: unknown;
   contact_name?: unknown;
   contact?: unknown;
+  contactName?: unknown;
   contact_phone?: unknown;
+  contactPhone?: unknown;
   address_text?: unknown;
+  addressText?: unknown;
   order_remark?: unknown;
   note?: unknown;
   remark?: unknown;
+  orderRemark?: unknown;
   store_label?: unknown;
+  storeLabel?: unknown;
   header_status_id?: unknown;
+  headerStatusId?: unknown;
   header_status?: unknown;
+  headerStatus?: unknown;
   latest_status?: unknown;
+  latestStatus?: unknown;
   header_amount?: unknown;
+  headerAmount?: unknown;
   amount?: unknown;
   order_amount?: unknown;
+  orderAmount?: unknown;
   items_count?: unknown;
+  itemsCount?: unknown;
   header_updated_at?: unknown;
+  headerUpdatedAt?: unknown;
   synced_at?: unknown;
+  header?: unknown;
   items?: unknown;
   details?: unknown;
   lines?: unknown;
@@ -71,6 +91,7 @@ type ParsedOrderItem = {
 
 type ParsedOrder = {
   orderNo: string;
+  orderCreatedAt: Date | null;
   customerId: string | null;
   orderAmount: number | null;
   companyName: string | null;
@@ -160,7 +181,15 @@ function parseOrderItem(input: RawOrderItem, index: number): ParsedOrderItem {
 }
 
 function parseOrder(input: RawOrder, index: number): ParsedOrder {
-  const orderNo = text(input.order_no) || text(input.order_key);
+  const header =
+    input.header && typeof input.header === "object"
+      ? (input.header as Record<string, unknown>)
+      : null;
+  const orderNo =
+    text(input.order_no) ||
+    text(input.orderNo) ||
+    text(input.order_key) ||
+    text(input.orderKey);
   if (!orderNo) {
     throw new Error(`Row ${index + 1}: order_no or order_key is required`);
   }
@@ -168,19 +197,64 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
   const items = rawItems.map(parseOrderItem);
   return {
     orderNo,
-    customerId: text(input.customer_id),
-    orderAmount: numberOrNull(input.header_amount ?? input.order_amount ?? input.amount),
-    companyName: text(input.company_name) || text(input.company),
-    customerName: text(input.customer_name) || text(input.customer),
-    contactName: text(input.contact_name) || text(input.contact),
-    contactPhone: text(input.contact_phone),
-    addressText: text(input.address_text),
-    remarkText: text(input.order_remark) || text(input.note) || text(input.remark),
-    storeLabel: text(input.store_label),
-    headerStatusId: text(input.header_status_id),
-    headerStatus: text(input.header_status),
-    latestStatus: text(input.latest_status),
-    headerUpdatedAt: dateOrNull(input.header_updated_at ?? input.synced_at),
+    orderCreatedAt: dateOrNull(
+      input.order_created_at ??
+        input.orderCreatedAt ??
+        header?.order_created_at ??
+        header?.orderCreatedAt,
+    ),
+    customerId: text(input.customer_id) || text(input.customerId),
+    orderAmount: numberOrNull(
+      input.header_amount ??
+        input.headerAmount ??
+        input.order_amount ??
+        input.orderAmount ??
+        input.amount ??
+        header?.header_amount ??
+        header?.headerAmount,
+    ),
+    companyName:
+      text(input.company_name) ||
+      text(input.companyName) ||
+      text(input.company),
+    customerName:
+      text(input.customer_name) ||
+      text(input.customerName) ||
+      text(input.customer),
+    contactName:
+      text(input.contact_name) ||
+      text(input.contactName) ||
+      text(input.contact),
+    contactPhone: text(input.contact_phone) || text(input.contactPhone),
+    addressText: text(input.address_text) || text(input.addressText),
+    remarkText:
+      text(input.order_remark) ||
+      text(input.orderRemark) ||
+      text(input.note) ||
+      text(input.remark),
+    storeLabel: text(input.store_label) || text(input.storeLabel),
+    headerStatusId:
+      text(input.header_status_id) ||
+      text(input.headerStatusId) ||
+      text(header?.header_status_id) ||
+      text(header?.headerStatusId),
+    headerStatus:
+      text(input.header_status) ||
+      text(input.headerStatus) ||
+      text(header?.header_status) ||
+      text(header?.headerStatus),
+    latestStatus:
+      text(input.latest_status) ||
+      text(input.latestStatus) ||
+      text(header?.latest_status) ||
+      text(header?.latestStatus),
+    headerUpdatedAt: dateOrNull(
+      input.header_updated_at ??
+        input.headerUpdatedAt ??
+        input.synced_at ??
+        header?.header_updated_at ??
+        header?.headerUpdatedAt,
+    ),
     items,
   };
 }
@@ -204,6 +278,7 @@ async function ensurePreviewStatusColumns() {
     ADD COLUMN IF NOT EXISTS header_status text,
     ADD COLUMN IF NOT EXISTS latest_status text,
     ADD COLUMN IF NOT EXISTS header_updated_at timestamptz,
+    ADD COLUMN IF NOT EXISTS order_created_at timestamptz,
     ADD COLUMN IF NOT EXISTS order_key text,
     ADD COLUMN IF NOT EXISTS customer_id text
   `);
@@ -250,6 +325,7 @@ export async function POST(request: Request) {
     const hasHeaderStatusId = await columnExists("header_status_id");
     const hasLatestStatus = await columnExists("latest_status");
     const hasHeaderUpdatedAt = await columnExists("header_updated_at");
+    const hasOrderCreatedAt = await columnExists("order_created_at");
     const hasOrderKey = await columnExists("order_key");
     const hasCustomerId = await columnExists("customer_id");
 
@@ -257,6 +333,16 @@ export async function POST(request: Request) {
       const createCompanyName = order.companyName || order.customerName;
       const createCustomerName = order.customerName || order.companyName;
       const createContactName = order.contactName || order.customerName || order.companyName;
+      const summedLineTotal = order.items.reduce((sum, item) => {
+        const line = item.lineTotal ?? 0;
+        return sum + line;
+      }, 0);
+      const resolvedAmount =
+        order.orderAmount !== null
+          ? order.orderAmount
+          : summedLineTotal > 0
+            ? summedLineTotal
+            : null;
       const upserted = await prisma.ygOrderImport.upsert({
         where: {
           tenant_id_company_id_order_no: {
@@ -271,7 +357,7 @@ export async function POST(request: Request) {
           order_no: order.orderNo,
           source_file_name: "yogo-sync-orders",
           sheet_name: "sync",
-          order_amount: order.orderAmount,
+          order_amount: resolvedAmount,
           last_three: tailThree(order.orderNo),
           company_name: createCompanyName,
           customer_name: createCustomerName,
@@ -285,7 +371,7 @@ export async function POST(request: Request) {
           created_by: "yogo-sync",
         },
         update: {
-          ...(order.orderAmount !== null ? { order_amount: order.orderAmount } : {}),
+          ...(resolvedAmount !== null ? { order_amount: resolvedAmount } : {}),
           ...(order.companyName ? { company_name: order.companyName } : {}),
           ...(order.customerName ? { customer_name: order.customerName } : {}),
           ...(order.contactName ? { contact_name: order.contactName } : {}),
@@ -305,6 +391,7 @@ export async function POST(request: Request) {
         hasHeaderStatusId ||
         hasLatestStatus ||
         hasHeaderUpdatedAt ||
+        hasOrderCreatedAt ||
         hasOrderKey ||
         hasCustomerId
       ) {
@@ -325,6 +412,10 @@ export async function POST(request: Request) {
         if (hasHeaderUpdatedAt && order.headerUpdatedAt) {
           params.push(order.headerUpdatedAt);
           sets.push(`header_updated_at = $${params.length}`);
+        }
+        if (hasOrderCreatedAt && order.orderCreatedAt) {
+          params.push(order.orderCreatedAt);
+          sets.push(`order_created_at = $${params.length}`);
         }
         if (hasOrderKey) {
           params.push(order.orderNo);
@@ -359,7 +450,7 @@ export async function POST(request: Request) {
             order_no: order.orderNo,
             supplier_code: "YOGO",
             derived_order_no: `${order.orderNo}-YOGO-000`,
-            order_amount: order.orderAmount,
+            order_amount: resolvedAmount,
             note_text: order.remarkText,
             item_count: order.items.length,
             items: {
