@@ -35,27 +35,17 @@ function formatDateTime(value: Date | null) {
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
-async function readSearchParams(
-  input: SearchParams | Promise<SearchParams> | undefined,
-) {
-  if (!input) return {} as SearchParams;
-  if (typeof (input as Promise<SearchParams>).then === "function") {
-    return (await input) || {};
-  }
-  return input;
-}
-
 function firstValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
 export default async function YogoOrdersPreviewPage(props: {
-  searchParams?: SearchParams | Promise<SearchParams>;
+  searchParams?: Promise<SearchParams>;
 }) {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const searchParams = await readSearchParams(props.searchParams);
+  const searchParams = (await props.searchParams) || {};
   const selectedOrderKey = firstValue(searchParams.order_key) || "";
 
   const rows = await prisma.ygOrderImport.findMany({
