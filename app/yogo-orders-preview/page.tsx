@@ -75,12 +75,14 @@ export default async function YogoOrdersPreviewPage(props: {
       SELECT column_name
       FROM information_schema.columns
       WHERE table_name = 'yg_order_imports'
-        AND column_name IN ('header_status', 'header_status_id')
+        AND column_name IN ('header_status', 'header_status_id', 'order_created_at')
     `,
   );
   const hasHeaderStatus = statusColumns.some((col) => col.column_name === "header_status");
   const hasHeaderStatusId = statusColumns.some((col) => col.column_name === "header_status_id");
+  const hasOrderCreatedAt = statusColumns.some((col) => col.column_name === "order_created_at");
   let statusById = new Map<string, string>();
+  let orderCreatedAtById = new Map<string, Date>();
   if (hasHeaderStatus || hasHeaderStatusId) {
     const statusExpr = hasHeaderStatus
       ? "NULLIF(TRIM(CAST(header_status AS text)), '')"
@@ -88,11 +90,17 @@ export default async function YogoOrdersPreviewPage(props: {
     const statusIdExpr = hasHeaderStatusId
       ? "NULLIF(TRIM(CAST(header_status_id AS text)), '')"
       : "NULL";
-    const statusRows = await prisma.$queryRawUnsafe<Array<{ id: string; header_status: string | null }>>(
+    const createdAtExpr = hasOrderCreatedAt
+      ? "order_created_at"
+      : "created_at";
+    const statusRows = await prisma.$queryRawUnsafe<
+      Array<{ id: string; header_status: string | null; order_created_at: Date | null }>
+    >(
       `
         SELECT
           CAST(id AS text) AS id,
-          COALESCE(${statusExpr}, ${statusIdExpr}) AS header_status
+          COALESCE(${statusExpr}, ${statusIdExpr}) AS header_status,
+          ${createdAtExpr} AS order_created_at
         FROM yg_order_imports
         WHERE tenant_id = $1::uuid
           AND company_id = $2::uuid
@@ -104,6 +112,11 @@ export default async function YogoOrdersPreviewPage(props: {
       statusRows
         .filter((row) => row.header_status)
         .map((row) => [row.id, String(row.header_status || "").trim()]),
+    );
+    orderCreatedAtById = new Map(
+      statusRows
+        .filter((row) => row.order_created_at)
+        .map((row) => [row.id, row.order_created_at as Date]),
     );
   }
 
@@ -230,14 +243,13 @@ export default async function YogoOrdersPreviewPage(props: {
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">联系人</th>
                 <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">订单金额</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">备注</th>
-                <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">order_key</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">详情</th>
               </tr>
             </thead>
             <tbody className="text-[13px]">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={8} className="px-3 py-10 text-center text-slate-500">
                     暂无订单预览数据
                   </td>
                 </tr>
@@ -251,7 +263,9 @@ export default async function YogoOrdersPreviewPage(props: {
                     <td className="px-3 py-2 text-slate-600">
                       {statusById.get(row.id) || "-"}
                     </td>
-                    <td className="px-3 py-2 text-slate-600">{formatDateTime(row.created_at)}</td>
+                    <td className="px-3 py-2 text-slate-600">
+                      {formatDateTime(orderCreatedAtById.get(row.id) || row.created_at)}
+                    </td>
                     <td className="px-3 py-2 text-slate-700">{row.company_name || "-"}</td>
                     <td className="px-3 py-2 text-slate-700">
                       {row.contact_name || row.customer_name || "-"}
@@ -262,7 +276,6 @@ export default async function YogoOrdersPreviewPage(props: {
                     <td className="max-w-[240px] truncate px-3 py-2 text-slate-600">
                       {row.order_remark || "-"}
                     </td>
-                    <td className="px-3 py-2 text-slate-600">{row.id}</td>
                     <td className="px-3 py-2 text-slate-600">
                       <Link
                         href={`/yogo-orders-preview?order_key=${row.id}`}
