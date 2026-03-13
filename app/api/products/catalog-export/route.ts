@@ -822,7 +822,9 @@ async function buildCatalogPdf(
     const skuLine = unicodeSafe ? `编号 ${sku}` : `NO ${sku}`;
     page.drawText(skuLine, { x: x + textPad, y: textY, size: 7.5, font: fontForText(skuLine), color: rgb(0.4, 0.42, 0.45) });
     textY -= metaLineGap;
-    const metaPrefix = `包装数 ${casePack}  装箱数 ${cartonPack}  价格 `;
+    const metaPrefix = unicodeSafe
+      ? `包装数 ${casePack}  装箱数 ${cartonPack}  价格 `
+      : `PACK ${casePack}  CARTON ${cartonPack}  PRICE `;
     const metaPrefixFont = fontForText(metaPrefix);
     const metaPrefixW = metaPrefixFont.widthOfTextAtSize(metaPrefix, 7.5);
     page.drawText(metaPrefix, {
