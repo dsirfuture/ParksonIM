@@ -89,6 +89,7 @@ export default async function YogoOrdersPreviewPage(props: {
                 select: {
                   id: true,
                   product_name: true,
+                  location: true,
                   item_no: true,
                   barcode: true,
                   total_qty: true,
@@ -244,6 +245,7 @@ export default async function YogoOrdersPreviewPage(props: {
               <tr className="bg-slate-50 text-left text-xs text-slate-500">
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">产品图片</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">商品</th>
+                <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">供应商</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">中文名</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">西文名</th>
                 <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">数量</th>
@@ -254,13 +256,13 @@ export default async function YogoOrdersPreviewPage(props: {
             <tbody className="text-[13px]">
               {!selectedOrder ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={8} className="px-3 py-10 text-center text-slate-500">
                     暂未选择订单
                   </td>
                 </tr>
               ) : detailItems.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-10 text-center text-slate-500">
+                  <td colSpan={8} className="px-3 py-10 text-center text-slate-500">
                     当前订单暂无明细
                   </td>
                 </tr>
@@ -277,6 +279,7 @@ export default async function YogoOrdersPreviewPage(props: {
                       <td className="px-3 py-2 text-slate-700">
                         {item.product_name || item.item_no || item.barcode || "-"}
                       </td>
+                      <td className="px-3 py-2 text-slate-700">{item.location || "-"}</td>
                       <td className="px-3 py-2 text-slate-700">{mapped.zh || "-"}</td>
                       <td className="px-3 py-2 text-slate-700">{mapped.es || "-"}</td>
                       <td className="px-3 py-2 text-right tabular-nums text-slate-700">{item.total_qty}</td>
@@ -294,7 +297,7 @@ export default async function YogoOrdersPreviewPage(props: {
             {selectedOrder ? (
               <tfoot>
                 <tr className="border-t border-slate-200 bg-slate-50">
-                  <td className="px-3 py-2.5 text-sm font-semibold text-slate-900" colSpan={6}>
+                  <td className="px-3 py-2.5 text-sm font-semibold text-slate-900" colSpan={7}>
                     订单总金额
                   </td>
                   <td className="px-3 py-2.5 text-right text-sm font-semibold text-slate-900">
