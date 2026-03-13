@@ -11,6 +11,7 @@ import { withPrismaRetry } from "@/lib/prisma-retry";
 import { buildProductImageUrls, HAS_REMOTE_PRODUCT_IMAGE_BASE } from "@/lib/product-image-url";
 
 export const runtime = "nodejs";
+const REMOTE_IMAGE_FETCH_TIMEOUT_MS = 2500;
 
 type ProductRow = {
   sku: string;
@@ -148,7 +149,8 @@ async function loadImageBySku(sku: string) {
   }
   // 2) remote CDN/R2 source for deployed environments
   if (HAS_REMOTE_PRODUCT_IMAGE_BASE) {
-    const candidates = buildProductImageUrls(sku, exts);
+    // Keep remote attempts minimal to avoid long export stalls per SKU.
+    const candidates = buildProductImageUrls(sku, ["jpg", "png"]);
     for (const url of candidates) {
       const remote = await loadImageFromUrl(url);
       if (remote) return remote;
@@ -857,7 +859,12 @@ async function loadImageFromUrl(url: string) {
   if (!value) return null;
   try {
     if (value.startsWith("http://") || value.startsWith("https://")) {
-      const res = await fetch(value);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), REMOTE_IMAGE_FETCH_TIMEOUT_MS);
+      const res = await fetch(value, {
+        signal: controller.signal,
+        cache: "no-store",
+      }).finally(() => clearTimeout(timeout));
       if (!res.ok) return null;
       const contentType = res.headers.get("content-type") || "";
       const ext = contentType.includes("png") ? "png" : "jpeg";
