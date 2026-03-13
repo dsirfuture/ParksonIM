@@ -264,27 +264,23 @@ export async function POST(request: Request) {
           company_id: companyId,
           source: "yogo",
           source_disabled: false,
+          product_no: null,
+          name_cn: null,
+          name_es: null,
+          AND: [
+            {
+              OR: [{ case_pack: null }, { case_pack: { equals: 0 } }],
+            },
+            {
+              OR: [{ carton_pack: null }, { carton_pack: { equals: 0 } }],
+            },
+            {
+              OR: [{ source_discount: null }, { source_discount: { equals: 0 } }],
+            },
+          ],
           OR: [
-            {
-              product_no: null,
-              name_cn: null,
-              name_es: null,
-              category_name: null,
-              subcategory_name: null,
-              supplier: null,
-              source_price: null,
-              source_discount: null,
-            },
-            {
-              product_no: "",
-              name_cn: "",
-              name_es: "",
-              category_name: "",
-              subcategory_name: "",
-              supplier: "",
-              source_price: null,
-              source_discount: null,
-            },
+            { source_price: null },
+            { source_price: { equals: 0 } },
           ],
         },
         data: {
