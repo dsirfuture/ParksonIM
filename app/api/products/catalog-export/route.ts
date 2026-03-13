@@ -192,8 +192,8 @@ function resolveDisplayNames(item: ProductRow) {
   };
   const zhRaw = normalizeName(item.name_zh);
   const esRaw = normalizeName(item.name_es);
-  const zh = zhRaw || esRaw || "-";
-  const es = esRaw || zhRaw || "-";
+  const zh = zhRaw;
+  const es = esRaw;
   return { zh, es };
 }
 
@@ -539,13 +539,13 @@ async function buildCatalogXlsx(
     const priceValue = toNumber(item.price);
     const names = resolveDisplayNames(item);
     const nameZh = names.zh;
-    const nameEs = names.es === "-" ? labels.unset : names.es;
+    const nameEs = names.es;
     const row = ws.getRow(rowNo);
     row.values = [
       "",
       item.sku,
-      nameZh || labels.unset,
-      nameEs,
+      nameZh || "",
+      nameEs || "",
       item.case_pack ?? "",
       item.carton_pack ?? "",
       priceValue === null ? "" : `$${priceValue.toFixed(2)}`,
@@ -843,8 +843,8 @@ async function buildCatalogPdf(
     const names = resolveDisplayNames(item);
     const zhLineSafe = safePdfText(names.zh, unicodeSafe);
     const esLineSafe = safePdfText(names.es, unicodeSafe);
-    const zhLine = zhLineSafe || esLineSafe || "-";
-    const esLine = esLineSafe || zhLineSafe || "-";
+    const zhLine = zhLineSafe;
+    const esLine = esLineSafe;
     const casePack = String(item.case_pack ?? "-");
     const cartonPack = String(item.carton_pack ?? "-");
     const priceNum = toNumber(item.price);
@@ -858,11 +858,11 @@ async function buildCatalogPdf(
       2,
       Math.floor((cardH - imageBoxH - metaLinesCount * metaLineGap - minBottomPad) / descLineGap),
     );
-    const rawZhLines = wrapLines(zhLine, cardW - textPad * 2, zhSize, boldFont);
-    const rawEsLines = wrapLines(esLine, cardW - textPad * 2, esSize, esFont);
+    const rawZhLines = zhLine ? wrapLines(zhLine, cardW - textPad * 2, zhSize, boldFont) : [];
+    const rawEsLines = esLine ? wrapLines(esLine, cardW - textPad * 2, esSize, esFont) : [];
     const zhLineLimit = Math.min(3, maxNameLineCount);
     const zhLines = clampWithEllipsis(rawZhLines, zhLineLimit);
-    const remainingEsLines = Math.max(1, maxNameLineCount - zhLines.length);
+    const remainingEsLines = Math.max(0, maxNameLineCount - zhLines.length);
     const esLines = clampWithEllipsis(rawEsLines, remainingEsLines);
     if (col === 0 && y - cardH < margin + footerH) {
       page = pdfDoc.addPage([width, height]);
