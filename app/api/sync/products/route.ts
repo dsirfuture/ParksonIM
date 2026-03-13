@@ -256,6 +256,41 @@ export async function POST(request: Request) {
           },
         }),
       ),
+      // Only disable explicit placeholder/test products kept from historical syncs.
+      // This is intentionally narrow and does NOT disable all missing SKUs.
+      prisma.yogoProductSource.updateMany({
+        where: {
+          tenant_id: tenantId,
+          company_id: companyId,
+          source: "yogo",
+          source_disabled: false,
+          OR: [
+            {
+              product_no: null,
+              name_cn: null,
+              name_es: null,
+              category_name: null,
+              subcategory_name: null,
+              supplier: null,
+              source_price: null,
+              source_discount: null,
+            },
+            {
+              product_no: "",
+              name_cn: "",
+              name_es: "",
+              category_name: "",
+              subcategory_name: "",
+              supplier: "",
+              source_price: null,
+              source_discount: null,
+            },
+          ],
+        },
+        data: {
+          source_disabled: true,
+        },
+      }),
       prisma.yogoProductSyncLog.create({
         data: {
           tenant_id: tenantId,
