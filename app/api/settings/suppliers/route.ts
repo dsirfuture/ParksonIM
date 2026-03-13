@@ -76,9 +76,9 @@ async function syncSuppliersFromYogo(tenantId: string, companyId: string) {
 export async function GET() {
   try {
     const session = await getSession();
-    if (!session) return NextResponse.json({ ok: false, error: "Î´µÇÂ¼" }, { status: 401 });
+    if (!session) return NextResponse.json({ ok: false, error: "æœªç™»å½•" }, { status: 401 });
     const allowed = await hasPermission(session, "manageSuppliers");
-    if (!allowed) return NextResponse.json({ ok: false, error: "ÎŞÈ¨ÏŞ" }, { status: 403 });
+    if (!allowed) return NextResponse.json({ ok: false, error: "æ— æƒé™" }, { status: 403 });
 
     await syncSuppliersFromYogo(session.tenantId, session.companyId);
 
@@ -106,7 +106,7 @@ export async function GET() {
     });
   } catch (error) {
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "¶ÁÈ¡¹©Ó¦ÉÌÊ§°Ü" },
+      { ok: false, error: error instanceof Error ? error.message : "è¯»å–ä¾›åº”å•†å¤±è´¥" },
       { status: 500 },
     );
   }
@@ -115,16 +115,16 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const session = await getSession();
-    if (!session) return NextResponse.json({ ok: false, error: "Î´µÇÂ¼" }, { status: 401 });
+    if (!session) return NextResponse.json({ ok: false, error: "æœªç™»å½•" }, { status: 401 });
     const allowed = await hasPermission(session, "manageSuppliers");
-    if (!allowed) return NextResponse.json({ ok: false, error: "ÎŞÈ¨ÏŞ" }, { status: 403 });
+    if (!allowed) return NextResponse.json({ ok: false, error: "æ— æƒé™" }, { status: 403 });
 
     const body = (await request.json()) as Record<string, unknown>;
     const id = String(body.id || "").trim();
     const shortName = String(body.shortName || "").trim();
     const fullName = String(body.fullName || "").trim();
     if (!shortName || !fullName) {
-      return NextResponse.json({ ok: false, error: "¼ò³ÆºÍÈ«³Æ±ØÌî" }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "ç®€ç§°å’Œå…¨ç§°å¿…å¡«" }, { status: 400 });
     }
 
     const data = {
@@ -149,7 +149,7 @@ export async function POST(request: Request) {
           select: { id: true },
         }),
       );
-      if (!target) return NextResponse.json({ ok: false, error: "¹©Ó¦ÉÌ²»´æÔÚ" }, { status: 404 });
+      if (!target) return NextResponse.json({ ok: false, error: "ä¾›åº”å•†ä¸å­˜åœ¨" }, { status: 404 });
       await withPrismaRetry(() => prisma.supplierProfile.update({ where: { id }, data }));
       return NextResponse.json({ ok: true, id });
     }
@@ -163,7 +163,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, id: created.id });
   } catch (error) {
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "±£´æ¹©Ó¦ÉÌÊ§°Ü" },
+      { ok: false, error: error instanceof Error ? error.message : "ä¿å­˜ä¾›åº”å•†å¤±è´¥" },
       { status: 500 },
     );
   }
