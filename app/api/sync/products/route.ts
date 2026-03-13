@@ -111,6 +111,21 @@ function asItemList(body: unknown): YogoPayload[] {
   return [];
 }
 
+function isFullSyncPayload(body: unknown) {
+  if (!body || typeof body !== "object") return false;
+  const data = body as Record<string, unknown>;
+  const fullSync = data.full_sync ?? data.fullSync ?? data.is_full_sync ?? data.isFullSync;
+  if (typeof fullSync === "boolean") return fullSync;
+  if (typeof fullSync === "number") return fullSync !== 0;
+  if (typeof fullSync === "string") {
+    const value = fullSync.trim().toLowerCase();
+    if (["1", "true", "yes", "y", "on", "full"].includes(value)) return true;
+  }
+  const syncMode = data.sync_mode ?? data.syncMode;
+  if (typeof syncMode === "string" && syncMode.trim().toLowerCase() === "full") return true;
+  return false;
+}
+
 function normalizeProduct(input: YogoPayload, index: number): NormalizedProduct {
   const source = text(input.source);
   const productCode = text(input.product_code);
@@ -178,6 +193,7 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as unknown;
     const rawItems = asItemList(body);
+    const isFullSync = isFullSyncPayload(body);
     if (rawItems.length === 0) {
       throw new Error("Payload must be a product object or an array of products");
     }
@@ -257,18 +273,22 @@ export async function POST(request: Request) {
           },
         }),
       ),
-      prisma.yogoProductSource.updateMany({
-        where: {
-          tenant_id: tenantId,
-          company_id: companyId,
-          source: "yogo",
-          product_code: { notIn: currentCodes },
-          source_disabled: false,
-        },
-        data: {
-          source_disabled: true,
-        },
-      }),
+      ...(isFullSync
+        ? [
+            prisma.yogoProductSource.updateMany({
+              where: {
+                tenant_id: tenantId,
+                company_id: companyId,
+                source: "yogo",
+                product_code: { notIn: currentCodes },
+                source_disabled: false,
+              },
+              data: {
+                source_disabled: true,
+              },
+            }),
+          ]
+        : []),
       prisma.yogoProductSyncLog.create({
         data: {
           tenant_id: tenantId,
