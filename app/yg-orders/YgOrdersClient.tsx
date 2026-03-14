@@ -339,7 +339,7 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                 ...row,
                 customerName: result.data.customerName ?? row.customerName,
                 companyName: result.data.customerName ?? row.companyName,
-                contactName: result.data.customerName ?? row.contactName,
+                contactName: result.data.contactName ?? result.data.customerName ?? row.contactName,
                 contactPhone: result.data.contactText ?? row.contactPhone,
                 addressText: result.data.addressText ?? row.addressText,
                 remarkText: result.data.remarkText ?? row.remarkText,
