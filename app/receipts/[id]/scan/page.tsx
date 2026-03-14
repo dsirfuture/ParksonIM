@@ -54,6 +54,7 @@ function formatTime(
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    timeZone: "America/Mexico_City",
   }).format(date);
 }
 
@@ -81,10 +82,7 @@ function buildSummary(rows: ItemRow[]) {
   const addedCount = rows.filter((row) => row.unexpected).length;
 
   const totalSku = importedRows.length;
-  const expectedQtyTotal = importedRows.reduce(
-    (sum, item) => sum + (item.expectedQty ?? 0),
-    0,
-  );
+  const expectedQtyTotal = importedRows.reduce((sum, item) => sum + (item.expectedQty ?? 0), 0);
   const goodQtyTotal = importedRows.reduce(
     (sum, item) => sum + item.goodQty,
     0,
@@ -99,8 +97,8 @@ function buildSummary(rows: ItemRow[]) {
   );
 
   const checkedQtyTotal = goodQtyTotal + damagedQtyTotal;
-  const uncheckedQtyTotal = Math.max(expectedQtyTotal - checkedQtyTotal, 0);
-  const diffQtyTotal = uncheckedQtyTotal;
+  const uncheckedQtyTotal = importedRows.reduce((sum, item) => sum + item.uncheckedQty, 0);
+  const diffQtyTotal = importedRows.reduce((sum, item) => sum + item.diffQty, 0);
 
   const progress =
     expectedQtyTotal > 0
@@ -285,8 +283,9 @@ export default async function ReceiptScanPage({ params }: ScanPageProps) {
     const excessQty = item.unexpected ? 0 : (item.excess_qty ?? 0);
 
     const checkedQty = Math.min(goodQty + damagedQty, expectedQty);
-    const diffQty = item.unexpected ? 0 : Math.max(expectedQty - checkedQty, 0);
-    const uncheckedQty = item.unexpected ? 0 : diffQty;
+    const isPending = item.status === "pending";
+    const diffQty = item.unexpected || isPending ? 0 : Math.max(expectedQty - checkedQty, 0);
+    const uncheckedQty = item.unexpected || isPending ? 0 : diffQty;
 
     return {
       id: item.id,

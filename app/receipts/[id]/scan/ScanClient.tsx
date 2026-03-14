@@ -165,10 +165,7 @@ function buildSummary(items: ItemRow[]): SummaryState {
   const addedCount = items.filter((row) => row.unexpected).length;
 
   const totalSku = importedRows.length;
-  const expectedQtyTotal = importedRows.reduce(
-    (sum, item) => sum + (item.expectedQty ?? 0),
-    0,
-  );
+  const expectedQtyTotal = importedRows.reduce((sum, item) => sum + (item.expectedQty ?? 0), 0);
   const goodQtyTotal = importedRows.reduce(
     (sum, item) => sum + item.goodQty,
     0,
@@ -183,8 +180,8 @@ function buildSummary(items: ItemRow[]): SummaryState {
   );
 
   const checkedQtyTotal = goodQtyTotal + damagedQtyTotal;
-  const uncheckedQtyTotal = Math.max(expectedQtyTotal - checkedQtyTotal, 0);
-  const diffQtyTotal = uncheckedQtyTotal;
+  const uncheckedQtyTotal = importedRows.reduce((sum, item) => sum + item.uncheckedQty, 0);
+  const diffQtyTotal = importedRows.reduce((sum, item) => sum + item.diffQty, 0);
 
   const progress =
     expectedQtyTotal > 0
