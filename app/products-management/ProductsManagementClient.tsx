@@ -91,7 +91,7 @@ type ComparePreviewRow = {
   compareState: "上架" | "下架" | "新增";
 };
 
-function ComparePreviewImageCell({ sku }: { sku: string }) {
+function ComparePreviewImageCell({ sku, onOpen }: { sku: string; onOpen?: (src: string, title: string) => void }) {
   const [failed, setFailed] = useState(false);
   const normalizedSku = String(sku || "").trim();
   const src = normalizedSku ? buildProductImageUrl(normalizedSku, "jpg") : "";
@@ -105,14 +105,21 @@ function ComparePreviewImageCell({ sku }: { sku: string }) {
   }
 
   return (
-    <img
-      src={src}
-      alt={normalizedSku}
-      width={32}
-      height={32}
-      className="h-8 w-8 rounded-md border border-slate-200 bg-white object-cover"
-      onError={() => setFailed(true)}
-    />
+    <button
+      type="button"
+      onClick={() => onOpen?.(src, normalizedSku)}
+      className="block"
+      title={normalizedSku}
+    >
+      <img
+        src={src}
+        alt={normalizedSku}
+        width={32}
+        height={32}
+        className="h-8 w-8 rounded-md border border-slate-200 bg-white object-cover"
+        onError={() => setFailed(true)}
+      />
+    </button>
   );
 }
 
@@ -1524,7 +1531,10 @@ export function ProductsManagementClient({
                   {comparePreview.rows.map((r, idx) => (
                     <tr key={`${r.sku}-${idx}`} className="border-t border-slate-100">
                       <td className="px-3 py-2">
-                        <ComparePreviewImageCell sku={r.imageSku} />
+                        <ComparePreviewImageCell
+                          sku={r.imageSku}
+                          onOpen={(src, title) => setPreview({ open: true, src, title })}
+                        />
                       </td>
                       <td className="px-3 py-2 font-semibold text-slate-900">{r.sku}</td>
                       <td className="px-3 py-2">{r.barcode || "-"}</td>
