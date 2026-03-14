@@ -5,6 +5,7 @@ import { TableCard } from "@/components/table-card";
 import { ProductImage } from "@/components/product-image";
 import { ImageLightbox } from "@/components/image-lightbox";
 import * as XLSX from "xlsx";
+import * as ExcelJS from "exceljs";
 import { getClientLang } from "@/lib/lang-client";
 import { buildProductImageUrl, HAS_REMOTE_PRODUCT_IMAGE_BASE } from "@/lib/product-image-url";
 
@@ -601,25 +602,70 @@ export function ProductsManagementClient({
     }
   }
 
-  function exportComparePreview() {
+  async function exportComparePreview() {
     if (comparePreview.rows.length === 0) return;
-    const data = comparePreview.rows.map((r) => ({
-      编码: r.sku,
-      条形码: r.barcode || "",
-      中文名: r.nameZh || "",
-      西文名: r.nameEs || "",
-      包装数: r.casePack || "",
-      装箱数: r.cartonPack || "",
-      卖价: r.price || "",
-      友购价: r.yogoPrice || "",
-      上架: r.compareState === "上架" ? "是" : "",
-      下架: r.compareState === "下架" ? "是" : "",
-      新增: r.compareState === "新增" ? "是" : "",
-    }));
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(data);
-    XLSX.utils.book_append_sheet(wb, ws, "对比结果");
-    XLSX.writeFile(wb, `对比结果-${Date.now()}.xlsx`);
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const originalName = (comparePreview.fileName || "导入表格").replace(/\.[^.]+$/, "");
+    const fileName = `${originalName}-对比结果-${yyyy}${mm}${dd}.xlsx`;
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("对比结果");
+    sheet.columns = [
+      { header: "编码", key: "sku", width: 16 },
+      { header: "条形码", key: "barcode", width: 18 },
+      { header: "中文名", key: "nameZh", width: 28 },
+      { header: "西文名", key: "nameEs", width: 28 },
+      { header: "包装数", key: "casePack", width: 10 },
+      { header: "装箱数", key: "cartonPack", width: 10 },
+      { header: "卖价", key: "price", width: 10 },
+      { header: "友购价", key: "yogoPrice", width: 10 },
+      { header: "上架", key: "onShelf", width: 8 },
+      { header: "下架", key: "offShelf", width: 8 },
+      { header: "新增", key: "isNew", width: 8 },
+    ];
+
+    sheet.getRow(1).font = { name: "Microsoft YaHei", bold: true };
+
+    for (const r of comparePreview.rows) {
+      sheet.addRow({
+        sku: r.sku,
+        barcode: r.barcode || "",
+        nameZh: r.nameZh || "",
+        nameEs: r.nameEs || "",
+        casePack: r.casePack || "",
+        cartonPack: r.cartonPack || "",
+        price: r.price || "",
+        yogoPrice: r.yogoPrice || "",
+        onShelf: r.compareState === "上架" ? "是" : "",
+        offShelf: r.compareState === "下架" ? "是" : "",
+        isNew: r.compareState === "新增" ? "是" : "",
+      });
+    }
+
+    sheet.eachRow((row, rowNumber) => {
+      if (rowNumber > 1) {
+        row.font = { name: "Microsoft YaHei Light", bold: false };
+      }
+      row.eachCell((cell) => {
+        cell.alignment = { vertical: "middle", horizontal: "left" };
+      });
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 
   async function saveEdit() {
