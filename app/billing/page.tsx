@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
-import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { TableCard } from "@/components/table-card";
 import { getLang } from "@/lib/i18n-server";
@@ -107,29 +106,6 @@ export default async function BillingPage({
 
   return (
     <AppShell>
-      <PageHeader
-        badge={text.badge}
-        title={`${text.title} · ${tabLabel}`}
-        description={text.desc}
-        actions={
-          <>
-            <Link
-              href="/receipts"
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            >
-              {text.receiptsBtn}
-            </Link>
-
-            <button
-              type="button"
-              className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-soft transition hover:opacity-95"
-            >
-              {text.exportBtn}
-            </button>
-          </>
-        }
-      />
-
       <section className="mt-5 overflow-hidden rounded-3xl border border-slate-200 bg-white">
         <div className="bg-white px-5 pt-4">
           <div className="flex flex-wrap items-end gap-2">
