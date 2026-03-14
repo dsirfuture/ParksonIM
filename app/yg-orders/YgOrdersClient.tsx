@@ -384,8 +384,8 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
           </div>
 
           <div className="space-y-4 px-5 py-5">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1650px] border-separate border-spacing-0">
+            <div className="overflow-x-hidden">
+              <table className="w-full table-fixed border-separate border-spacing-0">
                 <thead>
                   <tr className="bg-slate-50 text-left text-xs text-slate-500">
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">订单编号</th>
@@ -475,6 +475,14 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
             <div className="flex items-center justify-center gap-2">
               <button
                 type="button"
+                onClick={() => setOrderPage(1)}
+                disabled={orderPage <= 1}
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                回到首页
+              </button>
+              <button
+                type="button"
                 onClick={() => setOrderPage((p) => Math.max(1, p - 1))}
                 disabled={orderPage <= 1}
                 className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
@@ -491,6 +499,14 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                 className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 下一页
+              </button>
+              <button
+                type="button"
+                onClick={() => setOrderPage(orderTotalPages)}
+                disabled={orderPage >= orderTotalPages}
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                最后一页
               </button>
             </div>
           </div>
