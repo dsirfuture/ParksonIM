@@ -207,6 +207,14 @@ function buildSummary(items: ItemRow[]): SummaryState {
   };
 }
 
+function hasRowScanData(row: ItemRow): boolean {
+  if (row.unexpected) return true;
+  if (row.goodQty > 0) return true;
+  if (row.damagedQty > 0) return true;
+  if (row.excessQty > 0) return true;
+  return row.status !== "pending";
+}
+
 function SummaryCard({
   label,
   value,
@@ -492,6 +500,11 @@ export function ScanClient({
 
     return list;
   }, [items, keyword, pinnedItemId]);
+
+  const hasRealScanData = useMemo(
+    () => items.some((row) => hasRowScanData(row)),
+    [items],
+  );
 
   useEffect(() => {
     const value = scanInput.trim();
@@ -1062,7 +1075,9 @@ export function ScanClient({
               label={text.diffQty}
               value={summary.diffQtyTotal}
               valueClassName={
-                summary.diffQtyTotal > 0 ? "text-rose-600" : "text-slate-900"
+                hasRealScanData && summary.diffQtyTotal > 0
+                  ? "text-rose-600"
+                  : "text-slate-900"
               }
             />
 
@@ -1070,7 +1085,7 @@ export function ScanClient({
               label={text.uncheckedQty}
               value={summary.uncheckedQtyTotal}
               valueClassName={
-                summary.uncheckedQtyTotal > 0
+                hasRealScanData && summary.uncheckedQtyTotal > 0
                   ? "text-rose-600"
                   : "text-slate-900"
               }
@@ -1246,8 +1261,9 @@ export function ScanClient({
               ) : (
                 filteredRows.map((row) => {
                   const imageAlt = row.nameZh || row.nameEs || row.sku || "-";
+                  const rowHasScanData = hasRowScanData(row);
                   const damagedChanged = row.damagedQty > 0;
-                  const diffChanged = row.diffQty > 0;
+                  const diffChanged = rowHasScanData && row.diffQty > 0;
                   const excessChanged = row.excessQty > 0;
 
                   return (
@@ -1308,7 +1324,7 @@ export function ScanClient({
                       </td>
                       <td
                         className={`whitespace-nowrap px-2 py-3 text-sm ${
-                          row.uncheckedQty > 0
+                          rowHasScanData && row.uncheckedQty > 0
                             ? "text-rose-600"
                             : "text-slate-700"
                         }`}
