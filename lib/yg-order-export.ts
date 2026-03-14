@@ -228,6 +228,30 @@ function safePdfText(value: string, unicodeSafe: boolean) {
   return normalized.replace(/[^\x20-\x7E]/g, " ");
 }
 
+function normalizeLookupKey(value: string | null | undefined) {
+  return String(value || "").trim().toUpperCase();
+}
+
+function normalizeProductText(value: string | null | undefined) {
+  const raw = String(value || "")
+    .replace(/\uFFFD/g, "")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/[\u0000-\u001F\u007F]/g, "");
+
+  const collapsed = raw.normalize("NFKC").replace(/\s+/g, " ").trim();
+
+  return collapsed
+    .replace(/(?<=\d)\s+(?=\d)/g, "")
+    .replace(/(?<=[0-9A-Za-z])\s*([xX*+\-/])\s*(?=[0-9A-Za-z])/g, "$1")
+    .replace(/(?<=\d)\s+(?=(cm|mm|m|kg|g|pcs|pc)\b)/gi, "");
+}
+
+function isLikelyMojibake(value: string | null | undefined) {
+  const text = String(value || "");
+  if (!text) return false;
+  return /[鍙鐨鎶璇鍟鏄绯鍏閲姘瓒惫鎴€]/.test(text);
+}
+
 export async function buildSupplierOrderXlsx(
   order: Awaited<ReturnType<typeof getSupplierOrderForExport>>,
 ) {
@@ -237,10 +261,22 @@ export async function buildSupplierOrderXlsx(
   const worksheet = workbook.addWorksheet("订单");
 
   const skuSet = new Set(
-    order.items.map((item) => (item.item_no || "").trim()).filter(Boolean),
+    order.items
+      .flatMap((item) => {
+        const raw = (item.item_no || "").trim();
+        if (!raw) return [];
+        return [raw, raw.toUpperCase(), raw.toLowerCase()];
+      })
+      .filter(Boolean),
   );
   const barcodeSet = new Set(
-    order.items.map((item) => (item.barcode || "").trim()).filter(Boolean),
+    order.items
+      .flatMap((item) => {
+        const raw = (item.barcode || "").trim();
+        if (!raw) return [];
+        return [raw, raw.toUpperCase(), raw.toLowerCase()];
+      })
+      .filter(Boolean),
   );
   const yogoRows =
     skuSet.size > 0 || barcodeSet.size > 0
@@ -262,12 +298,18 @@ export async function buildSupplierOrderXlsx(
         })
       : [];
   const nameBySku = new Map(
-    yogoRows.map((row) => [String(row.product_code || "").trim(), { zh: row.name_cn || "", es: row.name_es || "" }]),
+    yogoRows.map((row) => [
+      normalizeLookupKey(String(row.product_code || "")),
+      { zh: normalizeProductText(row.name_cn || ""), es: normalizeProductText(row.name_es || "") },
+    ]),
   );
   const nameByBarcode = new Map(
     yogoRows
       .filter((row) => row.product_no)
-      .map((row) => [String(row.product_no || "").trim(), { zh: row.name_cn || "", es: row.name_es || "" }]),
+      .map((row) => [
+        normalizeLookupKey(String(row.product_no || "")),
+        { zh: normalizeProductText(row.name_cn || ""), es: normalizeProductText(row.name_es || "") },
+      ]),
   );
 
   worksheet.columns = [
@@ -405,9 +447,22 @@ export async function buildSupplierOrderXlsx(
   for (let i = 0; i < order.items.length; i += 1) {
     const item = order.items[i];
     const mapped =
-      nameBySku.get((item.item_no || "").trim()) ||
-      nameByBarcode.get((item.barcode || "").trim()) ||
+      nameBySku.get(normalizeLookupKey(item.item_no || "")) ||
+      nameByBarcode.get(normalizeLookupKey(item.barcode || "")) ||
       { zh: "", es: "" };
+    const fallbackName = normalizeProductText(item.product_name || "");
+    const resolvedCn =
+      mapped.zh && !isLikelyMojibake(mapped.zh)
+        ? mapped.zh
+        : !isLikelyMojibake(fallbackName) && hasChineseGlyph(fallbackName)
+          ? fallbackName
+          : "";
+    const resolvedEs =
+      mapped.es && !isLikelyMojibake(mapped.es)
+        ? mapped.es
+        : !isLikelyMojibake(fallbackName) && !hasChineseGlyph(fallbackName)
+          ? fallbackName
+          : "";
     const lineTotal = toNumber(item.line_total);
     const qty = Number(item.total_qty || 0);
     const unit = toNumber(item.unit_price) || 0;
@@ -416,8 +471,8 @@ export async function buildSupplierOrderXlsx(
       "",
       item.item_no || "",
       item.barcode || "",
-      mapped.zh || "",
-      mapped.es || "",
+      resolvedCn,
+      resolvedEs,
       qty,
       unit || "",
       lineTotal !== null ? lineTotal : qty * unit,
@@ -516,10 +571,22 @@ export async function buildSupplierOrderPdf(
   };
 
   const skuSet = new Set(
-    order.items.map((item) => (item.item_no || "").trim()).filter(Boolean),
+    order.items
+      .flatMap((item) => {
+        const raw = (item.item_no || "").trim();
+        if (!raw) return [];
+        return [raw, raw.toUpperCase(), raw.toLowerCase()];
+      })
+      .filter(Boolean),
   );
   const barcodeSet = new Set(
-    order.items.map((item) => (item.barcode || "").trim()).filter(Boolean),
+    order.items
+      .flatMap((item) => {
+        const raw = (item.barcode || "").trim();
+        if (!raw) return [];
+        return [raw, raw.toUpperCase(), raw.toLowerCase()];
+      })
+      .filter(Boolean),
   );
   const yogoRows =
     skuSet.size > 0 || barcodeSet.size > 0
@@ -541,12 +608,18 @@ export async function buildSupplierOrderPdf(
         })
       : [];
   const nameBySku = new Map(
-    yogoRows.map((row) => [String(row.product_code || "").trim(), { zh: row.name_cn || "", es: row.name_es || "" }]),
+    yogoRows.map((row) => [
+      normalizeLookupKey(String(row.product_code || "")),
+      { zh: normalizeProductText(row.name_cn || ""), es: normalizeProductText(row.name_es || "") },
+    ]),
   );
   const nameByBarcode = new Map(
     yogoRows
       .filter((row) => row.product_no)
-      .map((row) => [String(row.product_no || "").trim(), { zh: row.name_cn || "", es: row.name_es || "" }]),
+      .map((row) => [
+        normalizeLookupKey(String(row.product_no || "")),
+        { zh: normalizeProductText(row.name_cn || ""), es: normalizeProductText(row.name_es || "") },
+      ]),
   );
 
   let y = 560;
@@ -714,11 +787,22 @@ export async function buildSupplierOrderPdf(
   for (const item of order.items) {
     let colX = tableX;
     const mapped =
-      nameBySku.get((item.item_no || "").trim()) ||
-      nameByBarcode.get((item.barcode || "").trim()) ||
+      nameBySku.get(normalizeLookupKey(item.item_no || "")) ||
+      nameByBarcode.get(normalizeLookupKey(item.barcode || "")) ||
       { zh: "", es: "" };
-    const nameCn = mapped.zh || "";
-    const nameEs = mapped.es || "";
+    const fallbackName = normalizeProductText(item.product_name || "");
+    const nameCn =
+      mapped.zh && !isLikelyMojibake(mapped.zh)
+        ? mapped.zh
+        : !isLikelyMojibake(fallbackName) && hasChineseGlyph(fallbackName)
+          ? fallbackName
+          : "";
+    const nameEs =
+      mapped.es && !isLikelyMojibake(mapped.es)
+        ? mapped.es
+        : !isLikelyMojibake(fallbackName) && !hasChineseGlyph(fallbackName)
+          ? fallbackName
+          : "";
     const qty = Number(item.total_qty || 0);
     const unitPrice = toNumber(item.unit_price);
     const lineTotal = toNumber(item.line_total);
