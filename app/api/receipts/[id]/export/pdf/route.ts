@@ -97,6 +97,8 @@ function computeRow(item: {
 
 async function loadFontBytes() {
   const fontCandidates = [
+    path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Regular.otf"),
+    path.join(process.cwd(), "public", "fonts", "NotoSansSC-Regular.otf"),
     path.join(process.cwd(), "public", "fonts", "NotoSansSC-Regular.ttf"),
     "C:\\Windows\\Fonts\\msyh.ttf",
     "C:\\Windows\\Fonts\\simhei.ttf",
@@ -110,9 +112,7 @@ async function loadFontBytes() {
     }
   }
 
-  throw new Error(
-    "Missing font for PDF export. Add public/fonts/NotoSansSC-Regular.ttf or install msyh.ttf/simhei.ttf.",
-  );
+  return null;
 }
 
 async function loadLatinFontBytes() {
