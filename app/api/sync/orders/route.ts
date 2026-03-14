@@ -127,6 +127,7 @@ type RawOrder = {
 type ParsedOrderItem = {
   lineNo: number;
   location: string;
+  locationKey: string | null;
   itemNo: string | null;
   barcode: string | null;
   productName: string | null;
@@ -236,27 +237,51 @@ function tailThree(orderNo: string) {
   return (digits.slice(-3) || "000").padStart(3, "0");
 }
 
+function findLocationValue(input: RawOrderItem): { value: string; key: string | null } {
+  const knownKeys: Array<keyof RawOrderItem> = [
+    "location",
+    "position",
+    "position_name",
+    "positionName",
+    "location_name",
+    "locationName",
+    "warehouse_position",
+    "warehousePosition",
+    "pos",
+    "weizhi",
+    "位置",
+    "库位",
+    "仓位",
+    "supplier",
+    "supplier_name",
+    "supplierName",
+    "gongyingshang",
+  ];
+  for (const key of knownKeys) {
+    const value = text(input[key]);
+    if (value && value !== "-") return { value, key: String(key) };
+  }
+
+  const entries = Object.entries(input as Record<string, unknown>);
+  for (const [key, raw] of entries) {
+    const v = text(raw);
+    if (!v || v === "-") continue;
+    const k = key.toLowerCase();
+    if (
+      /location|position|posicion|ubicacion|warehouse|slot|bin|shelf|place|weizhi|supplier|proveedor|gongying|库位|仓位|位置/.test(
+        k,
+      )
+    ) {
+      return { value: v, key };
+    }
+  }
+  return { value: "-", key: null };
+}
+
 function parseOrderItem(input: RawOrderItem, index: number): ParsedOrderItem {
   const lineNo = intOrZero(input.line_no ?? input.lineNo) || index + 1;
-  const location =
-    text(input.location) ||
-    text(input.position) ||
-    text(input.position_name) ||
-    text(input.positionName) ||
-    text(input.location_name) ||
-    text(input.locationName) ||
-    text(input.warehouse_position) ||
-    text(input.warehousePosition) ||
-    text(input.pos) ||
-    text(input.weizhi) ||
-    text(input["位置"]) ||
-    text(input["库位"]) ||
-    text(input["仓位"]) ||
-    text(input.supplier) ||
-    text(input.supplier_name) ||
-    text(input.supplierName) ||
-    text(input.gongyingshang) ||
-    "-";
+  const locationPicked = findLocationValue(input);
+  const location = locationPicked.value;
   const itemNo =
     text(input.item_no) ||
     text(input.itemNo) ||
@@ -299,7 +324,17 @@ function parseOrderItem(input: RawOrderItem, index: number): ParsedOrderItem {
       input.line_amount ??
       input.lineAmount,
   );
-  return { lineNo, location, itemNo, barcode, productName, qty, unitPrice, lineTotal };
+  return {
+    lineNo,
+    location,
+    locationKey: locationPicked.key,
+    itemNo,
+    barcode,
+    productName,
+    qty,
+    unitPrice,
+    lineTotal,
+  };
 }
 
 function parseOrder(input: RawOrder, index: number): ParsedOrder {
@@ -625,7 +660,11 @@ export async function POST(request: Request) {
     const hasOrderKey = await columnExists("order_key");
     const hasCustomerId = await columnExists("customer_id");
 
+    const detectedLocationKeys = new Set<string>();
     for (const order of orders) {
+      for (const item of order.items) {
+        if (item.locationKey) detectedLocationKeys.add(item.locationKey);
+      }
       const createCompanyName = order.companyName || order.customerName;
       const createCustomerName = order.customerName || order.companyName;
       const createContactName = order.contactName || order.customerName || order.companyName;
@@ -771,7 +810,10 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       requestId: randomUUID(),
-      summary: { totalCount: orders.length },
+      summary: {
+        totalCount: orders.length,
+        detectedLocationKeys: Array.from(detectedLocationKeys),
+      },
     });
   } catch (error) {
     return NextResponse.json(
