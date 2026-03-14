@@ -386,20 +386,20 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
 
           <div className="space-y-4 px-5 py-5">
             <div className="overflow-x-hidden">
-              <table className="w-full table-fixed border-separate border-spacing-0">
+              <table className="w-full table-auto border-separate border-spacing-0">
                 <colgroup>
                   <col className="w-[9%]" />
                   <col className="w-[7%]" />
                   <col className="w-[9%]" />
-                  <col className="w-[13%]" />
-                  <col className="w-[13%]" />
                   <col className="w-[12%]" />
-                  <col className="w-[7%]" />
                   <col className="w-[12%]" />
-                  <col className="w-[5%]" />
-                  <col className="w-[5%]" />
+                  <col className="w-[1%]" />
+                  <col className="w-[1%]" />
+                  <col className="w-[18%]" />
                   <col className="w-[4%]" />
                   <col className="w-[4%]" />
+                  <col className="w-[3%]" />
+                  <col className="w-[3%]" />
                 </colgroup>
                 <thead>
                   <tr className="bg-slate-50 text-left text-xs text-slate-500">
@@ -442,7 +442,7 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                           </td>
                           <td className="whitespace-nowrap px-3 py-2 text-slate-700">{extractPhone(row.contactPhone, row.remarkText)}</td>
                           <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-slate-700">{row.orderAmountText}</td>
-                          <td className="max-w-[220px] truncate px-3 py-2 text-slate-700">{row.remarkText || "-"}</td>
+                          <td className="max-w-[420px] truncate whitespace-nowrap px-3 py-2 text-slate-700">{row.remarkText || "-"}</td>
                           <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-slate-700">{row.itemCount}</td>
                           <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-slate-700">{row.supplierCount}</td>
                           <td className="whitespace-nowrap px-2 py-2 text-slate-700">{row.storeLabelText || "-"}</td>
