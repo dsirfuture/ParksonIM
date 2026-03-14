@@ -2,15 +2,50 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { StatCard } from "@/components/stat-card";
 import { TableCard } from "@/components/table-card";
-import { getLang } from "@/lib/i18n-server";
+import { prisma } from "@/lib/prisma";
+import { getSession } from "@/lib/tenant";
 
 type TabKey = "customer" | "supplier";
+type ListKey = "pending";
 type SearchParams = Record<string, string | string[] | undefined>;
 
 const TAB_LIST: TabKey[] = ["customer", "supplier"];
+const PAGE_SIZE = 8;
 
 function normalizeTab(tab: string | null | undefined): TabKey {
   return tab === "supplier" ? "supplier" : "customer";
+}
+
+function normalizeListType(listType: string | null | undefined): ListKey {
+  return listType === "pending" ? "pending" : "pending";
+}
+
+function parseIntOr(value: string | null | undefined, fallback: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+  return Math.floor(parsed);
+}
+
+function formatDateTime(value: Date | null | undefined) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "America/Mexico_City",
+  }).format(value);
+}
+
+function formatMoney(value: number) {
+  return value.toFixed(2);
+}
+
+function baseOrderNo(receiptNo: string) {
+  const head = String(receiptNo || "").trim().split("-")[0];
+  return head || String(receiptNo || "").trim();
 }
 
 export default async function BillingPage({
@@ -18,91 +53,142 @@ export default async function BillingPage({
 }: {
   searchParams?: Promise<SearchParams>;
 }) {
-  const lang = await getLang();
+  const session = await getSession();
+  if (!session) {
+    return (
+      <AppShell>
+        <section className="rounded-2xl border border-red-200 bg-white p-4 text-sm text-red-600">
+          未获取到租户会话，请先登录。
+        </section>
+      </AppShell>
+    );
+  }
+
   const params = (await searchParams) || {};
   const tabRaw = Array.isArray(params.tab) ? params.tab[0] : params.tab;
+  const listRaw = Array.isArray(params.list) ? params.list[0] : params.list;
+  const pageRaw = Array.isArray(params.page) ? params.page[0] : params.page;
+
   const activeTab = normalizeTab(tabRaw || null);
+  const activeList = normalizeListType(listRaw || null);
+  const page = parseIntOr(pageRaw || "1", 1);
 
-  const text =
-    lang === "zh"
-      ? {
-          badge: "账单与对账",
-          title: "对账与账单",
-          desc: "汇总已完成验货单，生成对账结果，并为后续下载、分享与留痕做准备。",
-          receiptsBtn: "查看验货单",
-          exportBtn: "导出预留",
-          tabCustomer: "客户出账单",
-          tabSupplier: "供应商账单",
-          totalBills: "账单总数",
-          pendingBills: "待生成",
-          reviewingBills: "待复核",
-          finishedBills: "可输出",
-          totalHint: "后续统计全部账单批次",
-          pendingHint: "等待生成汇总结果",
-          reviewingHint: "等待人工确认或复核",
-          finishedHint: "可下载或分享的账单",
-          processTitle: "对账流程",
-          processDesc: "建议按这个顺序完成账单处理",
-          p1: "1. 从已完成验货单中选择需要汇总的记录。",
-          p2: "2. 生成账单汇总结果，并检查数量、差异与异常。",
-          p3: "3. 人工复核账单内容，确认后进入输出阶段。",
-          p4: "4. 后续可支持下载、分享链接和公共访问页。",
-          outputTitle: "输出能力",
-          outputDesc: "当前页面先定义后续要承接的核心能力",
-          o1: "账单汇总结果展示",
-          o2: "下载文件输出",
-          o3: "分享链接生成",
-          o4: "公共访问页",
-          o5: "审计日志与状态留痕",
-          recentTitle: "最近账单记录",
-          recentDesc: "后续这里展示账单批次、状态、时间与操作入口",
-          recentEmpty:
-            "当前还没有账单记录。后续接入汇总账单逻辑后，这里会展示最近生成的账单。",
-          shareTitle: "分享与下载预留区",
-          shareDesc: "后续这里接入下载、复制链接、公共访问与状态控制能力",
-          shareEmpty:
-            "当前还没有可分享的账单内容。接入真实账单能力后，这里会展示下载、分享与公开访问入口。",
-        }
-      : {
-          badge: "Facturacion y conciliacion",
-          title: "Conciliacion y facturas",
-          desc: "Consolida recepciones completadas, genera resultados de conciliacion y prepara descarga, compartir y trazabilidad.",
-          receiptsBtn: "Ver recepciones",
-          exportBtn: "Reserva de exportacion",
-          tabCustomer: "Factura clientes",
-          tabSupplier: "Factura proveedores",
-          totalBills: "Total de facturas",
-          pendingBills: "Pendientes",
-          reviewingBills: "Por revisar",
-          finishedBills: "Listas para salida",
-          totalHint: "Contara todos los lotes de facturacion",
-          pendingHint: "Esperando generar resultado consolidado",
-          reviewingHint: "Esperando confirmacion manual",
-          finishedHint: "Facturas listas para descargar o compartir",
-          processTitle: "Flujo de conciliacion",
-          processDesc: "Se recomienda completar en este orden",
-          p1: "1. Elegir las recepciones completadas que deben consolidarse.",
-          p2: "2. Generar el resultado consolidado y revisar cantidad, diferencia y anomalias.",
-          p3: "3. Hacer revision manual del contenido antes de salida.",
-          p4: "4. Luego podra soportar descarga, enlace compartido y acceso publico.",
-          outputTitle: "Capacidades de salida",
-          outputDesc: "Esta pagina define primero la capacidad principal a conectar despues",
-          o1: "Vista de resultado consolidado",
-          o2: "Descarga de archivo",
-          o3: "Generacion de enlace compartido",
-          o4: "Pagina de acceso publico",
-          o5: "Auditoria y trazabilidad de estado",
-          recentTitle: "Facturas recientes",
-          recentDesc: "Aqui se mostraran lotes, estado, fecha y acciones",
-          recentEmpty:
-            "Todavia no hay registros de facturacion. Cuando se conecte la logica real, aqui apareceran facturas recientes.",
-          shareTitle: "Zona de compartir y descarga",
-          shareDesc: "Aqui se conectaran descarga, copia de enlace y acceso publico",
-          shareEmpty:
-            "Todavia no hay contenido para compartir. Cuando se conecte la capacidad real, aqui apareceran acciones de descarga y compartir.",
-        };
+  const completedReceipts = await prisma.receipt.findMany({
+    where: {
+      tenant_id: session.tenantId,
+      company_id: session.companyId,
+      status: "completed",
+    },
+    select: {
+      receipt_no: true,
+      updated_at: true,
+      items: {
+        select: {
+          expected_qty: true,
+          sell_price: true,
+          line_total: true,
+        },
+      },
+    },
+    orderBy: { updated_at: "desc" },
+  });
 
-  const tabLabel = activeTab === "customer" ? text.tabCustomer : text.tabSupplier;
+  const grouped = new Map<
+    string,
+    {
+      orderNo: string;
+      totalAmount: number;
+      latestAt: Date | null;
+    }
+  >();
+
+  for (const receipt of completedReceipts) {
+    const orderNo = baseOrderNo(receipt.receipt_no);
+    const row =
+      grouped.get(orderNo) ||
+      ({
+        orderNo,
+        totalAmount: 0,
+        latestAt: null,
+      } as const);
+
+    let receiptAmount = 0;
+    for (const item of receipt.items) {
+      const line = item.line_total ? Number(item.line_total) : null;
+      if (line !== null && Number.isFinite(line)) {
+        receiptAmount += line;
+        continue;
+      }
+      const price = item.sell_price ? Number(item.sell_price) : null;
+      const qty = Number(item.expected_qty || 0);
+      if (price !== null && Number.isFinite(price)) {
+        receiptAmount += qty * price;
+      }
+    }
+
+    const latestAt =
+      !row.latestAt || row.latestAt.getTime() < receipt.updated_at.getTime()
+        ? receipt.updated_at
+        : row.latestAt;
+
+    grouped.set(orderNo, {
+      orderNo,
+      totalAmount: row.totalAmount + receiptAmount,
+      latestAt,
+    });
+  }
+
+  const orderNos = Array.from(grouped.keys());
+  const ygOrders =
+    orderNos.length > 0
+      ? await prisma.ygOrderImport.findMany({
+          where: {
+            tenant_id: session.tenantId,
+            company_id: session.companyId,
+            order_no: { in: orderNos },
+          },
+          select: {
+            order_no: true,
+            company_name: true,
+            contact_name: true,
+            contact_phone: true,
+          },
+        })
+      : [];
+
+  const orderMap = new Map(
+    ygOrders.map((row) => [
+      row.order_no,
+      {
+        companyName: row.company_name || "-",
+        contactName: row.contact_name || "-",
+        contactPhone: row.contact_phone || "-",
+      },
+    ]),
+  );
+
+  const pendingRows = Array.from(grouped.values())
+    .map((row) => {
+      const order = orderMap.get(row.orderNo);
+      return {
+        orderNo: row.orderNo,
+        companyName: order?.companyName || "-",
+        contactName: order?.contactName || "-",
+        contactPhone: order?.contactPhone || "-",
+        amountText: formatMoney(row.totalAmount),
+        updatedAtText: formatDateTime(row.latestAt),
+      };
+    })
+    .sort((a, b) => b.orderNo.localeCompare(a.orderNo));
+
+  const pendingCount = pendingRows.length;
+  const totalPages = Math.max(1, Math.ceil(pendingRows.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pagedRows = pendingRows.slice(start, start + PAGE_SIZE);
+
+  const activeRows = activeList === "pending" ? pagedRows : pagedRows;
+  const activeCount = activeList === "pending" ? pendingCount : pendingCount;
 
   return (
     <AppShell>
@@ -111,11 +197,11 @@ export default async function BillingPage({
           <div className="flex flex-wrap items-end gap-2">
             {TAB_LIST.map((tab) => {
               const selected = activeTab === tab;
-              const label = tab === "customer" ? text.tabCustomer : text.tabSupplier;
+              const label = tab === "customer" ? "客户出账单" : "供应商账单";
               return (
                 <Link
                   key={tab}
-                  href={`/billing?tab=${tab}`}
+                  href={`/billing?tab=${tab}&list=pending&page=1`}
                   className={[
                     "inline-flex min-w-[148px] items-center justify-center rounded-t-2xl border px-4 py-2 text-sm font-semibold transition",
                     selected
@@ -132,70 +218,110 @@ export default async function BillingPage({
 
         <div className="p-5">
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard label={text.totalBills} value="0" hint={text.totalHint} />
-            <StatCard
-              label={text.pendingBills}
-              value="0"
-              hint={text.pendingHint}
-              valueClassName="text-amber-600"
-            />
-            <StatCard
-              label={text.reviewingBills}
-              value="0"
-              hint={text.reviewingHint}
-              valueClassName="text-blue-600"
-            />
-            <StatCard
-              label={text.finishedBills}
-              value="0"
-              hint={text.finishedHint}
-              valueClassName="text-emerald-600"
-            />
+            <Link href={`/billing?tab=${activeTab}&list=pending&page=1`} className="block">
+              <div className="transition hover:opacity-95">
+                <StatCard
+                  label="待出账单"
+                  value={pendingCount}
+                  hint="验货完毕待汇总"
+                  valueClassName="text-primary"
+                />
+              </div>
+            </Link>
+            <StatCard label="待生成" value="0" hint="等待生成汇总结果" valueClassName="text-amber-600" />
+            <StatCard label="待复核" value="0" hint="等待人工确认或复核" valueClassName="text-blue-600" />
+            <StatCard label="可输出" value="0" hint="可下载或分享的账单" valueClassName="text-emerald-600" />
           </section>
 
-          <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_1fr]">
-            <TableCard title={text.processTitle} description={text.processDesc}>
-              <div className="p-4">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <ul className="space-y-2 text-sm leading-6 text-slate-600">
-                    <li>{text.p1}</li>
-                    <li>{text.p2}</li>
-                    <li>{text.p3}</li>
-                    <li>{text.p4}</li>
-                  </ul>
-                </div>
+          <div className="mt-5">
+            <TableCard
+              title={activeList === "pending" ? "待出账单列表" : "账单列表"}
+              description={`共 ${activeCount} 条`}
+            >
+              <div className="overflow-x-auto">
+                <table className="min-w-full border-separate border-spacing-0">
+                  <thead>
+                    <tr className="bg-slate-50 text-left text-sm text-slate-500">
+                      <th className="whitespace-nowrap px-4 py-3 font-semibold">账单名称</th>
+                      <th className="whitespace-nowrap px-4 py-3 font-semibold">公司名称</th>
+                      <th className="whitespace-nowrap px-4 py-3 font-semibold">联系人</th>
+                      <th className="whitespace-nowrap px-4 py-3 font-semibold">联系电话</th>
+                      <th className="whitespace-nowrap px-4 py-3 font-semibold text-right">配货金额</th>
+                      <th className="whitespace-nowrap px-4 py-3 font-semibold">更新时间</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-500">
+                          当前没有待出账单记录
+                        </td>
+                      </tr>
+                    ) : (
+                      activeRows.map((row) => (
+                        <tr key={row.orderNo} className="border-t border-slate-100 hover:bg-secondary-accent/20">
+                          <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-slate-800">{row.orderNo}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{row.companyName}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{row.contactName}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{row.contactPhone}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-slate-800">{row.amountText}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{row.updatedAtText}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
-            </TableCard>
 
-            <TableCard title={text.outputTitle} description={text.outputDesc}>
-              <div className="grid gap-3 p-4 sm:grid-cols-2">
-                {[text.o1, text.o2, text.o3, text.o4, text.o5].map((item) => (
-                  <div
-                    key={item}
-                    className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-                  >
-                    <div className="text-sm font-medium text-slate-700">{item}</div>
+              {activeCount > 0 ? (
+                <div className="border-t border-slate-200 px-5 py-4">
+                  <div className="flex items-center justify-center gap-2">
+                    <Link
+                      href={`/billing?tab=${activeTab}&list=${activeList}&page=1`}
+                      className={`inline-flex h-9 min-w-[76px] items-center justify-center rounded-lg border px-3 text-sm ${
+                        currentPage === 1
+                          ? "cursor-not-allowed border-slate-200 text-slate-300"
+                          : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      首页
+                    </Link>
+                    <Link
+                      href={`/billing?tab=${activeTab}&list=${activeList}&page=${Math.max(1, currentPage - 1)}`}
+                      className={`inline-flex h-9 min-w-[76px] items-center justify-center rounded-lg border px-3 text-sm ${
+                        currentPage === 1
+                          ? "cursor-not-allowed border-slate-200 text-slate-300"
+                          : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      上一页
+                    </Link>
+                    <span className="inline-flex h-9 min-w-[76px] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700">
+                      {currentPage} / {totalPages}
+                    </span>
+                    <Link
+                      href={`/billing?tab=${activeTab}&list=${activeList}&page=${Math.min(totalPages, currentPage + 1)}`}
+                      className={`inline-flex h-9 min-w-[76px] items-center justify-center rounded-lg border px-3 text-sm ${
+                        currentPage >= totalPages
+                          ? "cursor-not-allowed border-slate-200 text-slate-300"
+                          : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      下一页
+                    </Link>
+                    <Link
+                      href={`/billing?tab=${activeTab}&list=${activeList}&page=${totalPages}`}
+                      className={`inline-flex h-9 min-w-[76px] items-center justify-center rounded-lg border px-3 text-sm ${
+                        currentPage >= totalPages
+                          ? "cursor-not-allowed border-slate-200 text-slate-300"
+                          : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      末页
+                    </Link>
                   </div>
-                ))}
-              </div>
-            </TableCard>
-          </div>
-
-          <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_1fr]">
-            <TableCard title={text.recentTitle} description={text.recentDesc}>
-              <div className="p-4">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-500">
-                  {text.recentEmpty}
                 </div>
-              </div>
-            </TableCard>
-
-            <TableCard title={text.shareTitle} description={text.shareDesc}>
-              <div className="p-4">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-500">
-                  {text.shareEmpty}
-                </div>
-              </div>
+              ) : null}
             </TableCard>
           </div>
         </div>
