@@ -72,8 +72,11 @@ type YgOrdersSummary = {
   totalAmountText: string;
   customerCount: number;
   latestUpdatedAtText: string;
-  yearlyStats: Array<{ year: number; orders: number; amountText: string }>;
+  periodStats: Array<{ year: number; month: number; orders: number; amountText: string }>;
+  yearOptions: number[];
+  monthsByYear: Record<number, number[]>;
   defaultYear: number | null;
+  defaultMonth: number | null;
 };
 
 type YgOrdersClientProps = {
@@ -230,11 +233,29 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
   const [selectedYear, setSelectedYear] = useState<number | "">(summary.defaultYear ?? "");
-
-  const activeYearStat = useMemo(
-    () => (selectedYear === "" ? null : summary.yearlyStats.find((x) => x.year === selectedYear) || null),
-    [selectedYear, summary.yearlyStats],
+  const [selectedMonth, setSelectedMonth] = useState<number | "">(summary.defaultMonth ?? "");
+  const monthOptions = useMemo(
+    () => (selectedYear === "" ? [] : summary.monthsByYear[selectedYear] || []),
+    [selectedYear, summary.monthsByYear],
   );
+  useEffect(() => {
+    if (selectedYear === "") return;
+    if (!monthOptions.includes(Number(selectedMonth))) {
+      setSelectedMonth(monthOptions[0] ?? "");
+    }
+  }, [selectedMonth, selectedYear, monthOptions]);
+
+  const activePeriodStat = useMemo(
+    () =>
+      selectedYear === "" || selectedMonth === ""
+        ? null
+        : summary.periodStats.find((x) => x.year === selectedYear && x.month === selectedMonth) || null,
+    [selectedMonth, selectedYear, summary.periodStats],
+  );
+  const periodLabel =
+    selectedYear === "" || selectedMonth === ""
+      ? "-"
+      : `${selectedYear}/${String(selectedMonth).padStart(2, "0")}`;
 
   const filteredRows = useMemo(() => {
     const q = keyword.trim().toLowerCase();
@@ -335,7 +356,8 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
       <div className="grid gap-5">
         <TableCard title="" description="" className="!mt-0">
           <div className="space-y-3 px-5 py-5">
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="grid flex-1 grid-cols-2 gap-3 lg:grid-cols-5">
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <div className="text-xs text-slate-500">总订单数</div>
                 <div className="mt-1 text-lg font-semibold text-slate-900">{summary.totalOrders.toLocaleString("zh-CN")}</div>
@@ -345,29 +367,41 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                 <div className="mt-1 text-lg font-semibold text-slate-900">{summary.totalAmountText}</div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <div className="text-xs text-slate-500">年订单额（{selectedYear || "-"}）</div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">{activeYearStat?.amountText || "-"}</div>
+                <div className="text-xs text-slate-500">订单额（{periodLabel}）</div>
+                <div className="mt-1 text-lg font-semibold text-slate-900">{activePeriodStat?.amountText || "-"}</div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <div className="text-xs text-slate-500">年订单数（{selectedYear || "-"}）</div>
-                <div className="mt-1 flex items-center justify-between gap-2">
-                  <div className="text-lg font-semibold text-slate-900">{(activeYearStat?.orders ?? 0).toLocaleString("zh-CN")}</div>
-                  <select
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(e.target.value ? Number(e.target.value) : "")}
-                    className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none"
-                  >
-                    {summary.yearlyStats.map((stat) => (
-                      <option key={stat.year} value={stat.year}>
-                        {stat.year}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <div className="text-xs text-slate-500">订单数（{periodLabel}）</div>
+                <div className="mt-1 text-lg font-semibold text-slate-900">{(activePeriodStat?.orders ?? 0).toLocaleString("zh-CN")}</div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <div className="text-xs text-slate-500">客户数量</div>
                 <div className="mt-1 text-lg font-semibold text-slate-900">{summary.customerCount.toLocaleString("zh-CN")}</div>
+              </div>
+              </div>
+              <div className="flex items-center gap-2 lg:pt-1">
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(e.target.value ? Number(e.target.value) : "")}
+                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none"
+                >
+                  {summary.yearOptions.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value ? Number(e.target.value) : "")}
+                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none"
+                >
+                  {monthOptions.map((month) => (
+                    <option key={month} value={month}>
+                      {String(month).padStart(2, "0")}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>
