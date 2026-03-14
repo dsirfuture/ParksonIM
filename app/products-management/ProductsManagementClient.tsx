@@ -627,7 +627,11 @@ export function ProductsManagementClient({
       { header: "新增", key: "isNew", width: 8 },
     ];
 
-    sheet.getRow(1).font = { name: "Microsoft YaHei", bold: true };
+    const headerRow = sheet.getRow(1);
+    headerRow.font = { name: "Microsoft YaHei", bold: true };
+    headerRow.eachCell((cell) => {
+      cell.font = { name: "Microsoft YaHei", bold: true };
+    });
 
     for (const r of comparePreview.rows) {
       sheet.addRow({
