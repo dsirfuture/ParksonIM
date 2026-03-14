@@ -650,6 +650,7 @@ export function ProductsManagementClient({
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("对比结果");
+    sheet.views = [{ state: "frozen", ySplit: 1 }];
     sheet.columns = [
       { header: "编码", key: "sku", width: 16 },
       { header: "条形码", key: "barcode", width: 18 },
@@ -680,9 +681,9 @@ export function ProductsManagementClient({
         cartonPack: r.cartonPack || "",
         price: r.price || "",
         yogoPrice: r.yogoPrice || "",
-        onShelf: r.compareState === "上架" ? "是" : "",
-        offShelf: r.compareState === "下架" ? "是" : "",
-        isNew: r.compareState === "新增" ? "是" : "",
+        onShelf: r.compareState === "上架" ? "上架" : "",
+        offShelf: r.compareState === "下架" ? "下架" : "",
+        isNew: r.compareState === "新增" ? "新增" : "",
       });
 
       // 卖价/友购价不一致：两个价格单元格标红
@@ -699,15 +700,12 @@ export function ProductsManagementClient({
       const isNewCell = row.getCell(11);
       if (r.compareState === "上架") {
         onShelfCell.font = { name: "Microsoft YaHei Light", bold: true, color: { argb: "FF047857" } };
-        onShelfCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFECFDF5" } };
       }
       if (r.compareState === "下架") {
         offShelfCell.font = { name: "Microsoft YaHei Light", bold: true, color: { argb: "FFBE123C" } };
-        offShelfCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF1F2" } };
       }
       if (r.compareState === "新增") {
         isNewCell.font = { name: "Microsoft YaHei Light", bold: true, color: { argb: "FF7C3AED" } };
-        isNewCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF5F3FF" } };
       }
     }
 
