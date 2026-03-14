@@ -181,9 +181,7 @@ export default async function YgOrdersPage() {
       tenant_id: session.tenantId,
       company_id: session.companyId,
     },
-    orderBy: {
-      created_at: "desc",
-    },
+    orderBy: [{ order_no: "desc" }, { created_at: "desc" }],
     include: {
       supplierOrders: {
         orderBy: {
