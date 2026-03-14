@@ -62,6 +62,7 @@ type DetailState = {
   orderNo: string;
   orderAmountText: string;
   itemCount: number;
+  remarkText: string;
   items: SupplierOrderItem[];
   supplierOrders: SupplierOrderRow[];
 };
@@ -455,6 +456,7 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                                     orderNo: row.orderNo,
                                     orderAmountText: row.orderAmountText,
                                     itemCount: row.itemCount,
+                                    remarkText: row.remarkText || "",
                                     items: allItems,
                                     supplierOrders: row.supplierOrders,
                                   });
@@ -535,11 +537,12 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
           <div className="w-full max-w-[1240px] rounded-xl bg-white shadow-2xl">
             <div className="border-b border-slate-200 px-5 py-4">
-              <div className="flex flex-wrap items-center gap-6 text-sm text-slate-600">
-                <h3 className="text-base font-semibold text-slate-900">订单详情预览</h3>
+              <h3 className="text-base font-semibold text-slate-900">订单详情预览</h3>
+              <div className="mt-2 flex flex-wrap items-center gap-6 text-sm text-slate-600">
                 <span>当前订单：{detailState.orderNo}</span>
                 <span>订单金额：{detailState.orderAmountText}</span>
                 <span>商品数量：{detailState.itemCount}</span>
+                <span className="max-w-[420px] truncate">订单备注：{detailState.remarkText || "-"}</span>
               </div>
             </div>
 
@@ -711,6 +714,7 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                                 orderNo: so.derivedOrderNo,
                                 orderAmountText: so.orderAmountText,
                                 itemCount: so.itemCount,
+                                remarkText: so.noteText || "",
                                 items: so.items,
                                 supplierOrders: splitState.supplierOrders,
                               });
