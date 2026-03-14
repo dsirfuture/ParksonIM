@@ -78,7 +78,7 @@ type ImportRecord = {
 };
 
 type ComparePreviewRow = {
-  hasImage: boolean;
+  imageSku: string;
   sku: string;
   barcode: string;
   nameZh: string;
@@ -580,7 +580,7 @@ export function ProductsManagementClient({
             : "下架";
 
         compared.push({
-          hasImage: Boolean(current?.hasImage),
+          imageSku: current?.sku || sku,
           sku,
           barcode,
           nameZh,
@@ -1468,11 +1468,7 @@ export function ProductsManagementClient({
                   {comparePreview.rows.map((r, idx) => (
                     <tr key={`${r.sku}-${idx}`} className="border-t border-slate-100">
                       <td className="px-3 py-2">
-                        {r.hasImage ? (
-                          <ProductImage sku={r.sku} hasImage size={32} roundedClassName="rounded-md" />
-                        ) : (
-                          <span className="text-xs text-slate-400">空</span>
-                        )}
+                        <ProductImage sku={r.imageSku} hasImage size={32} roundedClassName="rounded-md" />
                       </td>
                       <td className="px-3 py-2 font-semibold text-slate-900">{r.sku}</td>
                       <td className="px-3 py-2">{r.barcode || "-"}</td>
