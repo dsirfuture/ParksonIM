@@ -146,6 +146,7 @@ type ParsedOrder = {
   orderCreatedAt: Date | null;
   customerId: string | null;
   orderAmount: number | null;
+  amountKeyPath: string | null;
   companyName: string | null;
   customerName: string | null;
   contactName: string | null;
@@ -181,7 +182,12 @@ function firstNonNull<T>(...values: Array<T | null | undefined>) {
 
 function numberOrNull(value: unknown) {
   if (value === null || value === undefined || value === "") return null;
-  const parsed = Number(String(value).trim());
+  const raw = String(value).trim();
+  const normalized = raw
+    .replace(/[%$¥￥\s]/g, "")
+    .replace(/，/g, ",")
+    .replace(/(\d),(?=\d{3}(\D|$))/g, "$1");
+  const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
@@ -283,6 +289,43 @@ function findLocationValue(input: RawOrderItem): { value: string; key: string | 
   return { value: "-", key: null };
 }
 
+function detectAmountFromPayload(
+  root: Record<string, unknown>,
+  header: Record<string, unknown> | null,
+  pedidolist: Record<string, unknown> | null,
+): { value: number | null; keyPath: string | null } {
+  const scopes: Array<{ path: string; obj: Record<string, unknown> | null }> = [
+    { path: "pedidolist", obj: pedidolist },
+    { path: "header", obj: header },
+    { path: "root", obj: root },
+  ];
+  const candidates: Array<{ keyPath: string; score: number; value: number }> = [];
+  for (const scope of scopes) {
+    if (!scope.obj) continue;
+    for (const [key, raw] of Object.entries(scope.obj)) {
+      if (raw === null || raw === undefined) continue;
+      if (Array.isArray(raw) || typeof raw === "object") continue;
+      const amount = numberOrNull(raw);
+      if (amount === null) continue;
+      const keyText = key.toLowerCase();
+      const keyIsAmountLike =
+        /jine|amount|total|money|price|sum|pay|fee|折后|实付|应付|金额/.test(keyText) ||
+        /jine|amount|total|money|price|sum|pay|fee|折后|实付|应付|金额/.test(key);
+      if (!keyIsAmountLike) continue;
+      let score = 0;
+      if (scope.path === "pedidolist") score += 50;
+      if (/jinez|折后|actual|real|net|paid|payable|实付|应付/.test(keyText)) score += 40;
+      if (/jine|amount|金额/.test(keyText)) score += 25;
+      if (/total|sum|money|price/.test(keyText)) score += 10;
+      if (/qty|count|num|line|item|status|id/.test(keyText)) score -= 40;
+      candidates.push({ keyPath: `${scope.path}.${key}`, score, value: amount });
+    }
+  }
+  if (candidates.length === 0) return { value: null, keyPath: null };
+  candidates.sort((a, b) => b.score - a.score);
+  return { value: candidates[0].value, keyPath: candidates[0].keyPath };
+}
+
 function parseOrderItem(input: RawOrderItem, index: number): ParsedOrderItem {
   const lineNo = intOrZero(input.line_no ?? input.lineNo) || index + 1;
   const locationPicked = findLocationValue(input);
@@ -355,8 +398,11 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
     }
     return null;
   };
+
+  const root = input as Record<string, unknown>;
   const header = asObjectOrNull(input.header);
   const pedidolist = asObjectOrNull(input.pedidolist) ?? asObjectOrNull(input.pedidoList);
+
   const orderNo = firstNonNull(
     text(input.order_no),
     text(input.orderNo),
@@ -367,9 +413,8 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
     text(header?.order_key),
     text(header?.orderKey),
   );
-  if (!orderNo) {
-    throw new Error(`Row ${index + 1}: order_no or order_key is required`);
-  }
+  if (!orderNo) throw new Error(`Row ${index + 1}: order_no or order_key is required`);
+
   const rawItems = asItemList(
     input.items ??
       input.details ??
@@ -389,19 +434,56 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
       header?.product_list,
   );
   const items = rawItems.map(parseOrderItem);
+
+  const explicitAmount = numberOrNull(
+    firstNonNull(
+      input.jinez,
+      root.jinez,
+      pedidolist?.jinez,
+      input.header_amount,
+      input.headerAmount,
+      input.order_amount,
+      input.orderAmount,
+      input.amount,
+      root.order_total,
+      root.total,
+      root.total_amount,
+      root.totalAmount,
+      root.jine,
+      header?.header_amount,
+      header?.headerAmount,
+      header?.order_amount,
+      header?.orderAmount,
+      header?.amount,
+      header?.total,
+      header?.total_amount,
+      header?.totalAmount,
+      header?.jine,
+      header?.jinez,
+      pedidolist?.amount,
+      pedidolist?.total,
+      pedidolist?.total_amount,
+      pedidolist?.totalAmount,
+      pedidolist?.jine,
+    ),
+  );
+
+  const detectedAmount =
+    explicitAmount !== null
+      ? { value: explicitAmount, keyPath: "explicit-mapped" as string | null }
+      : detectAmountFromPayload(root, header, pedidolist);
+
   return {
     orderNo,
     orderCreatedAt: firstNonNull(
       dateOrNull(input.order_created_at),
       dateOrNull(input.orderCreatedAt),
-      dateOrNull((input as Record<string, unknown>).created_at),
-      dateOrNull((input as Record<string, unknown>).order_date),
-      dateOrNull((input as Record<string, unknown>).createdAt),
-      dateOrNull((input as Record<string, unknown>).create_time),
-      dateOrNull((input as Record<string, unknown>).created_time),
-      dateOrNull((input as Record<string, unknown>).riqi),
-      dateOrNull((input as Record<string, unknown>)["订单日期"]),
-      dateOrNull((input as Record<string, unknown>)["下单时间"]),
+      dateOrNull(root.created_at),
+      dateOrNull(root.order_date),
+      dateOrNull(root.createdAt),
+      dateOrNull(root.create_time),
+      dateOrNull(root.created_time),
+      dateOrNull(root.riqi),
       dateOrNull(header?.order_created_at),
       dateOrNull(header?.orderCreatedAt),
       dateOrNull(header?.created_at),
@@ -410,8 +492,6 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
       dateOrNull(header?.create_time),
       dateOrNull(header?.created_time),
       dateOrNull(header?.riqi),
-      dateOrNull(header?.["订单日期"]),
-      dateOrNull(header?.["下单时间"]),
     ),
     customerId: firstNonNull(
       text(input.customer_id),
@@ -419,70 +499,21 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
       text(header?.customer_id),
       text(header?.customerId),
     ),
-    orderAmount: numberOrNull(
-      firstNonNull(
-        input.jinez,
-        (input as Record<string, unknown>).jinez,
-        (input as Record<string, unknown>).discounted_amount,
-        (input as Record<string, unknown>).discountedAmount,
-        (input as Record<string, unknown>)["折后金额"],
-        pedidolist?.jinez,
-        pedidolist?.discounted_amount,
-        pedidolist?.discountedAmount,
-        pedidolist?.["折后金额"],
-        input.header_amount,
-        input.headerAmount,
-        input.order_amount,
-        input.orderAmount,
-        input.amount,
-        (input as Record<string, unknown>).order_total,
-        (input as Record<string, unknown>).total,
-        (input as Record<string, unknown>).total_price,
-        (input as Record<string, unknown>).price_total,
-        (input as Record<string, unknown>).sum_amount,
-        (input as Record<string, unknown>).jine,
-        (input as Record<string, unknown>)["金额"],
-        (input as Record<string, unknown>)["订单金额"],
-        (input as Record<string, unknown>).total_amount,
-        (input as Record<string, unknown>).totalAmount,
-        header?.header_amount,
-        header?.headerAmount,
-        header?.jinez,
-        header?.discounted_amount,
-        header?.discountedAmount,
-        header?.["折后金额"],
-        header?.order_amount,
-        header?.orderAmount,
-        header?.amount,
-        header?.order_total,
-        header?.total,
-        header?.total_price,
-        header?.price_total,
-        header?.sum_amount,
-        header?.jine,
-        header?.["金额"],
-        header?.["订单金额"],
-        header?.total_amount,
-        header?.totalAmount,
-      ),
-    ),
+    orderAmount: detectedAmount.value,
+    amountKeyPath: detectedAmount.keyPath,
     companyName: firstNonNull(
       text(input.company_name),
       text(input.companyName),
       text(input.company),
-      text((input as Record<string, unknown>).customer_company),
-      text((input as Record<string, unknown>).gongsi),
-      text((input as Record<string, unknown>).kehu),
-      text((input as Record<string, unknown>)["公司名称"]),
-      text((input as Record<string, unknown>)["客户公司"]),
+      text(root.customer_company),
+      text(root.gongsi),
+      text(root.kehu),
       text(header?.company_name),
       text(header?.companyName),
       text(header?.company),
       text(header?.customer_company),
       text(header?.gongsi),
       text(header?.kehu),
-      text(header?.["公司名称"]),
-      text(header?.["客户公司"]),
     ),
     customerName: firstNonNull(
       text(input.customer_name),
@@ -496,31 +527,28 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
       text(input.contact_name),
       text(input.contactName),
       text(input.contact),
-      text((input as Record<string, unknown>).contact_person),
-      text((input as Record<string, unknown>).linkman),
-      text((input as Record<string, unknown>).lianxiren),
-      text((input as Record<string, unknown>)["联系人"]),
+      text(root.contact_person),
+      text(root.linkman),
+      text(root.lianxiren),
       text(header?.contact_name),
       text(header?.contactName),
       text(header?.contact),
       text(header?.contact_person),
       text(header?.linkman),
       text(header?.lianxiren),
-      text(header?.["联系人"]),
     ),
     contactPhone: firstNonNull(
       text(input.contact_phone),
       text(input.contactPhone),
-      text((input as Record<string, unknown>).contact_tel),
-      text((input as Record<string, unknown>).contact_mobile),
-      text((input as Record<string, unknown>).customer_phone),
-      text((input as Record<string, unknown>).customer_mobile),
-      text((input as Record<string, unknown>).phone),
-      text((input as Record<string, unknown>).mobile),
-      text((input as Record<string, unknown>).telephone),
-      text((input as Record<string, unknown>).tel),
-      text((input as Record<string, unknown>).lianxidianhua),
-      text((input as Record<string, unknown>)["联系电话"]),
+      text(root.contact_tel),
+      text(root.contact_mobile),
+      text(root.customer_phone),
+      text(root.customer_mobile),
+      text(root.phone),
+      text(root.mobile),
+      text(root.telephone),
+      text(root.tel),
+      text(root.lianxidianhua),
       text(header?.contact_phone),
       text(header?.contactPhone),
       text(header?.contact_tel),
@@ -532,7 +560,6 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
       text(header?.telephone),
       text(header?.tel),
       text(header?.lianxidianhua),
-      text(header?.["联系电话"]),
     ),
     addressText: firstNonNull(
       text(input.address_text),
@@ -545,16 +572,14 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
       text(input.orderRemark),
       text(input.note),
       text(input.remark),
-      text((input as Record<string, unknown>).memo),
-      text((input as Record<string, unknown>).beizhu),
-      text((input as Record<string, unknown>)["备注"]),
+      text(root.memo),
+      text(root.beizhu),
       text(header?.order_remark),
       text(header?.orderRemark),
       text(header?.note),
       text(header?.remark),
       text(header?.memo),
       text(header?.beizhu),
-      text(header?.["备注"]),
     ),
     storeLabel: firstNonNull(
       text(input.store_label),
@@ -565,32 +590,26 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
     headerStatusId: firstNonNull(
       text(input.header_status_id),
       text(input.headerStatusId),
-      text((input as Record<string, unknown>).status_id),
-      text((input as Record<string, unknown>).statusId),
-      text((input as Record<string, unknown>)["状态ID"]),
+      text(root.status_id),
+      text(root.statusId),
       text(header?.header_status_id),
       text(header?.headerStatusId),
       text(header?.status_id),
       text(header?.statusId),
-      text(header?.["状态ID"]),
     ),
     headerStatus: firstNonNull(
       text(input.header_status),
       text(input.headerStatus),
-      text((input as Record<string, unknown>).status),
-      text((input as Record<string, unknown>).zhuangtai),
-      text((input as Record<string, unknown>).status_text),
-      text((input as Record<string, unknown>).header_status_text),
-      text((input as Record<string, unknown>)["订单状态"]),
-      text((input as Record<string, unknown>)["状态"]),
+      text(root.status),
+      text(root.zhuangtai),
+      text(root.status_text),
+      text(root.header_status_text),
       text(header?.header_status),
       text(header?.headerStatus),
       text(header?.status),
       text(header?.zhuangtai),
       text(header?.status_text),
       text(header?.header_status_text),
-      text(header?.["订单状态"]),
-      text(header?.["状态"]),
     ),
     latestStatus: firstNonNull(
       text(input.latest_status),
@@ -680,10 +699,12 @@ export async function POST(request: Request) {
     const hasCustomerId = await columnExists("customer_id");
 
     const detectedLocationKeys = new Set<string>();
+    const detectedAmountKeys = new Set<string>();
     for (const order of orders) {
       for (const item of order.items) {
         if (item.locationKey) detectedLocationKeys.add(item.locationKey);
       }
+      if (order.amountKeyPath) detectedAmountKeys.add(order.amountKeyPath);
       const createCompanyName = order.companyName || order.customerName;
       const createCustomerName = order.customerName || order.companyName;
       const createContactName = order.contactName || order.customerName || order.companyName;
@@ -832,6 +853,7 @@ export async function POST(request: Request) {
       summary: {
         totalCount: orders.length,
         detectedLocationKeys: Array.from(detectedLocationKeys),
+        detectedAmountKeys: Array.from(detectedAmountKeys),
       },
     });
   } catch (error) {
