@@ -288,7 +288,9 @@ export default async function YgOrdersPage() {
   const initialRows = rows.map((row) => {
     const uniqueLocations = new Set(
       row.supplierOrders
-        .flatMap((supplierOrder) => supplierOrder.items.map((detail) => (detail.location || "").trim()))
+        .flatMap((supplierOrder) =>
+          supplierOrder.items.map((detail) => (detail.location || "").trim().toUpperCase()),
+        )
         .filter(Boolean),
     );
 

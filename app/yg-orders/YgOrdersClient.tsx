@@ -355,16 +355,12 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
 
         <TableCard title="" description="" className="!mt-0">
           <div className="border-b border-slate-200 px-5 py-4">
-            <div className="flex items-center gap-4 whitespace-nowrap">
-              <h2 className="text-[18px] font-semibold tracking-tight text-slate-900">友购订单列表</h2>
-              <div className="text-sm text-slate-500">最近一次友购订单更新时间是：{summary.latestUpdatedAtText || "-"}</div>
-            </div>
-          </div>
-
-          <div className="space-y-4 px-5 py-5">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="text-sm text-slate-500">按订单查看同步结果</div>
-              <div className="w-full lg:w-[420px]">
+              <div className="flex items-center gap-4 whitespace-nowrap">
+                <h2 className="text-[18px] font-semibold tracking-tight text-slate-900">友购订单列表</h2>
+                <div className="text-sm text-slate-500">最近一次友购订单更新时间是：{summary.latestUpdatedAtText || "-"}</div>
+              </div>
+              <div className="w-full lg:ml-auto lg:w-[420px]">
                 <input
                   value={keyword}
                   onChange={(e) => setKeyword(e.target.value)}
@@ -373,7 +369,9 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                 />
               </div>
             </div>
+          </div>
 
+          <div className="space-y-4 px-5 py-5">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1650px] border-separate border-spacing-0">
                 <thead>
