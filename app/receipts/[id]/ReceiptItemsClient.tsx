@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ProductImage } from "@/components/product-image";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { buildProductImageUrl } from "@/lib/product-image-url";
@@ -145,6 +146,7 @@ export function ReceiptItemsClient({
   rows,
   text,
 }: ReceiptItemsClientProps) {
+  const router = useRouter();
   const [items, setItems] = useState<ItemRow[]>(rows);
   const [keyword, setKeyword] = useState("");
   const [page, setPage] = useState(1);
@@ -172,6 +174,16 @@ export function ReceiptItemsClient({
   useEffect(() => {
     setItems(rows);
   }, [rows]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      if (editingItemId) return;
+      router.refresh();
+    }, 3000);
+
+    return () => window.clearInterval(timer);
+  }, [editingItemId, router]);
 
   useEffect(() => {
     if (!saveSuccessOpen) return;
