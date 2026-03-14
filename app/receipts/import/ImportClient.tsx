@@ -865,12 +865,15 @@ export function ImportClient({
           <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-5 py-6">
             <div className="mx-auto flex max-w-[860px] flex-col items-center">
               <div className="flex flex-wrap items-center justify-center gap-4">
-                <a
-                  href="/api/receipts/import/template"
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href = "/api/receipts/import/template";
+                  }}
                   className="inline-flex h-10 min-w-[120px] items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
                   {text.downloadTemplate}
-                </a>
+                </button>
 
                 <label className="inline-flex h-10 min-w-[120px] cursor-pointer items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-white shadow-soft transition hover:opacity-95">
                   {text.choose}
