@@ -309,13 +309,34 @@ export default async function YgOrdersPage() {
 
   if (hasHeaderStatus || hasHeaderStatusId || hasLatestStatus || hasOrderCreatedAt) {
     const statusExpr = hasHeaderStatus
-      ? "NULLIF(TRIM(CAST(header_status AS text)), '')"
+      ? `
+        CASE
+          WHEN header_status IS NULL THEN NULL
+          WHEN LOWER(TRIM(CAST(header_status AS text))) IN ('', '-', '—', 'n/a', 'null', 'none')
+            THEN NULL
+          ELSE TRIM(CAST(header_status AS text))
+        END
+      `
       : "NULL";
     const statusIdExpr = hasHeaderStatusId
-      ? "NULLIF(TRIM(CAST(header_status_id AS text)), '')"
+      ? `
+        CASE
+          WHEN header_status_id IS NULL THEN NULL
+          WHEN LOWER(TRIM(CAST(header_status_id AS text))) IN ('', '-', '—', 'n/a', 'null', 'none')
+            THEN NULL
+          ELSE TRIM(CAST(header_status_id AS text))
+        END
+      `
       : "NULL";
     const latestStatusExpr = hasLatestStatus
-      ? "NULLIF(TRIM(CAST(latest_status AS text)), '')"
+      ? `
+        CASE
+          WHEN latest_status IS NULL THEN NULL
+          WHEN LOWER(TRIM(CAST(latest_status AS text))) IN ('', '-', '—', 'n/a', 'null', 'none')
+            THEN NULL
+          ELSE TRIM(CAST(latest_status AS text))
+        END
+      `
       : "NULL";
     const createdExpr = hasOrderCreatedAt ? "order_created_at" : "created_at";
 

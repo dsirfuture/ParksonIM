@@ -169,6 +169,26 @@ function pickNonEmptyText(...values: Array<string | null | undefined>) {
   return null;
 }
 
+function sanitizeStatusText(value: string | null | undefined) {
+  const raw = (value || "").trim();
+  if (!raw) return null;
+  const lower = raw.toLowerCase();
+  if (lower === "-" || lower === "—" || lower === "n/a" || lower === "null" || lower === "none") {
+    return null;
+  }
+  return raw;
+}
+
+function sanitizeStatusId(value: string | null | undefined) {
+  const raw = (value || "").trim();
+  if (!raw) return null;
+  const lower = raw.toLowerCase();
+  if (lower === "-" || lower === "—" || lower === "n/a" || lower === "null" || lower === "none") {
+    return null;
+  }
+  return raw;
+}
+
 function pickDate(
   left: Date | null | undefined,
   right: Date | null | undefined,
@@ -182,12 +202,12 @@ function pickDate(
 
 function mergeParsedOrder(base: ParsedOrder, incoming: ParsedOrder): ParsedOrder {
   const mergedStatusText = pickNonEmptyText(
-    incoming.headerStatus,
-    incoming.latestStatus,
-    incoming.headerStatusId,
-    base.headerStatus,
-    base.latestStatus,
-    base.headerStatusId,
+    sanitizeStatusText(incoming.headerStatus),
+    sanitizeStatusText(incoming.latestStatus),
+    sanitizeStatusId(incoming.headerStatusId),
+    sanitizeStatusText(base.headerStatus),
+    sanitizeStatusText(base.latestStatus),
+    sanitizeStatusId(base.headerStatusId),
   );
 
   return {
@@ -203,9 +223,15 @@ function mergeParsedOrder(base: ParsedOrder, incoming: ParsedOrder): ParsedOrder
     addressText: pickNonEmptyText(incoming.addressText, base.addressText),
     remarkText: pickNonEmptyText(incoming.remarkText, base.remarkText),
     storeLabel: pickNonEmptyText(incoming.storeLabel, base.storeLabel),
-    headerStatusId: pickNonEmptyText(incoming.headerStatusId, base.headerStatusId),
+    headerStatusId: pickNonEmptyText(
+      sanitizeStatusId(incoming.headerStatusId),
+      sanitizeStatusId(base.headerStatusId),
+    ),
     headerStatus: mergedStatusText,
-    latestStatus: pickNonEmptyText(incoming.latestStatus, base.latestStatus),
+    latestStatus: pickNonEmptyText(
+      sanitizeStatusText(incoming.latestStatus),
+      sanitizeStatusText(base.latestStatus),
+    ),
     headerUpdatedAt: pickDate(base.headerUpdatedAt, incoming.headerUpdatedAt, true),
     items: incoming.items.length > 0 ? incoming.items : base.items,
   };
@@ -390,6 +416,8 @@ function detectStatusFromPayload(
     for (const [key, raw] of Object.entries(scope)) {
       const value = text(raw);
       if (!value) continue;
+      const cleaned = sanitizeStatusText(value) || sanitizeStatusId(value);
+      if (!cleaned) continue;
       const k = key.toLowerCase();
       if (!/(status|state|zhuangtai|鐘舵€?|鐘舵€�)/.test(k)) continue;
 
@@ -402,10 +430,10 @@ function detectStatusFromPayload(
       if (/status[_-]?id|state[_-]?id/.test(k)) score += 15;
       if (/latest/.test(k)) score -= 10;
 
-      if (/^\d+$/.test(value)) {
-        idCandidates.push({ score, value });
+      if (/^\d+$/.test(cleaned)) {
+        idCandidates.push({ score, value: cleaned });
       } else {
-        textCandidates.push({ score, value });
+        textCandidates.push({ score, value: cleaned });
       }
     }
   }
@@ -726,48 +754,48 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
       text(header?.storeLabel),
     ),
     headerStatusId: firstNonNull(
-      text(input.header_status_id),
-      text(input.headerStatusId),
-      text(root.status_id),
-      text(root.statusId),
-      text(pedidolist?.header_status_id),
-      text(pedidolist?.headerStatusId),
-      text(pedidolist?.status_id),
-      text(pedidolist?.statusId),
-      text(header?.header_status_id),
-      text(header?.headerStatusId),
-      text(header?.status_id),
-      text(header?.statusId),
-      detectedStatus.statusId,
+      sanitizeStatusId(text(input.header_status_id)),
+      sanitizeStatusId(text(input.headerStatusId)),
+      sanitizeStatusId(text(root.status_id)),
+      sanitizeStatusId(text(root.statusId)),
+      sanitizeStatusId(text(pedidolist?.header_status_id)),
+      sanitizeStatusId(text(pedidolist?.headerStatusId)),
+      sanitizeStatusId(text(pedidolist?.status_id)),
+      sanitizeStatusId(text(pedidolist?.statusId)),
+      sanitizeStatusId(text(header?.header_status_id)),
+      sanitizeStatusId(text(header?.headerStatusId)),
+      sanitizeStatusId(text(header?.status_id)),
+      sanitizeStatusId(text(header?.statusId)),
+      sanitizeStatusId(detectedStatus.statusId),
     ),
     headerStatus: firstNonNull(
-      text(input.header_status),
-      text(input.headerStatus),
-      text(root.status),
-      text(root.zhuangtai),
-      text(root.status_text),
-      text(root.header_status_text),
-      text(pedidolist?.header_status),
-      text(pedidolist?.headerStatus),
-      text(pedidolist?.status),
-      text(pedidolist?.zhuangtai),
-      text(pedidolist?.status_text),
-      text(pedidolist?.header_status_text),
-      text(header?.header_status),
-      text(header?.headerStatus),
-      text(header?.status),
-      text(header?.zhuangtai),
-      text(header?.status_text),
-      text(header?.header_status_text),
-      detectedStatus.statusText,
+      sanitizeStatusText(text(input.header_status)),
+      sanitizeStatusText(text(input.headerStatus)),
+      sanitizeStatusText(text(root.status)),
+      sanitizeStatusText(text(root.zhuangtai)),
+      sanitizeStatusText(text(root.status_text)),
+      sanitizeStatusText(text(root.header_status_text)),
+      sanitizeStatusText(text(pedidolist?.header_status)),
+      sanitizeStatusText(text(pedidolist?.headerStatus)),
+      sanitizeStatusText(text(pedidolist?.status)),
+      sanitizeStatusText(text(pedidolist?.zhuangtai)),
+      sanitizeStatusText(text(pedidolist?.status_text)),
+      sanitizeStatusText(text(pedidolist?.header_status_text)),
+      sanitizeStatusText(text(header?.header_status)),
+      sanitizeStatusText(text(header?.headerStatus)),
+      sanitizeStatusText(text(header?.status)),
+      sanitizeStatusText(text(header?.zhuangtai)),
+      sanitizeStatusText(text(header?.status_text)),
+      sanitizeStatusText(text(header?.header_status_text)),
+      sanitizeStatusText(detectedStatus.statusText),
     ),
     latestStatus: firstNonNull(
-      text(input.latest_status),
-      text(input.latestStatus),
-      text(pedidolist?.latest_status),
-      text(pedidolist?.latestStatus),
-      text(header?.latest_status),
-      text(header?.latestStatus),
+      sanitizeStatusText(text(input.latest_status)),
+      sanitizeStatusText(text(input.latestStatus)),
+      sanitizeStatusText(text(pedidolist?.latest_status)),
+      sanitizeStatusText(text(pedidolist?.latestStatus)),
+      sanitizeStatusText(text(header?.latest_status)),
+      sanitizeStatusText(text(header?.latestStatus)),
     ),
     headerUpdatedAt: dateOrNull(
       input.header_updated_at ??
