@@ -258,6 +258,17 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
         : summary.periodStats.find((x) => x.year === selectedYear && x.month === selectedMonth) || null,
     [selectedMonth, selectedYear, summary.periodStats],
   );
+  const activeYearStat = useMemo(() => {
+    if (selectedYear === "") return null;
+    const rows = summary.periodStats.filter((x) => x.year === selectedYear);
+    if (rows.length === 0) return null;
+    const orders = rows.reduce((sum, row) => sum + row.orders, 0);
+    const amount = rows.reduce((sum, row) => sum + Number(row.amountText || 0), 0);
+    return {
+      orders,
+      amountText: Number.isFinite(amount) ? amount.toFixed(2) : "-",
+    };
+  }, [selectedYear, summary.periodStats]);
   const periodLabel =
     selectedYear === "" || selectedMonth === ""
       ? "-"
@@ -375,10 +386,12 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <div className="text-xs text-slate-500">订单额（{periodLabel}）</div>
                 <div className="mt-1 text-lg font-semibold text-slate-900">{activePeriodStat?.amountText || "-"}</div>
+                <div className="mt-1 text-xs text-slate-500">全年（{selectedYear || "-"}）：{activeYearStat?.amountText || "-"}</div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <div className="text-xs text-slate-500">订单数（{periodLabel}）</div>
                 <div className="mt-1 text-lg font-semibold text-slate-900">{(activePeriodStat?.orders ?? 0).toLocaleString("zh-CN")}</div>
+                <div className="mt-1 text-xs text-slate-500">全年（{selectedYear || "-"}）：{(activeYearStat?.orders ?? 0).toLocaleString("zh-CN")}</div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <div className="text-xs text-slate-500">客户数量</div>
