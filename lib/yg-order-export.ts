@@ -573,23 +573,50 @@ export async function buildSupplierOrderPdf(
       : fallbackOrderAmount > 0
         ? fallbackOrderAmount
         : null;
-  const infoLines = [
-    `${labels.orderAmount}: ${moneyText(resolvedOrderAmount)}`,
-    orderSuffix
-      ? `${labels.packingHint} "ParksonMX-${orderSuffix}"`
-      : `${labels.packingHint} "ParksonMX-***"`,
-  ];
+  const amountLine = `${labels.orderAmount}: ${moneyText(resolvedOrderAmount)}`;
+  page.drawText(safePdfText(amountLine, unicodeSafe), {
+    x: contentX,
+    y,
+    size: 9,
+    font: fontForText(amountLine),
+    color: rgb(0.15, 0.2, 0.3),
+  });
+  y -= 16;
 
-  for (const line of infoLines) {
-    page.drawText(safePdfText(line, unicodeSafe), {
-      x: contentX,
-      y,
-      size: 9,
-      font: fontForText(line),
-      color: rgb(0.15, 0.2, 0.3),
-    });
-    y -= 16;
-  }
+  const packingPrefix = `${labels.packingHint} "ParksonMX-`;
+  const packingSuffix = orderSuffix || "***";
+  const packingQuoteEnd = '"';
+  const packingPrefixSafe = safePdfText(packingPrefix, unicodeSafe);
+  const packingSuffixSafe = safePdfText(packingSuffix, unicodeSafe);
+  const packingQuoteEndSafe = safePdfText(packingQuoteEnd, unicodeSafe);
+
+  let packingX = contentX;
+  page.drawText(packingPrefixSafe, {
+    x: packingX,
+    y,
+    size: 9,
+    font: fontForText(packingPrefix),
+    color: rgb(0.15, 0.2, 0.3),
+  });
+  packingX += fontForText(packingPrefix).widthOfTextAtSize(packingPrefixSafe, 9);
+
+  page.drawText(packingSuffixSafe, {
+    x: packingX,
+    y,
+    size: 9,
+    font: latinBoldFont,
+    color: rgb(0.15, 0.2, 0.3),
+  });
+  packingX += latinBoldFont.widthOfTextAtSize(packingSuffixSafe, 9);
+
+  page.drawText(packingQuoteEndSafe, {
+    x: packingX,
+    y,
+    size: 9,
+    font: esFont,
+    color: rgb(0.15, 0.2, 0.3),
+  });
+  y -= 16;
 
   y -= 8;
 
