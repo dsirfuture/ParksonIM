@@ -77,6 +77,7 @@ type ImportRecord = {
 };
 
 type ComparePreviewRow = {
+  hasImage: boolean;
   sku: string;
   barcode: string;
   nameZh: string;
@@ -84,6 +85,8 @@ type ComparePreviewRow = {
   casePack: string;
   cartonPack: string;
   price: string;
+  yogoPrice: string;
+  priceMismatch: boolean;
   compareState: "上架" | "下架" | "新增";
 };
 
@@ -526,6 +529,12 @@ export function ProductsManagementClient({
   const normalizeHeader = (v: string) => v.replace(/\s+/g, "").replace(/[：:]/g, "").toLowerCase();
   const toCellText = (v: unknown) => String(v ?? "").trim();
   const toSkuText = (v: unknown) => toCellText(v).replace(/\s+/g, "");
+  const toPriceNumber = (v: string) => {
+    const normalized = v.replace(/[^\d.-]/g, "");
+    if (!normalized) return null;
+    const n = Number.parseFloat(normalized);
+    return Number.isFinite(n) ? n : null;
+  };
 
   function pickByAlias(record: Record<string, unknown>, aliases: string[]) {
     const hit = Object.keys(record).find((k) => aliases.includes(normalizeHeader(k)));
@@ -557,6 +566,12 @@ export function ProductsManagementClient({
         const price = toCellText(pickByAlias(record, ["卖价", "价格", "price", "sourceprice", "source_price"]));
 
         const current = existing.get(sku.toUpperCase());
+        const yogoPrice = current?.priceText ?? "";
+        const importPriceNum = toPriceNumber(price);
+        const yogoPriceNum = toPriceNumber(yogoPrice);
+        const priceMismatch =
+          (importPriceNum !== null && yogoPriceNum !== null && Math.abs(importPriceNum - yogoPriceNum) > 0.0001) ||
+          ((importPriceNum === null) !== (yogoPriceNum === null));
         const compareState: ComparePreviewRow["compareState"] = !current
           ? "新增"
           : current.statusText === "上架"
@@ -564,6 +579,7 @@ export function ProductsManagementClient({
             : "下架";
 
         compared.push({
+          hasImage: Boolean(current?.hasImage),
           sku,
           barcode,
           nameZh,
@@ -571,6 +587,8 @@ export function ProductsManagementClient({
           casePack,
           cartonPack,
           price,
+          yogoPrice,
+          priceMismatch,
           compareState,
         });
       }
@@ -593,6 +611,7 @@ export function ProductsManagementClient({
       包装数: r.casePack || "",
       装箱数: r.cartonPack || "",
       卖价: r.price || "",
+      友购价: r.yogoPrice || "",
       上架: r.compareState === "上架" ? "是" : "",
       下架: r.compareState === "下架" ? "是" : "",
       新增: r.compareState === "新增" ? "是" : "",
@@ -1381,6 +1400,7 @@ export function ProductsManagementClient({
               <table className="w-full min-w-[1120px] border-separate border-spacing-0">
                 <thead className="sticky top-0 z-10 bg-slate-50">
                   <tr className="bg-slate-50 text-left text-xs text-slate-500">
+                    <th className="px-3 py-2 font-semibold">图片</th>
                     <th className="px-3 py-2 font-semibold">编码</th>
                     <th className="px-3 py-2 font-semibold">条形码</th>
                     <th className="px-3 py-2 font-semibold">中文名</th>
@@ -1388,6 +1408,7 @@ export function ProductsManagementClient({
                     <th className="px-3 py-2 font-semibold text-right">包装数</th>
                     <th className="px-3 py-2 font-semibold text-right">装箱数</th>
                     <th className="px-3 py-2 font-semibold text-right">卖价</th>
+                    <th className="px-3 py-2 font-semibold text-right">友购价</th>
                     <th className="px-3 py-2 font-semibold text-center text-emerald-700">上架</th>
                     <th className="px-3 py-2 font-semibold text-center text-rose-700">下架</th>
                     <th className="px-3 py-2 font-semibold text-center text-violet-700">新增</th>
@@ -1396,13 +1417,21 @@ export function ProductsManagementClient({
                 <tbody className="text-[13px] text-slate-700">
                   {comparePreview.rows.map((r, idx) => (
                     <tr key={`${r.sku}-${idx}`} className="border-t border-slate-100">
+                      <td className="px-3 py-2">
+                        {r.hasImage ? (
+                          <ProductImage sku={r.sku} hasImage size={32} roundedClassName="rounded-md" />
+                        ) : (
+                          <span className="text-xs text-slate-400">空</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 font-semibold text-slate-900">{r.sku}</td>
                       <td className="px-3 py-2">{r.barcode || "-"}</td>
                       <td className="px-3 py-2">{r.nameZh || "-"}</td>
                       <td className="px-3 py-2">{r.nameEs || "-"}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{r.casePack || "-"}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{r.cartonPack || "-"}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{r.price || "-"}</td>
+                      <td className={`px-3 py-2 text-right tabular-nums ${r.priceMismatch ? "font-semibold text-rose-600" : ""}`}>{r.price || "-"}</td>
+                      <td className={`px-3 py-2 text-right tabular-nums ${r.priceMismatch ? "font-semibold text-rose-600" : ""}`}>{r.yogoPrice || "-"}</td>
                       <td className="px-3 py-2 text-center">{r.compareState === "上架" ? <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">上架</span> : "-"}</td>
                       <td className="px-3 py-2 text-center">{r.compareState === "下架" ? <span className="inline-flex rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">下架</span> : "-"}</td>
                       <td className="px-3 py-2 text-center">{r.compareState === "新增" ? <span className="inline-flex rounded-full bg-violet-50 px-2 py-0.5 text-xs font-semibold text-violet-700">新增</span> : "-"}</td>
