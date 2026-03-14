@@ -87,13 +87,13 @@ export function BillingClient({
   const theme =
     activeTab === "supplier"
       ? {
-          panel: "border-amber-300 bg-amber-50/40",
+          panel: "border-slate-200 bg-white",
           tabActive: "border-amber-300 bg-amber-100 text-amber-900",
           tabInactive: "border-transparent bg-slate-200 text-slate-600",
           accentValue: "text-amber-700",
         }
       : {
-          panel: "border-sky-300 bg-sky-50/40",
+          panel: "border-slate-200 bg-white",
           tabActive: "border-sky-300 bg-sky-100 text-sky-900",
           tabInactive: "border-transparent bg-slate-200 text-slate-600",
           accentValue: "text-sky-700",
@@ -392,4 +392,3 @@ export function BillingClient({
     </section>
   );
 }
-
