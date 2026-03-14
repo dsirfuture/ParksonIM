@@ -39,6 +39,17 @@ function formatDateTime(value: Date | null | undefined) {
   }).format(value);
 }
 
+function formatDateOnly(value: Date | null | undefined) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour12: false,
+    timeZone: "America/Mexico_City",
+  }).format(value);
+}
+
 function formatMoney(value: number) {
   return value.toFixed(2);
 }
@@ -236,7 +247,7 @@ export default async function BillingPage({
         contactName: order?.contactName || "-",
         contactPhone: order?.contactPhone || "-",
         amountText: formatMoney(row.totalAmount),
-        updatedAtText: formatDateTime(row.latestAt),
+        updatedAtText: formatDateOnly(row.latestAt),
       };
     })
     .sort((a, b) => b.orderNo.localeCompare(a.orderNo));
@@ -302,7 +313,7 @@ export default async function BillingPage({
                       <th className="whitespace-nowrap px-4 py-3 font-semibold">联系人</th>
                       <th className="whitespace-nowrap px-4 py-3 font-semibold">联系电话</th>
                       <th className="whitespace-nowrap px-4 py-3 font-semibold text-right">配货金额</th>
-                      <th className="whitespace-nowrap px-4 py-3 font-semibold">更新时间</th>
+                      <th className="whitespace-nowrap px-4 py-3 font-semibold">汇总时间</th>
                       <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">操作</th>
                     </tr>
                   </thead>
