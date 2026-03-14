@@ -150,6 +150,10 @@ function isLikelyMojibake(value: string | null | undefined) {
   return /[鍙鐨鎶璇鍟鏄绯鍏閲姘瓒惫鎴€]/.test(text);
 }
 
+function normalizeLookupKey(value: string | null | undefined) {
+  return String(value || "").trim().toUpperCase();
+}
+
 export default async function YgOrdersPage() {
   const session = await getSession();
 
@@ -347,8 +351,18 @@ export default async function YgOrdersPage() {
   for (const row of rows) {
     for (const so of row.supplierOrders) {
       for (const item of so.items) {
-        if (item.item_no) skuSet.add(item.item_no.trim());
-        if (item.barcode) barcodeSet.add(item.barcode.trim());
+        if (item.item_no) {
+          const raw = item.item_no.trim();
+          skuSet.add(raw);
+          skuSet.add(raw.toUpperCase());
+          skuSet.add(raw.toLowerCase());
+        }
+        if (item.barcode) {
+          const raw = item.barcode.trim();
+          barcodeSet.add(raw);
+          barcodeSet.add(raw.toUpperCase());
+          barcodeSet.add(raw.toLowerCase());
+        }
       }
     }
   }
@@ -377,7 +391,7 @@ export default async function YgOrdersPage() {
 
   const nameBySku = new Map(
     yogoNameRows.map((row) => [
-      String(row.product_code || "").trim(),
+      normalizeLookupKey(String(row.product_code || "")),
       {
         zh: normalizeProductText(row.name_cn || ""),
         es: normalizeProductText(row.name_es || ""),
@@ -389,7 +403,7 @@ export default async function YgOrdersPage() {
     yogoNameRows
       .filter((row) => row.product_no)
       .map((row) => [
-        String(row.product_no || "").trim(),
+        normalizeLookupKey(String(row.product_no || "")),
         {
           zh: normalizeProductText(row.name_cn || ""),
           es: normalizeProductText(row.name_es || ""),
@@ -450,29 +464,19 @@ export default async function YgOrdersPage() {
         noteText: item.note_text || "",
         items: item.items.map((detail) => ({
           ...(function () {
-            const mappedBySku = nameBySku.get(detail.item_no || "");
-            const mappedByBarcode = nameByBarcode.get(detail.barcode || "");
+            const mappedBySku = nameBySku.get(normalizeLookupKey(detail.item_no || ""));
+            const mappedByBarcode = nameByBarcode.get(normalizeLookupKey(detail.barcode || ""));
             const cnMapped = mappedBySku?.zh || mappedByBarcode?.zh || "";
             const esMapped = mappedBySku?.es || mappedByBarcode?.es || "";
             const productNameNorm = normalizeProductText(detail.product_name || "");
-            const cnResolved =
-              cnMapped && !isLikelyMojibake(cnMapped)
-                ? cnMapped
-                : !isLikelyMojibake(productNameNorm)
-                  ? productNameNorm
-                  : cnMapped || productNameNorm;
-            const esResolved =
-              esMapped && !isLikelyMojibake(esMapped)
-                ? esMapped
-                : !isLikelyMojibake(productNameNorm)
-                  ? productNameNorm
-                  : esMapped || productNameNorm;
+            const cnResolved = !isLikelyMojibake(cnMapped) ? cnMapped : "";
+            const esResolved = !isLikelyMojibake(esMapped) ? esMapped : "";
             return {
           id: detail.id,
           location: detail.location,
           itemNo: detail.item_no || "",
           barcode: detail.barcode || "",
-          productName: normalizeProductText(detail.product_name || ""),
+          productName: !isLikelyMojibake(productNameNorm) ? productNameNorm : "",
           nameCn: cnResolved,
           nameEs: esResolved,
           normalDiscount:
