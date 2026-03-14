@@ -44,16 +44,11 @@ export default async function YgOrdersPage() {
     redirect("/login");
   }
 
-  const now = new Date();
-  const yearStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
-
-  const [summaryRows, customerCountRows] = await Promise.all([
+  const [summaryRows, customerCountRows, yearlyRows] = await Promise.all([
     prisma.$queryRawUnsafe<
       Array<{
         total_orders: number | string | bigint;
         total_amount: unknown;
-        year_orders: number | string | bigint;
-        year_amount: unknown;
         latest_updated_at: Date | null;
       }>
     >(
@@ -61,8 +56,6 @@ export default async function YgOrdersPage() {
         SELECT
           COUNT(*) AS total_orders,
           COALESCE(SUM(order_amount), 0) AS total_amount,
-          COUNT(*) FILTER (WHERE created_at >= $3::timestamptz) AS year_orders,
-          COALESCE(SUM(order_amount) FILTER (WHERE created_at >= $3::timestamptz), 0) AS year_amount,
           MAX(updated_at) AS latest_updated_at
         FROM yg_order_imports
         WHERE tenant_id = $1::uuid
@@ -70,7 +63,6 @@ export default async function YgOrdersPage() {
       `,
       session.tenantId,
       session.companyId,
-      yearStart,
     ),
     prisma.$queryRawUnsafe<Array<{ customer_count: number | string | bigint }>>(
       `
@@ -83,10 +75,37 @@ export default async function YgOrdersPage() {
       session.tenantId,
       session.companyId,
     ),
+    prisma.$queryRawUnsafe<
+      Array<{
+        stat_year: number;
+        year_orders: number | string | bigint;
+        year_amount: unknown;
+      }>
+    >(
+      `
+        SELECT
+          EXTRACT(YEAR FROM created_at)::int AS stat_year,
+          COUNT(*) AS year_orders,
+          COALESCE(SUM(order_amount), 0) AS year_amount
+        FROM yg_order_imports
+        WHERE tenant_id = $1::uuid
+          AND company_id = $2::uuid
+        GROUP BY EXTRACT(YEAR FROM created_at)
+        ORDER BY stat_year ASC
+      `,
+      session.tenantId,
+      session.companyId,
+    ),
   ]);
 
   const summary = summaryRows[0];
   const customerCount = Number(customerCountRows[0]?.customer_count || 0);
+  const yearlyStats = yearlyRows.map((row) => ({
+    year: Number(row.stat_year),
+    orders: Number(row.year_orders || 0),
+    amountText: formatMoney(row.year_amount || 0),
+  }));
+  const defaultYear = yearlyStats.length > 0 ? yearlyStats[yearlyStats.length - 1].year : null;
 
   const rows = await prisma.ygOrderImport.findMany({
     where: {
@@ -280,8 +299,8 @@ export default async function YgOrdersPage() {
         summary={{
           totalOrders: Number(summary?.total_orders || 0),
           totalAmountText: formatMoney(summary?.total_amount || 0),
-          yearOrders: Number(summary?.year_orders || 0),
-          yearAmountText: formatMoney(summary?.year_amount || 0),
+          yearlyStats,
+          defaultYear,
           customerCount,
           latestUpdatedAtText: formatDateTime(summary?.latest_updated_at || null),
         }}
