@@ -97,6 +97,13 @@ function extractPhone(contactPhone: string, remarkText: string) {
   return normalizeMexicoPhone(matched[0]) || "-";
 }
 
+function cleanRemarkText(value: string) {
+  return (value || "")
+    .replace(/[\[\]【】]/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function PreviewProductImage({
   itemNo,
   barcode,
@@ -442,7 +449,9 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                           </td>
                           <td className="whitespace-nowrap px-3 py-2 text-slate-700">{extractPhone(row.contactPhone, row.remarkText)}</td>
                           <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-slate-700">{row.orderAmountText}</td>
-                          <td className="max-w-[420px] truncate whitespace-nowrap px-3 py-2 text-slate-700">{row.remarkText || "-"}</td>
+                          <td className="max-w-[420px] truncate whitespace-nowrap px-3 py-2 text-slate-700">
+                            {cleanRemarkText(row.remarkText || "") || "-"}
+                          </td>
                           <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-slate-700">{row.itemCount}</td>
                           <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-slate-700">{row.supplierCount}</td>
                           <td className="whitespace-nowrap px-2 py-2 text-slate-700">{row.storeLabelText || "-"}</td>
