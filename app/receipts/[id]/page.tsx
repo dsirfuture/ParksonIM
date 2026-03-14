@@ -559,7 +559,7 @@ export default async function ReceiptDetailPage({
               pending: text.pending,
               inProgress: text.inProgress,
               completed: text.completed,
-              unitPrice: text.unitPrice,
+              unitPrice: lang === "zh" ? "供应价" : "Precio proveedor",
               yogoPrice: lang === "zh" ? "友购价" : "Precio YOGO",
               priceCompare: lang === "zh" ? "价格对比" : "Comparación",
               same: lang === "zh" ? "一致" : "Igual",

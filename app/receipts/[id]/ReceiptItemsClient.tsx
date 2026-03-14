@@ -451,7 +451,7 @@ export function ReceiptItemsClient({
                 <th className="whitespace-nowrap px-2 py-3 font-semibold">
                   {text.unitPrice}
                 </th>
-                <th className="whitespace-nowrap px-2 py-3 font-semibold">
+                <th className="whitespace-nowrap px-2 py-3 font-semibold bg-slate-50/70">
                   {text.yogoPrice}
                 </th>
                 <th className="whitespace-nowrap px-2 py-3 font-semibold">
@@ -541,7 +541,7 @@ export function ReceiptItemsClient({
                       </td>
 
                       <td
-                        className={`whitespace-nowrap px-2 py-3 text-sm ${
+                        className={`whitespace-nowrap px-2 py-3 text-sm bg-slate-50/70 ${
                           row.priceCompareStatus === "different"
                             ? "text-rose-600"
                             : "text-slate-700"
