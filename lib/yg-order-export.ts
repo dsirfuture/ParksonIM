@@ -483,8 +483,65 @@ export async function buildSupplierOrderPdf(
     return preferBold ? latinBoldFont : esFont;
   };
 
+  const skuSet = new Set(
+    order.items.map((item) => (item.item_no || "").trim()).filter(Boolean),
+  );
+  const barcodeSet = new Set(
+    order.items.map((item) => (item.barcode || "").trim()).filter(Boolean),
+  );
+  const yogoRows =
+    skuSet.size > 0 || barcodeSet.size > 0
+      ? await prisma.yogoProductSource.findMany({
+          where: {
+            tenant_id: order.tenant_id,
+            company_id: order.company_id,
+            OR: [
+              ...(skuSet.size > 0 ? [{ product_code: { in: Array.from(skuSet) } }] : []),
+              ...(barcodeSet.size > 0 ? [{ product_no: { in: Array.from(barcodeSet) } }] : []),
+            ],
+          },
+          select: {
+            product_code: true,
+            product_no: true,
+            name_cn: true,
+            name_es: true,
+          },
+        })
+      : [];
+  const nameBySku = new Map(
+    yogoRows.map((row) => [String(row.product_code || "").trim(), { zh: row.name_cn || "", es: row.name_es || "" }]),
+  );
+  const nameByBarcode = new Map(
+    yogoRows
+      .filter((row) => row.product_no)
+      .map((row) => [String(row.product_no || "").trim(), { zh: row.name_cn || "", es: row.name_es || "" }]),
+  );
+
   let y = 560;
   const contentX = 74;
+  const labels = unicodeSafe
+    ? {
+        orderAmount: "订单金额",
+        packingHint: "PARKSON : 请安排配货，包装上标明",
+        image: "图片",
+        code: "编号",
+        barcode: "条形码",
+        product: "中文名 / 西文名",
+        qty: "总数量",
+        unitPrice: "价格",
+        total: "合计",
+      }
+    : {
+        orderAmount: "Order Amount",
+        packingHint: "PARKSON: mark package as",
+        image: "IMG",
+        code: "SKU",
+        barcode: "Barcode",
+        product: "CN / ES",
+        qty: "Qty",
+        unitPrice: "Price",
+        total: "Total",
+      };
 
   page.drawText(safePdfText("ParksonMX", unicodeSafe), {
     x: contentX,
@@ -507,11 +564,24 @@ export async function buildSupplierOrderPdf(
   y -= 26;
 
   const orderSuffix = getOrderSuffix(order.order_no);
+  const fallbackOrderAmount = order.items.reduce((sum, item) => {
+    const line = toNumber(item.line_total);
+    if (line !== null) return sum + line;
+    const qty = Number(item.total_qty || 0);
+    const unit = toNumber(item.unit_price) || 0;
+    return sum + qty * unit;
+  }, 0);
+  const resolvedOrderAmount =
+    order.order_amount !== null && order.order_amount !== undefined
+      ? order.order_amount
+      : fallbackOrderAmount > 0
+        ? fallbackOrderAmount
+        : null;
   const infoLines = [
-    `订单金额: ${moneyText(order.order_amount)}`,
+    `${labels.orderAmount}: ${moneyText(resolvedOrderAmount)}`,
     orderSuffix
-      ? `PARKSON : 请安排配货，包装上标明 "ParksonMX-${orderSuffix}"`
-      : `PARKSON : 请安排配货，包装上标明 "ParksonMX-***"`,
+      ? `${labels.packingHint} "ParksonMX-${orderSuffix}"`
+      : `${labels.packingHint} "ParksonMX-***"`,
   ];
 
   for (const line of infoLines) {
@@ -527,7 +597,15 @@ export async function buildSupplierOrderPdf(
 
   y -= 8;
 
-  const headers = ["图片", "编号", "条形码", "产品品名", "总数量", "价格", "合计"];
+  const headers = [
+    labels.image,
+    labels.code,
+    labels.barcode,
+    labels.product,
+    labels.qty,
+    labels.unitPrice,
+    labels.total,
+  ];
   const maxItemNo = order.items.reduce((max, item) => {
     const value = (item.item_no || "").trim();
     return value.length > max.length ? value : max;
@@ -582,14 +660,26 @@ export async function buildSupplierOrderPdf(
 
   for (const item of order.items) {
     let colX = tableX;
+    const mapped =
+      nameBySku.get((item.item_no || "").trim()) ||
+      nameByBarcode.get((item.barcode || "").trim()) ||
+      { zh: "", es: "" };
+    const productLabel = mapped.zh && mapped.es
+      ? `${mapped.zh} / ${mapped.es}`
+      : mapped.zh || mapped.es || item.product_name || "";
+    const qty = Number(item.total_qty || 0);
+    const unitPrice = toNumber(item.unit_price);
+    const lineTotal = toNumber(item.line_total);
+    const resolvedLineTotal =
+      lineTotal !== null ? lineTotal : qty * (unitPrice || 0);
     const values = [
       "",
       item.item_no || "",
       item.barcode || "",
-      item.product_name || "",
-      String(item.total_qty),
-      moneyText(item.unit_price),
-      moneyText(item.line_total),
+      productLabel,
+      String(qty),
+      moneyText(unitPrice),
+      moneyText(resolvedLineTotal),
     ];
 
     for (let i = 0; i < values.length; i += 1) {
