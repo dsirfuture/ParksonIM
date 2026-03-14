@@ -106,6 +106,9 @@ type RawOrder = {
   header_amount?: unknown;
   headerAmount?: unknown;
   amount?: unknown;
+  jinez?: unknown;
+  discounted_amount?: unknown;
+  discountedAmount?: unknown;
   order_amount?: unknown;
   orderAmount?: unknown;
   items_count?: unknown;
@@ -122,6 +125,8 @@ type RawOrder = {
   list?: unknown;
   products?: unknown;
   product_list?: unknown;
+  pedidolist?: unknown;
+  pedidoList?: unknown;
 };
 
 type ParsedOrderItem = {
@@ -338,19 +343,20 @@ function parseOrderItem(input: RawOrderItem, index: number): ParsedOrderItem {
 }
 
 function parseOrder(input: RawOrder, index: number): ParsedOrder {
-  let header: Record<string, unknown> | null = null;
-  if (input.header && typeof input.header === "object") {
-    header = input.header as Record<string, unknown>;
-  } else if (typeof input.header === "string") {
-    try {
-      const parsed = JSON.parse(input.header);
-      if (parsed && typeof parsed === "object") {
-        header = parsed as Record<string, unknown>;
+  const asObjectOrNull = (value: unknown) => {
+    if (value && typeof value === "object") return value as Record<string, unknown>;
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        if (parsed && typeof parsed === "object") return parsed as Record<string, unknown>;
+      } catch {
+        return null;
       }
-    } catch {
-      header = null;
     }
-  }
+    return null;
+  };
+  const header = asObjectOrNull(input.header);
+  const pedidolist = asObjectOrNull(input.pedidolist) ?? asObjectOrNull(input.pedidoList);
   const orderNo = firstNonNull(
     text(input.order_no),
     text(input.orderNo),
@@ -415,6 +421,15 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
     ),
     orderAmount: numberOrNull(
       firstNonNull(
+        input.jinez,
+        (input as Record<string, unknown>).jinez,
+        (input as Record<string, unknown>).discounted_amount,
+        (input as Record<string, unknown>).discountedAmount,
+        (input as Record<string, unknown>)["折后金额"],
+        pedidolist?.jinez,
+        pedidolist?.discounted_amount,
+        pedidolist?.discountedAmount,
+        pedidolist?.["折后金额"],
         input.header_amount,
         input.headerAmount,
         input.order_amount,
@@ -432,6 +447,10 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
         (input as Record<string, unknown>).totalAmount,
         header?.header_amount,
         header?.headerAmount,
+        header?.jinez,
+        header?.discounted_amount,
+        header?.discountedAmount,
+        header?.["折后金额"],
         header?.order_amount,
         header?.orderAmount,
         header?.amount,
