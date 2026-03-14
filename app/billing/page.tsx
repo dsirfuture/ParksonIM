@@ -5,8 +5,24 @@ import { StatCard } from "@/components/stat-card";
 import { TableCard } from "@/components/table-card";
 import { getLang } from "@/lib/i18n-server";
 
-export default async function BillingPage() {
+type TabKey = "customer" | "supplier";
+type SearchParams = Record<string, string | string[] | undefined>;
+
+const TAB_LIST: TabKey[] = ["customer", "supplier"];
+
+function normalizeTab(tab: string | null | undefined): TabKey {
+  return tab === "supplier" ? "supplier" : "customer";
+}
+
+export default async function BillingPage({
+  searchParams,
+}: {
+  searchParams?: Promise<SearchParams>;
+}) {
   const lang = await getLang();
+  const params = (await searchParams) || {};
+  const tabRaw = Array.isArray(params.tab) ? params.tab[0] : params.tab;
+  const activeTab = normalizeTab(tabRaw || null);
 
   const text =
     lang === "zh"
@@ -16,6 +32,8 @@ export default async function BillingPage() {
           desc: "汇总已完成验货单，生成对账结果，并为后续下载、分享与留痕做准备。",
           receiptsBtn: "查看验货单",
           exportBtn: "导出预留",
+          tabCustomer: "客户出账单",
+          tabSupplier: "供应商账单",
           totalBills: "账单总数",
           pendingBills: "待生成",
           reviewingBills: "待复核",
@@ -47,50 +65,51 @@ export default async function BillingPage() {
             "当前还没有可分享的账单内容。接入真实账单能力后，这里会展示下载、分享与公开访问入口。",
         }
       : {
-          badge: "Facturación y conciliación",
-          title: "Conciliación y facturas",
-          desc: "Consolida recepciones completadas, genera resultados de conciliación y prepara la descarga, el compartir y el registro del proceso.",
+          badge: "Facturacion y conciliacion",
+          title: "Conciliacion y facturas",
+          desc: "Consolida recepciones completadas, genera resultados de conciliacion y prepara descarga, compartir y trazabilidad.",
           receiptsBtn: "Ver recepciones",
-          exportBtn: "Reserva de exportación",
+          exportBtn: "Reserva de exportacion",
+          tabCustomer: "Factura clientes",
+          tabSupplier: "Factura proveedores",
           totalBills: "Total de facturas",
           pendingBills: "Pendientes",
           reviewingBills: "Por revisar",
           finishedBills: "Listas para salida",
-          totalHint: "Después contará todos los lotes de facturación",
-          pendingHint: "Esperando generar el resultado consolidado",
-          reviewingHint: "Esperando revisión manual",
-          finishedHint: "Listas para descargar o compartir",
-          processTitle: "Flujo de conciliación",
-          processDesc: "Se recomienda completar la operación en este orden",
+          totalHint: "Contara todos los lotes de facturacion",
+          pendingHint: "Esperando generar resultado consolidado",
+          reviewingHint: "Esperando confirmacion manual",
+          finishedHint: "Facturas listas para descargar o compartir",
+          processTitle: "Flujo de conciliacion",
+          processDesc: "Se recomienda completar en este orden",
           p1: "1. Elegir las recepciones completadas que deben consolidarse.",
-          p2: "2. Generar el resultado de conciliación y revisar cantidades, diferencias y anomalías.",
-          p3: "3. Hacer una revisión manual del contenido antes de la salida final.",
-          p4: "4. Después se podrá soportar descarga, enlace compartido y acceso público.",
+          p2: "2. Generar el resultado consolidado y revisar cantidad, diferencia y anomalias.",
+          p3: "3. Hacer revision manual del contenido antes de salida.",
+          p4: "4. Luego podra soportar descarga, enlace compartido y acceso publico.",
           outputTitle: "Capacidades de salida",
-          outputDesc:
-            "Por ahora esta página define las funciones que se conectarán después",
-          o1: "Vista del resultado consolidado",
-          o2: "Salida de archivo descargable",
-          o3: "Generación de enlace compartido",
-          o4: "Página pública de acceso",
-          o5: "Bitácora y trazabilidad del estado",
+          outputDesc: "Esta pagina define primero la capacidad principal a conectar despues",
+          o1: "Vista de resultado consolidado",
+          o2: "Descarga de archivo",
+          o3: "Generacion de enlace compartido",
+          o4: "Pagina de acceso publico",
+          o5: "Auditoria y trazabilidad de estado",
           recentTitle: "Facturas recientes",
-          recentDesc:
-            "Después aquí se mostrarán lotes, estado, fecha y acciones",
+          recentDesc: "Aqui se mostraran lotes, estado, fecha y acciones",
           recentEmpty:
-            "Todavía no hay registros de facturación. Cuando se conecte la lógica real, aquí aparecerán las facturas más recientes.",
-          shareTitle: "Área de compartir y descargar",
-          shareDesc:
-            "Después aquí se conectarán descarga, copia de enlace, acceso público y control de estado",
+            "Todavia no hay registros de facturacion. Cuando se conecte la logica real, aqui apareceran facturas recientes.",
+          shareTitle: "Zona de compartir y descarga",
+          shareDesc: "Aqui se conectaran descarga, copia de enlace y acceso publico",
           shareEmpty:
-            "Todavía no hay contenido disponible para compartir. Cuando se conecte la capacidad real, aquí aparecerán las acciones de descarga y compartir.",
+            "Todavia no hay contenido para compartir. Cuando se conecte la capacidad real, aqui apareceran acciones de descarga y compartir.",
         };
+
+  const tabLabel = activeTab === "customer" ? text.tabCustomer : text.tabSupplier;
 
   return (
     <AppShell>
       <PageHeader
         badge={text.badge}
-        title={text.title}
+        title={`${text.title} · ${tabLabel}`}
         description={text.desc}
         actions={
           <>
@@ -111,73 +130,100 @@ export default async function BillingPage() {
         }
       />
 
-      <section className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label={text.totalBills} value="0" hint={text.totalHint} />
-        <StatCard
-          label={text.pendingBills}
-          value="0"
-          hint={text.pendingHint}
-          valueClassName="text-amber-600"
-        />
-        <StatCard
-          label={text.reviewingBills}
-          value="0"
-          hint={text.reviewingHint}
-          valueClassName="text-blue-600"
-        />
-        <StatCard
-          label={text.finishedBills}
-          value="0"
-          hint={text.finishedHint}
-          valueClassName="text-emerald-600"
-        />
-      </section>
-
-      <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_1fr]">
-        <TableCard title={text.processTitle} description={text.processDesc}>
-          <div className="p-4">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <ul className="space-y-2 text-sm leading-6 text-slate-600">
-                <li>{text.p1}</li>
-                <li>{text.p2}</li>
-                <li>{text.p3}</li>
-                <li>{text.p4}</li>
-              </ul>
-            </div>
+      <section className="mt-5 overflow-hidden rounded-3xl border border-slate-200 bg-white">
+        <div className="border-b border-slate-200 bg-slate-100 px-5 pt-4">
+          <div className="flex flex-wrap items-end gap-2">
+            {TAB_LIST.map((tab) => {
+              const selected = activeTab === tab;
+              const label = tab === "customer" ? text.tabCustomer : text.tabSupplier;
+              return (
+                <Link
+                  key={tab}
+                  href={`/billing?tab=${tab}`}
+                  className={[
+                    "inline-flex min-w-[148px] items-center justify-center rounded-t-2xl border px-4 py-2 text-sm font-semibold transition",
+                    selected
+                      ? "border-slate-200 border-b-white bg-white text-slate-900"
+                      : "border-transparent bg-slate-200 text-slate-600 hover:bg-slate-300",
+                  ].join(" ")}
+                >
+                  {label}
+                </Link>
+              );
+            })}
           </div>
-        </TableCard>
+        </div>
 
-        <TableCard title={text.outputTitle} description={text.outputDesc}>
-          <div className="grid gap-3 p-4 sm:grid-cols-2">
-            {[text.o1, text.o2, text.o3, text.o4, text.o5].map((item) => (
-              <div
-                key={item}
-                className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-              >
-                <div className="text-sm font-medium text-slate-700">{item}</div>
+        <div className="p-5">
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard label={text.totalBills} value="0" hint={text.totalHint} />
+            <StatCard
+              label={text.pendingBills}
+              value="0"
+              hint={text.pendingHint}
+              valueClassName="text-amber-600"
+            />
+            <StatCard
+              label={text.reviewingBills}
+              value="0"
+              hint={text.reviewingHint}
+              valueClassName="text-blue-600"
+            />
+            <StatCard
+              label={text.finishedBills}
+              value="0"
+              hint={text.finishedHint}
+              valueClassName="text-emerald-600"
+            />
+          </section>
+
+          <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_1fr]">
+            <TableCard title={text.processTitle} description={text.processDesc}>
+              <div className="p-4">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <ul className="space-y-2 text-sm leading-6 text-slate-600">
+                    <li>{text.p1}</li>
+                    <li>{text.p2}</li>
+                    <li>{text.p3}</li>
+                    <li>{text.p4}</li>
+                  </ul>
+                </div>
               </div>
-            ))}
-          </div>
-        </TableCard>
-      </div>
+            </TableCard>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_1fr]">
-        <TableCard title={text.recentTitle} description={text.recentDesc}>
-          <div className="p-4">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-500">
-              {text.recentEmpty}
-            </div>
+            <TableCard title={text.outputTitle} description={text.outputDesc}>
+              <div className="grid gap-3 p-4 sm:grid-cols-2">
+                {[text.o1, text.o2, text.o3, text.o4, text.o5].map((item) => (
+                  <div
+                    key={item}
+                    className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                  >
+                    <div className="text-sm font-medium text-slate-700">{item}</div>
+                  </div>
+                ))}
+              </div>
+            </TableCard>
           </div>
-        </TableCard>
 
-        <TableCard title={text.shareTitle} description={text.shareDesc}>
-          <div className="p-4">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-500">
-              {text.shareEmpty}
-            </div>
+          <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_1fr]">
+            <TableCard title={text.recentTitle} description={text.recentDesc}>
+              <div className="p-4">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-500">
+                  {text.recentEmpty}
+                </div>
+              </div>
+            </TableCard>
+
+            <TableCard title={text.shareTitle} description={text.shareDesc}>
+              <div className="p-4">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-500">
+                  {text.shareEmpty}
+                </div>
+              </div>
+            </TableCard>
           </div>
-        </TableCard>
-      </div>
+        </div>
+      </section>
     </AppShell>
   );
 }
