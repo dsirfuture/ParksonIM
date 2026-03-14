@@ -84,6 +84,29 @@ function formatMoney(value: unknown) {
   return num.toFixed(2);
 }
 
+function numberOrNull(value: unknown) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "toNumber" in value &&
+    typeof (value as { toNumber: unknown }).toNumber === "function"
+  ) {
+    try {
+      return (value as { toNumber: () => number }).toNumber();
+    } catch {
+      return null;
+    }
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function normalizeOrderStatus(value: string | null | undefined) {
   const raw = String(value || "").trim();
   if (!raw) return "-";
@@ -365,11 +388,25 @@ export default async function YgOrdersPage() {
     createdAtText: formatDateTime(row.created_at),
     supplierCount: uniqueLocations.size > 0 ? uniqueLocations.size : row.supplier_count,
     itemCount: row.item_count,
-      supplierOrders: row.supplierOrders.map((item) => ({
+      supplierOrders: row.supplierOrders.map((item) => {
+        const fallbackAmount = item.items.reduce((sum, detail) => {
+          const line = numberOrNull(detail.line_total);
+          if (line !== null) return sum + line;
+          const qty = Number(detail.total_qty || 0);
+          const unit = numberOrNull(detail.unit_price) || 0;
+          return sum + qty * unit;
+        }, 0);
+        return {
       id: item.id,
       supplierCode: item.supplier_code,
       derivedOrderNo: item.derived_order_no,
-        orderAmountText: formatMoney(item.order_amount),
+        orderAmountText: formatMoney(
+          item.order_amount !== null && item.order_amount !== undefined
+            ? item.order_amount
+            : fallbackAmount > 0
+              ? fallbackAmount
+              : null,
+        ),
         itemCount: item.item_count,
         noteText: item.note_text || "",
         items: item.items.map((detail) => ({
@@ -401,7 +438,8 @@ export default async function YgOrdersPage() {
               ? formatMoney(detail.line_total)
               : formatMoney((detail.total_qty || 0) * Number(detail.unit_price || 0)),
         })),
-      })),
+      };
+    }),
     };
   });
 

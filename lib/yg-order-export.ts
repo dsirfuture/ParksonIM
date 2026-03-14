@@ -5,6 +5,7 @@ import JSZip from "jszip";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { prisma } from "@/lib/prisma";
+import { buildProductImageUrls } from "@/lib/product-image-url";
 
 function hasChineseGlyph(value: string) {
   return /[\u3400-\u9FFF\uF900-\uFAFF]/.test(String(value || ""));
@@ -134,6 +135,28 @@ async function loadProductImageForExport(itemNo: string | null, barcode: string 
     }
   }
 
+  const remoteExts = ["jpg", "jpeg", "png", "webp"];
+  for (const key of keys) {
+    const remoteUrls = buildProductImageUrls(key, remoteExts);
+    for (const url of remoteUrls) {
+      try {
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) continue;
+        const contentType = (res.headers.get("content-type") || "").toLowerCase();
+        if (!contentType.includes("image")) continue;
+        const arr = await res.arrayBuffer();
+        const buffer = Buffer.from(arr);
+        const extByType = contentType.includes("png") ? "png" : "jpeg";
+        return {
+          buffer,
+          extension: extByType as "png" | "jpeg",
+        };
+      } catch {
+        // continue searching
+      }
+    }
+  }
+
   return null;
 }
 
@@ -205,11 +228,46 @@ export async function buildSupplierOrderXlsx(
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet("订单");
 
+  const skuSet = new Set(
+    order.items.map((item) => (item.item_no || "").trim()).filter(Boolean),
+  );
+  const barcodeSet = new Set(
+    order.items.map((item) => (item.barcode || "").trim()).filter(Boolean),
+  );
+  const yogoRows =
+    skuSet.size > 0 || barcodeSet.size > 0
+      ? await prisma.yogoProductSource.findMany({
+          where: {
+            tenant_id: order.tenant_id,
+            company_id: order.company_id,
+            OR: [
+              ...(skuSet.size > 0 ? [{ product_code: { in: Array.from(skuSet) } }] : []),
+              ...(barcodeSet.size > 0 ? [{ product_no: { in: Array.from(barcodeSet) } }] : []),
+            ],
+          },
+          select: {
+            product_code: true,
+            product_no: true,
+            name_cn: true,
+            name_es: true,
+          },
+        })
+      : [];
+  const nameBySku = new Map(
+    yogoRows.map((row) => [String(row.product_code || "").trim(), { zh: row.name_cn || "", es: row.name_es || "" }]),
+  );
+  const nameByBarcode = new Map(
+    yogoRows
+      .filter((row) => row.product_no)
+      .map((row) => [String(row.product_no || "").trim(), { zh: row.name_cn || "", es: row.name_es || "" }]),
+  );
+
   worksheet.columns = [
     { key: "image", width: 12 },
     { key: "itemNo", width: 16 },
     { key: "barcode", width: 22 },
-    { key: "productName", width: 48 },
+    { key: "nameCn", width: 28 },
+    { key: "nameEs", width: 32 },
     { key: "totalQty", width: 10 },
     { key: "unitPrice", width: 10 },
     { key: "lineTotal", width: 12 },
@@ -232,7 +290,20 @@ export async function buildSupplierOrderXlsx(
   worksheet.getCell("A2").value = "订单号";
   worksheet.getCell("B2").value = order.derived_order_no;
   worksheet.getCell("A3").value = "订单金额";
-  worksheet.getCell("B3").value = moneyText(order.order_amount);
+  const fallbackOrderAmount = order.items.reduce((sum, item) => {
+    const line = toNumber(item.line_total);
+    if (line !== null) return sum + line;
+    const qty = Number(item.total_qty || 0);
+    const unit = toNumber(item.unit_price) || 0;
+    return sum + qty * unit;
+  }, 0);
+  worksheet.getCell("B3").value = moneyText(
+    order.order_amount !== null && order.order_amount !== undefined
+      ? order.order_amount
+      : fallbackOrderAmount > 0
+        ? fallbackOrderAmount
+        : null,
+  );
 
   for (let row = 2; row <= 3; row += 1) {
     worksheet.getCell(`A${row}`).font = {
@@ -289,7 +360,7 @@ export async function buildSupplierOrderXlsx(
         },
       ],
     };
-    worksheet.mergeCells("A5:G5");
+    worksheet.mergeCells("A5:H5");
     worksheet.getCell("A5").alignment = {
       vertical: "middle",
       horizontal: "left",
@@ -299,7 +370,7 @@ export async function buildSupplierOrderXlsx(
 
   const headerRowNumber = 7;
   const headerRow = worksheet.getRow(headerRowNumber);
-  headerRow.values = ["图片", "编号", "条形码", "产品品名", "总数量", "价格", "合计"];
+  headerRow.values = ["图片", "编号", "条形码", "中文名", "西文名", "总数量", "价格", "合计"];
   headerRow.height = 24;
 
   headerRow.eachCell((cell) => {
@@ -325,22 +396,30 @@ export async function buildSupplierOrderXlsx(
 
   for (let i = 0; i < order.items.length; i += 1) {
     const item = order.items[i];
+    const mapped =
+      nameBySku.get((item.item_no || "").trim()) ||
+      nameByBarcode.get((item.barcode || "").trim()) ||
+      { zh: "", es: "" };
+    const lineTotal = toNumber(item.line_total);
+    const qty = Number(item.total_qty || 0);
+    const unit = toNumber(item.unit_price) || 0;
     const row = worksheet.getRow(headerRowNumber + 1 + i);
     row.values = [
       "",
       item.item_no || "",
       item.barcode || "",
-      item.product_name || "",
-      item.total_qty,
-      toNumber(item.unit_price) ?? "",
-      toNumber(item.line_total) ?? "",
+      mapped.zh || "",
+      mapped.es || "",
+      qty,
+      unit || "",
+      lineTotal !== null ? lineTotal : qty * unit,
     ];
     row.height = 56;
 
     row.eachCell({ includeEmpty: true }, (cell, col) => {
       const text = String(cell.value ?? "");
       let fontName = getDocumentFontName(text);
-      if (col === 4) {
+      if (col === 4 || col === 5) {
         fontName = hasChineseGlyph(text) ? "Noto Sans SC" : "Source Sans 3";
       }
       cell.font = {
@@ -349,7 +428,7 @@ export async function buildSupplierOrderXlsx(
         color: { argb: "FF111827" },
       };
       cell.alignment =
-        col === 4
+        col === 4 || col === 5
           ? { vertical: "middle", horizontal: "left" }
           : { vertical: "middle", horizontal: "center" };
       cell.border = {
