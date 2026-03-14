@@ -386,6 +386,20 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
           <div className="space-y-4 px-5 py-5">
             <div className="overflow-x-hidden">
               <table className="w-full table-fixed border-separate border-spacing-0">
+                <colgroup>
+                  <col className="w-[9%]" />
+                  <col className="w-[7%]" />
+                  <col className="w-[9%]" />
+                  <col className="w-[13%]" />
+                  <col className="w-[13%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[7%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[5%]" />
+                  <col className="w-[5%]" />
+                  <col className="w-[4%]" />
+                  <col className="w-[4%]" />
+                </colgroup>
                 <thead>
                   <tr className="bg-slate-50 text-left text-xs text-slate-500">
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">订单编号</th>
@@ -396,10 +410,10 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">联系电话</th>
                     <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">订单金额</th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">备注</th>
-                    <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">商品数量</th>
-                    <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">供应商数量</th>
-                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">第几门店</th>
-                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700"></th>
+                    <th className="whitespace-nowrap px-2 py-2.5 text-right font-semibold text-slate-700">商品数量</th>
+                    <th className="whitespace-nowrap px-2 py-2.5 text-right font-semibold text-slate-700">供应商</th>
+                    <th className="whitespace-nowrap px-2 py-2.5 font-semibold text-slate-700">第几门店</th>
+                    <th className="whitespace-nowrap px-1 py-2.5 text-right font-semibold text-slate-700"></th>
                   </tr>
                 </thead>
                 <tbody className="text-[13px]">
@@ -419,16 +433,20 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                             {row.orderStatus || "-"}
                           </td>
                           <td className="whitespace-nowrap px-3 py-2 text-slate-700">{row.orderDateText || row.createdAtText}</td>
-                          <td className="whitespace-nowrap px-3 py-2 text-slate-700">{row.companyName || "-"}</td>
-                          <td className="whitespace-nowrap px-3 py-2 text-slate-700">{row.contactName || row.customerName || "-"}</td>
+                          <td className="px-3 py-2 text-slate-700">
+                            <div className="truncate whitespace-nowrap">{row.companyName || "-"}</div>
+                          </td>
+                          <td className="px-3 py-2 text-slate-700">
+                            <div className="truncate whitespace-nowrap">{row.contactName || row.customerName || "-"}</div>
+                          </td>
                           <td className="whitespace-nowrap px-3 py-2 text-slate-700">{extractPhone(row.contactPhone, row.remarkText)}</td>
                           <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-slate-700">{row.orderAmountText}</td>
                           <td className="max-w-[220px] truncate px-3 py-2 text-slate-700">{row.remarkText || "-"}</td>
-                          <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-slate-700">{row.itemCount}</td>
-                          <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-slate-700">{row.supplierCount}</td>
-                          <td className="whitespace-nowrap px-3 py-2 text-slate-700">{row.storeLabelText || "-"}</td>
-                          <td className="px-3 py-2">
-                            <div className="flex items-center gap-2">
+                          <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-slate-700">{row.itemCount}</td>
+                          <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-slate-700">{row.supplierCount}</td>
+                          <td className="whitespace-nowrap px-2 py-2 text-slate-700">{row.storeLabelText || "-"}</td>
+                          <td className="px-1 py-2">
+                            <div className="flex items-center justify-end gap-2 pr-1">
                               <button
                                 type="button"
                                 onClick={() => {
