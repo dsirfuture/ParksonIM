@@ -163,6 +163,9 @@ async function loadProductImageForExport(itemNo: string | null, barcode: string 
 async function loadPdfFontBytes() {
   const fontCandidates = [
     path.join(process.cwd(), "public", "fonts", "NotoSansSC-Regular.ttf"),
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/arphic/uming.ttc",
     "C:\\Windows\\Fonts\\msyh.ttf",
     "C:\\Windows\\Fonts\\simhei.ttf",
   ];
@@ -181,6 +184,8 @@ async function loadPdfFontBytes() {
 async function loadPdfBoldFontBytes() {
   const fontCandidates = [
     path.join(process.cwd(), "public", "fonts", "NotoSansSC-Bold.ttf"),
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
     "C:\\Windows\\Fonts\\msyhbd.ttf",
     "C:\\Windows\\Fonts\\simhei.ttf",
   ];
@@ -461,7 +466,7 @@ export async function buildSupplierOrderPdf(
 
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
-  const page = pdfDoc.addPage([842, 595]);
+  let page = pdfDoc.addPage([842, 595]);
   const fontBytes = await loadPdfFontBytes();
   const boldFontBytes = await loadPdfBoldFontBytes();
   const latinFontBytes = await loadPdfLatinFontBytes();
@@ -519,29 +524,17 @@ export async function buildSupplierOrderPdf(
 
   let y = 560;
   const contentX = 74;
-  const labels = unicodeSafe
-    ? {
-        orderAmount: "订单金额",
-        packingHint: "PARKSON : 请安排配货，包装上标明",
-        image: "图片",
-        code: "编号",
-        barcode: "条形码",
-        product: "中文名 / 西文名",
-        qty: "总数量",
-        unitPrice: "价格",
-        total: "合计",
-      }
-    : {
-        orderAmount: "Order Amount",
-        packingHint: "PARKSON: mark package as",
-        image: "IMG",
-        code: "SKU",
-        barcode: "Barcode",
-        product: "CN / ES",
-        qty: "Qty",
-        unitPrice: "Price",
-        total: "Total",
-      };
+  const labels = {
+    orderAmount: "订单金额",
+    packingHint: "PARKSON : 请安排配货，包装上标明",
+    image: "图片",
+    code: "编号",
+    barcode: "条形码",
+    product: "中文名 / 西文名",
+    qty: "总数量",
+    unitPrice: "价格",
+    total: "合计",
+  };
 
   page.drawText(safePdfText("ParksonMX", unicodeSafe), {
     x: contentX,
@@ -632,31 +625,34 @@ export async function buildSupplierOrderPdf(
   const widths = [imageWidth, itemNoWidth, barcodeWidth, productWidth, 58, 58, 72];
   const tableWidth = widths.reduce((sum, width) => sum + width, 0);
   const tableX = Math.max((842 - tableWidth) / 2, 28);
-  let x = tableX;
+  const drawTableHeader = () => {
+    let x = tableX;
+    for (let i = 0; i < headers.length; i += 1) {
+      page.drawRectangle({
+        x,
+        y: y - 4,
+        width: widths[i],
+        height: 22,
+        borderColor: rgb(0.86, 0.89, 0.92),
+        borderWidth: 0.6,
+        color: rgb(0.95, 0.96, 0.98),
+      });
 
-  for (let i = 0; i < headers.length; i += 1) {
-    page.drawRectangle({
-      x,
-      y: y - 4,
-      width: widths[i],
-      height: 22,
-      borderColor: rgb(0.86, 0.89, 0.92),
-      borderWidth: 0.6,
-      color: rgb(0.95, 0.96, 0.98),
-    });
+      page.drawText(safePdfText(headers[i], unicodeSafe), {
+        x: x + 6,
+        y: y + 3,
+        size: 8,
+        font: fontForText(headers[i], true),
+        color: rgb(0.15, 0.2, 0.3),
+      });
 
-    page.drawText(safePdfText(headers[i], unicodeSafe), {
-      x: x + 6,
-      y: y + 3,
-      size: 8,
-      font: fontForText(headers[i], true),
-      color: rgb(0.15, 0.2, 0.3),
-    });
+      x += widths[i];
+    }
 
-    x += widths[i];
-  }
+    y -= 28;
+  };
 
-  y -= 28;
+  drawTableHeader();
 
   for (const item of order.items) {
     let colX = tableX;
@@ -733,7 +729,11 @@ export async function buildSupplierOrderPdf(
     }
 
     y -= 24;
-    if (y < 40) break;
+    if (y < 40) {
+      page = pdfDoc.addPage([842, 595]);
+      y = 560;
+      drawTableHeader();
+    }
   }
 
   return pdfDoc.save();
