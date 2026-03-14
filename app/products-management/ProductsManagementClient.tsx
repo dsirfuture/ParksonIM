@@ -76,6 +76,17 @@ type ImportRecord = {
   createdAt: string;
 };
 
+type ComparePreviewRow = {
+  sku: string;
+  barcode: string;
+  nameZh: string;
+  nameEs: string;
+  casePack: string;
+  cartonPack: string;
+  price: string;
+  compareState: "上架" | "下架" | "新增";
+};
+
 const PAGE_SIZE = 50;
 
 const vipLast = (s: string) => {
@@ -149,6 +160,15 @@ export function ProductsManagementClient({
   });
   const [catalogShareOpen, setCatalogShareOpen] = useState(false);
   const [catalogCategory, setCatalogCategory] = useState("all");
+  const [comparePreview, setComparePreview] = useState<{
+    open: boolean;
+    fileName: string;
+    rows: ComparePreviewRow[];
+  }>({
+    open: false,
+    fileName: "",
+    rows: [],
+  });
   const fileRef = useRef<HTMLInputElement | null>(null);
   const repairFileRef = useRef<HTMLInputElement | null>(null);
   const zhFallbackMap: Record<string, string> = {
@@ -503,6 +523,86 @@ export function ProductsManagementClient({
     }
   }
 
+  const normalizeHeader = (v: string) => v.replace(/\s+/g, "").replace(/[：:]/g, "").toLowerCase();
+  const toCellText = (v: unknown) => String(v ?? "").trim();
+  const toSkuText = (v: unknown) => toCellText(v).replace(/\s+/g, "");
+
+  function pickByAlias(record: Record<string, unknown>, aliases: string[]) {
+    const hit = Object.keys(record).find((k) => aliases.includes(normalizeHeader(k)));
+    return hit ? record[hit] : "";
+  }
+
+  async function openComparePreview(file: File) {
+    try {
+      setError("");
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      if (!sheet) throw new Error("未读取到表格内容");
+
+      const imported = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+      const existing = new Map(rows.map((r) => [r.sku.trim().toUpperCase(), r]));
+
+      const compared: ComparePreviewRow[] = [];
+      for (const record of imported) {
+        const sku = toSkuText(
+          pickByAlias(record, ["sku", "编码", "货号", "商品编码", "productcode", "product_code"]),
+        );
+        if (!sku) continue;
+        const barcode = toCellText(pickByAlias(record, ["条码", "条形码", "barcode", "productno", "product_no"]));
+        const nameZh = toCellText(pickByAlias(record, ["品名", "中文名", "namezh", "name_cn"]));
+        const nameEs = toCellText(pickByAlias(record, ["西文", "西文名", "namees", "name_es"]));
+        const casePack = toCellText(pickByAlias(record, ["中包", "包装数", "casepack", "case_pack"]));
+        const cartonPack = toCellText(pickByAlias(record, ["装箱数", "cartonpack", "carton_pack"]));
+        const price = toCellText(pickByAlias(record, ["卖价", "价格", "price", "sourceprice", "source_price"]));
+
+        const current = existing.get(sku.toUpperCase());
+        const compareState: ComparePreviewRow["compareState"] = !current
+          ? "新增"
+          : current.statusText === "上架"
+            ? "上架"
+            : "下架";
+
+        compared.push({
+          sku,
+          barcode,
+          nameZh,
+          nameEs,
+          casePack,
+          cartonPack,
+          price,
+          compareState,
+        });
+      }
+
+      setComparePreview({ open: true, fileName: file.name, rows: compared });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "对比解析失败");
+    } finally {
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  function exportComparePreview() {
+    if (comparePreview.rows.length === 0) return;
+    const data = comparePreview.rows.map((r) => ({
+      编码: r.sku,
+      条形码: r.barcode || "",
+      中文名: r.nameZh || "",
+      西文名: r.nameEs || "",
+      包装数: r.casePack || "",
+      装箱数: r.cartonPack || "",
+      卖价: r.price || "",
+      上架: r.compareState === "上架" ? "是" : "",
+      下架: r.compareState === "下架" ? "是" : "",
+      新增: r.compareState === "新增" ? "是" : "",
+    }));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, "对比结果");
+    XLSX.writeFile(wb, `对比结果-${Date.now()}.xlsx`);
+  }
+
   async function saveEdit() {
     if (readOnlyMode) {
       setError(tx("当前为 YOGO 同步源，只读预览模式", "Read only source"));
@@ -741,8 +841,8 @@ export function ProductsManagementClient({
           <div className="overflow-x-auto">
 	            <div className="grid min-w-[1280px] grid-cols-[auto_400px_auto] items-center gap-3">
 	              <div className="flex items-center gap-2 whitespace-nowrap">
-	              <button type="button" onClick={() => { setImportMode("compare"); fileRef.current?.click(); }} disabled={uploading || readOnlyMode} className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{uploading ? tx("处理中...", "Proc...") : tx("对比数据导入", "Imp cmp")}</button>
-	              <input ref={fileRef} type="file" accept=".xls,.xlsx" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadFile(f); }} />
+	              <button type="button" onClick={() => { setImportMode("compare"); fileRef.current?.click(); }} disabled={uploading} className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{uploading ? tx("处理中...", "Proc...") : tx("对比数据导入", "Imp cmp")}</button>
+	              <input ref={fileRef} type="file" accept=".xls,.xlsx" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void openComparePreview(f); }} />
 	              <button type="button" onClick={openQuickModal} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700">
 	                {lang === "zh" ? `批量筛选（${filtered.length}）` : `Filt (${filtered.length})`}
 	              </button>
@@ -1252,6 +1352,71 @@ export function ProductsManagementClient({
       {dup.open ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4"><div className="w-full max-w-[640px] rounded-xl bg-white shadow-2xl"><div className="border-b border-slate-200 px-5 py-4"><h3 className="text-base font-semibold">{tx("检测到重复SKU", "SKU dup")}</h3></div><div className="space-y-2 px-5 py-5 text-sm"><p>{dup.msg}</p><div className="max-h-40 overflow-auto rounded-lg border border-slate-200 p-2 text-xs">{dup.skus.slice(0, 30).map((d) => <div key={d.sku}>{lang === "zh" ? `${d.sku}（重复 ${d.count} 条）` : `${d.sku} (dup ${d.count})`}</div>)}</div></div><div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4"><button type="button" onClick={() => setDup({ open: false, skus: [], msg: "" })} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold">{tx("取消", "Canc")}</button><button type="button" onClick={() => { const f = pendingFile; setDup({ open: false, skus: [], msg: "" }); if (f) { setImportMode(pendingMode); void uploadFile(f, "first"); } }} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold">{tx("保留第一条", "Keep 1st")}</button><button type="button" onClick={() => { const f = pendingFile; setDup({ open: false, skus: [], msg: "" }); if (f) { setImportMode(pendingMode); void uploadFile(f, "last"); } }} className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white">{tx("保留最后一条", "Keep last")}</button></div></div></div> : null}
 
       {uploading ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4"><div className="w-full max-w-[420px] rounded-xl bg-white p-5 shadow-2xl"><div className="mb-3 text-sm font-semibold">{importMode === "initial" ? tx("基础数据导入...", "Base import...") : tx("对比中...", "Compare...")}</div><div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progress}%` }} /></div><div className="mt-2 text-xs text-slate-500">{tx("进度", "Prog")} {Math.min(progress, 100)}%</div></div></div> : null}
+      {comparePreview.open ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="w-full max-w-[1200px] rounded-xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">对比结果预览</h3>
+                <p className="mt-1 text-xs text-slate-500">{comparePreview.fileName}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={exportComparePreview}
+                  className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700"
+                >
+                  导出对比结果
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setComparePreview({ open: false, fileName: "", rows: [] })}
+                  className="inline-flex h-9 items-center justify-center rounded-lg bg-primary px-3 text-xs font-semibold text-white"
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
+            <div className="max-h-[70vh] overflow-auto p-4">
+              <table className="w-full min-w-[1120px] border-separate border-spacing-0">
+                <thead className="sticky top-0 z-10 bg-slate-50">
+                  <tr className="bg-slate-50 text-left text-xs text-slate-500">
+                    <th className="px-3 py-2 font-semibold">编码</th>
+                    <th className="px-3 py-2 font-semibold">条形码</th>
+                    <th className="px-3 py-2 font-semibold">中文名</th>
+                    <th className="px-3 py-2 font-semibold">西文名</th>
+                    <th className="px-3 py-2 font-semibold text-right">包装数</th>
+                    <th className="px-3 py-2 font-semibold text-right">装箱数</th>
+                    <th className="px-3 py-2 font-semibold text-right">卖价</th>
+                    <th className="px-3 py-2 font-semibold text-center text-emerald-700">上架</th>
+                    <th className="px-3 py-2 font-semibold text-center text-rose-700">下架</th>
+                    <th className="px-3 py-2 font-semibold text-center text-violet-700">新增</th>
+                  </tr>
+                </thead>
+                <tbody className="text-[13px] text-slate-700">
+                  {comparePreview.rows.map((r, idx) => (
+                    <tr key={`${r.sku}-${idx}`} className="border-t border-slate-100">
+                      <td className="px-3 py-2 font-semibold text-slate-900">{r.sku}</td>
+                      <td className="px-3 py-2">{r.barcode || "-"}</td>
+                      <td className="px-3 py-2">{r.nameZh || "-"}</td>
+                      <td className="px-3 py-2">{r.nameEs || "-"}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{r.casePack || "-"}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{r.cartonPack || "-"}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{r.price || "-"}</td>
+                      <td className="px-3 py-2 text-center">{r.compareState === "上架" ? <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">上架</span> : "-"}</td>
+                      <td className="px-3 py-2 text-center">{r.compareState === "下架" ? <span className="inline-flex rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">下架</span> : "-"}</td>
+                      <td className="px-3 py-2 text-center">{r.compareState === "新增" ? <span className="inline-flex rounded-full bg-violet-50 px-2 py-0.5 text-xs font-semibold text-violet-700">新增</span> : "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {comparePreview.rows.length === 0 ? (
+                <p className="py-6 text-center text-sm text-slate-500">未解析到可对比数据</p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
       {catalogShareOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
           <div className="w-full max-w-[560px] rounded-xl bg-white shadow-2xl">
