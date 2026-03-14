@@ -489,9 +489,9 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
           <div className="w-full max-w-[1240px] rounded-xl bg-white shadow-2xl">
             <div className="border-b border-slate-200 px-5 py-4">
-              <h3 className="text-base font-semibold text-slate-900">订单详情预览</h3>
-              <p className="mt-1 text-sm text-slate-500">当前订单：{detailState.orderNo}</p>
-              <div className="mt-2 flex items-center gap-6 text-sm text-slate-600">
+              <div className="flex flex-wrap items-center gap-6 text-sm text-slate-600">
+                <h3 className="text-base font-semibold text-slate-900">订单详情预览</h3>
+                <span>当前订单：{detailState.orderNo}</span>
                 <span>订单金额：{detailState.orderAmountText}</span>
                 <span>商品数量：{detailState.itemCount}</span>
               </div>
@@ -503,7 +503,6 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                   <thead>
                     <tr className="bg-slate-50 text-left text-xs text-slate-500">
                       <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">产品图片</th>
-                      <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">商品</th>
                       <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">商品编号</th>
                       <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">条形码</th>
                       <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">供应商</th>
@@ -520,7 +519,6 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                     {pagedDetailItems.map((item) => (
                       <tr key={item.id} className="border-t border-slate-100">
                         <td className="px-3 py-2"><PreviewProductImage itemNo={item.itemNo} barcode={item.barcode} /></td>
-                        <td className="px-3 py-2 text-slate-700">{item.productName || item.itemNo || item.barcode || "-"}</td>
                         <td className="px-3 py-2 text-slate-700">{item.itemNo || "-"}</td>
                         <td className="px-3 py-2 text-slate-700">{item.barcode || item.itemNo || "-"}</td>
                         <td className="px-3 py-2 text-slate-700">{item.location || "-"}</td>
