@@ -97,8 +97,8 @@ function buildSummary(rows: ItemRow[]) {
   );
 
   const checkedQtyTotal = goodQtyTotal + damagedQtyTotal;
-  const uncheckedQtyTotal = importedRows.reduce((sum, item) => sum + item.uncheckedQty, 0);
-  const diffQtyTotal = importedRows.reduce((sum, item) => sum + item.diffQty, 0);
+  const uncheckedQtyTotal = Math.max(expectedQtyTotal - checkedQtyTotal, 0);
+  const diffQtyTotal = uncheckedQtyTotal;
 
   const progress =
     expectedQtyTotal > 0
@@ -309,6 +309,12 @@ export default async function ReceiptScanPage({ params }: ScanPageProps) {
 
   const summary = buildSummary(itemRows);
 
+  const inspectedAt = (() => {
+    const left = receipt.last_activity_at ? new Date(receipt.last_activity_at).getTime() : 0;
+    const right = receipt.updated_at ? new Date(receipt.updated_at).getTime() : 0;
+    return left >= right ? receipt.last_activity_at : receipt.updated_at;
+  })();
+
   return (
     <AppShell>
       <ScanClient
@@ -316,7 +322,7 @@ export default async function ReceiptScanPage({ params }: ScanPageProps) {
         receiptNo={receipt.receipt_no}
         supplierName={receipt.supplier_name || text.noSupplier}
         uploadedAtText={formatTime(receipt.created_at, lang)}
-        inspectedAtText={formatTime(receipt.last_activity_at, lang)}
+        inspectedAtText={formatTime(inspectedAt, lang)}
         backHref={`/receipts/${receipt.id}`}
         rows={itemRows}
         initialSummary={summary}

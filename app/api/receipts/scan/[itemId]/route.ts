@@ -92,17 +92,8 @@ function buildSummary(
   );
 
   const checkedQtyTotal = goodQtyTotal + damagedQtyTotal;
-  const perItemComputed = imported.map((item) =>
-    computeItemNumbers(
-      item.expected_qty,
-      item.good_qty,
-      item.damaged_qty,
-      item.excess_qty,
-      item.unexpected,
-    ),
-  );
-  const uncheckedQtyTotal = perItemComputed.reduce((sum, item) => sum + item.uncheckedQty, 0);
-  const diffQtyTotal = perItemComputed.reduce((sum, item) => sum + item.diffQty, 0);
+  const uncheckedQtyTotal = Math.max(expectedQtyTotal - checkedQtyTotal, 0);
+  const diffQtyTotal = uncheckedQtyTotal;
   const progress =
     expectedQtyTotal > 0
       ? Math.max(

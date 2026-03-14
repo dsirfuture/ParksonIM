@@ -180,8 +180,8 @@ function buildSummary(items: ItemRow[]): SummaryState {
   );
 
   const checkedQtyTotal = goodQtyTotal + damagedQtyTotal;
-  const uncheckedQtyTotal = importedRows.reduce((sum, item) => sum + item.uncheckedQty, 0);
-  const diffQtyTotal = importedRows.reduce((sum, item) => sum + item.diffQty, 0);
+  const uncheckedQtyTotal = Math.max(expectedQtyTotal - checkedQtyTotal, 0);
+  const diffQtyTotal = uncheckedQtyTotal;
 
   const progress =
     expectedQtyTotal > 0
