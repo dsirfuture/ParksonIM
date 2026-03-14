@@ -504,15 +504,16 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                     <tr className="bg-slate-50 text-left text-xs text-slate-500">
                       <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">产品图片</th>
                       <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">商品</th>
+                      <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">商品编号</th>
                       <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">条形码</th>
-                      <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">供应商（位置）</th>
+                      <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">供应商</th>
                       <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">中文名</th>
                       <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">西文名</th>
                       <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">数量</th>
                       <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">单价</th>
                       <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">普通折扣</th>
                       <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">VIP折扣</th>
-                      <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">行金额 / 小计</th>
+                      <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">小计</th>
                     </tr>
                   </thead>
                   <tbody className="text-[13px]">
@@ -520,6 +521,7 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                       <tr key={item.id} className="border-t border-slate-100">
                         <td className="px-3 py-2"><PreviewProductImage itemNo={item.itemNo} barcode={item.barcode} /></td>
                         <td className="px-3 py-2 text-slate-700">{item.productName || item.itemNo || item.barcode || "-"}</td>
+                        <td className="px-3 py-2 text-slate-700">{item.itemNo || "-"}</td>
                         <td className="px-3 py-2 text-slate-700">{item.barcode || item.itemNo || "-"}</td>
                         <td className="px-3 py-2 text-slate-700">{item.location || "-"}</td>
                         <td className="px-3 py-2 text-slate-700">{item.nameCn || (/[\u4e00-\u9fa5]/.test(item.productName || "") ? item.productName : "-")}</td>
