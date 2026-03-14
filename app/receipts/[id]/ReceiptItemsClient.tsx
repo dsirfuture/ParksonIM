@@ -290,7 +290,73 @@ export function ReceiptItemsClient({
       }
 
       setItems((prev) =>
-        prev.map((item) => (item.id === result.item.id ? result.item : item)),
+        prev.map((item) => {
+          if (item.id !== result.item.id) return item;
+
+          const nextSku = result.item?.sku ?? item.sku;
+          const skuChanged =
+            String(nextSku || "").trim().toUpperCase() !==
+            String(item.sku || "").trim().toUpperCase();
+
+          // Keep existing YOGO price for same SKU so editing import price won't wipe it.
+          const nextYogoPriceValue = skuChanged ? null : item.yogoPriceValue;
+          const nextYogoPriceText = skuChanged
+            ? text.noValue
+            : item.yogoPriceText || text.noValue;
+
+          const nextUnitPriceValue =
+            typeof result.item?.unitPriceValue === "number"
+              ? result.item.unitPriceValue
+              : item.unitPriceValue;
+          const hasComparablePrice =
+            nextUnitPriceValue !== null && nextYogoPriceValue !== null;
+          const priceCompareStatus: "same" | "different" | "unknown" =
+            !hasComparablePrice
+              ? "unknown"
+              : Math.abs(nextUnitPriceValue - nextYogoPriceValue) < 0.0001
+                ? "same"
+                : "different";
+          const priceCompareText =
+            priceCompareStatus === "same"
+              ? text.same
+              : priceCompareStatus === "different"
+                ? text.different
+                : text.noValue;
+
+          return {
+            ...item,
+            sku: result.item?.sku ?? item.sku,
+            barcode: result.item?.barcode ?? item.barcode,
+            nameZh: result.item?.nameZh ?? item.nameZh,
+            nameEs: result.item?.nameEs ?? item.nameEs,
+            casePack:
+              result.item?.casePack === undefined
+                ? item.casePack
+                : result.item.casePack,
+            expectedQty:
+              result.item?.expectedQty === undefined
+                ? item.expectedQty
+                : result.item.expectedQty,
+            unitPriceValue: nextUnitPriceValue,
+            unitPriceText: result.item?.unitPriceText ?? item.unitPriceText,
+            normalDiscountValue:
+              result.item?.normalDiscountValue ?? item.normalDiscountValue,
+            vipDiscountValue:
+              result.item?.vipDiscountValue ?? item.vipDiscountValue,
+            yogoPriceValue: nextYogoPriceValue,
+            yogoPriceText: nextYogoPriceText,
+            priceCompareStatus,
+            priceCompareText,
+            // Keep scan-derived fields unchanged after editing product/base fields.
+            goodQty: item.goodQty,
+            diffQty: item.diffQty,
+            uncheckedQty: item.uncheckedQty,
+            damagedQty: item.damagedQty,
+            excessQty: item.excessQty,
+            status: item.status,
+            unexpected: item.unexpected,
+          };
+        }),
       );
 
       closeEdit();
