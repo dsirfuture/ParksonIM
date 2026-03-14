@@ -105,6 +105,23 @@ export default async function BillingPage({
   const page = parseIntOr(pageRaw || "1", 1);
   const detailOrderNo = (detailRaw || "").trim();
 
+  const theme =
+    activeTab === "supplier"
+      ? {
+          panel: "border-amber-300 bg-amber-50/40",
+          tabActive: "border-amber-300 bg-amber-100 text-amber-900",
+          tabInactive: "border-transparent bg-slate-200 text-slate-600 hover:bg-slate-300",
+          heading: "text-amber-900",
+          accentValue: "text-amber-700",
+        }
+      : {
+          panel: "border-sky-300 bg-sky-50/40",
+          tabActive: "border-sky-300 bg-sky-100 text-sky-900",
+          tabInactive: "border-transparent bg-slate-200 text-slate-600 hover:bg-slate-300",
+          heading: "text-sky-900",
+          accentValue: "text-sky-700",
+        };
+
   const completedReceipts = await prisma.receipt.findMany({
     where: {
       tenant_id: session.tenantId,
@@ -266,8 +283,8 @@ export default async function BillingPage({
 
   return (
     <AppShell>
-      <section className="mt-4 overflow-hidden rounded-3xl border border-slate-200 bg-white">
-        <div className="bg-white px-4 pt-3">
+      <section className={`mt-4 overflow-hidden rounded-[30px] border-2 ${theme.panel}`}>
+        <div className="px-4 pt-3">
           <div className="flex flex-wrap items-end gap-2">
             {TAB_LIST.map((tab) => {
               const selected = activeTab === tab;
@@ -278,9 +295,7 @@ export default async function BillingPage({
                   href={`/billing?tab=${tab}&list=pending&page=1`}
                   className={[
                     "inline-flex min-w-[148px] items-center justify-center rounded-t-2xl border px-4 py-2 text-sm font-semibold transition",
-                    selected
-                      ? "border-slate-200 bg-white text-slate-900"
-                      : "border-transparent bg-slate-200 text-slate-600 hover:bg-slate-300",
+                    selected ? theme.tabActive : theme.tabInactive,
                   ].join(" ")}
                 >
                   {label}
@@ -294,7 +309,12 @@ export default async function BillingPage({
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Link href={`/billing?tab=${activeTab}&list=pending&page=1`} className="block">
               <div className="transition hover:opacity-95">
-                <StatCard label="待出账单" value={pendingCount} hint="验货完毕待汇总" valueClassName="text-primary" />
+                <StatCard
+                  label="待出账单"
+                  value={pendingCount}
+                  hint="验货完毕待汇总"
+                  valueClassName={theme.accentValue}
+                />
               </div>
             </Link>
             <StatCard label="待生成" value="0" hint="等待生成汇总结果" valueClassName="text-amber-600" />
@@ -303,7 +323,10 @@ export default async function BillingPage({
           </section>
 
           <div className="mt-4">
-            <TableCard title={activeList === "pending" ? "待出账单列表" : "账单列表"} description={`共 ${activeCount} 条`}>
+            <TableCard
+              title={activeList === "pending" ? "待出账单列表" : "账单列表"}
+              description={`共 ${activeCount} 条`}
+            >
               <div className="overflow-x-auto">
                 <table className="min-w-full border-separate border-spacing-0">
                   <thead>
