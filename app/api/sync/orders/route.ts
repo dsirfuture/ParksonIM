@@ -161,6 +161,56 @@ type ParsedOrder = {
   items: ParsedOrderItem[];
 };
 
+function pickNonEmptyText(...values: Array<string | null | undefined>) {
+  for (const value of values) {
+    const v = (value || "").trim();
+    if (v) return v;
+  }
+  return null;
+}
+
+function pickDate(
+  left: Date | null | undefined,
+  right: Date | null | undefined,
+  preferLatest = false,
+) {
+  if (!left) return right || null;
+  if (!right) return left;
+  if (!preferLatest) return right;
+  return left.getTime() >= right.getTime() ? left : right;
+}
+
+function mergeParsedOrder(base: ParsedOrder, incoming: ParsedOrder): ParsedOrder {
+  const mergedStatusText = pickNonEmptyText(
+    incoming.headerStatus,
+    incoming.latestStatus,
+    incoming.headerStatusId,
+    base.headerStatus,
+    base.latestStatus,
+    base.headerStatusId,
+  );
+
+  return {
+    orderNo: base.orderNo,
+    orderCreatedAt: pickDate(base.orderCreatedAt, incoming.orderCreatedAt),
+    customerId: pickNonEmptyText(incoming.customerId, base.customerId),
+    orderAmount: incoming.orderAmount ?? base.orderAmount,
+    amountKeyPath: pickNonEmptyText(incoming.amountKeyPath, base.amountKeyPath),
+    companyName: pickNonEmptyText(incoming.companyName, base.companyName),
+    customerName: pickNonEmptyText(incoming.customerName, base.customerName),
+    contactName: pickNonEmptyText(incoming.contactName, base.contactName),
+    contactPhone: pickNonEmptyText(incoming.contactPhone, base.contactPhone),
+    addressText: pickNonEmptyText(incoming.addressText, base.addressText),
+    remarkText: pickNonEmptyText(incoming.remarkText, base.remarkText),
+    storeLabel: pickNonEmptyText(incoming.storeLabel, base.storeLabel),
+    headerStatusId: pickNonEmptyText(incoming.headerStatusId, base.headerStatusId),
+    headerStatus: mergedStatusText,
+    latestStatus: pickNonEmptyText(incoming.latestStatus, base.latestStatus),
+    headerUpdatedAt: pickDate(base.headerUpdatedAt, incoming.headerUpdatedAt, true),
+    items: incoming.items.length > 0 ? incoming.items : base.items,
+  };
+}
+
 function text(value: unknown) {
   if (value === null || value === undefined) return null;
   if (typeof value === "string") {
@@ -787,7 +837,14 @@ export async function POST(request: Request) {
 
     const parsedOrders = rawOrders.map(parseOrder);
     const deduped = new Map<string, ParsedOrder>();
-    for (const order of parsedOrders) deduped.set(order.orderNo, order);
+    for (const order of parsedOrders) {
+      const previous = deduped.get(order.orderNo);
+      if (!previous) {
+        deduped.set(order.orderNo, order);
+      } else {
+        deduped.set(order.orderNo, mergeParsedOrder(previous, order));
+      }
+    }
     const orders = Array.from(deduped.values());
 
     await ensurePreviewStatusColumns();
