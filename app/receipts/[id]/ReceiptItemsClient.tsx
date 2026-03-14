@@ -416,7 +416,6 @@ export function ReceiptItemsClient({
               <col className="w-[50px]" />
               <col className="w-[72px]" />
               <col className="w-[72px]" />
-              <col className="w-[72px]" />
               <col className="w-[45px]" />
               <col className="w-[45px]" />
               <col className="w-[45px]" />
@@ -456,9 +455,6 @@ export function ReceiptItemsClient({
                   {text.yogoPrice}
                 </th>
                 <th className="whitespace-nowrap px-2 py-3 font-semibold">
-                  {text.priceCompare}
-                </th>
-                <th className="whitespace-nowrap px-2 py-3 font-semibold">
                   {text.goodQty}
                 </th>
                 <th className="whitespace-nowrap px-2 py-3 font-semibold">
@@ -483,10 +479,7 @@ export function ReceiptItemsClient({
             <tbody>
               {pagedRows.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={17}
-                    className="px-4 py-10 text-center text-sm text-slate-500"
-                  >
+                  <td colSpan={16} className="px-4 py-10 text-center text-sm text-slate-500">
                     {text.noMatch}
                   </td>
                 </tr>
@@ -547,24 +540,24 @@ export function ReceiptItemsClient({
                         {row.expectedQty ?? 0}
                       </td>
 
-                      <td className="whitespace-nowrap px-2 py-3 text-sm text-slate-700">
+                      <td
+                        className={`whitespace-nowrap px-2 py-3 text-sm ${
+                          row.priceCompareStatus === "different"
+                            ? "text-rose-600"
+                            : "text-slate-700"
+                        }`}
+                      >
                         {row.unitPriceText || text.noValue}
-                      </td>
-
-                      <td className="whitespace-nowrap px-2 py-3 text-sm text-slate-700">
-                        {row.yogoPriceText || text.noValue}
                       </td>
 
                       <td
                         className={`whitespace-nowrap px-2 py-3 text-sm ${
-                          row.priceCompareStatus === "same"
-                            ? "text-emerald-600"
-                            : row.priceCompareStatus === "different"
-                              ? "text-rose-600"
-                              : "text-slate-700"
+                          row.priceCompareStatus === "different"
+                            ? "text-rose-600"
+                            : "text-slate-700"
                         }`}
                       >
-                        {row.priceCompareText || text.noValue}
+                        {row.yogoPriceText || text.noValue}
                       </td>
 
                       <td className="whitespace-nowrap px-2 py-3 text-sm text-slate-700">
