@@ -428,7 +428,7 @@ export async function buildSupplierOrderXlsx(
       const text = String(cell.value ?? "");
       let fontName = getDocumentFontName(text);
       if (col === 4 || col === 5) {
-        fontName = hasChineseGlyph(text) ? "Noto Sans SC" : "Source Sans 3";
+        fontName = "Microsoft YaHei";
       }
       cell.font = {
         name: fontName,
