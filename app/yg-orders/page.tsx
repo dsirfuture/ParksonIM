@@ -15,7 +15,21 @@ function formatDateTime(value: Date | null) {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    timeZone: "America/Mexico_City",
   }).format(value);
+}
+
+async function columnExists(name: string) {
+  const rows = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(
+    `
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'yg_order_imports'
+        AND column_name = $1
+    `,
+    name,
+  );
+  return rows.length > 0;
 }
 
 function parseOrderNoDateText(orderNo: string | null | undefined) {
@@ -123,6 +137,11 @@ export default async function YgOrdersPage() {
     redirect("/login");
   }
 
+  const hasHeaderUpdatedAt = await columnExists("header_updated_at");
+  const latestUpdatedExpr = hasHeaderUpdatedAt
+    ? "COALESCE(MAX(header_updated_at), MAX(updated_at))"
+    : "MAX(updated_at)";
+
   const [summaryRows, customerCountRows, periodRows] = await Promise.all([
     prisma.$queryRawUnsafe<
       Array<{
@@ -135,7 +154,7 @@ export default async function YgOrdersPage() {
         SELECT
           COUNT(*) AS total_orders,
           COALESCE(SUM(order_amount), 0) AS total_amount,
-          MAX(updated_at) AS latest_updated_at
+          ${latestUpdatedExpr} AS latest_updated_at
         FROM yg_order_imports
         WHERE tenant_id = $1::uuid
           AND company_id = $2::uuid
