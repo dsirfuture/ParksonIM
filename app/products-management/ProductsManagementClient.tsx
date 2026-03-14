@@ -1459,9 +1459,9 @@ export function ProductsManagementClient({
                     <th className="px-3 py-2 font-semibold text-right">装箱数</th>
                     <th className="px-3 py-2 font-semibold text-right">卖价</th>
                     <th className="px-3 py-2 font-semibold text-right">友购价</th>
-                    <th className="px-3 py-2 font-semibold text-center text-emerald-700">上架</th>
-                    <th className="px-3 py-2 font-semibold text-center text-rose-700">下架</th>
-                    <th className="px-3 py-2 font-semibold text-center text-violet-700">新增</th>
+                    <th className="px-3 py-2 font-semibold text-center">上架</th>
+                    <th className="px-3 py-2 font-semibold text-center">下架</th>
+                    <th className="px-3 py-2 font-semibold text-center">新增</th>
                   </tr>
                 </thead>
                 <tbody className="text-[13px] text-slate-700">
