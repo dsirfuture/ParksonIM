@@ -131,7 +131,7 @@ export default async function BillingPage({
       />
 
       <section className="mt-5 overflow-hidden rounded-3xl border border-slate-200 bg-white">
-        <div className="border-b border-slate-200 bg-slate-100 px-5 pt-4">
+        <div className="bg-white px-5 pt-4">
           <div className="flex flex-wrap items-end gap-2">
             {TAB_LIST.map((tab) => {
               const selected = activeTab === tab;
@@ -143,7 +143,7 @@ export default async function BillingPage({
                   className={[
                     "inline-flex min-w-[148px] items-center justify-center rounded-t-2xl border px-4 py-2 text-sm font-semibold transition",
                     selected
-                      ? "border-slate-200 border-b-white bg-white text-slate-900"
+                      ? "border-slate-200 bg-white text-slate-900"
                       : "border-transparent bg-slate-200 text-slate-600 hover:bg-slate-300",
                   ].join(" ")}
                 >
