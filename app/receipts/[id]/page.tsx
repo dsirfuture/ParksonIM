@@ -466,6 +466,7 @@ export default async function ReceiptDetailPage({
               buttonText={lang === "zh" ? "导出文件" : "Exportar"}
               exportExcelText={lang === "zh" ? "导出表格" : "Exportar Excel"}
               exportPdfText={lang === "zh" ? "导出 PDF" : "Exportar PDF"}
+              cancelText={lang === "zh" ? "关闭" : "Cerrar"}
             />
 
             <EvidencePreviewButton

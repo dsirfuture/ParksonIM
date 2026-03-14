@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
+import { buildProductImageUrls } from "@/lib/product-image-url";
 
 function hasChineseGlyph(value: string) {
   return /[\u3400-\u9FFF\uF900-\uFAFF]/.test(String(value || ""));
@@ -103,18 +104,34 @@ function computeRow(item: {
 async function loadProductImageBuffer(sku: string) {
   if (!sku) return null;
 
-  const imagePath = path.join(
-    process.cwd(),
-    "public",
-    "products",
-    `${sku}.jpg`,
-  );
-
-  try {
-    return await fs.readFile(imagePath);
-  } catch {
-    return null;
+  const localExts = ["jpg", "jpeg", "png", "webp", "JPG", "JPEG", "PNG", "WEBP"];
+  for (const ext of localExts) {
+    const imagePath = path.join(
+      process.cwd(),
+      "public",
+      "products",
+      `${sku}.${ext}`,
+    );
+    try {
+      return await fs.readFile(imagePath);
+    } catch {
+      // try next ext
+    }
   }
+
+  const remoteUrls = buildProductImageUrls(sku, ["jpg", "jpeg", "png", "webp"]);
+  for (const url of remoteUrls) {
+    try {
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) continue;
+      const data = await response.arrayBuffer();
+      if (data.byteLength > 0) return Buffer.from(data);
+    } catch {
+      // try next url
+    }
+  }
+
+  return null;
 }
 
 function applyBorder(cell: ExcelJS.Cell) {
