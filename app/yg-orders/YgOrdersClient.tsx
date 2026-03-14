@@ -501,7 +501,7 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                             <div className="truncate whitespace-nowrap">{row.contactName || row.customerName || "-"}</div>
                           </td>
                           <td className="whitespace-nowrap px-3 py-2 text-slate-700">{extractPhone(row.contactPhone, row.remarkText)}</td>
-                          <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-slate-700">{row.orderAmountText}</td>
+                          <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums font-semibold text-slate-700">{row.orderAmountText}</td>
                           <td className="max-w-[420px] truncate whitespace-nowrap px-3 py-2 text-slate-700">
                             {cleanRemarkText(row.remarkText || "") || "-"}
                           </td>
