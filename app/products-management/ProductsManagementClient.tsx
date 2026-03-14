@@ -1487,8 +1487,10 @@ export function ProductsManagementClient({
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <div>
                 <h3 className="text-base font-semibold text-slate-900">对比结果预览</h3>
-                <p className="mt-1 text-xs text-slate-500">{comparePreview.fileName}</p>
-                <p className="mt-1 text-xs text-slate-500">导入SKU数量：{compareSkuCount}</p>
+                <div className="mt-1 flex items-center gap-4 text-xs text-slate-500">
+                  <p>{comparePreview.fileName}</p>
+                  <p>导入SKU数量：{comparePreview.rows.length}（去重：{compareSkuCount}）</p>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <button
