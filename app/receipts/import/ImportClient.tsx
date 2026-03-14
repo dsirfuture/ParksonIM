@@ -573,7 +573,7 @@ export function ImportClient({
             colSku: "编码",
             colQty: "数量",
             colBarcode: "条形码",
-            colCasePack: "中包数",
+            colCasePack: "包装数",
             colPrice: "供应价",
             close: "关闭",
             modalTitleHeader: "请调整表格规范",
