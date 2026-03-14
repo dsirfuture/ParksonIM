@@ -37,13 +37,14 @@ export async function GET() {
 
   const bytes = await workbook.xlsx.writeBuffer();
   const fileName = "\u5bfc\u5165\u6587\u4ef6\u4e0b\u8f7d\u6a21\u677f.xlsx";
+  const asciiFallback = "receipt-import-template.xlsx";
 
   return new NextResponse(Buffer.from(bytes), {
     status: 200,
     headers: {
       "Content-Type":
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+      "Content-Disposition": `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
       "Cache-Control": "no-store",
     },
   });
