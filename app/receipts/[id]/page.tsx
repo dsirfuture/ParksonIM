@@ -322,8 +322,17 @@ export default async function ReceiptDetailPage({
   );
 
   const checkedQtyTotal = goodQtyTotal + damagedQtyTotal;
-  const uncheckedQtyTotal = Math.max(expectedQtyTotal - checkedQtyTotal, 0);
-  const diffQtyTotal = uncheckedQtyTotal;
+  const hasRealScanData = importedItems.some(
+    (item) =>
+      (item.good_qty ?? 0) > 0 ||
+      (item.damaged_qty ?? 0) > 0 ||
+      (item.excess_qty ?? 0) > 0,
+  );
+
+  const uncheckedQtyTotal = hasRealScanData
+    ? Math.max(expectedQtyTotal - checkedQtyTotal, 0)
+    : 0;
+  const diffQtyTotal = hasRealScanData ? uncheckedQtyTotal : 0;
 
   const progress =
     expectedQtyTotal > 0
@@ -349,7 +358,9 @@ export default async function ReceiptDetailPage({
     );
     const diffQty = item.unexpected
       ? 0
-      : Math.max((item.expected_qty ?? 0) - checkedQty, 0);
+      : hasRealScanData
+      ? Math.max((item.expected_qty ?? 0) - checkedQty, 0)
+      : 0;
     const uncheckedQty = item.unexpected ? 0 : diffQty;
 
     const calculatedLineTotal = item.unexpected
