@@ -20,8 +20,26 @@ function formatDateTime(value: Date | null) {
 
 function parseOrderNoDateText(orderNo: string | null | undefined) {
   if (!orderNo) return null;
-  const match = String(orderNo).trim().match(/^YGO(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/i);
-  if (!match) return null;
+  const clean = String(orderNo).trim();
+  const match = clean.match(/^YGO(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/i);
+  if (!match) {
+    const fallback = clean.match(/^YGO(\d{2})(\d{2})(\d{2})/i);
+    if (!fallback) return null;
+    const [, yy2, mm2, dd2] = fallback;
+    const year2 = 2000 + Number(yy2);
+    const month2 = Number(mm2);
+    const day2 = Number(dd2);
+    if (
+      !Number.isFinite(year2) ||
+      month2 < 1 ||
+      month2 > 12 ||
+      day2 < 1 ||
+      day2 > 31
+    ) {
+      return null;
+    }
+    return `${year2}/${String(month2).padStart(2, "0")}/${String(day2).padStart(2, "0")} 00:00`;
+  }
 
   const [, yy, mm, dd, hh, mi] = match;
   const year = 2000 + Number(yy);
@@ -189,7 +207,7 @@ export default async function YgOrdersPage() {
   let statusById = new Map<string, string>();
   let orderCreatedAtById = new Map<string, Date>();
 
-  if (hasHeaderStatus || hasHeaderStatusId || hasOrderCreatedAt) {
+  if (hasHeaderStatus || hasHeaderStatusId || hasLatestStatus || hasOrderCreatedAt) {
     const statusExpr = hasHeaderStatus
       ? "NULLIF(TRIM(CAST(header_status AS text)), '')"
       : "NULL";
