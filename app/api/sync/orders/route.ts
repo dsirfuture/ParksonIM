@@ -11,7 +11,18 @@ type RawOrderItem = {
   line_no?: unknown;
   lineNo?: unknown;
   location?: unknown;
+  position?: unknown;
+  position_name?: unknown;
+  positionName?: unknown;
+  location_name?: unknown;
+  locationName?: unknown;
+  warehouse_position?: unknown;
+  warehousePosition?: unknown;
+  pos?: unknown;
   weizhi?: unknown;
+  "位置"?: unknown;
+  "库位"?: unknown;
+  "仓位"?: unknown;
   supplier?: unknown;
   supplier_name?: unknown;
   supplierName?: unknown;
@@ -229,7 +240,18 @@ function parseOrderItem(input: RawOrderItem, index: number): ParsedOrderItem {
   const lineNo = intOrZero(input.line_no ?? input.lineNo) || index + 1;
   const location =
     text(input.location) ||
+    text(input.position) ||
+    text(input.position_name) ||
+    text(input.positionName) ||
+    text(input.location_name) ||
+    text(input.locationName) ||
+    text(input.warehouse_position) ||
+    text(input.warehousePosition) ||
+    text(input.pos) ||
     text(input.weizhi) ||
+    text(input["位置"]) ||
+    text(input["库位"]) ||
+    text(input["仓位"]) ||
     text(input.supplier) ||
     text(input.supplier_name) ||
     text(input.supplierName) ||
