@@ -107,6 +107,12 @@ function cleanRemarkText(value: string) {
     .trim();
 }
 
+function mapSearchUrl(address: string) {
+  const text = (address || "").trim();
+  if (!text) return "";
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(text)}`;
+}
+
 function PreviewProductImage({
   itemNo,
   barcode,
@@ -517,7 +523,7 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                                     customerName: row.customerName || "",
                                     addressText: row.addressText || "",
                                     contactText: row.contactPhone || "",
-                                    remarkText: row.remarkText || "",
+                                    remarkText: cleanRemarkText(row.remarkText || ""),
                                     storeLabelText: row.storeLabelText || "",
                                   })
                                 }
@@ -818,11 +824,30 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
               </div>
               <div>
                 <label className="text-xs text-slate-500">地址</label>
-                <input
-                  value={editState.addressText}
-                  onChange={(e) => setEditState({ ...editState, addressText: e.target.value })}
-                  className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary/40"
-                />
+                <div className="mt-1 flex items-center gap-2">
+                  <input
+                    value={editState.addressText}
+                    onChange={(e) => setEditState({ ...editState, addressText: e.target.value })}
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary/40"
+                  />
+                  <a
+                    href={mapSearchUrl(editState.addressText)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border ${
+                      editState.addressText.trim()
+                        ? "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                        : "pointer-events-none border-slate-100 bg-slate-50 text-slate-300"
+                    }`}
+                    title="Google Maps 导航"
+                    aria-label="Google Maps 导航"
+                  >
+                    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M10 17s5-4.8 5-9a5 5 0 1 0-10 0c0 4.2 5 9 5 9Z" />
+                      <circle cx="10" cy="8" r="1.8" />
+                    </svg>
+                  </a>
+                </div>
               </div>
               <div className="grid gap-3 lg:grid-cols-3">
                 <div>
@@ -838,7 +863,7 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                   <label className="text-xs text-slate-500">备注</label>
                   <input
                     value={editState.remarkText}
-                    onChange={(e) => setEditState({ ...editState, remarkText: e.target.value })}
+                    onChange={(e) => setEditState({ ...editState, remarkText: cleanRemarkText(e.target.value) })}
                     className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary/40"
                   />
                 </div>
