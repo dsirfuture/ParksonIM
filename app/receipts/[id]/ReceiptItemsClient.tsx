@@ -167,10 +167,19 @@ export function ReceiptItemsClient({
     alt: "",
     title: "",
   });
+  const [saveSuccessOpen, setSaveSuccessOpen] = useState(false);
 
   useEffect(() => {
     setItems(rows);
   }, [rows]);
+
+  useEffect(() => {
+    if (!saveSuccessOpen) return;
+    const timer = window.setTimeout(() => {
+      setSaveSuccessOpen(false);
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [saveSuccessOpen]);
 
   const filteredRows = useMemo(() => {
     const value = keyword.trim().toLowerCase();
@@ -360,7 +369,7 @@ export function ReceiptItemsClient({
       );
 
       closeEdit();
-      window.alert(text.saveSuccess);
+      setSaveSuccessOpen(true);
     } catch (error) {
       const message = error instanceof Error ? error.message : text.saveFailed;
       window.alert(message);
@@ -853,6 +862,16 @@ export function ReceiptItemsClient({
         title={lightbox.title}
         onClose={closeImage}
       />
+
+      {saveSuccessOpen ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/35 px-4">
+          <div className="flex h-28 w-full max-w-[320px] items-center justify-center rounded-2xl bg-white shadow-2xl">
+            <span className="text-lg font-bold text-slate-900">
+              {text.saveSuccess}
+            </span>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
