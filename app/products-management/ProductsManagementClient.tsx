@@ -732,7 +732,11 @@ export function ProductsManagementClient({
 
   return (
     <section className="space-y-4">
-      <TableCard title={tx("产品管理", "Prod cfg")} description={tx("导入、筛选、批量修改并维护商品数据。", "Importe, filtre, edite por lote y mantenga datos de productos.")}>
+      <TableCard
+        className="!mt-0"
+        title={tx("产品管理", "Prod cfg")}
+        description={tx("导入、筛选、批量修改并维护商品数据。", "Importe, filtre, edite por lote y mantenga datos de productos.")}
+      >
         <div className="space-y-3 p-4">
           <div className="overflow-x-auto">
 	            <div className="grid min-w-[1280px] grid-cols-[auto_400px_auto] items-center gap-3">

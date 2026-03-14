@@ -283,8 +283,8 @@ export default async function BillingPage({
 
   return (
     <AppShell>
-      <section className={`mt-4 overflow-hidden rounded-[30px] border-2 ${theme.panel}`}>
-        <div className="px-4 pt-3">
+      <section className={`mt-0 overflow-hidden rounded-[30px] border-2 ${theme.panel}`}>
+        <div className="px-4 pt-2">
           <div className="flex flex-wrap items-end gap-2">
             {TAB_LIST.map((tab) => {
               const selected = activeTab === tab;
