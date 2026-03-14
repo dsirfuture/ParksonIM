@@ -499,6 +499,7 @@ export function ImportClient({
   );
   const [historyKeyword, setHistoryKeyword] = useState("");
   const [historyPage, setHistoryPage] = useState(1);
+  const [previewVisibleCount, setPreviewVisibleCount] = useState(5);
 
   const formatBatchStatus = (status: string) => mapBatchStatus(status, lang);
 
@@ -665,6 +666,7 @@ export function ImportClient({
     setRows([]);
     setRawHeaders([]);
     setFileName("");
+    setPreviewVisibleCount(5);
     setImportSummary(null);
     setActiveView("preview");
     setModal({
@@ -713,6 +715,7 @@ export function ImportClient({
 
       setRawHeaders(headers);
       setRows(mapped);
+      setPreviewVisibleCount(5);
     } catch {
       setClientError(text.parseError);
     }
@@ -743,6 +746,7 @@ export function ImportClient({
       if (data.ok) {
         if (data.normalizedRows?.length) {
           setRows(data.normalizedRows);
+          setPreviewVisibleCount(5);
         }
         const lines = data.summary
           ? [
@@ -932,9 +936,6 @@ export function ImportClient({
                     <h2 className="shrink-0 text-[18px] font-semibold tracking-tight text-slate-900">
                       {text.previewTab}
                     </h2>
-                    <p className="min-w-0 text-sm leading-6 text-slate-500">
-                      {text.previewDesc}
-                    </p>
                   </div>
                 </div>
 
@@ -1025,7 +1026,8 @@ export function ImportClient({
               rows.length === 0 ? (
                 <div className="p-5 text-sm text-slate-500">{text.noData}</div>
               ) : (
-                <div className="overflow-x-auto">
+                <>
+                  <div className="overflow-x-auto">
                   <table className="min-w-full border-separate border-spacing-0">
                     <thead>
                       <tr className="bg-slate-50 text-left text-sm text-slate-500">
@@ -1056,7 +1058,7 @@ export function ImportClient({
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.slice(0, 5).map((row, index) => {
+                      {rows.slice(0, previewVisibleCount).map((row, index) => {
                         const imageSrc = row.sku
                           ? buildProductImageUrl(row.sku, "jpg")
                           : "";
@@ -1115,6 +1117,24 @@ export function ImportClient({
                     </tbody>
                   </table>
                 </div>
+                  {rows.length > previewVisibleCount ? (
+                  <div className="border-t border-slate-200 px-5 py-4">
+                    <div className="flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPreviewVisibleCount((prev) =>
+                            Math.min(prev + 5, rows.length),
+                          )
+                        }
+                        className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-primary/30 hover:text-primary"
+                      >
+                        显示更多
+                      </button>
+                    </div>
+                  </div>
+                  ) : null}
+                </>
               )
             ) : recentBatches.length === 0 ? (
               <div className="p-5 text-sm text-slate-500">{text.noRecent}</div>
