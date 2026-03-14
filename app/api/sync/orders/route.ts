@@ -741,7 +741,11 @@ export async function POST(request: Request) {
           address_text: order.addressText,
           order_remark: order.remarkText,
           store_label: order.storeLabel,
-          supplier_count: order.items.length > 0 ? 1 : 0,
+          supplier_count: new Set(
+            order.items
+              .map((item) => (item.location || "").trim().toUpperCase())
+              .filter(Boolean),
+          ).size,
           item_count: order.items.length,
           created_by: "yogo-sync",
         },
@@ -755,7 +759,14 @@ export async function POST(request: Request) {
           ...(order.remarkText ? { order_remark: order.remarkText } : {}),
           ...(order.storeLabel ? { store_label: order.storeLabel } : {}),
           ...(order.items.length > 0
-            ? { supplier_count: 1, item_count: order.items.length }
+            ? {
+                supplier_count: new Set(
+                  order.items
+                    .map((item) => (item.location || "").trim().toUpperCase())
+                    .filter(Boolean),
+                ).size,
+                item_count: order.items.length,
+              }
             : {}),
         },
         select: { id: true },
@@ -817,33 +828,46 @@ export async function POST(request: Request) {
       });
 
       if (order.items.length > 0) {
-        await prisma.ygSupplierOrder.create({
-          data: {
-            tenant_id: tenantId,
-            company_id: companyId,
-            import_id: upserted.id,
-            order_no: order.orderNo,
-            supplier_code: "YOGO",
-            derived_order_no: `${order.orderNo}-YOGO-000`,
-            order_amount: resolvedAmount,
-            note_text: order.remarkText,
-            item_count: order.items.length,
-            items: {
-              create: order.items.map((item) => ({
-                tenant_id: tenantId,
-                company_id: companyId,
-                line_no: item.lineNo,
-                location: item.location,
-                item_no: item.itemNo,
-                barcode: item.barcode,
-                product_name: item.productName,
-                total_qty: item.qty,
-                unit_price: item.unitPrice,
-                line_total: item.lineTotal,
-              })),
+        const supplierGroups = new Map<string, ParsedOrderItem[]>();
+        for (const item of order.items) {
+          const supplier = (item.location || "").trim().toUpperCase() || "UNKNOWN";
+          const group = supplierGroups.get(supplier) || [];
+          group.push(item);
+          supplierGroups.set(supplier, group);
+        }
+
+        for (const [supplierCode, items] of supplierGroups.entries()) {
+          const groupLineTotal = items.reduce((sum, item) => sum + (item.lineTotal ?? 0), 0);
+          const groupAmount = groupLineTotal > 0 ? groupLineTotal : null;
+
+          await prisma.ygSupplierOrder.create({
+            data: {
+              tenant_id: tenantId,
+              company_id: companyId,
+              import_id: upserted.id,
+              order_no: order.orderNo,
+              supplier_code: supplierCode,
+              derived_order_no: `${order.orderNo}-${supplierCode}`,
+              order_amount: groupAmount,
+              note_text: order.remarkText,
+              item_count: items.length,
+              items: {
+                create: items.map((item) => ({
+                  tenant_id: tenantId,
+                  company_id: companyId,
+                  line_no: item.lineNo,
+                  location: item.location,
+                  item_no: item.itemNo,
+                  barcode: item.barcode,
+                  product_name: item.productName,
+                  total_qty: item.qty,
+                  unit_price: item.unitPrice,
+                  line_total: item.lineTotal,
+                })),
+              },
             },
-          },
-        });
+          });
+        }
       }
     }
 

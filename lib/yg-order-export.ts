@@ -258,7 +258,7 @@ export async function buildSupplierOrderXlsx(
     worksheet.getRow(row).height = 24;
   }
 
-  const orderSuffix = getOrderSuffix(order.derived_order_no);
+  const orderSuffix = getOrderSuffix(order.order_no);
   if (orderSuffix) {
     worksheet.getCell("A5").value = {
       richText: [
@@ -427,7 +427,7 @@ export async function buildSupplierOrderPdf(
 
   y -= 26;
 
-  const orderSuffix = getOrderSuffix(order.derived_order_no);
+  const orderSuffix = getOrderSuffix(order.order_no);
   const infoLines = [
     `订单金额: ${moneyText(order.order_amount)}`,
     orderSuffix
