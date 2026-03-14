@@ -450,6 +450,10 @@ export function ProductsManagementClient({
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const paged = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const compareSkuCount = useMemo(
+    () => new Set(comparePreview.rows.map((r) => r.sku.trim().toUpperCase()).filter(Boolean)).size,
+    [comparePreview.rows],
+  );
 
   function toggleQuick(key: string, checked: boolean) {
     setQuickSelected((prev) => (checked ? [...prev, key] : prev.filter((v) => v !== key)));
@@ -1453,6 +1457,7 @@ export function ProductsManagementClient({
               <div>
                 <h3 className="text-base font-semibold text-slate-900">对比结果预览</h3>
                 <p className="mt-1 text-xs text-slate-500">{comparePreview.fileName}</p>
+                <p className="mt-1 text-xs text-slate-500">导入SKU数量：{compareSkuCount}</p>
               </div>
               <div className="flex items-center gap-2">
                 <button
