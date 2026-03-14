@@ -62,6 +62,11 @@ type ImportResponse = {
   error?: string;
 };
 
+type ValidateRequestBody = {
+  headers: string[];
+  rows: ParsedRow[];
+};
+
 type ModalState = {
   open: boolean;
   kind: "success" | "error";
@@ -501,6 +506,30 @@ export function ImportClient({
   const [historyPage, setHistoryPage] = useState(1);
   const [previewVisibleCount, setPreviewVisibleCount] = useState(5);
 
+  async function hydratePreviewRows(
+    payload: ValidateRequestBody,
+    mode: "silent" | "full",
+  ) {
+    const res = await fetch("/api/receipts/import/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const data: ValidateResponse = await res.json();
+
+    if (data.ok && data.normalizedRows?.length) {
+      setRows(data.normalizedRows);
+      setPreviewVisibleCount(5);
+    }
+
+    if (mode === "full") {
+      setValidateResult(data);
+    }
+
+    return data;
+  }
+
   const formatBatchStatus = (status: string) => mapBatchStatus(status, lang);
 
   const filteredHistoryBatches = useMemo(() => {
@@ -716,6 +745,9 @@ export function ImportClient({
       setRawHeaders(headers);
       setRows(mapped);
       setPreviewVisibleCount(5);
+
+      // Auto-hydrate barcode / case-pack preview fields by SKU without forcing manual validate first.
+      void hydratePreviewRows({ headers, rows: mapped }, "silent");
     } catch {
       setClientError(text.parseError);
     }
@@ -734,14 +766,10 @@ export function ImportClient({
         lines: [],
       });
 
-      const res = await fetch("/api/receipts/import/validate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ headers: rawHeaders, rows }),
-      });
-
-      const data: ValidateResponse = await res.json();
-      setValidateResult(data);
+      const data = await hydratePreviewRows(
+        { headers: rawHeaders, rows },
+        "full",
+      );
 
       if (data.ok) {
         if (data.normalizedRows?.length) {
