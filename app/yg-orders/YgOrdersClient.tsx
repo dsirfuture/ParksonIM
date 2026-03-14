@@ -370,7 +370,7 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-4 whitespace-nowrap">
                 <h2 className="text-[18px] font-semibold tracking-tight text-slate-900">友购订单列表</h2>
-                <div className="text-sm text-slate-500">最近一次友购订单更新时间是：{summary.latestUpdatedAtText || "-"}</div>
+                <div className="text-xs text-slate-500">最近一次友购订单更新时间是：{summary.latestUpdatedAtText || "-"}</div>
               </div>
               <div className="w-full lg:ml-auto lg:w-[420px]">
                 <input
@@ -399,7 +399,7 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                     <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">商品数量</th>
                     <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">供应商数量</th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">第几门店</th>
-                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">操作</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700"></th>
                   </tr>
                 </thead>
                 <tbody className="text-[13px]">
@@ -442,7 +442,7 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                                   });
                                   setDetailPage(1);
                                 }}
-                                className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-700 transition hover:text-slate-900"
                               >
                                 <EyeIcon />
                               </button>
@@ -458,7 +458,7 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                                     storeLabelText: row.storeLabelText || "",
                                   })
                                 }
-                                className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-700 transition hover:text-slate-900"
                               >
                                 <PencilIcon />
                               </button>
@@ -699,7 +699,7 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                               setDetailPage(1);
                               setSplitState(null);
                             }}
-                            className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-700 transition hover:text-slate-900"
                           >
                             <EyeIcon />
                           </button>
