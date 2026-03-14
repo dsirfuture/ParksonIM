@@ -355,7 +355,7 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
 
         <TableCard title="" description="" className="!mt-0">
           <div className="border-b border-slate-200 px-5 py-4">
-            <div className="flex items-center justify-between gap-4 whitespace-nowrap">
+            <div className="flex items-center gap-4 whitespace-nowrap">
               <h2 className="text-[18px] font-semibold tracking-tight text-slate-900">友购订单列表</h2>
               <div className="text-sm text-slate-500">最近一次友购订单更新时间是：{summary.latestUpdatedAtText || "-"}</div>
             </div>
