@@ -162,6 +162,7 @@ async function loadProductImageForExport(itemNo: string | null, barcode: string 
 
 async function loadPdfFontBytes() {
   const fontCandidates = [
+    path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Regular.otf"),
     path.join(process.cwd(), "public", "fonts", "NotoSansSC-Regular.ttf"),
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
     "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
@@ -183,6 +184,7 @@ async function loadPdfFontBytes() {
 
 async function loadPdfBoldFontBytes() {
   const fontCandidates = [
+    path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Bold.otf"),
     path.join(process.cwd(), "public", "fonts", "NotoSansSC-Bold.ttf"),
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
     "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
@@ -530,7 +532,8 @@ export async function buildSupplierOrderPdf(
     image: "图片",
     code: "编号",
     barcode: "条形码",
-    product: "中文名 / 西文名",
+    nameCn: "中文名",
+    nameEs: "西文名",
     qty: "总数量",
     unitPrice: "价格",
     total: "合计",
@@ -594,7 +597,8 @@ export async function buildSupplierOrderPdf(
     labels.image,
     labels.code,
     labels.barcode,
-    labels.product,
+    labels.nameCn,
+    labels.nameEs,
     labels.qty,
     labels.unitPrice,
     labels.total,
@@ -619,10 +623,11 @@ export async function buildSupplierOrderPdf(
     ),
   );
   const imageWidth = Math.max(44, itemNoWidth - 20);
-  const fixedTailWidth = 58 + 58 + 72;
+  const fixedTailWidth = 56 + 56 + 68;
   const totalTableWidth = 694;
-  const productWidth = totalTableWidth - (imageWidth + itemNoWidth + barcodeWidth + fixedTailWidth);
-  const widths = [imageWidth, itemNoWidth, barcodeWidth, productWidth, 58, 58, 72];
+  const nameCnWidth = 220;
+  const nameEsWidth = totalTableWidth - (imageWidth + itemNoWidth + barcodeWidth + fixedTailWidth + nameCnWidth);
+  const widths = [imageWidth, itemNoWidth, barcodeWidth, nameCnWidth, nameEsWidth, 56, 56, 68];
   const tableWidth = widths.reduce((sum, width) => sum + width, 0);
   const tableX = Math.max((842 - tableWidth) / 2, 28);
   const drawTableHeader = () => {
@@ -660,9 +665,8 @@ export async function buildSupplierOrderPdf(
       nameBySku.get((item.item_no || "").trim()) ||
       nameByBarcode.get((item.barcode || "").trim()) ||
       { zh: "", es: "" };
-    const productLabel = mapped.zh && mapped.es
-      ? `${mapped.zh} / ${mapped.es}`
-      : mapped.zh || mapped.es || item.product_name || "";
+    const nameCn = mapped.zh || "";
+    const nameEs = mapped.es || "";
     const qty = Number(item.total_qty || 0);
     const unitPrice = toNumber(item.unit_price);
     const lineTotal = toNumber(item.line_total);
@@ -672,7 +676,8 @@ export async function buildSupplierOrderPdf(
       "",
       item.item_no || "",
       item.barcode || "",
-      productLabel,
+      nameCn,
+      nameEs,
       String(qty),
       moneyText(unitPrice),
       moneyText(resolvedLineTotal),
