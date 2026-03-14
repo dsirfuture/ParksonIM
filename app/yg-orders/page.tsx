@@ -130,6 +130,19 @@ function normalizeOrderStatus(value: string | null | undefined) {
   return raw;
 }
 
+function normalizeProductText(value: string | null | undefined) {
+  const raw = String(value || "")
+    .replace(/\uFFFD/g, "")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "");
+
+  const collapsed = raw.replace(/\s+/g, " ").trim();
+
+  return collapsed
+    .replace(/(?<=\d)\s+(?=\d)/g, "")
+    .replace(/(?<=[0-9A-Za-z])\s*([xX*+\-/])\s*(?=[0-9A-Za-z])/g, "$1")
+    .replace(/(?<=\d)\s+(?=(cm|mm|m|kg|g|pcs|pc)\b)/gi, "");
+}
+
 export default async function YgOrdersPage() {
   const session = await getSession();
 
@@ -359,8 +372,8 @@ export default async function YgOrdersPage() {
     yogoNameRows.map((row) => [
       String(row.product_code || "").trim(),
       {
-        zh: row.name_cn || "",
-        es: row.name_es || "",
+        zh: normalizeProductText(row.name_cn || ""),
+        es: normalizeProductText(row.name_es || ""),
         ...parseYogoDiscountParts(row.category_name, row.source_discount),
       },
     ]),
@@ -371,8 +384,8 @@ export default async function YgOrdersPage() {
       .map((row) => [
         String(row.product_no || "").trim(),
         {
-          zh: row.name_cn || "",
-          es: row.name_es || "",
+          zh: normalizeProductText(row.name_cn || ""),
+          es: normalizeProductText(row.name_es || ""),
           ...parseYogoDiscountParts(row.category_name, row.source_discount),
         },
       ]),
@@ -433,7 +446,7 @@ export default async function YgOrdersPage() {
           location: detail.location,
           itemNo: detail.item_no || "",
           barcode: detail.barcode || "",
-          productName: detail.product_name || "",
+          productName: normalizeProductText(detail.product_name || ""),
           nameCn:
             nameBySku.get(detail.item_no || "")?.zh ||
             nameByBarcode.get(detail.barcode || "")?.zh ||
