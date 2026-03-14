@@ -223,8 +223,9 @@ async function loadPdfLatinFontBytes() {
 }
 
 function safePdfText(value: string, unicodeSafe: boolean) {
-  if (unicodeSafe) return value || "";
-  return (value || "").replace(/[^\x20-\x7E]/g, " ");
+  const normalized = String(value || "").replace(/[\r\n\t]+/g, " ");
+  if (unicodeSafe) return normalized;
+  return normalized.replace(/[^\x20-\x7E]/g, " ");
 }
 
 export async function buildSupplierOrderXlsx(
