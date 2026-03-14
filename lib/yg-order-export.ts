@@ -13,7 +13,7 @@ function hasChineseGlyph(value: string) {
 
 function getDocumentFontName(value: string, options?: { chineseBold?: boolean }) {
   if (hasChineseGlyph(value)) {
-    return options?.chineseBold ? "Noto Sans SC Bold" : "Noto Sans SC";
+    return options?.chineseBold ? "Microsoft YaHei Bold" : "Microsoft YaHei";
   }
   return "Source Sans 3";
 }
@@ -489,6 +489,25 @@ export async function buildSupplierOrderPdf(
     if (hasChineseGlyph(text)) return preferBold ? boldFont : bodyFont;
     return preferBold ? latinBoldFont : esFont;
   };
+  const drawMixedCellText = (text: string, x: number, drawY: number, size = 8) => {
+    const chunks =
+      String(text || "").match(/([\u3400-\u9FFF\uF900-\uFAFF]+|[^\u3400-\u9FFF\uF900-\uFAFF]+)/g) ||
+      [];
+    let cursorX = x;
+    for (const chunk of chunks) {
+      const safeChunk = safePdfText(chunk, unicodeSafe);
+      if (!safeChunk) continue;
+      const chunkFont = hasChineseGlyph(chunk) ? bodyFont : esFont;
+      page.drawText(safeChunk, {
+        x: cursorX,
+        y: drawY,
+        size,
+        font: chunkFont,
+        color: rgb(0.15, 0.2, 0.3),
+      });
+      cursorX += chunkFont.widthOfTextAtSize(safeChunk, size);
+    }
+  };
 
   const skuSet = new Set(
     order.items.map((item) => (item.item_no || "").trim()).filter(Boolean),
@@ -748,13 +767,18 @@ export async function buildSupplierOrderPdf(
           });
         }
       } else {
-        page.drawText(safePdfText(String(values[i]).slice(0, 46), unicodeSafe), {
-          x: colX + 6,
-          y: y + 3,
-          size: 8,
-          font: fontForText(String(values[i])),
-          color: rgb(0.15, 0.2, 0.3),
-        });
+        const textValue = String(values[i]).slice(0, 46);
+        if (i === 3 || i === 4) {
+          drawMixedCellText(textValue, colX + 6, y + 3, 8);
+        } else {
+          page.drawText(safePdfText(textValue, unicodeSafe), {
+            x: colX + 6,
+            y: y + 3,
+            size: 8,
+            font: fontForText(String(values[i])),
+            color: rgb(0.15, 0.2, 0.3),
+          });
+        }
       }
 
       colX += widths[i];
