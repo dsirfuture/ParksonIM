@@ -685,13 +685,15 @@ export function ProductsManagementClient({
         offShelf: r.compareState === "下架" ? "下架" : "",
         isNew: r.compareState === "新增" ? "新增" : "",
       });
+      row.font = { name: "Microsoft YaHei Light", bold: false };
 
       // 卖价/友购价不一致：两个价格单元格标红
       if (r.priceMismatch) {
         const sellPriceCell = row.getCell(7);
         const yogoPriceCell = row.getCell(8);
-        sellPriceCell.font = { name: "Microsoft YaHei Light", bold: true, color: { argb: "FFDC2626" } };
-        yogoPriceCell.font = { name: "Microsoft YaHei Light", bold: true, color: { argb: "FFDC2626" } };
+        // 预览页色值：text-rose-600
+        sellPriceCell.font = { name: "Microsoft YaHei Light", bold: true, color: { argb: "FFE11D48" } };
+        yogoPriceCell.font = { name: "Microsoft YaHei Light", bold: true, color: { argb: "FFE11D48" } };
       }
 
       // 上架/下架/新增列跟预览保持同色
@@ -699,20 +701,20 @@ export function ProductsManagementClient({
       const offShelfCell = row.getCell(10);
       const isNewCell = row.getCell(11);
       if (r.compareState === "上架") {
+        // 预览页色值：text-emerald-700
         onShelfCell.font = { name: "Microsoft YaHei Light", bold: true, color: { argb: "FF047857" } };
       }
       if (r.compareState === "下架") {
+        // 预览页色值：text-rose-700
         offShelfCell.font = { name: "Microsoft YaHei Light", bold: true, color: { argb: "FFBE123C" } };
       }
       if (r.compareState === "新增") {
-        isNewCell.font = { name: "Microsoft YaHei Light", bold: true, color: { argb: "FF7C3AED" } };
+        // 预览页色值：text-violet-700
+        isNewCell.font = { name: "Microsoft YaHei Light", bold: true, color: { argb: "FF6D28D9" } };
       }
     }
 
     sheet.eachRow((row, rowNumber) => {
-      if (rowNumber > 1) {
-        row.font = { name: "Microsoft YaHei Light", bold: false };
-      }
       row.eachCell((cell) => {
         cell.alignment = { vertical: "middle", horizontal: "left" };
       });
