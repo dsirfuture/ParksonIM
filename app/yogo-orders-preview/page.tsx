@@ -55,6 +55,16 @@ function splitMixedProductName(value: string | null | undefined) {
   return { zh, es };
 }
 
+function deriveLocationFallback(location: string | null | undefined, itemNo: string | null | undefined) {
+  const rawLocation = String(location || "").trim();
+  if (rawLocation && rawLocation !== "-") return rawLocation;
+  const sku = String(itemNo || "").trim();
+  if (!sku) return "-";
+  const m = sku.match(/^([A-Za-z]{2,6})[-_]/);
+  if (m && m[1]) return m[1].toUpperCase();
+  return "-";
+}
+
 function formatDateTime(value: Date | null) {
   if (!value) return "-";
   return new Intl.DateTimeFormat("zh-CN", {
@@ -485,7 +495,7 @@ export default async function YogoOrdersPreviewPage(props: {
                       </td>
                       <td className="px-3 py-2 text-slate-700">{item.barcode || "-"}</td>
                       <td className="px-3 py-2 text-slate-700">
-                        {item.location || "-"}
+                        {deriveLocationFallback(item.location, item.item_no)}
                       </td>
                       <td className="px-3 py-2 text-slate-700">
                         {mapped.zh || splitName.zh || "-"}
