@@ -34,3 +34,28 @@ export async function GET(_req: Request, ctx: any) {
     items: [], // placeholder until ReceiptItem relation is migrated
   });
 }
+
+export async function DELETE(_req: Request, ctx: any) {
+  const session = await getSession();
+  if (!session) return errorResponse("FORBIDDEN", "Auth required", 403);
+
+  const id = (ctx?.params?.id as string | undefined)?.trim();
+  if (!id) return errorResponse("VALIDATION_FAILED", "id required", 400);
+
+  const receipt = await prisma.receipt.findFirst({
+    where: {
+      id,
+      tenant_id: session.tenantId,
+      company_id: session.companyId,
+    },
+    select: { id: true },
+  });
+
+  if (!receipt) return errorResponse("NOT_FOUND", "Receipt not found", 404);
+
+  await prisma.receipt.delete({
+    where: { id: receipt.id },
+  });
+
+  return NextResponse.json({ ok: true });
+}

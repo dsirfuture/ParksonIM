@@ -36,6 +36,9 @@ type ReceiptsTableClientProps = {
     emptySearch: string;
     previousPage: string;
     nextPage: string;
+    delete?: string;
+    deleteConfirm?: string;
+    deleteFailed?: string;
   };
   rows: ReceiptRow[];
 };
@@ -83,16 +86,42 @@ function ScanIcon() {
   );
 }
 
+function TrashIcon() {
+  return (
+    <svg
+      className="h-[18px] w-[18px]"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 7h16" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+      <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" />
+      <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+    </svg>
+  );
+}
+
 export function ReceiptsTableClient({ text, rows }: ReceiptsTableClientProps) {
+  const deleteText = text.delete || "删除";
+  const deleteConfirmText = text.deleteConfirm || "确认删除这条验货单？";
+  const deleteFailedText = text.deleteFailed || "删除失败，请重试";
+  const [localRows, setLocalRows] = useState(rows);
   const [keyword, setKeyword] = useState("");
   const [page, setPage] = useState(1);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const filteredRows = useMemo(() => {
     const value = keyword.trim().toLowerCase();
 
-    if (!value) return rows;
+    if (!value) return localRows;
 
-    return rows.filter((row) => {
+    return localRows.filter((row) => {
       const source = [
         row.receiptNo,
         row.supplierName || "",
@@ -104,7 +133,7 @@ export function ReceiptsTableClient({ text, rows }: ReceiptsTableClientProps) {
 
       return source.includes(value);
     });
-  }, [keyword, rows]);
+  }, [keyword, localRows]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -122,6 +151,20 @@ export function ReceiptsTableClient({ text, rows }: ReceiptsTableClientProps) {
   function goToPage(nextPage: number) {
     if (nextPage < 1 || nextPage > totalPages) return;
     setPage(nextPage);
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm(deleteConfirmText)) return;
+    setDeletingId(id);
+    try {
+      const response = await fetch(`/api/receipts/${id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("delete failed");
+      setLocalRows((prev) => prev.filter((row) => row.id !== id));
+    } catch {
+      alert(deleteFailedText);
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   return (
@@ -238,7 +281,7 @@ export function ReceiptsTableClient({ text, rows }: ReceiptsTableClientProps) {
                       <div className="flex min-w-[140px] items-center gap-3">
                         <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
                           <div
-                            className="h-full rounded-full bg-primary-bright"
+                            className="h-full rounded-full bg-primary"
                             style={{ width: `${progress}%` }}
                           />
                         </div>
@@ -279,6 +322,17 @@ export function ReceiptsTableClient({ text, rows }: ReceiptsTableClientProps) {
                         >
                           <ScanIcon />
                         </Link>
+
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(row.id)}
+                          disabled={deletingId === row.id}
+                          className="inline-flex h-8 w-8 items-center justify-center text-rose-500 transition hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+                          title={deleteText}
+                          aria-label={deleteText}
+                        >
+                          <TrashIcon />
+                        </button>
                       </div>
                     </td>
                   </tr>
