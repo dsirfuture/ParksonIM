@@ -133,14 +133,21 @@ function normalizeOrderStatus(value: string | null | undefined) {
 function normalizeProductText(value: string | null | undefined) {
   const raw = String(value || "")
     .replace(/\uFFFD/g, "")
-    .replace(/[\u200B-\u200D\uFEFF]/g, "");
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/[\u0000-\u001F\u007F]/g, "");
 
-  const collapsed = raw.replace(/\s+/g, " ").trim();
+  const collapsed = raw.normalize("NFKC").replace(/\s+/g, " ").trim();
 
   return collapsed
     .replace(/(?<=\d)\s+(?=\d)/g, "")
     .replace(/(?<=[0-9A-Za-z])\s*([xX*+\-/])\s*(?=[0-9A-Za-z])/g, "$1")
     .replace(/(?<=\d)\s+(?=(cm|mm|m|kg|g|pcs|pc)\b)/gi, "");
+}
+
+function isLikelyMojibake(value: string | null | undefined) {
+  const text = String(value || "");
+  if (!text) return false;
+  return /[鍙鐨鎶璇鍟鏄绯鍏閲姘瓒惫鎴€]/.test(text);
 }
 
 export default async function YgOrdersPage() {
@@ -442,19 +449,32 @@ export default async function YgOrdersPage() {
         itemCount: item.item_count,
         noteText: item.note_text || "",
         items: item.items.map((detail) => ({
+          ...(function () {
+            const mappedBySku = nameBySku.get(detail.item_no || "");
+            const mappedByBarcode = nameByBarcode.get(detail.barcode || "");
+            const cnMapped = mappedBySku?.zh || mappedByBarcode?.zh || "";
+            const esMapped = mappedBySku?.es || mappedByBarcode?.es || "";
+            const productNameNorm = normalizeProductText(detail.product_name || "");
+            const cnResolved =
+              cnMapped && !isLikelyMojibake(cnMapped)
+                ? cnMapped
+                : !isLikelyMojibake(productNameNorm)
+                  ? productNameNorm
+                  : cnMapped || productNameNorm;
+            const esResolved =
+              esMapped && !isLikelyMojibake(esMapped)
+                ? esMapped
+                : !isLikelyMojibake(productNameNorm)
+                  ? productNameNorm
+                  : esMapped || productNameNorm;
+            return {
           id: detail.id,
           location: detail.location,
           itemNo: detail.item_no || "",
           barcode: detail.barcode || "",
           productName: normalizeProductText(detail.product_name || ""),
-          nameCn:
-            nameBySku.get(detail.item_no || "")?.zh ||
-            nameByBarcode.get(detail.barcode || "")?.zh ||
-            "",
-          nameEs:
-            nameBySku.get(detail.item_no || "")?.es ||
-            nameByBarcode.get(detail.barcode || "")?.es ||
-            "",
+          nameCn: cnResolved,
+          nameEs: esResolved,
           normalDiscount:
             nameBySku.get(detail.item_no || "")?.normal ||
             nameByBarcode.get(detail.barcode || "")?.normal ||
@@ -469,6 +489,8 @@ export default async function YgOrdersPage() {
             formatMoney(detail.line_total) !== "-"
               ? formatMoney(detail.line_total)
               : formatMoney((detail.total_qty || 0) * Number(detail.unit_price || 0)),
+            };
+          })(),
         })),
       };
     }),
