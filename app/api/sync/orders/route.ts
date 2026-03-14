@@ -668,6 +668,8 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
     latestStatus: firstNonNull(
       text(input.latest_status),
       text(input.latestStatus),
+      text(pedidolist?.latest_status),
+      text(pedidolist?.latestStatus),
       text(header?.latest_status),
       text(header?.latestStatus),
     ),

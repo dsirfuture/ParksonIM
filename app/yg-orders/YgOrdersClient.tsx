@@ -96,7 +96,15 @@ function extractPhone(contactPhone: string, remarkText: string) {
   return normalizeMexicoPhone(matched[0]) || "-";
 }
 
-function PreviewProductImage({ itemNo, barcode }: { itemNo: string; barcode: string }) {
+function PreviewProductImage({
+  itemNo,
+  barcode,
+  onPreview,
+}: {
+  itemNo: string;
+  barcode: string;
+  onPreview?: (src: string) => void;
+}) {
   const cacheRef = globalThis as unknown as { __ygImgCache?: Map<string, string | null> };
   if (!cacheRef.__ygImgCache) cacheRef.__ygImgCache = new Map();
   const cache = cacheRef.__ygImgCache;
@@ -158,7 +166,10 @@ function PreviewProductImage({ itemNo, barcode }: { itemNo: string; barcode: str
     <img
       src={src}
       alt={itemNo || barcode || "product"}
-      className="h-10 w-10 rounded border border-slate-200 object-contain"
+      className="h-10 w-10 cursor-zoom-in rounded border border-slate-200 object-contain"
+      onClick={() => {
+        if (src && onPreview) onPreview(src);
+      }}
       onError={() => {
         cache.set(cacheKey, null);
         setSrc(null);
@@ -206,6 +217,7 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
   const [detailPage, setDetailPage] = useState(1);
   const [splitState, setSplitState] = useState<{ importId: string; orderNo: string; supplierOrders: SupplierOrderRow[] } | null>(null);
   const [exportState, setExportState] = useState<{ importId: string; supplierOrderId: string } | null>(null);
+  const [imagePreviewSrc, setImagePreviewSrc] = useState<string | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
@@ -518,8 +530,14 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                   <tbody className="text-[13px]">
                     {pagedDetailItems.map((item) => (
                       <tr key={item.id} className="border-t border-slate-100">
-                        <td className="px-3 py-2"><PreviewProductImage itemNo={item.itemNo} barcode={item.barcode} /></td>
-                        <td className="px-3 py-2 text-slate-700">{item.itemNo || "-"}</td>
+                        <td className="px-3 py-2">
+                          <PreviewProductImage
+                            itemNo={item.itemNo}
+                            barcode={item.barcode}
+                            onPreview={(src) => setImagePreviewSrc(src)}
+                          />
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2 text-slate-700">{item.itemNo || "-"}</td>
                         <td className="px-3 py-2 text-slate-700">{item.barcode || item.itemNo || "-"}</td>
                         <td className="px-3 py-2 text-slate-700">{item.location || "-"}</td>
                         <td className="px-3 py-2 text-slate-700">{item.nameCn || (/[\u4e00-\u9fa5]/.test(item.productName || "") ? item.productName : "-")}</td>
@@ -561,13 +579,52 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
             <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
               <button
                 type="button"
-                onClick={() =>
+                onClick={() => {
+                  const legacySingleYogo =
+                    detailState.supplierOrders.length === 1 &&
+                    detailState.supplierOrders[0]?.supplierCode?.toUpperCase() === "YOGO";
+
+                  if (!legacySingleYogo) {
+                    setSplitState({
+                      importId: detailState.importId,
+                      orderNo: detailState.orderNo,
+                      supplierOrders: detailState.supplierOrders,
+                    });
+                    return;
+                  }
+
+                  const grouped = new Map<string, SupplierOrderItem[]>();
+                  for (const item of detailState.items) {
+                    const supplier = (item.location || "").trim().toUpperCase() || "UNKNOWN";
+                    const list = grouped.get(supplier) || [];
+                    list.push(item);
+                    grouped.set(supplier, list);
+                  }
+
+                  const virtualRows: SupplierOrderRow[] = Array.from(grouped.entries()).map(
+                    ([supplier, items], idx) => {
+                      const amount = items.reduce((sum, item) => {
+                        const num = Number(item.lineTotalText);
+                        return sum + (Number.isFinite(num) ? num : 0);
+                      }, 0);
+                      return {
+                        id: `${detailState.supplierOrders[0].id}::${supplier}::${idx}`,
+                        supplierCode: supplier,
+                        derivedOrderNo: `${detailState.orderNo}-${supplier}`,
+                        orderAmountText: amount > 0 ? amount.toFixed(2) : "-",
+                        itemCount: items.length,
+                        noteText: detailState.supplierOrders[0].noteText,
+                        items,
+                      };
+                    },
+                  );
+
                   setSplitState({
                     importId: detailState.importId,
                     orderNo: detailState.orderNo,
-                    supplierOrders: detailState.supplierOrders,
-                  })
-                }
+                    supplierOrders: virtualRows.length > 0 ? virtualRows : detailState.supplierOrders,
+                  });
+                }}
                 className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
                 拆分订单
@@ -632,13 +689,17 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                           </button>
                         </td>
                         <td className="px-3 py-2 text-center">
-                          <button
-                            type="button"
-                            onClick={() => setExportState({ importId: splitState.importId, supplierOrderId: so.id })}
-                            className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700"
-                          >
-                            导出文件
-                          </button>
+                          {so.id.includes("::") ? (
+                            <span className="text-xs text-slate-400">请同步后导出</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setExportState({ importId: splitState.importId, supplierOrderId: so.id })}
+                              className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700"
+                            >
+                              导出文件
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -730,6 +791,20 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
               </button>
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {imagePreviewSrc ? (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/65 px-4"
+          onClick={() => setImagePreviewSrc(null)}
+        >
+          <img
+            src={imagePreviewSrc}
+            alt="preview"
+            className="max-h-[86vh] max-w-[86vw] rounded-lg bg-white object-contain"
+            onClick={() => setImagePreviewSrc(null)}
+          />
         </div>
       ) : null}
 

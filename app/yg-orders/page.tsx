@@ -84,6 +84,15 @@ function formatMoney(value: unknown) {
   return num.toFixed(2);
 }
 
+function normalizeOrderStatus(value: string | null | undefined) {
+  const raw = String(value || "").trim();
+  if (!raw) return "-";
+  const key = raw.toLowerCase();
+  if (key === "1" || raw === "新订单") return "新订单";
+  if (key === "2" || raw === "配货中") return "配货中";
+  return raw;
+}
+
 export default async function YgOrdersPage() {
   const session = await getSession();
 
@@ -238,7 +247,7 @@ export default async function YgOrdersPage() {
     statusById = new Map(
       statusRows
         .filter((row) => row.header_status)
-        .map((row) => [row.id, String(row.header_status || "").trim()]),
+        .map((row) => [row.id, normalizeOrderStatus(row.header_status)]),
     );
     orderCreatedAtById = new Map(
       statusRows
@@ -319,7 +328,7 @@ export default async function YgOrdersPage() {
     return {
     id: row.id,
     orderNo: row.order_no,
-    orderStatus: statusById.get(row.id) || "-",
+    orderStatus: normalizeOrderStatus(statusById.get(row.id)),
     orderDateText,
     orderAmountText: formatMoney(row.order_amount),
     companyName: row.company_name || row.customer_name || "-",
