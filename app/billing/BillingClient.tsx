@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StatCard } from "@/components/stat-card";
 import { TableCard } from "@/components/table-card";
 
@@ -78,25 +78,32 @@ export function BillingClient({
   activeTab: TabKey;
 }) {
   const [rows, setRows] = useState(initialRows);
+  const [currentTab, setCurrentTab] = useState<TabKey>(activeTab);
   const [page, setPage] = useState(1);
   const [detailOrderNo, setDetailOrderNo] = useState<string | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
 
+  useEffect(() => {
+    setCurrentTab(activeTab);
+  }, [activeTab]);
+
   const theme =
-    activeTab === "supplier"
+    currentTab === "supplier"
       ? {
           panel: "border-slate-200 bg-white",
           tabActive: "border-amber-300 bg-amber-100 text-amber-900",
           tabInactive: "border-transparent bg-slate-200 text-slate-600",
           accentValue: "text-amber-700",
+          contentBg: "bg-amber-50/35",
         }
       : {
           panel: "border-slate-200 bg-white",
           tabActive: "border-sky-300 bg-sky-100 text-sky-900",
           tabInactive: "border-transparent bg-slate-200 text-slate-600",
           accentValue: "text-sky-700",
+          contentBg: "bg-sky-50/35",
         };
 
   const totalCount = rows.length;
@@ -160,16 +167,16 @@ export function BillingClient({
     <section className={`mt-0 overflow-hidden rounded-[30px] border-2 ${theme.panel}`}>
       <div className="px-4 pt-2">
         <div className="flex flex-wrap items-end gap-2">
-          <button type="button" className={`inline-flex min-w-[148px] items-center justify-center rounded-t-2xl border px-4 py-2 text-sm font-semibold ${activeTab === "customer" ? theme.tabActive : theme.tabInactive}`}>
+          <button type="button" onClick={() => setCurrentTab("customer")} className={`inline-flex min-w-[148px] items-center justify-center rounded-t-2xl border px-4 py-2 text-sm font-semibold ${currentTab === "customer" ? theme.tabActive : theme.tabInactive}`}>
             客户出账单
           </button>
-          <button type="button" className={`inline-flex min-w-[148px] items-center justify-center rounded-t-2xl border px-4 py-2 text-sm font-semibold ${activeTab === "supplier" ? theme.tabActive : theme.tabInactive}`}>
+          <button type="button" onClick={() => setCurrentTab("supplier")} className={`inline-flex min-w-[148px] items-center justify-center rounded-t-2xl border px-4 py-2 text-sm font-semibold ${currentTab === "supplier" ? theme.tabActive : theme.tabInactive}`}>
             供应商账单
           </button>
         </div>
       </div>
 
-      <div className="p-4">
+      <div className={`m-2 rounded-2xl p-4 ${theme.contentBg}`}>
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="待出账单" value={totalCount} hint="验货完毕待汇总" valueClassName={theme.accentValue} />
           <StatCard label="待生成" value="0" hint="等待生成汇总结果" valueClassName="text-amber-600" />
