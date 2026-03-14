@@ -192,8 +192,8 @@ export default async function BillingPage({
 
   return (
     <AppShell>
-      <section className="mt-5 overflow-hidden rounded-3xl border border-slate-200 bg-white">
-        <div className="bg-white px-5 pt-4">
+      <section className="mt-4 overflow-hidden rounded-3xl border border-slate-200 bg-white">
+        <div className="bg-white px-4 pt-3">
           <div className="flex flex-wrap items-end gap-2">
             {TAB_LIST.map((tab) => {
               const selected = activeTab === tab;
@@ -216,7 +216,7 @@ export default async function BillingPage({
           </div>
         </div>
 
-        <div className="p-5">
+        <div className="p-4">
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Link href={`/billing?tab=${activeTab}&list=pending&page=1`} className="block">
               <div className="transition hover:opacity-95">
@@ -233,7 +233,7 @@ export default async function BillingPage({
             <StatCard label="可输出" value="0" hint="可下载或分享的账单" valueClassName="text-emerald-600" />
           </section>
 
-          <div className="mt-5">
+          <div className="mt-4">
             <TableCard
               title={activeList === "pending" ? "待出账单列表" : "账单列表"}
               description={`共 ${activeCount} 条`}
