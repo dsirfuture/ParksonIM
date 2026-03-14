@@ -23,12 +23,13 @@ type ItemRow = {
   status: ItemStatus;
   unexpected?: boolean;
   unitPriceValue: number | null;
+  yogoPriceValue: number | null;
   normalDiscountValue: number | null;
   vipDiscountValue: number | null;
   unitPriceText: string;
-  normalDiscountText: string | null;
-  vipDiscountText: string | null;
-  lineTotalText: string;
+  yogoPriceText: string;
+  priceCompareStatus: "same" | "different" | "unknown";
+  priceCompareText: string;
 };
 
 type ReceiptItemsClientProps = {
@@ -53,6 +54,10 @@ type ReceiptItemsClientProps = {
     inProgress: string;
     completed: string;
     unitPrice: string;
+    yogoPrice: string;
+    priceCompare: string;
+    same: string;
+    different: string;
     normalDiscount: string;
     vipDiscount: string;
     lineTotal: string;
@@ -346,7 +351,6 @@ export function ReceiptItemsClient({
               <col className="w-[72px]" />
               <col className="w-[72px]" />
               <col className="w-[72px]" />
-              <col className="w-[70px]" />
               <col className="w-[45px]" />
               <col className="w-[45px]" />
               <col className="w-[45px]" />
@@ -383,13 +387,10 @@ export function ReceiptItemsClient({
                   {text.unitPrice}
                 </th>
                 <th className="whitespace-nowrap px-2 py-3 font-semibold">
-                  {text.normalDiscount}
+                  {text.yogoPrice}
                 </th>
                 <th className="whitespace-nowrap px-2 py-3 font-semibold">
-                  {text.vipDiscount}
-                </th>
-                <th className="whitespace-nowrap px-2 py-3 font-semibold">
-                  {text.lineTotal}
+                  {text.priceCompare}
                 </th>
                 <th className="whitespace-nowrap px-2 py-3 font-semibold">
                   {text.goodQty}
@@ -417,7 +418,7 @@ export function ReceiptItemsClient({
               {pagedRows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={18}
+                    colSpan={17}
                     className="px-4 py-10 text-center text-sm text-slate-500"
                   >
                     {text.noMatch}
@@ -485,15 +486,19 @@ export function ReceiptItemsClient({
                       </td>
 
                       <td className="whitespace-nowrap px-2 py-3 text-sm text-slate-700">
-                        {row.normalDiscountText || text.noValue}
+                        {row.yogoPriceText || text.noValue}
                       </td>
 
-                      <td className="whitespace-nowrap px-2 py-3 text-sm text-slate-700">
-                        {row.vipDiscountText || text.noValue}
-                      </td>
-
-                      <td className="whitespace-nowrap px-2 py-3 text-sm text-slate-700">
-                        {row.lineTotalText || text.noValue}
+                      <td
+                        className={`whitespace-nowrap px-2 py-3 text-sm ${
+                          row.priceCompareStatus === "same"
+                            ? "text-emerald-600"
+                            : row.priceCompareStatus === "different"
+                              ? "text-rose-600"
+                              : "text-slate-700"
+                        }`}
+                      >
+                        {row.priceCompareText || text.noValue}
                       </td>
 
                       <td className="whitespace-nowrap px-2 py-3 text-sm text-slate-700">

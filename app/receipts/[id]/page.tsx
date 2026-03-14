@@ -75,43 +75,10 @@ function formatMoney(value: number | null | undefined) {
   return `$${value.toFixed(2)}`;
 }
 
-function formatDiscountPercent(value: unknown) {
-  const num = toNumber(value);
-  if (num === null) return null;
-
-  const percent = num <= 1 ? num * 100 : num;
-  const rounded = Number.isInteger(percent)
-    ? String(percent)
-    : percent.toFixed(2).replace(/\.?0+$/, "");
-
-  return `${rounded}%`;
-}
-
 function toEditPercent(value: unknown) {
   const num = toNumber(value);
   if (num === null) return null;
   return num <= 1 ? num * 100 : num;
-}
-
-function computeLineTotal(
-  goodQty: number,
-  unitPrice: number | null,
-  normalDiscount: number | null,
-  vipDiscount: number | null,
-) {
-  if (unitPrice === null || !Number.isFinite(unitPrice)) return null;
-
-  let factor = 1;
-
-  if (normalDiscount !== null && Number.isFinite(normalDiscount)) {
-    factor *= 1 - (normalDiscount <= 1 ? normalDiscount : normalDiscount / 100);
-  }
-
-  if (vipDiscount !== null && Number.isFinite(vipDiscount)) {
-    factor *= 1 - (vipDiscount <= 1 ? vipDiscount : vipDiscount / 100);
-  }
-
-  return round2(goodQty * unitPrice * factor);
 }
 
 export default async function ReceiptDetailPage({
@@ -342,6 +309,32 @@ export default async function ReceiptDetailPage({
         )
       : 0;
 
+  const skuSet = new Set(
+    receipt.items.map((item) => String(item.sku || "").trim()).filter(Boolean),
+  );
+  const yogoPriceRows =
+    skuSet.size > 0
+      ? await prisma.yogoProductSource.findMany({
+          where: {
+            tenant_id: session.tenantId,
+            company_id: session.companyId,
+            product_code: { in: Array.from(skuSet) },
+          },
+          select: {
+            product_code: true,
+            source_price: true,
+            updated_at: true,
+          },
+          orderBy: [{ updated_at: "desc" }],
+        })
+      : [];
+  const yogoPriceBySku = new Map<string, number | null>();
+  for (const row of yogoPriceRows) {
+    const key = String(row.product_code || "").trim().toUpperCase();
+    if (!key || yogoPriceBySku.has(key)) continue;
+    yogoPriceBySku.set(key, toNumber(row.source_price));
+  }
+
   const itemRows = receipt.items.map((item) => {
     const unitPriceValue = toNumber(item.sell_price);
     const normalDiscountValue = toEditPercent(item.normal_discount);
@@ -363,14 +356,25 @@ export default async function ReceiptDetailPage({
       : 0;
     const uncheckedQty = item.unexpected ? 0 : diffQty;
 
-    const calculatedLineTotal = item.unexpected
-      ? null
-      : computeLineTotal(
-          goodQty,
-          unitPriceValue,
-          toNumber(item.normal_discount),
-          toNumber(item.vip_discount),
-        );
+    const yogoPriceValue =
+      yogoPriceBySku.get(String(item.sku || "").trim().toUpperCase()) ?? null;
+    const hasComparablePrice =
+      unitPriceValue !== null && yogoPriceValue !== null;
+    const priceCompareStatus: "unknown" | "same" | "different" = !hasComparablePrice
+      ? "unknown"
+      : Math.abs(unitPriceValue - yogoPriceValue) < 0.0001
+        ? "same"
+        : "different";
+    const priceCompareText =
+      priceCompareStatus === "same"
+        ? lang === "zh"
+          ? "一致"
+          : "Igual"
+        : priceCompareStatus === "different"
+          ? lang === "zh"
+            ? "不同"
+            : "Distinto"
+          : text.noValue;
 
     return {
       id: item.id,
@@ -388,14 +392,13 @@ export default async function ReceiptDetailPage({
       status: (item.status as ItemStatus) || "pending",
       unexpected: item.unexpected,
       unitPriceValue,
+      yogoPriceValue,
       normalDiscountValue,
       vipDiscountValue,
       unitPriceText: formatMoney(unitPriceValue),
-      normalDiscountText: formatDiscountPercent(item.normal_discount),
-      vipDiscountText: formatDiscountPercent(item.vip_discount),
-      lineTotalText: item.unexpected
-        ? text.noValue
-        : formatMoney(calculatedLineTotal),
+      yogoPriceText: formatMoney(yogoPriceValue),
+      priceCompareStatus,
+      priceCompareText,
     };
   });
 
@@ -557,6 +560,10 @@ export default async function ReceiptDetailPage({
               inProgress: text.inProgress,
               completed: text.completed,
               unitPrice: text.unitPrice,
+              yogoPrice: lang === "zh" ? "友购价" : "Precio YOGO",
+              priceCompare: lang === "zh" ? "价格对比" : "Comparación",
+              same: lang === "zh" ? "一致" : "Igual",
+              different: lang === "zh" ? "不同" : "Distinto",
               normalDiscount: text.normalDiscount,
               vipDiscount: text.vipDiscount,
               lineTotal: text.lineTotal,
