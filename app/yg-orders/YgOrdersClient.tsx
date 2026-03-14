@@ -639,8 +639,8 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                         <td className="whitespace-nowrap px-3 py-2 text-slate-700">{item.itemNo || "-"}</td>
                         <td className="px-3 py-2 text-slate-700">{item.barcode || item.itemNo || "-"}</td>
                         <td className="px-3 py-2 text-slate-700">{item.location || "-"}</td>
-                        <td className="px-3 py-2 text-slate-700">{item.nameCn || (/[\u4e00-\u9fa5]/.test(item.productName || "") ? item.productName : "-")}</td>
-                        <td className="px-3 py-2 text-slate-700">{item.nameEs || (!/[\u4e00-\u9fa5]/.test(item.productName || "") ? item.productName || "-" : "-")}</td>
+                        <td className="px-3 py-2 text-slate-700">{item.nameCn || "-"}</td>
+                        <td className="px-3 py-2 text-slate-700">{item.nameEs || "-"}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-slate-700">{item.totalQty}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-slate-700">{item.unitPriceText}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-slate-700">{item.normalDiscount || "-"}</td>
