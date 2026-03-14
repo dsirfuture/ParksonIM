@@ -315,21 +315,6 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
       <div className="grid gap-5">
         <TableCard title="" description="" className="!mt-0">
           <div className="space-y-3 px-5 py-5">
-            <div className="flex items-center justify-end">
-              <label className="mr-2 text-xs text-slate-500">统计年份</label>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value ? Number(e.target.value) : "")}
-                className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none"
-              >
-                {summary.yearlyStats.map((stat) => (
-                  <option key={stat.year} value={stat.year}>
-                    {stat.year}
-                  </option>
-                ))}
-              </select>
-            </div>
-
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <div className="text-xs text-slate-500">总订单数</div>
@@ -345,7 +330,20 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <div className="text-xs text-slate-500">年订单数（{selectedYear || "-"}）</div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">{(activeYearStat?.orders ?? 0).toLocaleString("zh-CN")}</div>
+                <div className="mt-1 flex items-center justify-between gap-2">
+                  <div className="text-lg font-semibold text-slate-900">{(activeYearStat?.orders ?? 0).toLocaleString("zh-CN")}</div>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(e.target.value ? Number(e.target.value) : "")}
+                    className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none"
+                  >
+                    {summary.yearlyStats.map((stat) => (
+                      <option key={stat.year} value={stat.year}>
+                        {stat.year}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <div className="text-xs text-slate-500">客户数量</div>
@@ -407,7 +405,9 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                       return (
                         <tr key={row.id} className="border-t border-slate-100">
                           <td className="whitespace-nowrap px-3 py-2 font-semibold text-slate-900">{row.orderNo}</td>
-                          <td className="whitespace-nowrap px-3 py-2 text-slate-700">{row.orderStatus || "-"}</td>
+                          <td className={`whitespace-nowrap px-3 py-2 ${row.orderStatus === "新订单" ? "font-semibold text-rose-600" : "text-slate-700"}`}>
+                            {row.orderStatus || "-"}
+                          </td>
                           <td className="whitespace-nowrap px-3 py-2 text-slate-700">{row.orderDateText || row.createdAtText}</td>
                           <td className="whitespace-nowrap px-3 py-2 text-slate-700">{row.companyName || "-"}</td>
                           <td className="whitespace-nowrap px-3 py-2 text-slate-700">{row.contactName || row.customerName || "-"}</td>
@@ -522,10 +522,10 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                       <tr key={item.id} className="border-t border-slate-100">
                         <td className="px-3 py-2"><PreviewProductImage itemNo={item.itemNo} barcode={item.barcode} /></td>
                         <td className="px-3 py-2 text-slate-700">{item.productName || item.itemNo || item.barcode || "-"}</td>
-                        <td className="px-3 py-2 text-slate-700">{item.barcode || "-"}</td>
+                        <td className="px-3 py-2 text-slate-700">{item.barcode || item.itemNo || "-"}</td>
                         <td className="px-3 py-2 text-slate-700">{item.location || "-"}</td>
-                        <td className="px-3 py-2 text-slate-700">{item.nameCn || "-"}</td>
-                        <td className="px-3 py-2 text-slate-700">{item.nameEs || "-"}</td>
+                        <td className="px-3 py-2 text-slate-700">{item.nameCn || (/[\u4e00-\u9fa5]/.test(item.productName || "") ? item.productName : "-")}</td>
+                        <td className="px-3 py-2 text-slate-700">{item.nameEs || (!/[\u4e00-\u9fa5]/.test(item.productName || "") ? item.productName || "-" : "-")}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-slate-700">{item.totalQty}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-slate-700">{item.unitPriceText}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-slate-700">{item.normalDiscount || "-"}</td>

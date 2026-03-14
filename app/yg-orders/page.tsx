@@ -84,13 +84,26 @@ export default async function YgOrdersPage() {
     >(
       `
         SELECT
-          EXTRACT(YEAR FROM created_at)::int AS stat_year,
+          COALESCE(
+            CASE
+              WHEN order_no ~ '^YGO[0-9]{2}' THEN 2000 + SUBSTRING(order_no FROM 4 FOR 2)::int
+              ELSE NULL
+            END,
+            EXTRACT(YEAR FROM created_at)::int
+          ) AS stat_year,
           COUNT(*) AS year_orders,
           COALESCE(SUM(order_amount), 0) AS year_amount
         FROM yg_order_imports
         WHERE tenant_id = $1::uuid
           AND company_id = $2::uuid
-        GROUP BY EXTRACT(YEAR FROM created_at)
+        GROUP BY
+          COALESCE(
+            CASE
+              WHEN order_no ~ '^YGO[0-9]{2}' THEN 2000 + SUBSTRING(order_no FROM 4 FOR 2)::int
+              ELSE NULL
+            END,
+            EXTRACT(YEAR FROM created_at)::int
+          )
         ORDER BY stat_year ASC
       `,
       session.tenantId,
@@ -129,7 +142,6 @@ export default async function YgOrdersPage() {
         },
       },
     },
-    take: 50,
   });
 
   const statusColumns = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(
@@ -137,11 +149,12 @@ export default async function YgOrdersPage() {
       SELECT column_name
       FROM information_schema.columns
       WHERE table_name = 'yg_order_imports'
-        AND column_name IN ('header_status', 'header_status_id', 'order_created_at')
+        AND column_name IN ('header_status', 'header_status_id', 'latest_status', 'order_created_at')
     `,
   );
   const hasHeaderStatus = statusColumns.some((col) => col.column_name === "header_status");
   const hasHeaderStatusId = statusColumns.some((col) => col.column_name === "header_status_id");
+  const hasLatestStatus = statusColumns.some((col) => col.column_name === "latest_status");
   const hasOrderCreatedAt = statusColumns.some((col) => col.column_name === "order_created_at");
 
   let statusById = new Map<string, string>();
@@ -154,6 +167,9 @@ export default async function YgOrdersPage() {
     const statusIdExpr = hasHeaderStatusId
       ? "NULLIF(TRIM(CAST(header_status_id AS text)), '')"
       : "NULL";
+    const latestStatusExpr = hasLatestStatus
+      ? "NULLIF(TRIM(CAST(latest_status AS text)), '')"
+      : "NULL";
     const createdExpr = hasOrderCreatedAt ? "order_created_at" : "created_at";
 
     const statusRows = await prisma.$queryRawUnsafe<
@@ -162,7 +178,7 @@ export default async function YgOrdersPage() {
       `
         SELECT
           CAST(id AS text) AS id,
-          COALESCE(${statusExpr}, ${statusIdExpr}) AS header_status,
+          COALESCE(${statusExpr}, ${statusIdExpr}, ${latestStatusExpr}) AS header_status,
           ${createdExpr} AS order_created_at
         FROM yg_order_imports
         WHERE tenant_id = $1::uuid
@@ -240,7 +256,14 @@ export default async function YgOrdersPage() {
       ]),
   );
 
-  const initialRows = rows.map((row) => ({
+  const initialRows = rows.map((row) => {
+    const uniqueLocations = new Set(
+      row.supplierOrders
+        .flatMap((supplierOrder) => supplierOrder.items.map((detail) => (detail.location || "").trim()))
+        .filter(Boolean),
+    );
+
+    return {
     id: row.id,
     orderNo: row.order_no,
     orderStatus: statusById.get(row.id) || "-",
@@ -254,14 +277,14 @@ export default async function YgOrdersPage() {
     remarkText: row.order_remark || "",
     storeLabelText: row.store_label || "",
     createdAtText: formatDateTime(row.created_at),
-    supplierCount: row.supplier_count,
+    supplierCount: uniqueLocations.size > 0 ? uniqueLocations.size : row.supplier_count,
     itemCount: row.item_count,
-    supplierOrders: row.supplierOrders.map((item) => ({
+      supplierOrders: row.supplierOrders.map((item) => ({
       id: item.id,
       supplierCode: item.supplier_code,
       derivedOrderNo: item.derived_order_no,
-      orderAmountText: formatMoney(item.order_amount),
-      itemCount: item.item_count,
+        orderAmountText: formatMoney(item.order_amount),
+        itemCount: item.item_count,
         noteText: item.note_text || "",
         items: item.items.map((detail) => ({
           id: detail.id,
@@ -287,10 +310,14 @@ export default async function YgOrdersPage() {
             "-",
           totalQty: detail.total_qty,
           unitPriceText: formatMoney(detail.unit_price),
-          lineTotalText: formatMoney(detail.line_total),
+          lineTotalText:
+            formatMoney(detail.line_total) !== "-"
+              ? formatMoney(detail.line_total)
+              : formatMoney((detail.total_qty || 0) * Number(detail.unit_price || 0)),
+        })),
       })),
-    })),
-  }));
+    };
+  });
 
   return (
     <AppShell>
