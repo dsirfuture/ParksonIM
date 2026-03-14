@@ -322,6 +322,7 @@ export async function POST(req: Request) {
               name_cn: true,
               name_es: true,
               case_pack: true,
+              carton_pack: true,
               source_price: true,
             },
           })
@@ -343,6 +344,7 @@ export async function POST(req: Request) {
               name_zh: true,
               name_es: true,
               case_pack: true,
+              carton_pack: true,
               price: true,
             },
           })
@@ -364,7 +366,7 @@ export async function POST(req: Request) {
         barcode: item.product_no || undefined,
         name_zh: item.name_cn || undefined,
         name_es: item.name_es || undefined,
-        case_pack: toNumber(item.case_pack),
+        case_pack: toNumber(item.case_pack) ?? toNumber(item.carton_pack),
         sell_price: toNumber(item.source_price),
       };
       const exactKey = item.product_code.trim().toUpperCase();
@@ -389,7 +391,7 @@ export async function POST(req: Request) {
         barcode: item.barcode || undefined,
         name_zh: item.name_zh || undefined,
         name_es: item.name_es || undefined,
-        case_pack: toNumber(item.case_pack),
+        case_pack: toNumber(item.case_pack) ?? toNumber(item.carton_pack),
         sell_price: toNumber(item.price),
       };
       const exactKey = item.sku.trim().toUpperCase();
