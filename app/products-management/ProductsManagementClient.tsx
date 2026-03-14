@@ -575,8 +575,9 @@ export function ProductsManagementClient({
         const importPriceNum = toPriceNumber(price);
         const yogoPriceNum = toPriceNumber(yogoPrice);
         const priceMismatch =
-          (importPriceNum !== null && yogoPriceNum !== null && Math.abs(importPriceNum - yogoPriceNum) > 0.0001) ||
-          ((importPriceNum === null) !== (yogoPriceNum === null));
+          importPriceNum !== null &&
+          yogoPriceNum !== null &&
+          Math.abs(importPriceNum - yogoPriceNum) > 0.0001;
         const compareState: ComparePreviewRow["compareState"] = !current
           ? "新增"
           : current.statusText === "上架"
