@@ -5,14 +5,14 @@ import { z } from "zod";
 
 const RowSchema = z.object({
   receipt_no: z.string().trim().min(1),
-  supplier_name: z.string().trim().optional(),
+  supplier_name: z.string().trim().min(1),
   sku: z.string().trim().min(1),
   barcode: z.string().trim().optional(),
   name_zh: z.string().trim().optional(),
   name_es: z.string().trim().optional(),
   case_pack: z.number().int().nonnegative().optional(),
   expected_qty: z.number().int().positive(),
-  sell_price: z.number().nonnegative().optional(),
+  sell_price: z.number().nonnegative(),
   discount: z.number().min(0).max(1).optional(),
   normal_discount: z.number().min(0).max(1).optional(),
   vip_discount: z.number().min(0).max(1).optional(),
@@ -25,24 +25,36 @@ const BodySchema = z.object({
 });
 
 const HEADER_ALIASES = {
-  receipt_no: ["receipt_no", "单号", "receipt no"],
+  receipt_no: ["receipt_no", "友购订单号", "单号", "receipt no"],
   supplier_name: ["supplier_name", "供应商", "supplier"],
-  sku: ["sku", "商品编码", "商品编号", "编码"],
+  sku: ["sku", "编码", "商品编码", "商品编号"],
   barcode: ["barcode", "条码"],
   name_zh: ["name_zh", "中文名"],
   name_es: ["name_es", "西文名"],
-  case_pack: ["case_pack", "包装数", "箱规"],
-  expected_qty: ["expected_qty", "应收数量", "数量"],
-  sell_price: ["sell_price", "单价", "price"],
+  case_pack: ["case_pack", "中包数", "包装数", "箱规"],
+  expected_qty: ["expected_qty", "数量", "应收数量"],
+  sell_price: ["sell_price", "供应价", "单价mxn", "单价", "price"],
   normal_discount: ["normal_discount", "普通折扣", "discount", "折扣"],
-  vip_discount: ["vip_discount", "VIP折扣", "VIP 折扣", "vip折扣", "vip 折扣"],
-  line_total: ["line_total", "金额", "行总额"],
+  vip_discount: ["vip_discount", "vip折扣", "VIP折扣", "VIP 折扣"],
+  line_total: ["line_total", "金额", "行金额", "行总额"],
 } as const;
 
-const REQUIRED_KEYS = ["receipt_no", "sku", "expected_qty"] as const;
+const REQUIRED_KEYS = [
+  "receipt_no",
+  "supplier_name",
+  "sku",
+  "expected_qty",
+  "sell_price",
+] as const;
 
 function normalize(value: string) {
   return value.trim().toLowerCase();
+}
+
+function toNumber(value: unknown): number | undefined {
+  if (value === null || value === undefined || value === "") return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 function isAllowedHeader(title: string) {
@@ -63,9 +75,11 @@ function hasRequiredHeader(
 }
 
 function getRequiredHeaderLabel(key: (typeof REQUIRED_KEYS)[number]) {
-  if (key === "receipt_no") return "单号";
-  if (key === "sku") return "商品编码";
-  return "应收数量";
+  if (key === "receipt_no") return "友购订单号";
+  if (key === "supplier_name") return "供应商";
+  if (key === "sku") return "编码";
+  if (key === "expected_qty") return "数量";
+  return "供应价";
 }
 
 export async function POST(req: Request) {
@@ -78,7 +92,7 @@ export async function POST(req: Request) {
           ok: false,
           errorCode: "SERVER_ERROR",
           errors: [
-            { row: 0, field: "session", message: "DEV_SESSION_NOT_CONFIGURED" },
+            { row: 0, field: "session", message: "当前会话未配置租户和公司" },
           ],
         },
         { status: 401 },
@@ -100,7 +114,6 @@ export async function POST(req: Request) {
     }
 
     const { headers = [], rows } = parsedBody.data;
-
     const normalizedHeaders = headers.map((h) => String(h ?? "").trim());
     const nonEmptyHeaders = normalizedHeaders.filter((h) => h.length > 0);
 
@@ -110,11 +123,7 @@ export async function POST(req: Request) {
           ok: false,
           errorCode: "HEADER_INVALID",
           errors: [
-            {
-              row: 1,
-              field: "headers_summary",
-              message: "请调整表格规范",
-            },
+            { row: 1, field: "headers_summary", message: "请调整表格规范" },
             {
               row: 1,
               field: "headers_empty",
@@ -136,14 +145,12 @@ export async function POST(req: Request) {
         blankHeaderIndexes.push(index + 1);
         return;
       }
-
       if (!isAllowedHeader(header)) {
         extraHeaders.push(header);
       }
     });
 
     const missingRequiredHeaders: string[] = [];
-
     REQUIRED_KEYS.forEach((key) => {
       if (!hasRequiredHeader(normalizedHeaders, key)) {
         missingRequiredHeaders.push(getRequiredHeaderLabel(key));
@@ -186,11 +193,7 @@ export async function POST(req: Request) {
           ok: false,
           errorCode: "HEADER_INVALID",
           errors: [
-            {
-              row: 1,
-              field: "headers_summary",
-              message: "请调整表格规范",
-            },
+            { row: 1, field: "headers_summary", message: "请调整表格规范" },
             ...headerErrors,
           ],
         },
@@ -204,7 +207,6 @@ export async function POST(req: Request) {
 
     rows.forEach((row, index) => {
       const result = RowSchema.safeParse(row);
-
       if (!result.success) {
         result.error.issues.forEach((issue) => {
           rowErrors.push({
@@ -215,7 +217,6 @@ export async function POST(req: Request) {
         });
         return;
       }
-
       normalizedRows.push(result.data);
     });
 
@@ -231,7 +232,6 @@ export async function POST(req: Request) {
     }
 
     const duplicateKeyMap = new Map<string, number[]>();
-
     normalizedRows.forEach((row, index) => {
       const key = `${row.receipt_no}__${row.sku}`;
       const list = duplicateKeyMap.get(key) || [];
@@ -251,7 +251,7 @@ export async function POST(req: Request) {
         duplicateErrors.push({
           row: rowNos[0],
           field: "receipt_no+sku",
-          message: `表格中重复：单号 ${receiptNo} / SKU ${sku}`,
+          message: `表格中重复：友购订单号 ${receiptNo} / 编码 ${sku}`,
         });
       }
     }
@@ -267,10 +267,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const receiptNos = [
-      ...new Set(normalizedRows.map((row) => row.receipt_no)),
-    ];
-
+    const receiptNos = [...new Set(normalizedRows.map((row) => row.receipt_no))];
     if (receiptNos.length > 0) {
       const existingReceipts = await prisma.receipt.findMany({
         where: {
@@ -285,27 +282,74 @@ export async function POST(req: Request) {
         const uniqueNos = [
           ...new Set(existingReceipts.map((item) => item.receipt_no)),
         ];
-
         const existsErrors = uniqueNos.map((no) => ({
           row: 0,
           field: "receipt_no",
           message: `此验货单已存在：${no}`,
         }));
-
         return NextResponse.json(
-          {
-            ok: false,
-            errorCode: "RECEIPT_EXISTS",
-            errors: existsErrors,
-          },
+          { ok: false, errorCode: "RECEIPT_EXISTS", errors: existsErrors },
           { status: 400 },
         );
       }
     }
 
-    const receiptSet = new Set(normalizedRows.map((row) => row.receipt_no));
-    const skuSet = new Set(normalizedRows.map((row) => row.sku));
-    const totalExpectedQty = normalizedRows.reduce(
+    // Import preview needs image/barcode/case_pack from product data by SKU.
+    const skuList = [
+      ...new Set(
+        normalizedRows
+          .map((row) => row.sku.trim().toUpperCase())
+          .filter((v) => Boolean(v)),
+      ),
+    ];
+    const productRows =
+      skuList.length > 0
+        ? await prisma.yogoProductSource.findMany({
+            where: {
+              tenant_id: session.tenantId,
+              company_id: session.companyId,
+              product_code: { in: skuList },
+            },
+            select: {
+              product_code: true,
+              product_no: true,
+              name_cn: true,
+              name_es: true,
+              case_pack: true,
+              source_price: true,
+            },
+          })
+        : [];
+
+    const productMap = new Map(
+      productRows.map((item) => [
+        item.product_code.trim().toUpperCase(),
+        {
+          barcode: item.product_no || undefined,
+          name_zh: item.name_cn || undefined,
+          name_es: item.name_es || undefined,
+          case_pack: toNumber(item.case_pack),
+          sell_price: toNumber(item.source_price),
+        },
+      ]),
+    );
+
+    const mergedRows = normalizedRows.map((row) => {
+      const product = productMap.get(row.sku.trim().toUpperCase());
+      if (!product) return row;
+      return {
+        ...row,
+        barcode: row.barcode || product.barcode,
+        name_zh: row.name_zh || product.name_zh,
+        name_es: row.name_es || product.name_es,
+        case_pack: row.case_pack ?? product.case_pack,
+        sell_price: row.sell_price ?? product.sell_price ?? row.sell_price,
+      };
+    });
+
+    const receiptSet = new Set(mergedRows.map((row) => row.receipt_no));
+    const skuSet = new Set(mergedRows.map((row) => row.sku));
+    const totalExpectedQty = mergedRows.reduce(
       (sum, row) => sum + (row.expected_qty || 0),
       0,
     );
@@ -318,7 +362,7 @@ export async function POST(req: Request) {
         skuCount: skuSet.size,
         totalExpectedQty,
       },
-      normalizedRows,
+      normalizedRows: mergedRows,
     });
   } catch {
     return NextResponse.json(

@@ -5,21 +5,14 @@ export const runtime = "nodejs";
 
 export async function GET() {
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("模板");
+  const sheet = workbook.addWorksheet("\u6a21\u677f");
 
   const columns = [
-    { key: "receipt_no", label: "单号", required: true },
-    { key: "supplier_name", label: "供应商", required: false },
-    { key: "sku", label: "商品编码", required: true },
-    { key: "barcode", label: "条码", required: false },
-    { key: "name_zh", label: "中文名", required: false },
-    { key: "name_es", label: "西文名", required: false },
-    { key: "case_pack", label: "包装数", required: false },
-    { key: "expected_qty", label: "应收数量", required: true },
-    { key: "sell_price", label: "友购价", required: false },
-    { key: "normal_discount", label: "普通折扣(%)", required: false },
-    { key: "vip_discount", label: "VIP折扣(%)", required: false },
-    { key: "line_total", label: "行金额", required: false },
+    { key: "receipt_no", label: "\u53cb\u8d2d\u8ba2\u5355\u53f7", required: true },
+    { key: "supplier_name", label: "\u4f9b\u5e94\u5546", required: true },
+    { key: "sku", label: "\u7f16\u7801", required: true },
+    { key: "expected_qty", label: "\u6570\u91cf", required: true },
+    { key: "sell_price", label: "\u4f9b\u5e94\u4ef7", required: true },
   ] as const;
 
   sheet.addRow(columns.map((c) => c.label));
@@ -43,14 +36,14 @@ export async function GET() {
   headerRow.commit();
 
   const bytes = await workbook.xlsx.writeBuffer();
-  const fileName = "receipt-import-template.xlsx";
+  const fileName = "\u5bfc\u5165\u6587\u4ef6\u4e0b\u8f7d\u6a21\u677f.xlsx";
 
   return new NextResponse(Buffer.from(bytes), {
     status: 200,
     headers: {
       "Content-Type":
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="${fileName}"`,
+      "Content-Disposition": `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
       "Cache-Control": "no-store",
     },
   });

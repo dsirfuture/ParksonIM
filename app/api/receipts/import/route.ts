@@ -6,14 +6,14 @@ import { z } from "zod";
 
 const RowSchema = z.object({
   receipt_no: z.string().trim().min(1),
-  supplier_name: z.string().trim().optional(),
+  supplier_name: z.string().trim().min(1),
   sku: z.string().trim().min(1),
   barcode: z.string().trim().optional(),
   name_zh: z.string().trim().optional(),
   name_es: z.string().trim().optional(),
   case_pack: z.number().int().nonnegative().optional(),
   expected_qty: z.number().int().positive(),
-  sell_price: z.number().nonnegative().optional(),
+  sell_price: z.number().nonnegative(),
   discount: z.number().min(0).max(1).optional(),
   normal_discount: z.number().min(0).max(1).optional(),
   vip_discount: z.number().min(0).max(1).optional(),

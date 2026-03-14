@@ -165,6 +165,7 @@ function mapRow(raw: Record<string, unknown>): ParsedRow {
 
   const receipt_no =
     toStringValue(entries["receipt_no"]) ||
+    toStringValue(entries["友购订单号"]) ||
     toStringValue(entries["单号"]) ||
     toStringValue(entries["receipt no"]) ||
     "";
@@ -176,9 +177,9 @@ function mapRow(raw: Record<string, unknown>): ParsedRow {
 
   const sku =
     toStringValue(entries["sku"]) ||
+    toStringValue(entries["编码"]) ||
     toStringValue(entries["商品编码"]) ||
     toStringValue(entries["商品编号"]) ||
-    toStringValue(entries["编码"]) ||
     "";
 
   const barcode =
@@ -203,6 +204,8 @@ function mapRow(raw: Record<string, unknown>): ParsedRow {
 
   const sell_price =
     toNumber(entries["sell_price"]) ??
+    toNumber(entries["供应价"]) ??
+    toNumber(entries["单价mxn"]) ??
     toNumber(entries["单价"]) ??
     toNumber(entries["price"]);
 
@@ -544,11 +547,11 @@ export function ImportClient({
       lang === "zh"
         ? {
             choose: "上传文件",
-            downloadTemplate: "下载文件模板",
+            downloadTemplate: "导入文件下载模板",
             selected: "已选择文件",
             previewTitle: "导入预览",
             previewDesc:
-              "仅显示前 5 行 便于当前页面完整查看图片 单号 供应商 折扣和金额信息",
+              "仅显示前 5 行，便于当前页面查看图片、友购订单号、供应商、编码、数量与供应价",
             noData: "当前还没有读取到文件内容",
             validate: "检查文件",
             importBtn: "正式导入",
@@ -564,14 +567,13 @@ export function ImportClient({
             importDone: "导入已完成 现在可以前往验货单列表查看",
             goReceipts: "去验货单列表",
             colImage: "图片",
-            colReceipt: "单号",
+            colReceipt: "友购订单号",
             colSupplier: "供应商",
-            colSku: "SKU",
+            colSku: "编码",
             colQty: "数量",
-            colPrice: "单价 MXN",
-            colNormalDiscount: "普通折扣",
-            colVipDiscount: "VIP折扣",
-            colAmount: "金额 MXN",
+            colBarcode: "条形码",
+            colCasePack: "中包数",
+            colPrice: "供应价",
             close: "关闭",
             modalTitleHeader: "请调整表格规范",
             modalTitleExists: "此验货单已存在",
@@ -625,11 +627,10 @@ export function ImportClient({
             colReceipt: "Número",
             colSupplier: "Proveedor",
             colSku: "SKU",
+            colBarcode: "C\u00f3digo de barras",
+            colCasePack: "Paquete",
             colQty: "Cantidad",
-            colPrice: "Precio MXN",
-            colNormalDiscount: "Descuento normal",
-            colVipDiscount: "Descuento VIP",
-            colAmount: "Importe MXN",
+            colPrice: "Precio proveedor",
             close: "Cerrar",
             modalTitleHeader: "Ajusta el formato del archivo",
             modalTitleExists: "La recepción ya existe",
@@ -740,6 +741,9 @@ export function ImportClient({
       setValidateResult(data);
 
       if (data.ok) {
+        if (data.normalizedRows?.length) {
+          setRows(data.normalizedRows);
+        }
         const lines = data.summary
           ? [
               `${text.statTotalRows}：${data.summary.totalRows}`,
@@ -1038,19 +1042,16 @@ export function ImportClient({
                           {text.colSku}
                         </th>
                         <th className="px-4 py-3 font-semibold">
+                          {text.colBarcode}
+                        </th>
+                        <th className="px-4 py-3 font-semibold">
+                          {text.colCasePack}
+                        </th>
+                        <th className="px-4 py-3 font-semibold">
                           {text.colQty}
                         </th>
                         <th className="px-4 py-3 font-semibold">
                           {text.colPrice}
-                        </th>
-                        <th className="px-4 py-3 font-semibold">
-                          {text.colNormalDiscount}
-                        </th>
-                        <th className="px-4 py-3 font-semibold">
-                          {text.colVipDiscount}
-                        </th>
-                        <th className="px-4 py-3 font-semibold">
-                          {text.colAmount}
                         </th>
                       </tr>
                     </thead>
@@ -1094,23 +1095,19 @@ export function ImportClient({
                             </td>
 
                             <td className="px-4 py-3 text-sm text-slate-700">
+                              {row.barcode || "-"}
+                            </td>
+
+                            <td className="px-4 py-3 text-sm text-slate-700">
+                              {row.case_pack ?? "-"}
+                            </td>
+
+                            <td className="px-4 py-3 text-sm text-slate-700">
                               {row.expected_qty ?? "-"}
                             </td>
 
                             <td className="px-4 py-3 text-sm text-slate-700">
                               {formatCurrency(row.sell_price)}
-                            </td>
-
-                            <td className="px-4 py-3 text-sm text-slate-700">
-                              {formatDiscount(row.normal_discount)}
-                            </td>
-
-                            <td className="px-4 py-3 text-sm text-slate-700">
-                              {formatDiscount(row.vip_discount)}
-                            </td>
-
-                            <td className="px-4 py-3 text-sm font-medium text-slate-900">
-                              {formatCurrency(row.line_total)}
                             </td>
                           </tr>
                         );
