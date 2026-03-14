@@ -436,7 +436,7 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
               <table className="w-full table-auto border-separate border-spacing-0">
                 <colgroup>
                   <col className="w-[9%]" />
-                  <col className="w-[7%]" />
+                  <col className="w-[72px]" />
                   <col className="w-[9%]" />
                   <col className="w-[12%]" />
                   <col className="w-[12%]" />
