@@ -479,6 +479,8 @@ export async function buildSupplierOrderPdf(
     : await pdfDoc.embedFont(StandardFonts.Helvetica);
   const esFont = latinFontBytes
     ? await pdfDoc.embedFont(latinFontBytes, { subset: false })
+    : fontBytes
+    ? bodyFont
     : await pdfDoc.embedFont(StandardFonts.Helvetica);
   const latinBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const boldFont = boldFontBytes
@@ -498,7 +500,10 @@ export async function buildSupplierOrderPdf(
     for (const chunk of chunks) {
       const safeChunk = safePdfText(chunk, unicodeSafe);
       if (!safeChunk) continue;
-      const chunkFont = hasChineseGlyph(chunk) ? bodyFont : esFont;
+      const chunkFont =
+        hasChineseGlyph(chunk) || (unicodeSafe && /[^\x00-\x7F]/.test(chunk))
+          ? bodyFont
+          : esFont;
       page.drawText(safeChunk, {
         x: cursorX,
         y: drawY,
