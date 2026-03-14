@@ -91,6 +91,31 @@ type ComparePreviewRow = {
   compareState: "上架" | "下架" | "新增";
 };
 
+function ComparePreviewImageCell({ sku }: { sku: string }) {
+  const [failed, setFailed] = useState(false);
+  const normalizedSku = String(sku || "").trim();
+  const src = normalizedSku ? buildProductImageUrl(normalizedSku, "jpg") : "";
+
+  if (!normalizedSku || failed) {
+    return (
+      <div className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-[11px] font-medium text-slate-400">
+        空
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={normalizedSku}
+      width={32}
+      height={32}
+      className="h-8 w-8 rounded-md border border-slate-200 bg-white object-cover"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 const PAGE_SIZE = 50;
 
 const vipLast = (s: string) => {
@@ -1499,7 +1524,7 @@ export function ProductsManagementClient({
                   {comparePreview.rows.map((r, idx) => (
                     <tr key={`${r.sku}-${idx}`} className="border-t border-slate-100">
                       <td className="px-3 py-2">
-                        <ProductImage sku={r.imageSku} hasImage size={32} roundedClassName="rounded-md" />
+                        <ComparePreviewImageCell sku={r.imageSku} />
                       </td>
                       <td className="px-3 py-2 font-semibold text-slate-900">{r.sku}</td>
                       <td className="px-3 py-2">{r.barcode || "-"}</td>
