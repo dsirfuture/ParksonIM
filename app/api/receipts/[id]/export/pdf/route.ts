@@ -5,6 +5,7 @@ import { PDFDocument, rgb, StandardFonts, type PDFFont } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
+import { buildProductImageUrls } from "@/lib/product-image-url";
 
 function hasChineseGlyph(value: string) {
   return /[\u3400-\u9FFF\uF900-\uFAFF]/.test(String(value || ""));
@@ -90,7 +91,7 @@ function computeRow(item: {
     diffQty,
     damagedQty,
     excessQty,
-    remark: item.unexpected ? "鏂板" : "",
+    remark: item.unexpected ? "新增" : "",
     unexpected: item.unexpected,
   };
 }
@@ -137,18 +138,36 @@ async function loadLatinFontBytes() {
 async function loadProductImageBuffer(sku: string) {
   if (!sku) return null;
 
-  const imagePath = path.join(
-    process.cwd(),
-    "public",
-    "products",
-    `${sku}.jpg`,
-  );
-
-  try {
-    return await fs.readFile(imagePath);
-  } catch {
-    return null;
+  const localExts = ["jpg", "jpeg", "png", "webp", "JPG", "JPEG", "PNG", "WEBP"];
+  for (const ext of localExts) {
+    const imagePath = path.join(
+      process.cwd(),
+      "public",
+      "products",
+      `${sku}.${ext}`,
+    );
+    try {
+      return await fs.readFile(imagePath);
+    } catch {
+      // try next ext
+    }
   }
+
+  const remoteUrls = buildProductImageUrls(sku, ["jpg", "jpeg", "png", "webp"]);
+  for (const url of remoteUrls) {
+    try {
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) continue;
+      const arrayBuffer = await response.arrayBuffer();
+      if (arrayBuffer.byteLength > 0) {
+        return Buffer.from(arrayBuffer);
+      }
+    } catch {
+      // try next url
+    }
+  }
+
+  return null;
 }
 
 function safePdfText(value: string, unicodeSafe: boolean) {
@@ -241,7 +260,7 @@ export async function GET(
     });
 
     if (!receipt) {
-      return NextResponse.json({ error: "鏈壘鍒伴獙璐у崟" }, { status: 404 });
+      return NextResponse.json({ error: "未找到验货单" }, { status: 404 });
     }
 
     const receiptData = receipt;
@@ -283,23 +302,23 @@ export async function GET(
     const cellPaddingY = 6;
 
     const columns = [
-      { key: "image", label: "鍥剧墖", width: 44, align: "center" as const },
+      { key: "image", label: "图片", width: 44, align: "center" as const },
       { key: "sku", label: "SKU", width: 72, align: "center" as const },
-      { key: "barcode", label: "鏉＄爜", width: 92, align: "center" as const },
+      { key: "barcode", label: "条码", width: 92, align: "center" as const },
       { key: "nameZh", label: "中文名", width: 128, align: "left" as const },
       { key: "nameEs", label: "西文名", width: 128, align: "left" as const },
       {
         key: "expectedQty",
-        label: "搴旈獙",
+        label: "应验",
         width: 42,
         align: "center" as const,
       },
-      { key: "unitPrice", label: "鍗曚环", width: 52, align: "center" as const },
-      { key: "goodQty", label: "鑹搧", width: 42, align: "center" as const },
-      { key: "diffQty", label: "鐩稿樊", width: 42, align: "center" as const },
-      { key: "damagedQty", label: "鐮存崯", width: 42, align: "center" as const },
-      { key: "excessQty", label: "瓒呮敹", width: 42, align: "center" as const },
-      { key: "remark", label: "澶囨敞", width: 50, align: "center" as const },
+      { key: "unitPrice", label: "单价", width: 52, align: "center" as const },
+      { key: "goodQty", label: "良品", width: 42, align: "center" as const },
+      { key: "diffQty", label: "相差", width: 42, align: "center" as const },
+      { key: "damagedQty", label: "破损", width: 42, align: "center" as const },
+      { key: "excessQty", label: "超收", width: 42, align: "center" as const },
+      { key: "remark", label: "备注", width: 50, align: "center" as const },
     ];
 
     const tableWidth = columns.reduce((sum, col) => sum + col.width, 0);
@@ -337,15 +356,16 @@ export async function GET(
       cellWidth: number,
       cellHeight: number,
       size = tableFontSize,
-      font: PDFFont = bodyFont,
+      font?: PDFFont,
       color?: { r: number; g: number; b: number },
     ) {
       const safeText = safePdfText(text, unicodeSafe);
-      const textWidth = font.widthOfTextAtSize(safeText, size);
+      const actualFont = font ?? fontForText(safeText);
+      const textWidth = actualFont.widthOfTextAtSize(safeText, size);
       const x = cellX + Math.max((cellWidth - textWidth) / 2, 2);
       const y = cellY + (cellHeight - size) / 2 + 1;
 
-      drawText(safeText, x, y, { size, font, color });
+      drawText(safeText, x, y, { size, font: actualFont, color });
     }
 
     function drawLeftAlignedWrappedText(
@@ -372,7 +392,7 @@ export async function GET(
       cursorY -= 32;
 
       drawText(
-        `楠岃揣鍗曞彿:  ${receiptData.receipt_no || ""}`,
+        `验货单号:  ${receiptData.receipt_no || ""}`,
         marginLeft + 6,
         cursorY,
         {
@@ -382,7 +402,7 @@ export async function GET(
       cursorY -= 20;
 
       drawText(
-        `渚涘簲鍟嗗悕绉?  ${receiptData.supplier_name || ""}`,
+        `供应商名称:  ${receiptData.supplier_name || ""}`,
         marginLeft + 6,
         cursorY,
         {
@@ -392,7 +412,7 @@ export async function GET(
       cursorY -= 20;
 
       drawText(
-        `楠岃揣鏃堕棿:  ${formatTime(receiptData.last_activity_at)}`,
+        `验货时间:  ${formatTime(receiptData.last_activity_at)}`,
         marginLeft + 6,
         cursorY,
         {
@@ -499,7 +519,12 @@ export async function GET(
 
       if (imageBuffer) {
         try {
-          const image = await pdfDoc.embedJpg(imageBuffer);
+          let image;
+          try {
+            image = await pdfDoc.embedJpg(imageBuffer);
+          } catch {
+            image = await pdfDoc.embedPng(imageBuffer);
+          }
           const imageSize = Math.min(28, imageCellW - 8, imageCellH - 8);
 
           page.drawImage(image, {
@@ -625,7 +650,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "瀵煎嚭 PDF 澶辫触";
+    const message = error instanceof Error ? error.message : "导出 PDF 失败";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
