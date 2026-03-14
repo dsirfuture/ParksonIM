@@ -71,10 +71,10 @@ export function YgOrdersClient({ initialRows }: YgOrdersClientProps) {
       const formData = new FormData(); formData.append("file", file);
       const response = await fetch("/api/yg-orders/import", { method: "POST", body: formData });
       const result = await response.json();
-      if (!response.ok || !result?.ok) throw new Error(result?.error || tx("µ¼ÈëÊ§°Ü", "Import fail"));
+      if (!response.ok || !result?.ok) throw new Error(result?.error || tx("å¯¼å…¥å¤±è´¥", "Import fail"));
       window.location.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : tx("µ¼ÈëÊ§°Ü", "Import fail"));
+      setError(e instanceof Error ? e.message : tx("å¯¼å…¥å¤±è´¥", "Import fail"));
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -93,10 +93,10 @@ export function YgOrdersClient({ initialRows }: YgOrdersClientProps) {
       setEditSaving(true); setEditError("");
       const response = await fetch(`/api/yg-orders/${editState.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customerName: editState.customerName.trim(), addressText: editState.addressText.trim(), contactPhone: editState.contactText.trim(), remarkText: editState.remarkText.trim(), storeLabel: editState.storeLabelText.trim() }) });
       const result = await response.json();
-      if (!response.ok || !result?.ok) throw new Error(result?.error || tx("±£´æÊ§°Ü", "Save fail"));
+      if (!response.ok || !result?.ok) throw new Error(result?.error || tx("ä¿å­˜å¤±è´¥", "Save fail"));
       setRows((prev) => prev.map((row) => row.id === editState.id ? { ...row, customerName: result.data.customerName ?? row.customerName, companyName: result.data.customerName ?? row.companyName, contactName: result.data.customerName ?? row.contactName, contactPhone: result.data.contactText ?? row.contactPhone, addressText: result.data.addressText ?? row.addressText, remarkText: result.data.remarkText ?? row.remarkText, storeLabelText: result.data.storeLabelText ?? row.storeLabelText } : row));
       setEditState(null);
-    } catch (e) { setEditError(e instanceof Error ? e.message : tx("±£´æÊ§°Ü", "Save fail")); }
+    } catch (e) { setEditError(e instanceof Error ? e.message : tx("ä¿å­˜å¤±è´¥", "Save fail")); }
     finally { setEditSaving(false); }
   }
 
@@ -117,9 +117,9 @@ export function YgOrdersClient({ initialRows }: YgOrdersClientProps) {
           <div className="space-y-4 px-5 py-5">
             <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-6">
               <div className="flex flex-col items-center justify-center gap-4 text-center lg:flex-row lg:justify-center lg:gap-8">
-                <div className="text-xs text-slate-500">{tx("½ÓÊÜµ¼Èë¸ñÊ½ XLS ºÍ XLSX¡£", "Acepta XLS/XLSX")}</div>
+                <div className="text-xs text-slate-500">{tx("æ¥å—å¯¼å…¥æ ¼å¼ XLS å’Œ XLSXã€‚", "Acepta XLS/XLSX")}</div>
                 <label className="inline-flex h-10 cursor-pointer items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-white shadow-soft transition hover:opacity-95">
-                  {uploading ? tx("µ¼ÈëÖĞ...", "Import...") : tx("µ¼ÈëÓÑ¹º¶©µ¥", "Import YG")}
+                  {uploading ? tx("å¯¼å…¥ä¸­...", "Import...") : tx("å¯¼å…¥å‹è´­è®¢å•", "Import YG")}
                   <input ref={fileInputRef} type="file" accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleChooseFile(file); }} />
                 </label>
               </div>
@@ -128,22 +128,22 @@ export function YgOrdersClient({ initialRows }: YgOrdersClientProps) {
           </div>
         </TableCard>
 
-        <TableCard title={tx("ÓÑ¹º¶©µ¥ÁĞ±í", "Pedidos YG")} description="" className="!mt-0">
+        <TableCard title={tx("å‹è´­è®¢å•åˆ—è¡¨", "Pedidos YG")} description="" className="!mt-0">
           <div className="space-y-4 px-5 py-5">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="text-sm text-slate-500">{tx("°´¶©µ¥²é¿´Í¬²½½á¹û", "Ver resultado")}</div>
-              <div className="w-full lg:w-[420px]"><input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder={tx("ËÑË÷¶©µ¥ºÅ¡¢×´Ì¬¡¢¿Í»§¡¢µç»°¡¢±¸×¢", "Buscar")} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-primary/40" /></div>
+              <div className="text-sm text-slate-500">{tx("æŒ‰è®¢å•æŸ¥çœ‹åŒæ­¥ç»“æœ", "Ver resultado")}</div>
+              <div className="w-full lg:w-[420px]"><input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder={tx("æœç´¢è®¢å•å·ã€çŠ¶æ€ã€å®¢æˆ·ã€ç”µè¯ã€å¤‡æ³¨", "Buscar")} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-primary/40" /></div>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1650px] border-separate border-spacing-0">
                 <thead>
                   <tr className="bg-slate-50 text-left text-xs text-slate-500">
-                    <th className="px-3 py-2.5 font-semibold text-slate-700">{tx("¶©µ¥±àºÅ", "No")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("¶©µ¥×´Ì¬", "Estado")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("¶©µ¥ÈÕÆÚ", "Fecha")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("¹«Ë¾Ãû³Æ", "Empresa")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("ÁªÏµÈË", "Contacto")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("ÁªÏµµç»°", "Tel")}</th><th className="px-3 py-2.5 text-right font-semibold text-slate-700">{tx("¶©µ¥½ğ¶î", "Monto")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("±¸×¢", "Nota")}</th><th className="px-3 py-2.5 text-right font-semibold text-slate-700">{tx("ÉÌÆ·ÊıÁ¿", "Items")}</th><th className="px-3 py-2.5 text-right font-semibold text-slate-700">{tx("¹©Ó¦ÉÌÊıÁ¿", "Prov")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("µÚ¼¸ÃÅµê", "Tienda")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("²Ù×÷", "Acciones")}</th>
+                    <th className="px-3 py-2.5 font-semibold text-slate-700">{tx("è®¢å•ç¼–å·", "No")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("è®¢å•çŠ¶æ€", "Estado")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("è®¢å•æ—¥æœŸ", "Fecha")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("å…¬å¸åç§°", "Empresa")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("è”ç³»äºº", "Contacto")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("è”ç³»ç”µè¯", "Tel")}</th><th className="px-3 py-2.5 text-right font-semibold text-slate-700">{tx("è®¢å•é‡‘é¢", "Monto")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("å¤‡æ³¨", "Nota")}</th><th className="px-3 py-2.5 text-right font-semibold text-slate-700">{tx("å•†å“æ•°é‡", "Items")}</th><th className="px-3 py-2.5 text-right font-semibold text-slate-700">{tx("ä¾›åº”å•†æ•°é‡", "Prov")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("ç¬¬å‡ é—¨åº—", "Tienda")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("æ“ä½œ", "Acciones")}</th>
                   </tr>
                 </thead>
                 <tbody className="text-[13px]">
-                  {filteredRows.length === 0 ? <tr><td colSpan={12} className="px-3 py-10 text-center text-slate-500">{tx("ÔİÎŞ¶©µ¥Êı¾İ", "Sin datos")}</td></tr> : filteredRows.map((row) => {
+                  {filteredRows.length === 0 ? <tr><td colSpan={12} className="px-3 py-10 text-center text-slate-500">{tx("æš‚æ— è®¢å•æ•°æ®", "Sin datos")}</td></tr> : filteredRows.map((row) => {
                     const expanded = expandedOrderIds.includes(row.id);
                     const allItems = row.supplierOrders.flatMap((s) => s.items);
                     return (
@@ -163,13 +163,13 @@ export function YgOrdersClient({ initialRows }: YgOrdersClientProps) {
                 <section key={`${row.id}-split`} className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50/60">
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[900px] border-separate border-spacing-0">
-                      <thead><tr className="bg-slate-50 text-left text-xs text-slate-500"><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("²ğ·Ö¶©µ¥ºÅ", "Split")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("¹©Ó¦ÉÌ", "Prov")}</th><th className="px-3 py-2.5 text-right font-semibold text-slate-700">{tx("¶©µ¥½ğ¶î", "Monto")}</th><th className="px-3 py-2.5 text-right font-semibold text-slate-700">{tx("ÉÌÆ·ÊıÁ¿", "Items")}</th><th className="px-3 py-2.5 text-center font-semibold text-slate-700">{tx("Ô¤ÀÀ", "Ver")}</th><th className="px-3 py-2.5 text-center font-semibold text-slate-700">{tx("µ¼³öÎÄ¼ş", "Export")}</th></tr></thead>
+                      <thead><tr className="bg-slate-50 text-left text-xs text-slate-500"><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("æ‹†åˆ†è®¢å•å·", "Split")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("ä¾›åº”å•†", "Prov")}</th><th className="px-3 py-2.5 text-right font-semibold text-slate-700">{tx("è®¢å•é‡‘é¢", "Monto")}</th><th className="px-3 py-2.5 text-right font-semibold text-slate-700">{tx("å•†å“æ•°é‡", "Items")}</th><th className="px-3 py-2.5 text-center font-semibold text-slate-700">{tx("é¢„è§ˆ", "Ver")}</th><th className="px-3 py-2.5 text-center font-semibold text-slate-700">{tx("å¯¼å‡ºæ–‡ä»¶", "Export")}</th></tr></thead>
                       <tbody className="text-[13px]">
                         {row.supplierOrders.map((so) => (
                           <tr key={so.id} className="border-t border-slate-100 bg-white">
                             <td className="px-3 py-2 text-slate-700">{so.derivedOrderNo}</td><td className="px-3 py-2 text-slate-700">{so.supplierCode}</td><td className="px-3 py-2 text-right tabular-nums text-slate-700">{so.orderAmountText}</td><td className="px-3 py-2 text-right tabular-nums text-slate-700">{so.itemCount}</td>
                             <td className="px-3 py-2 text-center"><button type="button" onClick={() => { setDetailState({ orderNo: so.derivedOrderNo, orderAmountText: so.orderAmountText, items: so.items }); setPreviewPage(1); }} className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700"><EyeIcon /></button></td>
-                            <td className="px-3 py-2 text-center"><button type="button" onClick={() => setExportState({ importId: row.id, supplierOrderId: so.id })} className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700">{tx("µ¼³öÎÄ¼ş", "Export")}</button></td>
+                            <td className="px-3 py-2 text-center"><button type="button" onClick={() => setExportState({ importId: row.id, supplierOrderId: so.id })} className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700">{tx("å¯¼å‡ºæ–‡ä»¶", "Export")}</button></td>
                           </tr>
                         ))}
                       </tbody>
@@ -185,11 +185,11 @@ export function YgOrdersClient({ initialRows }: YgOrdersClientProps) {
       {detailState ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
           <div className="w-full max-w-[1240px] rounded-xl bg-white shadow-2xl">
-            <div className="border-b border-slate-200 px-5 py-4"><h3 className="text-base font-semibold text-slate-900">{tx("¶©µ¥ÏêÇéÔ¤ÀÀ", "Detalle")}</h3><p className="mt-1 text-sm text-slate-500">{detailState.orderNo}</p></div>
+            <div className="border-b border-slate-200 px-5 py-4"><h3 className="text-base font-semibold text-slate-900">{tx("è®¢å•è¯¦æƒ…é¢„è§ˆ", "Detalle")}</h3><p className="mt-1 text-sm text-slate-500">{detailState.orderNo}</p></div>
             <div className="space-y-4 px-5 py-5">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[1200px] border-separate border-spacing-0">
-                  <thead><tr className="bg-slate-50 text-left text-xs text-slate-500"><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("²úÆ·Í¼Æ¬", "Img")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("ÉÌÆ·", "Producto")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("ÌõĞÎÂë", "Cod")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("¹©Ó¦ÉÌ£¨Î»ÖÃ£©", "Ubic")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("ÖĞÎÄÃû", "CN")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("Î÷ÎÄÃû", "ES")}</th><th className="px-3 py-2.5 text-right font-semibold text-slate-700">{tx("ÊıÁ¿", "Cant")}</th><th className="px-3 py-2.5 text-right font-semibold text-slate-700">{tx("µ¥¼Û", "Precio")}</th><th className="px-3 py-2.5 text-right font-semibold text-slate-700">{tx("ÆÕÍ¨ÕÛ¿Û", "Desc")}</th><th className="px-3 py-2.5 text-right font-semibold text-slate-700">{tx("VIPÕÛ¿Û", "VIP")}</th><th className="px-3 py-2.5 text-right font-semibold text-slate-700">{tx("ĞĞ½ğ¶î / Ğ¡¼Æ", "Subtotal")}</th></tr></thead>
+                  <thead><tr className="bg-slate-50 text-left text-xs text-slate-500"><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("äº§å“å›¾ç‰‡", "Img")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("å•†å“", "Producto")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("æ¡å½¢ç ", "Cod")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("ä¾›åº”å•†ï¼ˆä½ç½®ï¼‰", "Ubic")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("ä¸­æ–‡å", "CN")}</th><th className="px-3 py-2.5 font-semibold text-slate-700">{tx("è¥¿æ–‡å", "ES")}</th><th className="px-3 py-2.5 text-right font-semibold text-slate-700">{tx("æ•°é‡", "Cant")}</th><th className="px-3 py-2.5 text-right font-semibold text-slate-700">{tx("å•ä»·", "Precio")}</th><th className="px-3 py-2.5 text-right font-semibold text-slate-700">{tx("æ™®é€šæŠ˜æ‰£", "Desc")}</th><th className="px-3 py-2.5 text-right font-semibold text-slate-700">{tx("VIPæŠ˜æ‰£", "VIP")}</th><th className="px-3 py-2.5 text-right font-semibold text-slate-700">{tx("è¡Œé‡‘é¢ / å°è®¡", "Subtotal")}</th></tr></thead>
                   <tbody className="text-[13px]">
                     {pagedPreviewItems.map((item) => (
                       <tr key={item.id} className="border-t border-slate-100"><td className="px-3 py-2"><PreviewProductImage itemNo={item.itemNo} barcode={item.barcode} /></td><td className="px-3 py-2 text-slate-700">{item.productName || item.itemNo || item.barcode || "-"}</td><td className="px-3 py-2 text-slate-700">{item.barcode || "-"}</td><td className="px-3 py-2 text-slate-700">{item.location || "-"}</td><td className="px-3 py-2 text-slate-700">{item.nameCn || "-"}</td><td className="px-3 py-2 text-slate-700">{item.nameEs || "-"}</td><td className="px-3 py-2 text-right tabular-nums text-slate-700">{item.totalQty}</td><td className="px-3 py-2 text-right tabular-nums text-slate-700">{item.unitPriceText}</td><td className="px-3 py-2 text-right tabular-nums text-slate-700">{item.normalDiscount || "-"}</td><td className="px-3 py-2 text-right tabular-nums text-slate-700">{item.vipDiscount || "-"}</td><td className="px-3 py-2 text-right tabular-nums text-slate-700">{item.lineTotalText}</td></tr>
@@ -197,27 +197,27 @@ export function YgOrdersClient({ initialRows }: YgOrdersClientProps) {
                   </tbody>
                 </table>
               </div>
-              <div className="flex items-center justify-center gap-2"><button type="button" onClick={() => setPreviewPage((p) => Math.max(1, p - 1))} disabled={previewPage <= 1} className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-40">{tx("ÉÏÒ»Ò³", "Ant")}</button><div className="inline-flex h-9 min-w-10 items-center justify-center rounded-xl border border-slate-300 bg-slate-50 px-3 text-sm font-semibold text-slate-700">{previewPage} / {previewTotalPages}</div><button type="button" onClick={() => setPreviewPage((p) => Math.min(previewTotalPages, p + 1))} disabled={previewPage >= previewTotalPages} className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-40">{tx("ÏÂÒ»Ò³", "Sig")}</button></div>
+              <div className="flex items-center justify-center gap-2"><button type="button" onClick={() => setPreviewPage((p) => Math.max(1, p - 1))} disabled={previewPage <= 1} className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-40">{tx("ä¸Šä¸€é¡µ", "Ant")}</button><div className="inline-flex h-9 min-w-10 items-center justify-center rounded-xl border border-slate-300 bg-slate-50 px-3 text-sm font-semibold text-slate-700">{previewPage} / {previewTotalPages}</div><button type="button" onClick={() => setPreviewPage((p) => Math.min(previewTotalPages, p + 1))} disabled={previewPage >= previewTotalPages} className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-40">{tx("ä¸‹ä¸€é¡µ", "Sig")}</button></div>
             </div>
-            <div className="flex justify-end border-t border-slate-200 px-5 py-4"><button type="button" onClick={() => setDetailState(null)} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">{tx("¹Ø±Õ", "Cerrar")}</button></div>
+            <div className="flex justify-end border-t border-slate-200 px-5 py-4"><button type="button" onClick={() => setDetailState(null)} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">{tx("å…³é—­", "Cerrar")}</button></div>
           </div>
         </div>
       ) : null}
       {editState ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
           <div className="w-full max-w-[560px] rounded-xl bg-white shadow-2xl">
-            <div className="border-b border-slate-200 px-5 py-4"><h3 className="text-base font-semibold text-slate-900">{tx("±à¼­¿Í»§ĞÅÏ¢", "Editar cliente")}</h3></div>
+            <div className="border-b border-slate-200 px-5 py-4"><h3 className="text-base font-semibold text-slate-900">{tx("ç¼–è¾‘å®¢æˆ·ä¿¡æ¯", "Editar cliente")}</h3></div>
             <div className="space-y-4 px-5 py-5">
-              <div><label className="text-xs text-slate-500">{tx("¿Í»§Ãû³Æ", "Cliente")}</label><input value={editState.customerName} onChange={(e) => updateEditField("customerName", e.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary/40" /></div>
-              <div><label className="text-xs text-slate-500">{tx("µØÖ·", "Direcci¨®n")}</label><input value={editState.addressText} onChange={(e) => updateEditField("addressText", e.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary/40" /></div>
+              <div><label className="text-xs text-slate-500">{tx("å®¢æˆ·åç§°", "Cliente")}</label><input value={editState.customerName} onChange={(e) => updateEditField("customerName", e.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary/40" /></div>
+              <div><label className="text-xs text-slate-500">{tx("åœ°å€", "DirecciÃ³n")}</label><input value={editState.addressText} onChange={(e) => updateEditField("addressText", e.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary/40" /></div>
               <div className="grid gap-3 lg:grid-cols-3">
-                <div><label className="text-xs text-slate-500">{tx("ÁªÏµµç»°", "Tel")}</label><input value={editState.contactText} onChange={(e) => updateEditField("contactText", e.target.value)} placeholder="+52XXXXXXXXXX" className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary/40" /></div>
-                <div><label className="text-xs text-slate-500">{tx("±¸×¢", "Nota")}</label><input value={editState.remarkText} onChange={(e) => updateEditField("remarkText", e.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary/40" /></div>
-                <div><label className="text-xs text-slate-500">{tx("µÚ¼¸ÃÅµê", "Tienda")}</label><input value={editState.storeLabelText} onChange={(e) => updateEditField("storeLabelText", e.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary/40" /></div>
+                <div><label className="text-xs text-slate-500">{tx("è”ç³»ç”µè¯", "Tel")}</label><input value={editState.contactText} onChange={(e) => updateEditField("contactText", e.target.value)} placeholder="+52XXXXXXXXXX" className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary/40" /></div>
+                <div><label className="text-xs text-slate-500">{tx("å¤‡æ³¨", "Nota")}</label><input value={editState.remarkText} onChange={(e) => updateEditField("remarkText", e.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary/40" /></div>
+                <div><label className="text-xs text-slate-500">{tx("ç¬¬å‡ é—¨åº—", "Tienda")}</label><input value={editState.storeLabelText} onChange={(e) => updateEditField("storeLabelText", e.target.value)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary/40" /></div>
               </div>
               {editError ? <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-600">{editError}</div> : null}
             </div>
-            <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4"><button type="button" onClick={() => setEditState(null)} disabled={editSaving} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40">{tx("È¡Ïû", "Canc")}</button><button type="button" onClick={() => void saveEdit()} disabled={editSaving} className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{editSaving ? tx("±£´æÖĞ...", "Guard...") : tx("±£´æ", "Guardar")}</button></div>
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4"><button type="button" onClick={() => setEditState(null)} disabled={editSaving} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40">{tx("å–æ¶ˆ", "Canc")}</button><button type="button" onClick={() => void saveEdit()} disabled={editSaving} className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{editSaving ? tx("ä¿å­˜ä¸­...", "Guard...") : tx("ä¿å­˜", "Guardar")}</button></div>
           </div>
         </div>
       ) : null}
@@ -225,13 +225,13 @@ export function YgOrdersClient({ initialRows }: YgOrdersClientProps) {
       {exportState ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
           <div className="w-full max-w-[460px] rounded-xl bg-white shadow-2xl">
-            <div className="border-b border-slate-200 px-5 py-4"><h3 className="text-base font-semibold text-slate-900">{tx("µ¼³öÎÄ¼ş", "Export")}</h3></div>
+            <div className="border-b border-slate-200 px-5 py-4"><h3 className="text-base font-semibold text-slate-900">{tx("å¯¼å‡ºæ–‡ä»¶", "Export")}</h3></div>
             <div className="px-5 py-6"><div className="grid grid-cols-3 gap-4">
               <a href={`/api/yg-orders/supplier-orders/${exportState.supplierOrderId}/export/xlsx`} className="flex flex-col items-center justify-center rounded-2xl bg-white px-4 py-6 transition hover:bg-slate-50" onClick={() => setExportState(null)}><FileIcon label="XLSX" /><div className="mt-3 text-sm font-semibold text-slate-700">XLSX</div></a>
               <a href={`/api/yg-orders/supplier-orders/${exportState.supplierOrderId}/export/pdf`} target="_blank" rel="noreferrer" className="flex flex-col items-center justify-center rounded-2xl bg-white px-4 py-6 transition hover:bg-slate-50" onClick={() => setExportState(null)}><FileIcon label="PDF" /><div className="mt-3 text-sm font-semibold text-slate-700">PDF</div></a>
-              <a href={`/api/yg-orders/${exportState.importId}/export/zip`} className="flex flex-col items-center justify-center rounded-2xl bg-white px-4 py-6 transition hover:bg-slate-50" onClick={() => setExportState(null)}><FileIcon label="ZIP" /><div className="mt-3 text-sm font-semibold text-slate-700">{tx("È«²¿Ñ¹Ëõ°ü", "ZIP total")}</div></a>
+              <a href={`/api/yg-orders/${exportState.importId}/export/zip`} className="flex flex-col items-center justify-center rounded-2xl bg-white px-4 py-6 transition hover:bg-slate-50" onClick={() => setExportState(null)}><FileIcon label="ZIP" /><div className="mt-3 text-sm font-semibold text-slate-700">{tx("å…¨éƒ¨å‹ç¼©åŒ…", "ZIP total")}</div></a>
             </div></div>
-            <div className="flex justify-end px-5 py-4"><button type="button" onClick={() => setExportState(null)} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">{tx("¹Ø±Õ", "Cerrar")}</button></div>
+            <div className="flex justify-end px-5 py-4"><button type="button" onClick={() => setExportState(null)} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">{tx("å…³é—­", "Cerrar")}</button></div>
           </div>
         </div>
       ) : null}
