@@ -1446,7 +1446,7 @@ export function ProductsManagementClient({
                 </button>
               </div>
             </div>
-            <div className="max-h-[70vh] overflow-auto p-4">
+            <div className="max-h-[70vh] overflow-auto">
               <table className="w-full min-w-[1120px] border-separate border-spacing-0">
                 <thead className="sticky top-0 z-10 bg-slate-50">
                   <tr className="bg-slate-50 text-left text-xs text-slate-500">
