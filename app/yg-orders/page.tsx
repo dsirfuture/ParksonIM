@@ -1,4 +1,4 @@
-import { AppShell } from "@/components/app-shell";
+﻿import { AppShell } from "@/components/app-shell";
 import { prisma } from "@/lib/prisma";
 import { parseYogoDiscountParts } from "@/lib/yogo-product-utils";
 import { getSession } from "@/lib/tenant";
@@ -125,11 +125,12 @@ function normalizeOrderStatus(value: string | null | undefined) {
   const raw = String(value || "").trim();
   if (!raw) return "-";
   const key = raw.toLowerCase();
-  if (key === "1" || raw === "新订单") return "新订单";
-  if (key === "2" || raw === "配货中") return "配货中";
+  if (key === "1" || key === "new" || key === "new_order" || key === "new order" || raw === "新订单") return "新订单";
+  if (key === "2" || key === "packing" || key === "picking" || raw === "配货中") return "配货中";
+  if (/^\s*鏂/.test(raw)) return "新订单";
+  if (/^\s*閰/.test(raw)) return "配货中";
   return raw;
 }
-
 function normalizeProductText(value: string | null | undefined) {
   const raw = String(value || "")
     .replace(/\uFFFD/g, "")
@@ -147,7 +148,7 @@ function normalizeProductText(value: string | null | undefined) {
 function isLikelyMojibake(value: string | null | undefined) {
   const text = String(value || "");
   if (!text) return false;
-  return /[鍙鐨鎶璇鍟鏄绯鍏閲姘瓒惫鎴€]/.test(text);
+  return /[閸欓惃閹剁拠閸熼弰缁崗闁插鐡掓儷閹粹偓]/.test(text);
 }
 
 function normalizeLookupKey(value: string | null | undefined) {
@@ -520,3 +521,4 @@ export default async function YgOrdersPage() {
     </AppShell>
   );
 }
+

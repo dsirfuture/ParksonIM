@@ -326,6 +326,49 @@ function detectAmountFromPayload(
   return { value: candidates[0].value, keyPath: candidates[0].keyPath };
 }
 
+function detectStatusFromPayload(
+  root: Record<string, unknown>,
+  header: Record<string, unknown> | null,
+  pedidolist: Record<string, unknown> | null,
+): { statusText: string | null; statusId: string | null } {
+  const scopes: Array<Record<string, unknown> | null> = [pedidolist, header, root];
+  const textCandidates: Array<{ score: number; value: string }> = [];
+  const idCandidates: Array<{ score: number; value: string }> = [];
+
+  for (const scope of scopes) {
+    if (!scope) continue;
+    for (const [key, raw] of Object.entries(scope)) {
+      const value = text(raw);
+      if (!value) continue;
+      const k = key.toLowerCase();
+      if (!/(status|state|zhuangtai|鐘舵€?|鐘舵€�)/.test(k)) continue;
+
+      let score = 0;
+      if (scope === pedidolist) score += 40;
+      else if (scope === header) score += 25;
+      else score += 10;
+
+      if (/header[_-]?status|status[_-]?text|state[_-]?text|zhuangtai/.test(k)) score += 20;
+      if (/status[_-]?id|state[_-]?id/.test(k)) score += 15;
+      if (/latest/.test(k)) score -= 10;
+
+      if (/^\d+$/.test(value)) {
+        idCandidates.push({ score, value });
+      } else {
+        textCandidates.push({ score, value });
+      }
+    }
+  }
+
+  textCandidates.sort((a, b) => b.score - a.score);
+  idCandidates.sort((a, b) => b.score - a.score);
+
+  return {
+    statusText: textCandidates[0]?.value || null,
+    statusId: idCandidates[0]?.value || null,
+  };
+}
+
 function parseOrderItem(input: RawOrderItem, index: number): ParsedOrderItem {
   const lineNo = intOrZero(input.line_no ?? input.lineNo) || index + 1;
   const locationPicked = findLocationValue(input);
@@ -402,6 +445,7 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
   const root = input as Record<string, unknown>;
   const header = asObjectOrNull(input.header);
   const pedidolist = asObjectOrNull(input.pedidolist) ?? asObjectOrNull(input.pedidoList);
+  const detectedStatus = detectStatusFromPayload(root, header, pedidolist);
 
   const orderNo = firstNonNull(
     text(input.order_no),
@@ -644,6 +688,7 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
       text(header?.headerStatusId),
       text(header?.status_id),
       text(header?.statusId),
+      detectedStatus.statusId,
     ),
     headerStatus: firstNonNull(
       text(input.header_status),
@@ -664,6 +709,7 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
       text(header?.zhuangtai),
       text(header?.status_text),
       text(header?.header_status_text),
+      detectedStatus.statusText,
     ),
     latestStatus: firstNonNull(
       text(input.latest_status),
