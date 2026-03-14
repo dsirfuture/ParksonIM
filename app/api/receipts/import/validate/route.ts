@@ -57,6 +57,10 @@ function toNumber(value: unknown): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+function normalizeSkuKey(value: string) {
+  return value.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+}
+
 function isAllowedHeader(title: string) {
   const n = normalize(title);
   return Object.values(HEADER_ALIASES).some((aliases) =>
@@ -298,17 +302,19 @@ export async function POST(req: Request) {
     const skuList = [
       ...new Set(
         normalizedRows
-          .map((row) => row.sku.trim().toUpperCase())
+          .map((row) => row.sku.trim())
           .filter((v) => Boolean(v)),
       ),
     ];
-    const productRows =
+    const yogoRows =
       skuList.length > 0
         ? await prisma.yogoProductSource.findMany({
             where: {
               tenant_id: session.tenantId,
               company_id: session.companyId,
-              product_code: { in: skuList },
+              OR: skuList.map((sku) => ({
+                product_code: { equals: sku, mode: "insensitive" as const },
+              })),
             },
             select: {
               product_code: true,
@@ -321,29 +327,93 @@ export async function POST(req: Request) {
           })
         : [];
 
-    const productMap = new Map(
-      productRows.map((item) => [
-        item.product_code.trim().toUpperCase(),
-        {
-          barcode: item.product_no || undefined,
-          name_zh: item.name_cn || undefined,
-          name_es: item.name_es || undefined,
-          case_pack: toNumber(item.case_pack),
-          sell_price: toNumber(item.source_price),
-        },
-      ]),
-    );
+    const catalogRows =
+      skuList.length > 0
+        ? await prisma.productCatalog.findMany({
+            where: {
+              tenant_id: session.tenantId,
+              company_id: session.companyId,
+              OR: skuList.map((sku) => ({
+                sku: { equals: sku, mode: "insensitive" as const },
+              })),
+            },
+            select: {
+              sku: true,
+              barcode: true,
+              name_zh: true,
+              name_es: true,
+              case_pack: true,
+              price: true,
+            },
+          })
+        : [];
+
+    const yogoMap = new Map<
+      string,
+      {
+        barcode?: string;
+        name_zh?: string;
+        name_es?: string;
+        case_pack?: number;
+        sell_price?: number;
+      }
+    >();
+
+    for (const item of yogoRows) {
+      const payload = {
+        barcode: item.product_no || undefined,
+        name_zh: item.name_cn || undefined,
+        name_es: item.name_es || undefined,
+        case_pack: toNumber(item.case_pack),
+        sell_price: toNumber(item.source_price),
+      };
+      const exactKey = item.product_code.trim().toUpperCase();
+      const looseKey = normalizeSkuKey(item.product_code);
+      if (!yogoMap.has(exactKey)) yogoMap.set(exactKey, payload);
+      if (looseKey && !yogoMap.has(looseKey)) yogoMap.set(looseKey, payload);
+    }
+
+    const catalogMap = new Map<
+      string,
+      {
+        barcode?: string;
+        name_zh?: string;
+        name_es?: string;
+        case_pack?: number;
+        sell_price?: number;
+      }
+    >();
+
+    for (const item of catalogRows) {
+      const payload = {
+        barcode: item.barcode || undefined,
+        name_zh: item.name_zh || undefined,
+        name_es: item.name_es || undefined,
+        case_pack: toNumber(item.case_pack),
+        sell_price: toNumber(item.price),
+      };
+      const exactKey = item.sku.trim().toUpperCase();
+      const looseKey = normalizeSkuKey(item.sku);
+      if (!catalogMap.has(exactKey)) catalogMap.set(exactKey, payload);
+      if (looseKey && !catalogMap.has(looseKey)) catalogMap.set(looseKey, payload);
+    }
 
     const mergedRows = normalizedRows.map((row) => {
-      const product = productMap.get(row.sku.trim().toUpperCase());
-      if (!product) return row;
+      const exactKey = row.sku.trim().toUpperCase();
+      const looseKey = normalizeSkuKey(row.sku);
+      const yogo = yogoMap.get(exactKey) || yogoMap.get(looseKey);
+      const catalog = catalogMap.get(exactKey) || catalogMap.get(looseKey);
       return {
         ...row,
-        barcode: row.barcode || product.barcode,
-        name_zh: row.name_zh || product.name_zh,
-        name_es: row.name_es || product.name_es,
-        case_pack: row.case_pack ?? product.case_pack,
-        sell_price: row.sell_price ?? product.sell_price ?? row.sell_price,
+        barcode: row.barcode || yogo?.barcode || catalog?.barcode,
+        name_zh: row.name_zh || yogo?.name_zh || catalog?.name_zh,
+        name_es: row.name_es || yogo?.name_es || catalog?.name_es,
+        case_pack: row.case_pack ?? yogo?.case_pack ?? catalog?.case_pack,
+        sell_price:
+          row.sell_price ??
+          yogo?.sell_price ??
+          catalog?.sell_price ??
+          row.sell_price,
       };
     });
 
