@@ -18,6 +18,35 @@ function formatDateTime(value: Date | null) {
   }).format(value);
 }
 
+function parseOrderNoDateText(orderNo: string | null | undefined) {
+  if (!orderNo) return null;
+  const match = String(orderNo).trim().match(/^YGO(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/i);
+  if (!match) return null;
+
+  const [, yy, mm, dd, hh, mi] = match;
+  const year = 2000 + Number(yy);
+  const month = Number(mm);
+  const day = Number(dd);
+  const hour = Number(hh);
+  const minute = Number(mi);
+
+  if (
+    !Number.isFinite(year) ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31 ||
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59
+  ) {
+    return null;
+  }
+
+  return `${year}/${String(month).padStart(2, "0")}/${String(day).padStart(2, "0")} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
 function formatMoney(value: unknown) {
   if (value === null || value === undefined) return "-";
 
@@ -263,11 +292,15 @@ export default async function YgOrdersPage() {
         .filter(Boolean),
     );
 
+    const orderCreatedAt = orderCreatedAtById.get(row.id);
+    const orderDateText = orderCreatedAt
+      ? formatDateTime(orderCreatedAt)
+      : parseOrderNoDateText(row.order_no) || "-";
     return {
     id: row.id,
     orderNo: row.order_no,
     orderStatus: statusById.get(row.id) || "-",
-    orderDateText: formatDateTime(orderCreatedAtById.get(row.id) || row.created_at),
+    orderDateText,
     orderAmountText: formatMoney(row.order_amount),
     companyName: row.company_name || row.customer_name || "-",
     customerName: row.customer_name || "",
