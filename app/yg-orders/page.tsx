@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/app-shell";
 import { prisma } from "@/lib/prisma";
+import { parseYogoDiscountParts } from "@/lib/yogo-product-utils";
 import { getSession } from "@/lib/tenant";
 import { redirect } from "next/navigation";
 import { YgOrdersClient } from "./YgOrdersClient";
@@ -65,17 +66,127 @@ export default async function YgOrdersPage() {
         },
       },
     },
-    take: 20,
+    take: 50,
   });
+
+  const statusColumns = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(
+    `
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'yg_order_imports'
+        AND column_name IN ('header_status', 'header_status_id', 'order_created_at')
+    `,
+  );
+  const hasHeaderStatus = statusColumns.some((col) => col.column_name === "header_status");
+  const hasHeaderStatusId = statusColumns.some((col) => col.column_name === "header_status_id");
+  const hasOrderCreatedAt = statusColumns.some((col) => col.column_name === "order_created_at");
+
+  let statusById = new Map<string, string>();
+  let orderCreatedAtById = new Map<string, Date>();
+
+  if (hasHeaderStatus || hasHeaderStatusId || hasOrderCreatedAt) {
+    const statusExpr = hasHeaderStatus
+      ? "NULLIF(TRIM(CAST(header_status AS text)), '')"
+      : "NULL";
+    const statusIdExpr = hasHeaderStatusId
+      ? "NULLIF(TRIM(CAST(header_status_id AS text)), '')"
+      : "NULL";
+    const createdExpr = hasOrderCreatedAt ? "order_created_at" : "created_at";
+
+    const statusRows = await prisma.$queryRawUnsafe<
+      Array<{ id: string; header_status: string | null; order_created_at: Date | null }>
+    >(
+      `
+        SELECT
+          CAST(id AS text) AS id,
+          COALESCE(${statusExpr}, ${statusIdExpr}) AS header_status,
+          ${createdExpr} AS order_created_at
+        FROM yg_order_imports
+        WHERE tenant_id = $1::uuid
+          AND company_id = $2::uuid
+      `,
+      session.tenantId,
+      session.companyId,
+    );
+
+    statusById = new Map(
+      statusRows
+        .filter((row) => row.header_status)
+        .map((row) => [row.id, String(row.header_status || "").trim()]),
+    );
+    orderCreatedAtById = new Map(
+      statusRows
+        .filter((row) => row.order_created_at)
+        .map((row) => [row.id, row.order_created_at as Date]),
+    );
+  }
+
+  const skuSet = new Set<string>();
+  const barcodeSet = new Set<string>();
+  for (const row of rows) {
+    for (const so of row.supplierOrders) {
+      for (const item of so.items) {
+        if (item.item_no) skuSet.add(item.item_no.trim());
+        if (item.barcode) barcodeSet.add(item.barcode.trim());
+      }
+    }
+  }
+
+  const yogoNameRows =
+    skuSet.size > 0 || barcodeSet.size > 0
+      ? await prisma.yogoProductSource.findMany({
+          where: {
+            tenant_id: session.tenantId,
+            company_id: session.companyId,
+            OR: [
+              ...(skuSet.size > 0 ? [{ product_code: { in: Array.from(skuSet) } }] : []),
+              ...(barcodeSet.size > 0 ? [{ product_no: { in: Array.from(barcodeSet) } }] : []),
+            ],
+          },
+          select: {
+            product_code: true,
+            product_no: true,
+            name_cn: true,
+            name_es: true,
+            category_name: true,
+            source_discount: true,
+          },
+        })
+      : [];
+
+  const nameBySku = new Map(
+    yogoNameRows.map((row) => [
+      String(row.product_code || "").trim(),
+      {
+        zh: row.name_cn || "",
+        es: row.name_es || "",
+        ...parseYogoDiscountParts(row.category_name, row.source_discount),
+      },
+    ]),
+  );
+  const nameByBarcode = new Map(
+    yogoNameRows
+      .filter((row) => row.product_no)
+      .map((row) => [
+        String(row.product_no || "").trim(),
+        {
+          zh: row.name_cn || "",
+          es: row.name_es || "",
+          ...parseYogoDiscountParts(row.category_name, row.source_discount),
+        },
+      ]),
+  );
 
   const initialRows = rows.map((row) => ({
     id: row.id,
     orderNo: row.order_no,
+    orderStatus: statusById.get(row.id) || "-",
+    orderDateText: formatDateTime(orderCreatedAtById.get(row.id) || row.created_at),
     orderAmountText: formatMoney(row.order_amount),
+    companyName: row.company_name || row.customer_name || "-",
     customerName: row.customer_name || "",
-    contactText: [row.contact_name || "", row.contact_phone || ""]
-      .filter(Boolean)
-      .join(" / "),
+    contactName: row.contact_name || row.customer_name || "-",
+    contactPhone: row.contact_phone || "",
     addressText: row.address_text || "",
     remarkText: row.order_remark || "",
     storeLabelText: row.store_label || "",
@@ -88,16 +199,32 @@ export default async function YgOrdersPage() {
       derivedOrderNo: item.derived_order_no,
       orderAmountText: formatMoney(item.order_amount),
       itemCount: item.item_count,
-      noteText: item.note_text || "",
-      items: item.items.map((detail) => ({
-        id: detail.id,
-        location: detail.location,
-        itemNo: detail.item_no || "",
-        barcode: detail.barcode || "",
-        productName: detail.product_name || "",
-        totalQty: detail.total_qty,
-        unitPriceText: formatMoney(detail.unit_price),
-        lineTotalText: formatMoney(detail.line_total),
+        noteText: item.note_text || "",
+        items: item.items.map((detail) => ({
+          id: detail.id,
+          location: detail.location,
+          itemNo: detail.item_no || "",
+          barcode: detail.barcode || "",
+          productName: detail.product_name || "",
+          nameCn:
+            nameBySku.get(detail.item_no || "")?.zh ||
+            nameByBarcode.get(detail.barcode || "")?.zh ||
+            "",
+          nameEs:
+            nameBySku.get(detail.item_no || "")?.es ||
+            nameByBarcode.get(detail.barcode || "")?.es ||
+            "",
+          normalDiscount:
+            nameBySku.get(detail.item_no || "")?.normal ||
+            nameByBarcode.get(detail.barcode || "")?.normal ||
+            "-",
+          vipDiscount:
+            nameBySku.get(detail.item_no || "")?.vip ||
+            nameByBarcode.get(detail.barcode || "")?.vip ||
+            "-",
+          totalQty: detail.total_qty,
+          unitPriceText: formatMoney(detail.unit_price),
+          lineTotalText: formatMoney(detail.line_total),
       })),
     })),
   }));
