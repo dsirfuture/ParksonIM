@@ -48,6 +48,25 @@ function baseOrderNo(receiptNo: string) {
   return head || String(receiptNo || "").trim();
 }
 
+function EyeIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8">
+      <path d="M1.75 10s2.75-4.75 8.25-4.75S18.25 10 18.25 10 15.5 14.75 10 14.75 1.75 10 1.75 10Z" />
+      <circle cx="10" cy="10" r="2.25" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8">
+      <path d="M3.5 13.75V16.5h2.75L15 7.75 12.25 5 3.5 13.75Z" />
+      <path d="M10.75 6.5 13.5 9.25" />
+      <path d="M11.5 3.75 16.25 8.5" />
+    </svg>
+  );
+}
+
 export default async function BillingPage({
   searchParams,
 }: {
@@ -68,10 +87,12 @@ export default async function BillingPage({
   const tabRaw = Array.isArray(params.tab) ? params.tab[0] : params.tab;
   const listRaw = Array.isArray(params.list) ? params.list[0] : params.list;
   const pageRaw = Array.isArray(params.page) ? params.page[0] : params.page;
+  const detailRaw = Array.isArray(params.detail) ? params.detail[0] : params.detail;
 
   const activeTab = normalizeTab(tabRaw || null);
   const activeList = normalizeListType(listRaw || null);
   const page = parseIntOr(pageRaw || "1", 1);
+  const detailOrderNo = (detailRaw || "").trim();
 
   const completedReceipts = await prisma.receipt.findMany({
     where: {
@@ -84,6 +105,10 @@ export default async function BillingPage({
       updated_at: true,
       items: {
         select: {
+          sku: true,
+          barcode: true,
+          name_zh: true,
+          name_es: true,
           expected_qty: true,
           sell_price: true,
           line_total: true,
@@ -102,6 +127,22 @@ export default async function BillingPage({
     }
   >();
 
+  const detailMap = new Map<
+    string,
+    Map<
+      string,
+      {
+        sku: string;
+        barcode: string;
+        nameZh: string;
+        nameEs: string;
+        qty: number;
+        unitPrice: number;
+        lineTotal: number;
+      }
+    >
+  >();
+
   for (const receipt of completedReceipts) {
     const orderNo = baseOrderNo(receipt.receipt_no);
     const row =
@@ -112,19 +153,38 @@ export default async function BillingPage({
         latestAt: null,
       } as const);
 
+    const orderDetail = detailMap.get(orderNo) || new Map();
     let receiptAmount = 0;
+
     for (const item of receipt.items) {
-      const line = item.line_total ? Number(item.line_total) : null;
-      if (line !== null && Number.isFinite(line)) {
-        receiptAmount += line;
-        continue;
-      }
-      const price = item.sell_price ? Number(item.sell_price) : null;
       const qty = Number(item.expected_qty || 0);
-      if (price !== null && Number.isFinite(price)) {
-        receiptAmount += qty * price;
+      const unitPrice = item.sell_price ? Number(item.sell_price) : 0;
+      const lineTotalRaw = item.line_total ? Number(item.line_total) : null;
+      const lineTotal = lineTotalRaw !== null && Number.isFinite(lineTotalRaw) ? lineTotalRaw : qty * unitPrice;
+
+      receiptAmount += lineTotal;
+
+      const sku = String(item.sku || "").trim();
+      const barcode = String(item.barcode || "").trim();
+      const key = `${sku}|${barcode}`;
+      const old = orderDetail.get(key);
+      if (!old) {
+        orderDetail.set(key, {
+          sku,
+          barcode,
+          nameZh: String(item.name_zh || "").trim(),
+          nameEs: String(item.name_es || "").trim(),
+          qty,
+          unitPrice,
+          lineTotal,
+        });
+      } else {
+        old.qty += qty;
+        old.lineTotal += lineTotal;
       }
     }
+
+    detailMap.set(orderNo, orderDetail);
 
     const latestAt =
       !row.latestAt || row.latestAt.getTime() < receipt.updated_at.getTime()
@@ -190,6 +250,9 @@ export default async function BillingPage({
   const activeRows = activeList === "pending" ? pagedRows : pagedRows;
   const activeCount = activeList === "pending" ? pendingCount : pendingCount;
 
+  const detailItems = detailOrderNo ? Array.from(detailMap.get(detailOrderNo)?.values() || []) : [];
+  const detailTotalAmount = detailItems.reduce((sum, item) => sum + item.lineTotal, 0);
+
   return (
     <AppShell>
       <section className="mt-4 overflow-hidden rounded-3xl border border-slate-200 bg-white">
@@ -220,12 +283,7 @@ export default async function BillingPage({
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Link href={`/billing?tab=${activeTab}&list=pending&page=1`} className="block">
               <div className="transition hover:opacity-95">
-                <StatCard
-                  label="待出账单"
-                  value={pendingCount}
-                  hint="验货完毕待汇总"
-                  valueClassName="text-primary"
-                />
+                <StatCard label="待出账单" value={pendingCount} hint="验货完毕待汇总" valueClassName="text-primary" />
               </div>
             </Link>
             <StatCard label="待生成" value="0" hint="等待生成汇总结果" valueClassName="text-amber-600" />
@@ -234,10 +292,7 @@ export default async function BillingPage({
           </section>
 
           <div className="mt-4">
-            <TableCard
-              title={activeList === "pending" ? "待出账单列表" : "账单列表"}
-              description={`共 ${activeCount} 条`}
-            >
+            <TableCard title={activeList === "pending" ? "待出账单列表" : "账单列表"} description={`共 ${activeCount} 条`}>
               <div className="overflow-x-auto">
                 <table className="min-w-full border-separate border-spacing-0">
                   <thead>
@@ -248,12 +303,13 @@ export default async function BillingPage({
                       <th className="whitespace-nowrap px-4 py-3 font-semibold">联系电话</th>
                       <th className="whitespace-nowrap px-4 py-3 font-semibold text-right">配货金额</th>
                       <th className="whitespace-nowrap px-4 py-3 font-semibold">更新时间</th>
+                      <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">操作</th>
                     </tr>
                   </thead>
                   <tbody>
                     {activeRows.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-500">
+                        <td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-500">
                           当前没有待出账单记录
                         </td>
                       </tr>
@@ -266,6 +322,26 @@ export default async function BillingPage({
                           <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{row.contactPhone}</td>
                           <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-slate-800">{row.amountText}</td>
                           <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{row.updatedAtText}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-3">
+                              <Link
+                                href={`/billing?tab=${activeTab}&list=${activeList}&page=${currentPage}&detail=${encodeURIComponent(row.orderNo)}`}
+                                className="inline-flex h-8 w-8 items-center justify-center text-slate-500 transition hover:text-slate-800"
+                                title="查看明细"
+                                aria-label="查看明细"
+                              >
+                                <EyeIcon />
+                              </Link>
+                              <Link
+                                href={`/yg-orders`}
+                                className="inline-flex h-8 w-8 items-center justify-center text-slate-500 transition hover:text-slate-800"
+                                title="编辑"
+                                aria-label="编辑"
+                              >
+                                <PencilIcon />
+                              </Link>
+                            </div>
+                          </td>
                         </tr>
                       ))
                     )}
@@ -324,6 +400,57 @@ export default async function BillingPage({
               ) : null}
             </TableCard>
           </div>
+
+          {detailOrderNo ? (
+            <div className="mt-4">
+              <TableCard title={`账单明细：${detailOrderNo}`} description={`商品数 ${detailItems.length} · 合计 ${formatMoney(detailTotalAmount)}`}>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border-separate border-spacing-0">
+                    <thead>
+                      <tr className="bg-slate-50 text-left text-sm text-slate-500">
+                        <th className="whitespace-nowrap px-4 py-3 font-semibold">编码</th>
+                        <th className="whitespace-nowrap px-4 py-3 font-semibold">条形码</th>
+                        <th className="whitespace-nowrap px-4 py-3 font-semibold">中文名</th>
+                        <th className="whitespace-nowrap px-4 py-3 font-semibold">西文名</th>
+                        <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">数量</th>
+                        <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">单价</th>
+                        <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">金额</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detailItems.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-500">
+                            当前账单没有可显示的商品明细
+                          </td>
+                        </tr>
+                      ) : (
+                        detailItems.map((item, idx) => (
+                          <tr key={`${item.sku}-${item.barcode}-${idx}`} className="border-t border-slate-100">
+                            <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{item.sku || "-"}</td>
+                            <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{item.barcode || "-"}</td>
+                            <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{item.nameZh || "-"}</td>
+                            <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{item.nameEs || "-"}</td>
+                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{item.qty}</td>
+                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{formatMoney(item.unitPrice)}</td>
+                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-slate-800">{formatMoney(item.lineTotal)}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="border-t border-slate-200 px-5 py-3 text-right text-sm">
+                  <Link
+                    href={`/billing?tab=${activeTab}&list=${activeList}&page=${currentPage}`}
+                    className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm text-slate-600 hover:bg-slate-50"
+                  >
+                    收起明细
+                  </Link>
+                </div>
+              </TableCard>
+            </div>
+          ) : null}
         </div>
       </section>
     </AppShell>
