@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { StatCard } from "@/components/stat-card";
 import { TableCard } from "@/components/table-card";
 import { ProductImage } from "@/components/product-image";
+import { ImageLightbox } from "@/components/image-lightbox";
+import { buildProductImageUrl } from "@/lib/product-image-url";
 
 type TabKey = "customer" | "supplier";
 
@@ -28,6 +30,8 @@ type DetailItem = {
   nameEs: string;
   qty: number;
   unitPrice: number;
+  normalDiscount: number | null;
+  vipDiscount: number | null;
   lineTotal: number;
 };
 
@@ -82,6 +86,7 @@ export function BillingClient({
   const [currentTab, setCurrentTab] = useState<TabKey>(activeTab);
   const [page, setPage] = useState(1);
   const [detailOrderNo, setDetailOrderNo] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ src: string; alt: string; title: string } | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -323,13 +328,15 @@ export function BillingClient({
                     <th className="whitespace-nowrap px-4 py-3 font-semibold">西文名</th>
                     <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">数量</th>
                     <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">单价</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">普通折扣</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">VIP折扣</th>
                     <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">金额</th>
                   </tr>
                 </thead>
                 <tbody>
                   {detailItems.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-500">
+                      <td colSpan={10} className="px-4 py-8 text-center text-sm text-slate-500">
                         当前账单没有可显示的商品明细
                       </td>
                     </tr>
@@ -342,6 +349,12 @@ export function BillingClient({
                             alt={item.nameZh || item.nameEs || item.sku || item.barcode || "商品图片"}
                             size={40}
                             roundedClassName="rounded-md"
+                            onClick={() => {
+                              const src = buildProductImageUrl(item.sku, "jpg");
+                              if (!src) return;
+                              const title = item.nameZh || item.nameEs || item.sku || item.barcode || "商品图片";
+                              setPreviewImage({ src, alt: title, title });
+                            }}
                           />
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{item.sku || "-"}</td>
@@ -350,6 +363,8 @@ export function BillingClient({
                         <td className="px-4 py-3 text-sm text-slate-700">{item.nameEs || "-"}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{item.qty}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{toMoney(item.unitPrice)}</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{item.normalDiscount === null ? "-" : toMoney(item.normalDiscount)}</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{item.vipDiscount === null ? "-" : toMoney(item.vipDiscount)}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-slate-800">{toMoney(item.lineTotal)}</td>
                       </tr>
                     ))
@@ -360,6 +375,14 @@ export function BillingClient({
           </div>
         </div>
       ) : null}
+
+      <ImageLightbox
+        open={Boolean(previewImage)}
+        src={previewImage?.src || ""}
+        alt={previewImage?.alt}
+        title={previewImage?.title}
+        onClose={() => setPreviewImage(null)}
+      />
 
       {editState ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4" onClick={() => setEditState(null)}>

@@ -69,6 +69,8 @@ export default async function BillingPage({
           name_es: true,
           expected_qty: true,
           sell_price: true,
+          normal_discount: true,
+          vip_discount: true,
           line_total: true,
         },
       },
@@ -96,6 +98,8 @@ export default async function BillingPage({
         nameEs: string;
         qty: number;
         unitPrice: number;
+        normalDiscount: number | null;
+        vipDiscount: number | null;
         lineTotal: number;
       }
     >
@@ -117,6 +121,8 @@ export default async function BillingPage({
     for (const item of receipt.items) {
       const qty = Number(item.expected_qty || 0);
       const unitPrice = item.sell_price ? Number(item.sell_price) : 0;
+      const normalDiscount = item.normal_discount === null ? null : Number(item.normal_discount);
+      const vipDiscount = item.vip_discount === null ? null : Number(item.vip_discount);
       const lineTotalRaw = item.line_total ? Number(item.line_total) : null;
       const lineTotal =
         lineTotalRaw !== null && Number.isFinite(lineTotalRaw) ? lineTotalRaw : qty * unitPrice;
@@ -135,11 +141,19 @@ export default async function BillingPage({
           nameEs: String(item.name_es || "").trim(),
           qty,
           unitPrice,
+          normalDiscount: normalDiscount !== null && Number.isFinite(normalDiscount) ? normalDiscount : null,
+          vipDiscount: vipDiscount !== null && Number.isFinite(vipDiscount) ? vipDiscount : null,
           lineTotal,
         });
       } else {
         old.qty += qty;
         old.lineTotal += lineTotal;
+        if (old.normalDiscount === null && normalDiscount !== null && Number.isFinite(normalDiscount)) {
+          old.normalDiscount = normalDiscount;
+        }
+        if (old.vipDiscount === null && vipDiscount !== null && Number.isFinite(vipDiscount)) {
+          old.vipDiscount = vipDiscount;
+        }
       }
     }
 
@@ -241,4 +255,3 @@ export default async function BillingPage({
     </AppShell>
   );
 }
-
