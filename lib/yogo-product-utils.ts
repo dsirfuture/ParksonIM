@@ -53,7 +53,9 @@ export function parseYogoDiscountParts(categoryName: string | null, sourceDiscou
 export function stripLeadingCategoryCode(value: string | null | undefined) {
   const text = String(value || "").trim();
   if (!text) return "";
-  return text.replace(/^\d+\s*/u, "").trim();
+  // Only strip a leading numeric code when it is followed by whitespace.
+  // Example: "07 力控玩具" -> "力控玩具", but "1比1款香水" should stay unchanged.
+  return text.replace(/^\d+[ \t\u3000]+/u, "").trim();
 }
 
 // Reserved for next step: extract numeric category code for mapping settings.

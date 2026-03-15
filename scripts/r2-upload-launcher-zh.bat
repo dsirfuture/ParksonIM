@@ -7,7 +7,7 @@ rem ======================================
 rem One-time local config (do NOT commit real token)
 rem Paste your Cloudflare API token below.
 rem ======================================
-set "LOCAL_CF_TOKEN=PASTE_YOUR_CLOUDFLARE_API_TOKEN_HERE"
+set "LOCAL_CF_TOKEN=QJox8wsFp4dHB_ifKviiOQ-OJo-_wqCwKZwx4HKZ"
 
 echo ================================
 echo R2 图片一键启动（中文）
@@ -57,6 +57,22 @@ if errorlevel 1 (
 )
 
 echo.
+if not exist "%~dp0upload-new-images-r2-zh.bat" (
+  echo [错误] 未找到 upload-new-images-r2-zh.bat
+  echo [路径] %~dp0upload-new-images-r2-zh.bat
+  pause
+  exit /b 1
+)
+
 call "%~dp0upload-new-images-r2-zh.bat"
+set "EXIT_CODE=%ERRORLEVEL%"
+
+echo.
+if not "%EXIT_CODE%"=="0" (
+  echo [结束] 脚本执行失败，错误码：%EXIT_CODE%
+) else (
+  echo [结束] 脚本执行完成。
+)
+pause
 
 endlocal
