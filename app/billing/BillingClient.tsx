@@ -148,11 +148,23 @@ export function BillingClient({
     [rows, currentPage],
   );
 
-  const detailItems = detailOrderNo ? detailsByOrderNo[detailOrderNo] || [] : [];
+  const detailItems = useMemo(
+    () => (detailOrderNo ? detailsByOrderNo[detailOrderNo] || [] : []),
+    [detailOrderNo, detailsByOrderNo],
+  );
   const detailTotal = useMemo(
     () => detailItems.reduce((sum, item) => sum + calcLineTotal(item, vipDiscountEnabled), 0),
     [detailItems, vipDiscountEnabled],
   );
+  const exportLinks = useMemo(() => {
+    if (!detailOrderNo) return null;
+    const encodedOrderNo = encodeURIComponent(detailOrderNo);
+    const vipQuery = vipDiscountEnabled ? "vip=1" : "vip=0";
+    return {
+      xlsx: `/api/billing/${encodedOrderNo}/export/xlsx?${vipQuery}`,
+      pdf: `/api/billing/${encodedOrderNo}/export/pdf?${vipQuery}`,
+    };
+  }, [detailOrderNo, vipDiscountEnabled]);
 
   async function saveEdit() {
     if (!editState) return;
@@ -345,6 +357,22 @@ export function BillingClient({
                 <span className="ml-3 text-slate-500">合计 {toMoney(detailTotal)}</span>
               </div>
               <div className="flex items-center gap-3">
+                {exportLinks ? (
+                  <>
+                    <a
+                      href={exportLinks.xlsx}
+                      className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100"
+                    >
+                      导出 XLSX
+                    </a>
+                    <a
+                      href={exportLinks.pdf}
+                      className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-100"
+                    >
+                      导出 PDF
+                    </a>
+                  </>
+                ) : null}
                 <label className="inline-flex items-center gap-2 text-sm text-slate-600">
                   <input
                     type="checkbox"
