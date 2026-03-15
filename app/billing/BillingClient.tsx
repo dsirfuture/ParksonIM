@@ -73,6 +73,15 @@ function toMoney(value: number) {
   return value.toFixed(2);
 }
 
+function toPercentText(value: number | null) {
+  if (value === null || !Number.isFinite(value)) return "-";
+  const percent = value <= 1 ? value * 100 : value;
+  const rounded = Number.isInteger(percent)
+    ? String(percent)
+    : percent.toFixed(2).replace(/\.?0+$/, "");
+  return `${rounded}%`;
+}
+
 export function BillingClient({
   initialRows,
   detailsByOrderNo,
@@ -363,8 +372,8 @@ export function BillingClient({
                         <td className="px-4 py-3 text-sm text-slate-700">{item.nameEs || "-"}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{item.qty}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{toMoney(item.unitPrice)}</td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{item.normalDiscount === null ? "-" : toMoney(item.normalDiscount)}</td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{item.vipDiscount === null ? "-" : toMoney(item.vipDiscount)}</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{toPercentText(item.normalDiscount)}</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{toPercentText(item.vipDiscount)}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-slate-800">{toMoney(item.lineTotal)}</td>
                       </tr>
                     ))
