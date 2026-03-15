@@ -591,14 +591,14 @@ export async function buildBillingPdf(data: BillingExportData) {
   const unicodeSafe = Boolean(fontBytes);
 
   const bodyFont = fontBytes
-    ? await pdfDoc.embedFont(fontBytes, { subset: false })
+    ? await pdfDoc.embedFont(fontBytes, { subset: true })
     : await pdfDoc.embedFont(StandardFonts.Helvetica);
   const esFont = latinFontBytes
-    ? await pdfDoc.embedFont(latinFontBytes, { subset: false })
+    ? await pdfDoc.embedFont(latinFontBytes, { subset: true })
     : await pdfDoc.embedFont(StandardFonts.Helvetica);
   const latinBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const boldFont = boldFontBytes
-    ? await pdfDoc.embedFont(boldFontBytes, { subset: false })
+    ? await pdfDoc.embedFont(boldFontBytes, { subset: true })
     : bodyFont;
 
   const pageWidth = 842;
@@ -693,7 +693,7 @@ export async function buildBillingPdf(data: BillingExportData) {
     const summaryLine = `商品数: ${data.itemCount}    合计: ${toMoney(data.totalAmount)}`;
     drawText(summaryLine, marginLeft, cursorY, { size: 9, font: fontForText(summaryLine) });
     cursorY -= 16;
-    const vipLine = `VIP折扣: ${data.vipDiscountEnabled ? "启用" : "关闭"}    更新时间: ${formatDateOnly(data.updatedAt)}`;
+    const vipLine = `VIP折扣: ${data.vipDiscountEnabled ? "启用" : "关闭"}`;
     drawText(vipLine, marginLeft, cursorY, { size: 9, font: fontForText(vipLine) });
     cursorY -= 22;
   };
@@ -797,5 +797,5 @@ export async function buildBillingPdf(data: BillingExportData) {
     cursorY -= rowHeight;
   }
 
-  return pdfDoc.save();
+  return pdfDoc.save({ useObjectStreams: true });
 }
