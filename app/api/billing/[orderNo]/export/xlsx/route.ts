@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { buildBillingXlsx, getBillingExportData } from "@/lib/billing-export";
+import {
+  buildBillingExportBaseName,
+  buildBillingXlsx,
+  getBillingExportData,
+} from "@/lib/billing-export";
 import { getSession } from "@/lib/tenant";
 
 export const runtime = "nodejs";
@@ -30,7 +34,7 @@ export async function GET(
     }
 
     const buffer = await buildBillingXlsx(data);
-    const fileName = `${data.orderNo}${vipDiscountEnabled ? "-vip" : ""}.xlsx`;
+    const fileName = `${buildBillingExportBaseName(data)}.xlsx`;
 
     return new NextResponse(Buffer.from(buffer), {
       status: 200,

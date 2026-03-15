@@ -33,6 +33,16 @@ export type BillingExportData = {
   items: BillingExportItem[];
 };
 
+export function buildBillingExportBaseName(data: Pick<BillingExportData, "orderNo" | "companyName" | "vipDiscountEnabled">) {
+  const companyName = String(data.companyName || "")
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const safeCompanyName = companyName || "NoCompany";
+  return `${data.orderNo}-${safeCompanyName}${data.vipDiscountEnabled ? "-vip" : ""}`;
+}
+
 function hasChineseGlyph(value: string) {
   return /[\u3400-\u9FFF\uF900-\uFAFF]/.test(String(value || ""));
 }
@@ -677,11 +687,14 @@ export async function buildBillingPdf(data: BillingExportData) {
       color: { r: 0.12, g: 0.22, b: 0.43 },
     });
     cursorY -= 28;
-    drawText(`账单号: ${data.orderNo}`, marginLeft, cursorY, { size: 10, font: fontForText(data.orderNo, true) });
+    const orderLine = `账单号: ${data.orderNo}`;
+    drawText(orderLine, marginLeft, cursorY, { size: 10, font: fontForText(orderLine, true) });
     cursorY -= 18;
-    drawText(`商品数: ${data.itemCount}    合计: ${toMoney(data.totalAmount)}`, marginLeft, cursorY, { size: 9 });
+    const summaryLine = `商品数: ${data.itemCount}    合计: ${toMoney(data.totalAmount)}`;
+    drawText(summaryLine, marginLeft, cursorY, { size: 9, font: fontForText(summaryLine) });
     cursorY -= 16;
-    drawText(`VIP折扣: ${data.vipDiscountEnabled ? "启用" : "关闭"}    更新时间: ${formatDateOnly(data.updatedAt)}`, marginLeft, cursorY, { size: 9 });
+    const vipLine = `VIP折扣: ${data.vipDiscountEnabled ? "启用" : "关闭"}    更新时间: ${formatDateOnly(data.updatedAt)}`;
+    drawText(vipLine, marginLeft, cursorY, { size: 9, font: fontForText(vipLine) });
     cursorY -= 22;
   };
 
