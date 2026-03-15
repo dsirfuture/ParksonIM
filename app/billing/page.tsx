@@ -25,6 +25,24 @@ function formatMoney(value: number) {
   return value.toFixed(2);
 }
 
+function toDiscountFactor(value: number | null | undefined) {
+  if (value === null || value === undefined) return null;
+  if (!Number.isFinite(value) || value < 0) return null;
+  return value > 1 ? value / 100 : value;
+}
+
+function computeLineTotal(
+  qty: number,
+  unitPrice: number,
+  normalDiscount: number | null,
+  vipDiscount: number | null,
+) {
+  let factor = 1;
+  if (normalDiscount !== null) factor *= 1 - normalDiscount;
+  if (vipDiscount !== null) factor *= 1 - vipDiscount;
+  return qty * unitPrice * factor;
+}
+
 function baseOrderNo(receiptNo: string) {
   const head = String(receiptNo || "")
     .trim()
@@ -78,6 +96,49 @@ export default async function BillingPage({
     orderBy: { updated_at: "desc" },
   });
 
+  const skuList = Array.from(
+    new Set(
+      completedReceipts.flatMap((receipt) =>
+        receipt.items
+          .map((item) => String(item.sku || "").trim())
+          .filter((sku) => sku.length > 0),
+      ),
+    ),
+  );
+
+  const productDiscountRows =
+    skuList.length > 0
+      ? await prisma.productCatalog.findMany({
+          where: {
+            tenant_id: session.tenantId,
+            company_id: session.companyId,
+            sku: { in: skuList },
+          },
+          select: {
+            sku: true,
+            normal_discount: true,
+            vip_discount: true,
+          },
+        })
+      : [];
+
+  const productDiscountMap = new Map<
+    string,
+    {
+      normalDiscount: number | null;
+      vipDiscount: number | null;
+    }
+  >(
+    productDiscountRows.map((row) => [
+      String(row.sku || "").trim(),
+      {
+        normalDiscount:
+          row.normal_discount === null ? null : Number(row.normal_discount),
+        vipDiscount: row.vip_discount === null ? null : Number(row.vip_discount),
+      },
+    ]),
+  );
+
   const grouped = new Map<
     string,
     {
@@ -119,17 +180,22 @@ export default async function BillingPage({
     let receiptAmount = 0;
 
     for (const item of receipt.items) {
+      const sku = String(item.sku || "").trim();
       const qty = Number(item.expected_qty || 0);
       const unitPrice = item.sell_price ? Number(item.sell_price) : 0;
-      const normalDiscount = item.normal_discount === null ? null : Number(item.normal_discount);
-      const vipDiscount = item.vip_discount === null ? null : Number(item.vip_discount);
-      const lineTotalRaw = item.line_total ? Number(item.line_total) : null;
-      const lineTotal =
-        lineTotalRaw !== null && Number.isFinite(lineTotalRaw) ? lineTotalRaw : qty * unitPrice;
+      const catalogDiscount = productDiscountMap.get(sku);
+      const normalDiscountRaw =
+        catalogDiscount?.normalDiscount ??
+        (item.normal_discount === null ? null : Number(item.normal_discount));
+      const vipDiscountRaw =
+        catalogDiscount?.vipDiscount ??
+        (item.vip_discount === null ? null : Number(item.vip_discount));
+      const normalDiscount = toDiscountFactor(normalDiscountRaw);
+      const vipDiscount = toDiscountFactor(vipDiscountRaw);
+      const lineTotal = computeLineTotal(qty, unitPrice, normalDiscount, vipDiscount);
 
       receiptAmount += lineTotal;
 
-      const sku = String(item.sku || "").trim();
       const barcode = String(item.barcode || "").trim();
       const key = `${sku}|${barcode}`;
       const old = orderDetail.get(key);
@@ -141,18 +207,32 @@ export default async function BillingPage({
           nameEs: String(item.name_es || "").trim(),
           qty,
           unitPrice,
-          normalDiscount: normalDiscount !== null && Number.isFinite(normalDiscount) ? normalDiscount : null,
-          vipDiscount: vipDiscount !== null && Number.isFinite(vipDiscount) ? vipDiscount : null,
+          normalDiscount:
+            normalDiscountRaw !== null && Number.isFinite(normalDiscountRaw)
+              ? normalDiscountRaw
+              : null,
+          vipDiscount:
+            vipDiscountRaw !== null && Number.isFinite(vipDiscountRaw)
+              ? vipDiscountRaw
+              : null,
           lineTotal,
         });
       } else {
         old.qty += qty;
         old.lineTotal += lineTotal;
-        if (old.normalDiscount === null && normalDiscount !== null && Number.isFinite(normalDiscount)) {
-          old.normalDiscount = normalDiscount;
+        if (
+          old.normalDiscount === null &&
+          normalDiscountRaw !== null &&
+          Number.isFinite(normalDiscountRaw)
+        ) {
+          old.normalDiscount = normalDiscountRaw;
         }
-        if (old.vipDiscount === null && vipDiscount !== null && Number.isFinite(vipDiscount)) {
-          old.vipDiscount = vipDiscount;
+        if (
+          old.vipDiscount === null &&
+          vipDiscountRaw !== null &&
+          Number.isFinite(vipDiscountRaw)
+        ) {
+          old.vipDiscount = vipDiscountRaw;
         }
       }
     }

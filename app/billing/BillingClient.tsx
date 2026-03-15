@@ -82,6 +82,24 @@ function toPercentText(value: number | null) {
   return `${rounded}%`;
 }
 
+function toDiscountFactor(value: number | null) {
+  if (value === null || !Number.isFinite(value) || value < 0) return null;
+  return value > 1 ? value / 100 : value;
+}
+
+function calcLineTotal(item: DetailItem, vipEnabled: boolean) {
+  const qty = Number(item.qty || 0);
+  const unitPrice = Number(item.unitPrice || 0);
+
+  let factor = 1;
+  const normal = toDiscountFactor(item.normalDiscount);
+  const vip = toDiscountFactor(item.vipDiscount);
+  if (normal !== null) factor *= 1 - normal;
+  if (vipEnabled && vip !== null) factor *= 1 - vip;
+
+  return qty * unitPrice * factor;
+}
+
 export function BillingClient({
   initialRows,
   detailsByOrderNo,
@@ -96,6 +114,7 @@ export function BillingClient({
   const [page, setPage] = useState(1);
   const [detailOrderNo, setDetailOrderNo] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<{ src: string; alt: string; title: string } | null>(null);
+  const [vipDiscountEnabled, setVipDiscountEnabled] = useState(false);
   const [editState, setEditState] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -130,7 +149,10 @@ export function BillingClient({
   );
 
   const detailItems = detailOrderNo ? detailsByOrderNo[detailOrderNo] || [] : [];
-  const detailTotal = detailItems.reduce((sum, item) => sum + item.lineTotal, 0);
+  const detailTotal = useMemo(
+    () => detailItems.reduce((sum, item) => sum + calcLineTotal(item, vipDiscountEnabled), 0),
+    [detailItems, vipDiscountEnabled],
+  );
 
   async function saveEdit() {
     if (!editState) return;
@@ -322,9 +344,20 @@ export function BillingClient({
                 <span className="ml-3 text-slate-500">商品数 {detailItems.length}</span>
                 <span className="ml-3 text-slate-500">合计 {toMoney(detailTotal)}</span>
               </div>
-              <button type="button" className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50" onClick={() => setDetailOrderNo(null)}>
-                关闭
-              </button>
+              <div className="flex items-center gap-3">
+                <label className="inline-flex items-center gap-2 text-sm text-slate-600">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300"
+                    checked={vipDiscountEnabled}
+                    onChange={(e) => setVipDiscountEnabled(e.target.checked)}
+                  />
+                  启用VIP折扣
+                </label>
+                <button type="button" className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50" onClick={() => setDetailOrderNo(null)}>
+                  关闭
+                </button>
+              </div>
             </div>
             <div className="max-h-[70vh] overflow-auto">
               <table className="min-w-full border-separate border-spacing-0">
@@ -338,14 +371,14 @@ export function BillingClient({
                     <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">数量</th>
                     <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">单价</th>
                     <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">普通折扣</th>
-                    <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">VIP折扣</th>
+                    {vipDiscountEnabled ? <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">VIP折扣</th> : null}
                     <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">金额</th>
                   </tr>
                 </thead>
                 <tbody>
                   {detailItems.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="px-4 py-8 text-center text-sm text-slate-500">
+                      <td colSpan={vipDiscountEnabled ? 10 : 9} className="px-4 py-8 text-center text-sm text-slate-500">
                         当前账单没有可显示的商品明细
                       </td>
                     </tr>
@@ -373,8 +406,8 @@ export function BillingClient({
                         <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{item.qty}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{toMoney(item.unitPrice)}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{toPercentText(item.normalDiscount)}</td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{toPercentText(item.vipDiscount)}</td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-slate-800">{toMoney(item.lineTotal)}</td>
+                        {vipDiscountEnabled ? <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-slate-700">{toPercentText(item.vipDiscount)}</td> : null}
+                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-slate-800">{toMoney(calcLineTotal(item, vipDiscountEnabled))}</td>
                       </tr>
                     ))
                   )}
