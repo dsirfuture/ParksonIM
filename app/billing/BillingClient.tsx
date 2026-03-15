@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { StatCard } from "@/components/stat-card";
 import { TableCard } from "@/components/table-card";
+import { ProductImage } from "@/components/product-image";
 
 type TabKey = "customer" | "supplier";
 
@@ -315,6 +316,7 @@ export function BillingClient({
               <table className="min-w-full border-separate border-spacing-0">
                 <thead>
                   <tr className="bg-slate-50 text-left text-sm text-slate-500">
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold">图片</th>
                     <th className="whitespace-nowrap px-4 py-3 font-semibold">编码</th>
                     <th className="whitespace-nowrap px-4 py-3 font-semibold">条形码</th>
                     <th className="whitespace-nowrap px-4 py-3 font-semibold">中文名</th>
@@ -327,13 +329,21 @@ export function BillingClient({
                 <tbody>
                   {detailItems.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-500">
+                      <td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-500">
                         当前账单没有可显示的商品明细
                       </td>
                     </tr>
                   ) : (
                     detailItems.map((item, idx) => (
                       <tr key={`${item.sku}-${item.barcode}-${idx}`} className="border-t border-slate-100">
+                        <td className="px-4 py-3">
+                          <ProductImage
+                            sku={item.sku}
+                            alt={item.nameZh || item.nameEs || item.sku || item.barcode || "商品图片"}
+                            size={40}
+                            roundedClassName="rounded-md"
+                          />
+                        </td>
                         <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{item.sku || "-"}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{item.barcode || "-"}</td>
                         <td className="px-4 py-3 text-sm text-slate-700">{item.nameZh || "-"}</td>
