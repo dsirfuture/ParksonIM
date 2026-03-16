@@ -98,6 +98,28 @@ function firstValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function normalizeOrderStatus(value: string | null | undefined) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const key = raw.toLowerCase();
+  if (key === "1" || key === "new" || key === "new_order" || key === "new order" || raw === "新订单") return "新订单";
+  if (key === "2" || key === "packing" || key === "picking" || raw === "配货中") return "配货中";
+  if (/^\s*鏂/.test(raw)) return "新订单";
+  if (/^\s*閰/.test(raw)) return "配货中";
+  return raw;
+}
+
+function deriveFallbackStatus(
+  rowId: string,
+  explicitStatusById: Map<string, string>,
+  latestImplicitNewId: string | null,
+) {
+  const explicit = normalizeOrderStatus(explicitStatusById.get(rowId));
+  if (explicit) return explicit;
+  if (latestImplicitNewId && rowId === latestImplicitNewId) return "新订单";
+  return "配货中";
+}
+
 export default async function YogoOrdersPreviewPage(props: {
   searchParams?: Promise<SearchParams>;
 }) {
@@ -242,6 +264,16 @@ export default async function YogoOrdersPreviewPage(props: {
         .map((row) => [row.id, row.order_created_at as Date]),
     );
   }
+
+  const latestImplicitNewId =
+    rows
+      .filter((row) => !normalizeOrderStatus(statusById.get(row.id)))
+      .sort((left, right) => {
+        const leftTime = left.created_at ? new Date(left.created_at).getTime() : 0;
+        const rightTime = right.created_at ? new Date(right.created_at).getTime() : 0;
+        if (leftTime !== rightTime) return rightTime - leftTime;
+        return String(right.order_no || "").localeCompare(String(left.order_no || ""));
+      })[0]?.id || null;
 
   const selectedOrder = selectedOrderKey
     ? await prisma.ygOrderImport.findFirst({
@@ -398,7 +430,7 @@ export default async function YogoOrdersPreviewPage(props: {
                   >
                     <td className="px-3 py-2 font-semibold text-slate-900">{row.order_no}</td>
                     <td className="px-3 py-2 text-slate-600">
-                      {statusById.get(row.id) || "-"}
+                      {deriveFallbackStatus(row.id, statusById, latestImplicitNewId)}
                     </td>
                     <td className="px-3 py-2 text-slate-600">
                       {formatDateTime(orderCreatedAtById.get(row.id) || row.created_at)}

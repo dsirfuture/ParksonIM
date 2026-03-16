@@ -132,6 +132,17 @@ function normalizeOrderStatus(value: string | null | undefined) {
   if (/^\s*閰/.test(raw)) return "配货中";
   return raw;
 }
+
+function deriveFallbackStatus(
+  rowId: string,
+  explicitStatusById: Map<string, string>,
+  latestImplicitNewId: string | null,
+) {
+  const explicit = normalizeOrderStatus(explicitStatusById.get(rowId));
+  if (explicit) return explicit;
+  if (latestImplicitNewId && rowId === latestImplicitNewId) return "新订单";
+  return "配货中";
+}
 function normalizeProductText(value: string | null | undefined) {
   const raw = String(value || "")
     .replace(/\uFFFD/g, "")
@@ -369,6 +380,16 @@ export default async function YgOrdersPage() {
     );
   }
 
+  const latestImplicitNewId =
+    rows
+      .filter((row) => !normalizeOrderStatus(statusById.get(row.id)))
+      .sort((left, right) => {
+        const leftTime = left.created_at ? new Date(left.created_at).getTime() : 0;
+        const rightTime = right.created_at ? new Date(right.created_at).getTime() : 0;
+        if (leftTime !== rightTime) return rightTime - leftTime;
+        return String(right.order_no || "").localeCompare(String(left.order_no || ""));
+      })[0]?.id || null;
+
   const skuSet = new Set<string>();
   const barcodeSet = new Set<string>();
   for (const row of rows) {
@@ -452,7 +473,7 @@ export default async function YgOrdersPage() {
     return {
     id: row.id,
     orderNo: row.order_no,
-    orderStatus: normalizeOrderStatus(statusById.get(row.id)) || "-",
+    orderStatus: deriveFallbackStatus(row.id, statusById, latestImplicitNewId),
     orderDateText,
     orderAmountText: formatMoney(row.order_amount),
     companyName: row.company_name || row.customer_name || "-",

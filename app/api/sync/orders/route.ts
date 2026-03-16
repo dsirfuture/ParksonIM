@@ -189,6 +189,19 @@ function sanitizeStatusId(value: string | null | undefined) {
   return raw;
 }
 
+function normalizeStoredStatusText(value: string | null | undefined) {
+  const raw = sanitizeStatusText(value) || sanitizeStatusId(value);
+  if (!raw) return null;
+  const key = raw.toLowerCase();
+  if (key === "1" || key === "new" || key === "new_order" || key === "new order" || raw === "新订单") {
+    return "新订单";
+  }
+  if (key === "2" || key === "packing" || key === "picking" || raw === "配货中") {
+    return "配货中";
+  }
+  return raw;
+}
+
 function pickDate(
   left: Date | null | undefined,
   right: Date | null | undefined,
@@ -884,6 +897,39 @@ export async function POST(request: Request) {
     const hasOrderCreatedAt = await columnExists("order_created_at");
     const hasOrderKey = await columnExists("order_key");
     const hasCustomerId = await columnExists("customer_id");
+    const syncStatusAt = new Date();
+    const incomingOrderNos = orders.map((order) => order.orderNo);
+
+    if (incomingOrderNos.length > 0 && (hasHeaderStatus || hasLatestStatus || hasHeaderUpdatedAt)) {
+      const staleSets: string[] = [];
+      const staleParams: unknown[] = [tenantId, companyId, incomingOrderNos];
+
+      if (hasHeaderStatus) {
+        staleParams.push("配货中");
+        staleSets.push(`header_status = $${staleParams.length}`);
+      }
+      if (hasLatestStatus) {
+        staleParams.push("配货中");
+        staleSets.push(`latest_status = $${staleParams.length}`);
+      }
+      if (hasHeaderUpdatedAt) {
+        staleParams.push(syncStatusAt);
+        staleSets.push(`header_updated_at = $${staleParams.length}`);
+      }
+
+      if (staleSets.length > 0) {
+        await prisma.$executeRawUnsafe(
+          `
+            UPDATE yg_order_imports
+            SET ${staleSets.join(", ")}
+            WHERE tenant_id = $1::uuid
+              AND company_id = $2::uuid
+              AND NOT (order_no = ANY($3::text[]))
+          `,
+          ...staleParams,
+        );
+      }
+    }
 
     const detectedLocationKeys = new Set<string>();
     const detectedAmountKeys = new Set<string>();
@@ -970,20 +1016,25 @@ export async function POST(request: Request) {
       ) {
         const sets: string[] = [];
         const params: unknown[] = [upserted.id];
-        if (hasHeaderStatus && order.headerStatus) {
-          params.push(order.headerStatus);
+        const resolvedStatusText =
+          normalizeStoredStatusText(order.headerStatus) ||
+          normalizeStoredStatusText(order.latestStatus) ||
+          normalizeStoredStatusText(order.headerStatusId) ||
+          "新订单";
+        if (hasHeaderStatus && resolvedStatusText) {
+          params.push(resolvedStatusText);
           sets.push(`header_status = $${params.length}`);
         }
         if (hasHeaderStatusId && order.headerStatusId) {
           params.push(order.headerStatusId);
           sets.push(`header_status_id = $${params.length}`);
         }
-        if (hasLatestStatus && order.latestStatus) {
-          params.push(order.latestStatus);
+        if (hasLatestStatus && resolvedStatusText) {
+          params.push(normalizeStoredStatusText(order.latestStatus) || resolvedStatusText);
           sets.push(`latest_status = $${params.length}`);
         }
-        if (hasHeaderUpdatedAt && order.headerUpdatedAt) {
-          params.push(order.headerUpdatedAt);
+        if (hasHeaderUpdatedAt) {
+          params.push(order.headerUpdatedAt || syncStatusAt);
           sets.push(`header_updated_at = $${params.length}`);
         }
         if (hasOrderCreatedAt && order.orderCreatedAt) {
