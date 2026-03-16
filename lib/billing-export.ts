@@ -698,9 +698,11 @@ export async function buildBillingPdf(data: BillingExportData) {
     const iconWidth = 14.6 * iconScale;
     const iconGap = 8;
     const textSize = 10;
-    const rowCenterY = y - rowHeight / 2;
-    const iconY = rowCenterY - iconHeight / 2;
-    const textY = rowCenterY - textSize / 2 + 0.8;
+    const textFont = fontForText(text, true);
+    const textHeight = textFont.heightAtSize(textSize);
+    const rowBottomY = y - rowHeight;
+    const iconY = rowBottomY + (rowHeight - iconHeight) / 2;
+    const textY = rowBottomY + (rowHeight - textHeight) / 2;
 
     page.drawSvgPath(VIP_ICON_PATH, {
       x,
@@ -825,7 +827,7 @@ export async function buildBillingPdf(data: BillingExportData) {
       for (const field of section.fields) {
         const fieldHeight =
           "icon" in field && field.icon === "vip"
-            ? drawVipField(field.label, boxX + 18, boxY - 1)
+            ? drawVipField(field.label, boxX + 18, boxY)
             : drawField(field.label, field.value, boxX + 18, boxY, boxWidth - 36, {
                 emphasize: field.emphasize,
                 compact: true,
