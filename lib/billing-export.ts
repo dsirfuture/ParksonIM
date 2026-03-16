@@ -639,86 +639,69 @@ export async function buildBillingXlsx(data: BillingExportData) {
     }
   };
 
-  const writeInfoBlock = (
-    title: string,
-    startCol: string,
-    endCol: string,
-    rows: Array<{ label: string; value: string }>,
+  const writeRowAcross = (
+    row: number,
+    value: string,
+    options?: {
+      fontSize?: number;
+      bold?: boolean;
+      color?: string;
+      fill?: string;
+      border?: boolean | { top?: boolean; left?: boolean; bottom?: boolean; right?: boolean };
+      wrapText?: boolean;
+      rowHeight?: number;
+    },
   ) => {
-    const maxSlots = 5;
-    const filledRows = rows.filter((row) => String(row.label || "").trim() || String(row.value || "").trim());
-    const fillerCount = Math.max(0, maxSlots - filledRows.length);
+    if (options?.rowHeight) worksheet.getRow(row).height = options.rowHeight;
+    applyRangeStyle("A", "J", row, {
+      value,
+      fontSize: options?.fontSize,
+      bold: options?.bold,
+      color: options?.color,
+      fill: options?.fill,
+      border: options?.border,
+      wrapText: options?.wrapText,
+      horizontal: "left",
+      vertical: "middle",
+    });
+  };
 
-    applyRangeStyle(startCol, endCol, 8, {
-      value: title,
+  const writeLabelRow = (row: number, value: string) => {
+    writeRowAcross(row, value, {
+      fontSize: 9,
+      color: labelColor,
+      fill: panelFill,
+      border: { top: true, left: true, right: true, bottom: true },
+      rowHeight: 20,
+    });
+  };
+
+  const writeValueRow = (row: number, value: string, options?: { emphasize?: boolean; wrapText?: boolean }) => {
+    writeRowAcross(row, value, {
+      fontSize: options?.emphasize ? 18 : 12,
+      bold: true,
+      color: valueColor,
+      fill: panelFill,
+      border: { left: true, right: true, bottom: true },
+      wrapText: options?.wrapText,
+      rowHeight: options?.wrapText ? 38 : 24,
+    });
+  };
+
+  const writeSectionTitle = (row: number, value: string) => {
+    writeRowAcross(row, value, {
       fontSize: 11,
       bold: true,
       color: brandColor,
       fill: "FFF8FAFC",
-      border: true,
+      border: { top: true, left: true, right: true, bottom: true },
+      rowHeight: 24,
     });
-
-    filledRows.forEach((row, index) => {
-      const labelRow = 9 + index * 2;
-      const valueRow = labelRow + 1;
-      const isLastFilled = index === filledRows.length - 1 && fillerCount === 0;
-
-      applyRangeStyle(startCol, endCol, labelRow, {
-        value: row.label,
-        fontSize: 8.5,
-        color: labelColor,
-        fill: panelFill,
-        border: { left: true, right: true },
-        vertical: "bottom",
-      });
-
-      applyRangeStyle(startCol, endCol, valueRow, {
-        value: row.value,
-        fontSize: 11,
-        bold: false,
-        color: valueColor,
-        fill: panelFill,
-        border: { left: true, right: true, bottom: isLastFilled },
-        wrapText: true,
-        vertical: "top",
-      });
-    });
-
-    for (let i = 0; i < fillerCount; i += 1) {
-      const slotIndex = filledRows.length + i;
-      const labelRow = 9 + slotIndex * 2;
-      const valueRow = labelRow + 1;
-      const isLast = i === fillerCount - 1;
-      applyRangeStyle(startCol, endCol, labelRow, {
-        value: "",
-        fontSize: 8.5,
-        color: labelColor,
-        fill: panelFill,
-        border: { left: true, right: true },
-        vertical: "bottom",
-      });
-      applyRangeStyle(startCol, endCol, valueRow, {
-        value: "",
-        fontSize: 11,
-        color: valueColor,
-        fill: panelFill,
-        border: { left: true, right: true, bottom: isLast },
-        vertical: "top",
-      });
-    }
   };
 
-  worksheet.getRow(1).height = 24;
-  worksheet.getRow(2).height = 28;
-  worksheet.getRow(3).height = 26;
-  worksheet.getRow(4).height = 18;
-  worksheet.getRow(5).height = 22;
-  worksheet.getRow(6).height = 24;
-  worksheet.getRow(7).height = 12;
-  for (let rowNumber = 8; rowNumber <= 18; rowNumber += 1) {
-    worksheet.getRow(rowNumber).height = rowNumber % 2 === 1 ? 18 : rowNumber === 16 ? 38 : 24;
-  }
-  worksheet.getRow(19).height = 12;
+  worksheet.getRow(1).height = 26;
+  worksheet.getRow(2).height = 36;
+  worksheet.getRow(3).height = 20;
 
   if (logoBuffer) {
     const imageId = workbook.addImage({
@@ -726,82 +709,124 @@ export async function buildBillingXlsx(data: BillingExportData) {
       extension: "png",
     });
     worksheet.addImage(imageId, {
-      tl: { col: 0.08, row: 0.18 },
-      ext: { width: 26, height: 26 },
+      tl: { col: 0.12, row: 0.08 },
+      ext: { width: 24, height: 24 },
       editAs: "oneCell",
     });
   }
 
-  applyRangeStyle("B", "E", 1, {
+  applyCellStyle("B1", {
     value: "百盛供应链",
     fontSize: 12,
     bold: true,
     color: brandColor,
-    vertical: "bottom",
+    horizontal: "left",
+    vertical: "middle",
   });
-  applyCellStyle("A2", {
-    value: "INVOICE",
+  writeRowAcross(2, "INVOICE", {
     fontSize: 28,
     bold: true,
     color: valueColor,
-    vertical: "middle",
+    rowHeight: 36,
   });
-  applyRangeStyle("A", "E", 5, {
-    value: "MÁS QUE PRODUCTOS, ENTREGAMOS SOLUCIONES",
+  writeRowAcross(3, "MÁS QUE PRODUCTOS, ENTREGAMOS SOLUCIONES", {
     fontSize: 9,
     color: "FF64748B",
+    rowHeight: 20,
   });
 
-  [
-    { labelRange: "G1:J1", valueRange: "G2:J2", label: "订单号 / No. Ped.", value: data.orderNo || "-" },
-    { labelRange: "G3:J3", valueRange: "G4:J4", label: "出账日期 / F. Fact.", value: data.issueDateText || "-" },
-    { labelRange: "G5:J5", valueRange: "G6:J6", label: "合计金额 / Mto. Total", value: `$${toMoney(data.totalAmount)}`, emphasize: true },
-  ].forEach((item) => {
-    const [labelStart, labelEnd] = item.labelRange.split(":");
-    const [valueStart, valueEnd] = item.valueRange.split(":");
-    applyRangeStyle(labelStart.replace(/\d+/g, ""), labelEnd.replace(/\d+/g, ""), Number(labelStart.replace(/[A-Z]/g, "")), {
-      value: item.label,
-      fontSize: 9,
-      color: labelColor,
-      fill: panelFill,
-      border: true,
-    });
-    applyRangeStyle(valueStart.replace(/\d+/g, ""), valueEnd.replace(/\d+/g, ""), Number(valueStart.replace(/[A-Z]/g, "")), {
-      value: item.value,
-      fontSize: item.emphasize ? 18 : 11,
-      bold: true,
-      color: valueColor,
-      horizontal: "left",
-      fill: panelFill,
-      border: true,
-    });
-  });
+  let currentRow = 5;
 
-  writeInfoBlock("客户信息 / CLIENTE", "A", "C", [
-    { label: "客户名称 / Nom. Clte.", value: data.companyName || "-" },
-    { label: "收货人 / Dest.", value: data.recipientNameText || data.contactName || "-" },
-    { label: "电话 / Tel. Dest.", value: data.recipientPhoneText || data.contactPhone || "-" },
-    { label: "送货地址 / Dir. Ent.", value: data.addressText || "-" },
-  ]);
+  writeLabelRow(currentRow, "订单号 / No. Ped.");
+  currentRow += 1;
+  writeValueRow(currentRow, data.orderNo || "-");
+  currentRow += 1;
 
-  writeInfoBlock("账单信息 / FACT.", "D", "F", [
-    { label: "发货日期 / F. Env.", value: data.shipDateText || "-" },
-    { label: "门店标记 / Etiq. Tda.", value: formatStoreLabelDisplay(data.storeLabelText) || "-" },
-    ...(getPaymentTermDisplayLines(data.paymentTermText).length > 0
-      ? [{ label: "账期", value: getPaymentTermDisplayLines(data.paymentTermText).join(" ") }]
-      : []),
-    ...(data.vipDiscountEnabled ? [{ label: "VIP客户", value: "VIP客户" }] : []),
-  ]);
+  writeLabelRow(currentRow, "出账日期 / F. Fact.");
+  currentRow += 1;
+  writeValueRow(currentRow, data.issueDateText || "-");
+  currentRow += 1;
 
-  writeInfoBlock("物流信息 / ENVÍO", "G", "J", [
-    { label: "发货仓 / Dep. Env.", value: data.warehouseText || "-" },
-    { label: "发货方式 / Met. Env.", value: data.shippingMethodText || "-" },
-    { label: "托运公司 / Emp. Transp.", value: data.carrierCompanyText || "-" },
-    { label: "装箱件数 / Cant. Cajas", value: data.boxCountText || "-" },
-    { label: "商品总数量 / Tot. Prod.", value: String(data.totalQty || 0) },
-  ]);
+  writeLabelRow(currentRow, "合计金额 / Mto. Total");
+  currentRow += 1;
+  writeValueRow(currentRow, `$${toMoney(data.totalAmount)}`, { emphasize: true });
+  currentRow += 2;
 
-  const headerRowNumber = 20;
+  writeSectionTitle(currentRow, "客户信息 / CLIENTE");
+  currentRow += 1;
+  writeLabelRow(currentRow, "客户名称 / Nom. Clte.");
+  currentRow += 1;
+  writeValueRow(currentRow, data.companyName || "-");
+  currentRow += 1;
+
+  writeLabelRow(currentRow, "收货人 / Dest.");
+  currentRow += 1;
+  writeValueRow(currentRow, data.recipientNameText || data.contactName || "-");
+  currentRow += 1;
+
+  writeLabelRow(currentRow, "电话 / Tel. Dest.");
+  currentRow += 1;
+  writeValueRow(currentRow, data.recipientPhoneText || data.contactPhone || "-");
+  currentRow += 1;
+
+  writeLabelRow(currentRow, "送货地址 / Dir. Ent.");
+  currentRow += 1;
+  writeValueRow(currentRow, data.addressText || "-", { wrapText: true });
+  currentRow += 2;
+
+  writeSectionTitle(currentRow, "账单信息 / FACT.");
+  currentRow += 1;
+  writeLabelRow(currentRow, "发货日期 / F. Env.");
+  currentRow += 1;
+  writeValueRow(currentRow, data.shipDateText || "-");
+  currentRow += 1;
+
+  writeLabelRow(currentRow, "门店标记 / Etiq. Tda.");
+  currentRow += 1;
+  writeValueRow(currentRow, formatStoreLabelDisplay(data.storeLabelText) || "-");
+  currentRow += 1;
+
+  writeLabelRow(currentRow, "账期");
+  currentRow += 1;
+  writeValueRow(currentRow, getPaymentTermDisplayLines(data.paymentTermText).join(" ") || "-");
+  currentRow += 1;
+
+  if (data.vipDiscountEnabled) {
+    writeLabelRow(currentRow, "VIP客户");
+    currentRow += 1;
+    writeValueRow(currentRow, "VIP客户");
+    currentRow += 1;
+  }
+  currentRow += 1;
+
+  writeSectionTitle(currentRow, "物流信息 / ENVÍO");
+  currentRow += 1;
+  writeLabelRow(currentRow, "发货仓 / Dep. Env.");
+  currentRow += 1;
+  writeValueRow(currentRow, data.warehouseText || "-");
+  currentRow += 1;
+
+  writeLabelRow(currentRow, "发货方式 / Met. Env.");
+  currentRow += 1;
+  writeValueRow(currentRow, data.shippingMethodText || "-");
+  currentRow += 1;
+
+  writeLabelRow(currentRow, "托运公司 / Emp. Transp.");
+  currentRow += 1;
+  writeValueRow(currentRow, data.carrierCompanyText || "-");
+  currentRow += 1;
+
+  writeLabelRow(currentRow, "装箱件数 / Cant. Cajas");
+  currentRow += 1;
+  writeValueRow(currentRow, data.boxCountText || "-");
+  currentRow += 1;
+
+  writeLabelRow(currentRow, "商品总数量 / Tot. Prod.");
+  currentRow += 1;
+  writeValueRow(currentRow, String(data.totalQty || 0));
+  currentRow += 2;
+
+  const headerRowNumber = currentRow;
   const headerValues = [
     "图片",
     "编号",
