@@ -131,6 +131,7 @@ export function DropshippingClient({
   const [form, setForm] = useState<OrderFormState>(EMPTY_ORDER_FORM);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<number | null>(null);
   const [importSummary, setImportSummary] = useState<string>("");
   const [error, setError] = useState("");
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -451,21 +452,56 @@ export function DropshippingClient({
   async function handleImport(file: File) {
     try {
       setImporting(true);
+      setImportProgress(null);
       setError("");
       setImportSummary("");
-      if (file.size > 25 * 1024 * 1024) {
-        throw new Error(
-          lang === "zh"
-            ? `历史导入压缩包过大（${(file.size / 1024 / 1024).toFixed(1)} MB）。当前网站上传链路很可能被服务器限制，请先发我服务器日志或把压缩包拆小后再试。`
-            : `The import zip is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). The current upload path is likely limited by the server. Please check server logs or split the zip and try again.`,
-        );
+      const lowerName = file.name.toLowerCase();
+      let response: Response;
+
+      if (lowerName.endsWith(".zip")) {
+        setImportProgress(5);
+        const uploadUrlRes = await fetch("/api/dropshipping/import/upload-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName: file.name,
+            fileType: file.type || "application/zip",
+          }),
+        });
+        const uploadUrlJson = await uploadUrlRes.json();
+        if (!uploadUrlRes.ok || !uploadUrlJson?.ok || !uploadUrlJson?.upload?.url || !uploadUrlJson?.upload?.key) {
+          throw new Error(uploadUrlJson?.error || "create_upload_url_failed");
+        }
+
+        setImportProgress(20);
+        const uploadRes = await fetch(uploadUrlJson.upload.url as string, {
+          method: "PUT",
+          headers: uploadUrlJson.upload.headers || { "Content-Type": file.type || "application/zip" },
+          body: file,
+        });
+        if (!uploadRes.ok) {
+          const uploadErrorText = await uploadRes.text();
+          throw new Error(uploadErrorText || "upload_to_r2_failed");
+        }
+
+        setImportProgress(75);
+        response = await fetch("/api/dropshipping/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            r2Key: uploadUrlJson.upload.key,
+            fileName: file.name,
+          }),
+        });
+      } else {
+        const formData = new FormData();
+        formData.append("file", file);
+        response = await fetch("/api/dropshipping/import", {
+          method: "POST",
+          body: formData,
+        });
       }
-      const formData = new FormData();
-      formData.append("file", file);
-      const response = await fetch("/api/dropshipping/import", {
-        method: "POST",
-        body: formData,
-      });
+
       const raw = await response.text();
       let json: { ok?: boolean; error?: string; summary?: Record<string, number> } | null = null;
       try {
@@ -478,6 +514,7 @@ export function DropshippingClient({
       }
       if (!response.ok || !json?.ok) throw new Error(json?.error || "import_failed");
       const summary = json.summary || {};
+      setImportProgress(100);
       setImportSummary(
         lang === "zh"
           ? `已导入 ${summary.totalRows || 0} 行，新增订单 ${summary.createdOrders || 0}，更新订单 ${summary.updatedOrders || 0}，同步客户 ${summary.touchedCustomers || 0}，同步商品 ${summary.touchedProducts || 0}，付款快照 ${summary.seededPayments || 0}，面单 ${summary.uploadedLabels || 0}，凭据 ${summary.uploadedProofs || 0}。`
@@ -496,6 +533,7 @@ export function DropshippingClient({
       }
       setError(message);
     } finally {
+      setImportProgress(null);
       setImporting(false);
     }
   }
@@ -561,6 +599,14 @@ export function DropshippingClient({
 
       {importSummary ? (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{importSummary}</div>
+      ) : null}
+
+      {importing && importProgress !== null ? (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700">
+          {lang === "zh"
+            ? `历史迁移处理中：${importProgress}%`
+            : `Processing history import: ${importProgress}%`}
+        </div>
       ) : null}
 
       <div className="flex flex-wrap gap-2">

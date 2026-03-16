@@ -3,6 +3,7 @@ import JSZip from "jszip";
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { importLegacyOrders } from "@/lib/dropshipping";
+import { deleteR2Object, downloadR2Object } from "@/lib/r2-upload";
 import type { DsLegacyImportAsset, DsLegacyImportRow } from "@/lib/dropshipping-types";
 import { hasPermission } from "@/lib/permissions";
 import { getSession } from "@/lib/tenant";
@@ -136,12 +137,11 @@ function buildAssetIndexes(files: AssetFile[]) {
   const byName = new Map<string, AssetFile[]>();
 
   for (const file of files) {
-    const normalizedPath = normalizePath(file.path);
-    byPath.set(normalizedPath.toLowerCase(), file);
-    const name = file.name.toLowerCase();
-    const current = byName.get(name) || [];
-    current.push(file);
-    byName.set(name, current);
+    const normalized = normalizePath(file.path);
+    byPath.set(normalized.toLowerCase(), file);
+    const list = byName.get(file.name.toLowerCase()) || [];
+    list.push(file);
+    byName.set(file.name.toLowerCase(), list);
   }
 
   return { byPath, byName };
@@ -171,8 +171,8 @@ function resolveAsset(
     const preferred = assets.byPath.get(normalizePath(`${preferredFolder}/${baseName(normalized)}`).toLowerCase());
     if (preferred) return preferred;
 
-    const byFileName = assets.byName.get(baseName(normalized).toLowerCase());
-    if (byFileName?.length) return byFileName[0];
+    const matchedByName = assets.byName.get(baseName(normalized).toLowerCase());
+    if (matchedByName?.length) return matchedByName[0];
   }
 
   return null;
@@ -182,7 +182,6 @@ async function parseXlsxWorkbook(bytes: Uint8Array, assetFiles: AssetFile[]) {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(Buffer.from(bytes) as unknown as Parameters<typeof workbook.xlsx.load>[0]);
   const assets = buildAssetIndexes(assetFiles);
-
   let parsedRows: DsLegacyImportRow[] = [];
 
   for (const worksheet of workbook.worksheets) {
@@ -197,9 +196,9 @@ async function parseXlsxWorkbook(bytes: Uint8Array, assetFiles: AssetFile[]) {
         let hyperlink = "";
 
         if (typeof cellValue === "object" && cellValue && "hyperlink" in cellValue) {
-          const candidate = cellValue as { text?: string; hyperlink?: string };
-          displayText = text(candidate.text || cell.text);
-          hyperlink = text(candidate.hyperlink);
+          const linkCell = cellValue as { text?: string; hyperlink?: string };
+          displayText = text(linkCell.text || cell.text);
+          hyperlink = text(linkCell.hyperlink);
         } else {
           displayText = text(cell.text || cellValue);
           hyperlink = typeof cell.hyperlink === "string" ? cell.hyperlink : "";
@@ -235,12 +234,7 @@ async function parseXlsxWorkbook(bytes: Uint8Array, assetFiles: AssetFile[]) {
         indexes.shippingProofFile >= 0 ? meta.get(`${rowIndex + 1}:${indexes.shippingProofFile + 1}`) : undefined;
 
       const shippingLabelFiles: DsLegacyImportAsset[] = [];
-      const labelAsset = resolveAsset(
-        labelMeta?.text || "",
-        labelMeta?.hyperlink || "",
-        assets,
-        "面单文件",
-      );
+      const labelAsset = resolveAsset(labelMeta?.text || "", labelMeta?.hyperlink || "", assets, "面单文件");
       if (labelAsset) {
         shippingLabelFiles.push({
           displayName: labelAsset.name,
@@ -251,12 +245,7 @@ async function parseXlsxWorkbook(bytes: Uint8Array, assetFiles: AssetFile[]) {
       }
 
       const shippingProofFiles: DsLegacyImportAsset[] = [];
-      const proofAsset = resolveAsset(
-        proofMeta?.text || "",
-        proofMeta?.hyperlink || "",
-        assets,
-        "发货凭据",
-      );
+      const proofAsset = resolveAsset(proofMeta?.text || "", proofMeta?.hyperlink || "", assets, "发货凭据");
       if (proofAsset) {
         shippingProofFiles.push({
           displayName: proofAsset.name,
@@ -309,6 +298,7 @@ async function parseXlsxWorkbook(bytes: Uint8Array, assetFiles: AssetFile[]) {
 function parseFlatWorkbook(bytes: ArrayBuffer) {
   const workbook = XLSX.read(bytes, { type: "array" });
   let parsedRows: DsLegacyImportRow[] = [];
+
   for (const sheetName of workbook.SheetNames) {
     const matrix = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheetName], {
       header: 1,
@@ -324,8 +314,8 @@ function parseFlatWorkbook(bytes: ArrayBuffer) {
     const indexes = Object.fromEntries(
       Object.entries(COLUMN_ALIASES).map(([key, aliases]) => [key, findColumnIndex(rowHeaders, aliases)]),
     ) as Record<keyof typeof COLUMN_ALIASES, number>;
-    const items: DsLegacyImportRow[] = [];
 
+    const items: DsLegacyImportRow[] = [];
     for (let rowIndex = headerRowIndex + 1; rowIndex < matrix.length; rowIndex += 1) {
       const row = matrix[rowIndex] || [];
       const customerName = indexes.customerName >= 0 ? text(row[indexes.customerName]) : "";
@@ -373,8 +363,7 @@ function parseFlatWorkbook(bytes: ArrayBuffer) {
   return parsedRows;
 }
 
-async function parseZip(file: File) {
-  const bytes = new Uint8Array(await file.arrayBuffer());
+async function parseZipBytes(bytes: Uint8Array) {
   const zip = await JSZip.loadAsync(bytes);
   const entries = Object.values(zip.files).filter((entry) => !entry.dir);
   const workbookEntry = entries.find((entry) => /\.xlsx$/i.test(entry.name));
@@ -396,6 +385,14 @@ async function parseZip(file: File) {
   return parseXlsxWorkbook(workbookBytes, assetFiles);
 }
 
+async function parseZipFile(file: File) {
+  return parseZipBytes(new Uint8Array(await file.arrayBuffer()));
+}
+
+function uint8ArrayToArrayBuffer(value: Uint8Array) {
+  return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer;
+}
+
 export async function POST(request: Request) {
   try {
     const session = await getSession();
@@ -404,18 +401,38 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: "无权限" }, { status: 403 });
     }
 
-    const formData = await request.formData();
-    const file = formData.get("file");
-    if (!(file instanceof File)) {
-      return NextResponse.json({ ok: false, error: "请先选择历史导入文件" }, { status: 400 });
-    }
+    const contentType = request.headers.get("content-type") || "";
+    let parsedRows: DsLegacyImportRow[] = [];
+    let importedR2Key = "";
 
-    const lowerName = file.name.toLowerCase();
-    const parsedRows = lowerName.endsWith(".zip")
-      ? await parseZip(file)
-      : lowerName.endsWith(".xlsx")
-        ? await parseXlsxWorkbook(new Uint8Array(await file.arrayBuffer()), [])
-        : parseFlatWorkbook(await file.arrayBuffer());
+    if (contentType.includes("application/json")) {
+      const body = (await request.json()) as { r2Key?: string; fileName?: string };
+      importedR2Key = String(body.r2Key || "").trim();
+      if (!importedR2Key) {
+        return NextResponse.json({ ok: false, error: "缺少历史导入文件 key" }, { status: 400 });
+      }
+
+      const object = await downloadR2Object(importedR2Key);
+      const sourceName = String(body.fileName || importedR2Key).toLowerCase();
+      parsedRows = sourceName.endsWith(".zip")
+        ? await parseZipBytes(object.body)
+        : sourceName.endsWith(".xlsx")
+          ? await parseXlsxWorkbook(object.body, [])
+          : parseFlatWorkbook(uint8ArrayToArrayBuffer(object.body));
+    } else {
+      const formData = await request.formData();
+      const file = formData.get("file");
+      if (!(file instanceof File)) {
+        return NextResponse.json({ ok: false, error: "请先选择历史导入文件" }, { status: 400 });
+      }
+
+      const lowerName = file.name.toLowerCase();
+      parsedRows = lowerName.endsWith(".zip")
+        ? await parseZipFile(file)
+        : lowerName.endsWith(".xlsx")
+          ? await parseXlsxWorkbook(new Uint8Array(await file.arrayBuffer()), [])
+          : parseFlatWorkbook(await file.arrayBuffer());
+    }
 
     if (parsedRows.length === 0) {
       return NextResponse.json(
@@ -425,6 +442,10 @@ export async function POST(request: Request) {
     }
 
     const summary = await importLegacyOrders(session, parsedRows);
+    if (importedR2Key) {
+      await deleteR2Object(importedR2Key).catch(() => undefined);
+    }
+
     return NextResponse.json({ ok: true, summary });
   } catch (error) {
     return NextResponse.json(
