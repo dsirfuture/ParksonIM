@@ -547,12 +547,10 @@ export function BillingClient({
             <div className="space-y-8 p-6">
               <section className="space-y-4">
                 <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">固定信息区</div>
-                  <p className="mt-1 text-sm text-slate-500">先确认当前单据基础信息，再继续处理下方业务内容。</p>
+                  <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">基础信息区</div>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div><label className="mb-1 block text-sm text-slate-600">公司名称</label><input value={editState.companyName} onChange={(e) => setEditState((prev) => (prev ? { ...prev, companyName: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
-                  <div><label className="mb-1 block text-sm text-slate-600">联系电话</label><input value={editState.contactPhone} onChange={(e) => setEditState((prev) => (prev ? { ...prev, contactPhone: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
                 </div>
                 <div className="flex flex-wrap gap-4">
                   <div className="w-full md:w-[150px]"><label className="mb-1 block text-sm text-slate-600">第几门店</label><input value={editState.storeLabelText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, storeLabelText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
@@ -564,7 +562,6 @@ export function BillingClient({
               <section className="space-y-4 border-t border-slate-100 pt-6">
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">业务填写区</div>
-                  <p className="mt-1 text-sm text-slate-500">按发货、收货、物流顺序填写，操作路径会更自然。</p>
                 </div>
                 <div className="space-y-4">
                   <div className="flex flex-wrap gap-4">
