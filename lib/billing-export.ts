@@ -783,7 +783,7 @@ export async function buildBillingPdf(data: BillingExportData) {
       return usedHeight + 26;
     });
 
-    cursorY = sectionTop - Math.max(228, ...sectionHeights) - 16;
+    cursorY = sectionTop - Math.max(228, ...sectionHeights) - 24;
 
     drawText("\u5546\u54c1\u660e\u7ec6 / DETALLE", marginX, cursorY + 10, {
       size: 8.2,
@@ -840,10 +840,12 @@ export async function buildBillingPdf(data: BillingExportData) {
     page = pdfDoc.addPage([pageWidth, pageHeight]);
     cursorY = pageHeight - topMargin;
     drawItemsHeader();
+    isFirstRowOnPage = true;
   };
 
   await drawHeader();
   drawItemsHeader();
+  let isFirstRowOnPage = true;
 
   for (let itemIndex = 0; itemIndex < data.items.length; itemIndex += 1) {
     const item = data.items[itemIndex];
@@ -861,7 +863,7 @@ export async function buildBillingPdf(data: BillingExportData) {
 
     const rowTop = cursorY;
     const rowBottom = cursorY - rowHeight;
-    if (itemIndex > 0) {
+    if (!isFirstRowOnPage) {
       page.drawLine({
         start: { x: marginX, y: rowTop + 2 },
         end: { x: pageWidth - marginX, y: rowTop + 2 },
@@ -919,6 +921,7 @@ export async function buildBillingPdf(data: BillingExportData) {
     drawRightText(`$${toMoney(item.lineTotal)}`, x + columns[4].width - 4, rowTop - 14, { size: 9.6, bold: true });
 
     cursorY -= rowHeight;
+    isFirstRowOnPage = false;
   }
 
   const summarySubtotal = data.items.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
