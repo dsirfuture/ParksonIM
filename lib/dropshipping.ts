@@ -581,6 +581,7 @@ export async function importLegacyOrders(
         customer_id: customer.id,
         platform: row.platform,
         platform_order_no: row.platformOrderNo,
+        product_id: product.id,
       },
       select: { id: true },
     });
@@ -764,7 +765,7 @@ export async function listOrders(session: Session) {
   const duplicateKeys = new Set<string>();
   const grouped = new Map<string, number>();
   for (const row of rows) {
-    const key = `${row.customer_id}::${row.platform}::${row.platform_order_no}`;
+    const key = `${row.customer_id}::${row.platform}::${row.platform_order_no}::${row.product_id}`;
     grouped.set(key, (grouped.get(key) || 0) + 1);
   }
   for (const [key, count] of grouped.entries()) {

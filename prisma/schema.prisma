@@ -462,7 +462,7 @@ model DropshippingOrder {
   exchangeRate DropshippingExchangeRate? @relation(fields: [exchange_rate_id], references: [id], onDelete: SetNull)
   attachments  DropshippingOrderAttachment[]
 
-  @@unique([tenant_id, company_id, customer_id, platform, platform_order_no])
+  @@unique([tenant_id, company_id, customer_id, platform, platform_order_no, product_id])
   @@index([tenant_id, company_id])
   @@index([customer_id])
   @@index([product_id])

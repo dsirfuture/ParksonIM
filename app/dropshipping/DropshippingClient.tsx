@@ -110,6 +110,13 @@ function fmtMoney(value: number, lang: "zh" | "es") {
   }).format(value);
 }
 
+function isDirectFileLink(value: string) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return false;
+  if (normalized.startsWith("=")) return false;
+  return /^https?:\/\//i.test(normalized) || normalized.startsWith("/");
+}
+
 export function DropshippingClient({
   initialLang,
   initialOverview,
@@ -767,7 +774,7 @@ export function DropshippingClient({
                             >
                               PDF
                             </a>
-                          ) : row.shippingLabelFile ? (
+                          ) : isDirectFileLink(row.shippingLabelFile) ? (
                             <a
                               href={row.shippingLabelFile}
                               target="_blank"
@@ -786,7 +793,7 @@ export function DropshippingClient({
                             >
                               IMG{row.shippingProofAttachments.length > 1 ? ` x${row.shippingProofAttachments.length}` : ""}
                             </a>
-                          ) : row.shippingProofFile ? (
+                          ) : isDirectFileLink(row.shippingProofFile) ? (
                             <a
                               href={row.shippingProofFile}
                               target="_blank"

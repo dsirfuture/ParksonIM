@@ -21,12 +21,79 @@ type CellMeta = {
   hyperlink: string;
 };
 
+type ColumnKey = keyof Omit<DsLegacyImportRow, "shippingLabelFiles" | "shippingProofFiles">;
+
+const COLUMN_ALIASES: Record<ColumnKey, string[]> = {
+  customerName: ["客户名称", "客户"],
+  platform: ["下单平台", "平台"],
+  platformOrderNo: ["后台订单号", "订单号"],
+  trackingNo: ["面单物流号", "物流号", "运单号"],
+  shippingLabelFile: ["面单文件"],
+  shipped: ["是否发货"],
+  shippedAt: ["发货日期"],
+  shippingProofFile: ["发货凭据", "发货凭证"],
+  sku: ["产品sku", "sku", "产品SKU"],
+  quantity: ["下单数", "数量"],
+  color: ["发货颜色", "颜色"],
+  warehouse: ["发货仓", "仓库"],
+  shippingFee: ["代发费"],
+  productImageUrl: ["产品图"],
+  productNameZh: ["产品中文名"],
+  unitPrice: ["产品单价"],
+  discountRate: ["普通折扣"],
+  stockedQty: ["备货数量"],
+  stockAmount: ["备货总金额"],
+  rateValue: ["rmb汇率", "汇率", "RMB汇率"],
+  exchangedAmount: ["汇率后金额"],
+  shippingAmount: ["代发总金额"],
+  totalAmount: ["总金额"],
+  paidAmount: ["已付款项"],
+  unpaidAmount: ["剩余款项"],
+  settledAt: ["结账日期"],
+};
+
+const CARRY_DOWN_FIELDS: ColumnKey[] = [
+  "customerName",
+  "platform",
+  "platformOrderNo",
+  "trackingNo",
+  "shippingLabelFile",
+  "shipped",
+  "shippedAt",
+  "shippingProofFile",
+];
+
 function text(value: unknown) {
   return String(value ?? "").replace(/\r?\n/g, " ").trim();
 }
 
 function headerKey(value: unknown) {
   return text(value).replace(/\s+/g, "").toLowerCase();
+}
+
+function normalizePath(value: string) {
+  return value
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/^\.?\//, "")
+    .replace(/^\/+/, "")
+    .replace(/\/+/g, "/");
+}
+
+function baseName(filePath: string) {
+  const normalized = normalizePath(filePath);
+  const parts = normalized.split("/");
+  return parts[parts.length - 1] || normalized;
+}
+
+function mimeTypeFromName(fileName: string) {
+  const lower = fileName.toLowerCase();
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".gif")) return "image/gif";
+  return "application/octet-stream";
 }
 
 function parseNumber(value: unknown) {
@@ -61,60 +128,6 @@ function parseDiscount(value: unknown) {
   return parsed > 1 ? parsed / 100 : parsed;
 }
 
-function normalizePath(value: string) {
-  return value
-    .trim()
-    .replace(/\\/g, "/")
-    .replace(/^\.?\//, "")
-    .replace(/^\/+/, "")
-    .replace(/\/+/g, "/");
-}
-
-function baseName(filePath: string) {
-  const normalized = normalizePath(filePath);
-  const parts = normalized.split("/");
-  return parts[parts.length - 1] || normalized;
-}
-
-function mimeTypeFromName(fileName: string) {
-  const lower = fileName.toLowerCase();
-  if (lower.endsWith(".pdf")) return "application/pdf";
-  if (lower.endsWith(".png")) return "image/png";
-  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
-  if (lower.endsWith(".webp")) return "image/webp";
-  if (lower.endsWith(".gif")) return "image/gif";
-  return "application/octet-stream";
-}
-
-const COLUMN_ALIASES: Record<keyof Omit<DsLegacyImportRow, "shippingLabelFiles" | "shippingProofFiles">, string[]> = {
-  customerName: ["客户名称", "客户"],
-  platform: ["下单平台", "平台"],
-  platformOrderNo: ["后台订单号", "订单号"],
-  trackingNo: ["面单物流号", "物流号", "运单号"],
-  shippingLabelFile: ["面单文件"],
-  shipped: ["是否发货"],
-  shippedAt: ["发货日期"],
-  shippingProofFile: ["发货凭据", "发货凭证"],
-  sku: ["产品sku", "sku", "产品SKU"],
-  quantity: ["下单数", "数量"],
-  color: ["发货颜色", "颜色"],
-  warehouse: ["发货仓", "仓库"],
-  shippingFee: ["代发费"],
-  productImageUrl: ["产品图"],
-  productNameZh: ["产品中文名"],
-  unitPrice: ["产品单价"],
-  discountRate: ["普通折扣"],
-  stockedQty: ["备货数量"],
-  stockAmount: ["备货总金额"],
-  rateValue: ["rmb汇率", "汇率", "RMB汇率"],
-  exchangedAmount: ["汇率后金额"],
-  shippingAmount: ["代发总金额"],
-  totalAmount: ["总金额"],
-  paidAmount: ["已付款项"],
-  unpaidAmount: ["剩余款项"],
-  settledAt: ["结账日期"],
-};
-
 function findHeaderRow(rows: string[][]) {
   return rows.findIndex((row) => {
     const keys = row.map((cell) => headerKey(cell));
@@ -137,11 +150,12 @@ function buildAssetIndexes(files: AssetFile[]) {
   const byName = new Map<string, AssetFile[]>();
 
   for (const file of files) {
-    const normalized = normalizePath(file.path);
-    byPath.set(normalized.toLowerCase(), file);
-    const list = byName.get(file.name.toLowerCase()) || [];
-    list.push(file);
-    byName.set(file.name.toLowerCase(), list);
+    const normalizedPath = normalizePath(file.path).toLowerCase();
+    byPath.set(normalizedPath, file);
+    const normalizedName = file.name.toLowerCase();
+    const current = byName.get(normalizedName) || [];
+    current.push(file);
+    byName.set(normalizedName, current);
   }
 
   return { byPath, byName };
@@ -154,7 +168,16 @@ function splitPossiblePaths(value: string) {
     .filter(Boolean);
 }
 
-function resolveAsset(
+function fileToAsset(file: AssetFile): DsLegacyImportAsset {
+  return {
+    displayName: file.name,
+    relativePath: file.path,
+    bytes: file.bytes,
+    mimeType: mimeTypeFromName(file.name),
+  };
+}
+
+function findAssetByPath(
   rawValue: string,
   hyperlink: string,
   assets: ReturnType<typeof buildAssetIndexes>,
@@ -171,22 +194,74 @@ function resolveAsset(
     const preferred = assets.byPath.get(normalizePath(`${preferredFolder}/${baseName(normalized)}`).toLowerCase());
     if (preferred) return preferred;
 
-    const matchedByName = assets.byName.get(baseName(normalized).toLowerCase());
-    if (matchedByName?.length) return matchedByName[0];
+    const byName = assets.byName.get(baseName(normalized).toLowerCase());
+    if (byName?.length) return byName[0];
+  }
+  return null;
+}
+
+function findProofAssetsByKeys(
+  assets: ReturnType<typeof buildAssetIndexes>,
+  row: { platformOrderNo: string; trackingNo: string },
+) {
+  const keywords = [row.platformOrderNo, row.trackingNo]
+    .map((item) => text(item).toLowerCase())
+    .filter(Boolean);
+
+  if (keywords.length === 0) return [] as AssetFile[];
+
+  const matches: AssetFile[] = [];
+  for (const file of assets.byPath.values()) {
+    const normalizedPath = normalizePath(file.path).toLowerCase();
+    if (!normalizedPath.startsWith("发货凭据/")) continue;
+    if (keywords.some((keyword) => normalizedPath.includes(keyword))) {
+      matches.push(file);
+    }
   }
 
-  return null;
+  return matches.sort((a, b) => a.path.localeCompare(b.path, "en"));
+}
+
+function getCarriedValue(
+  row: string[],
+  indexes: Record<ColumnKey, number>,
+  carried: Partial<Record<ColumnKey, string>>,
+  key: ColumnKey,
+) {
+  const index = indexes[key];
+  const current = index >= 0 ? text(row[index]) : "";
+  if (current) {
+    if (CARRY_DOWN_FIELDS.includes(key)) carried[key] = current;
+    return current;
+  }
+  return CARRY_DOWN_FIELDS.includes(key) ? carried[key] || "" : "";
+}
+
+function getCarriedMeta(
+  rowNumber: number,
+  columnIndex: number,
+  carried: { text: string; hyperlink: string },
+  metaMap: Map<string, CellMeta>,
+) {
+  if (columnIndex < 0) return carried;
+  const current = metaMap.get(`${rowNumber}:${columnIndex + 1}`);
+  if (!current) return carried;
+  return {
+    text: current.text || carried.text,
+    hyperlink: current.hyperlink || carried.hyperlink,
+  };
 }
 
 async function parseXlsxWorkbook(bytes: Uint8Array, assetFiles: AssetFile[]) {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(Buffer.from(bytes) as unknown as Parameters<typeof workbook.xlsx.load>[0]);
   const assets = buildAssetIndexes(assetFiles);
+
   let parsedRows: DsLegacyImportRow[] = [];
 
   for (const worksheet of workbook.worksheets) {
     const matrix: string[][] = [];
-    const meta = new Map<string, CellMeta>();
+    const metaMap = new Map<string, CellMeta>();
 
     worksheet.eachRow({ includeEmpty: false }, (row) => {
       const current: string[] = [];
@@ -206,7 +281,7 @@ async function parseXlsxWorkbook(bytes: Uint8Array, assetFiles: AssetFile[]) {
 
         current[colNumber - 1] = displayText;
         if (displayText || hyperlink) {
-          meta.set(`${row.number}:${colNumber}`, { text: displayText, hyperlink });
+          metaMap.set(`${row.number}:${colNumber}`, { text: displayText, hyperlink });
         }
       });
       matrix[row.number - 1] = current;
@@ -218,53 +293,68 @@ async function parseXlsxWorkbook(bytes: Uint8Array, assetFiles: AssetFile[]) {
     const headers = (matrix[headerRowIndex] || []).map((cell) => text(cell));
     const indexes = Object.fromEntries(
       Object.entries(COLUMN_ALIASES).map(([key, aliases]) => [key, findColumnIndex(headers, aliases)]),
-    ) as Record<keyof typeof COLUMN_ALIASES, number>;
+    ) as Record<ColumnKey, number>;
 
     const items: DsLegacyImportRow[] = [];
+    const carriedValues: Partial<Record<ColumnKey, string>> = {};
+    let carriedLabelMeta: CellMeta = { text: "", hyperlink: "" };
+    let carriedProofMeta: CellMeta = { text: "", hyperlink: "" };
+
     for (let rowIndex = headerRowIndex + 1; rowIndex < matrix.length; rowIndex += 1) {
       const row = matrix[rowIndex] || [];
-      const customerName = indexes.customerName >= 0 ? text(row[indexes.customerName]) : "";
-      const platformOrderNo = indexes.platformOrderNo >= 0 ? text(row[indexes.platformOrderNo]) : "";
+      const excelRowNumber = rowIndex + 1;
+
+      const customerName = getCarriedValue(row, indexes, carriedValues, "customerName");
+      const platform = getCarriedValue(row, indexes, carriedValues, "platform");
+      const platformOrderNo = getCarriedValue(row, indexes, carriedValues, "platformOrderNo");
+      const trackingNo = getCarriedValue(row, indexes, carriedValues, "trackingNo");
       const sku = indexes.sku >= 0 ? text(row[indexes.sku]) : "";
+
       if (!customerName || !platformOrderNo || !sku) continue;
 
-      const labelMeta =
-        indexes.shippingLabelFile >= 0 ? meta.get(`${rowIndex + 1}:${indexes.shippingLabelFile + 1}`) : undefined;
-      const proofMeta =
-        indexes.shippingProofFile >= 0 ? meta.get(`${rowIndex + 1}:${indexes.shippingProofFile + 1}`) : undefined;
+      carriedLabelMeta = getCarriedMeta(excelRowNumber, indexes.shippingLabelFile, carriedLabelMeta, metaMap);
+      carriedProofMeta = getCarriedMeta(excelRowNumber, indexes.shippingProofFile, carriedProofMeta, metaMap);
+
+      const shippedRaw = getCarriedValue(row, indexes, carriedValues, "shipped");
+      const shippedAtRaw = getCarriedValue(row, indexes, carriedValues, "shippedAt");
+      const shippingLabelFile = getCarriedValue(row, indexes, carriedValues, "shippingLabelFile");
+      const shippingProofFile = getCarriedValue(row, indexes, carriedValues, "shippingProofFile");
 
       const shippingLabelFiles: DsLegacyImportAsset[] = [];
-      const labelAsset = resolveAsset(labelMeta?.text || "", labelMeta?.hyperlink || "", assets, "面单文件");
-      if (labelAsset) {
-        shippingLabelFiles.push({
-          displayName: labelAsset.name,
-          relativePath: labelAsset.path,
-          bytes: labelAsset.bytes,
-          mimeType: mimeTypeFromName(labelAsset.name),
-        });
-      }
+      const labelAsset = findAssetByPath(
+        shippingLabelFile,
+        carriedLabelMeta.hyperlink,
+        assets,
+        "面单文件",
+      );
+      if (labelAsset) shippingLabelFiles.push(fileToAsset(labelAsset));
 
       const shippingProofFiles: DsLegacyImportAsset[] = [];
-      const proofAsset = resolveAsset(proofMeta?.text || "", proofMeta?.hyperlink || "", assets, "发货凭据");
-      if (proofAsset) {
-        shippingProofFiles.push({
-          displayName: proofAsset.name,
-          relativePath: proofAsset.path,
-          bytes: proofAsset.bytes,
-          mimeType: mimeTypeFromName(proofAsset.name),
-        });
+      const directProofAsset = findAssetByPath(
+        shippingProofFile,
+        carriedProofMeta.hyperlink,
+        assets,
+        "发货凭据",
+      );
+      if (directProofAsset) {
+        shippingProofFiles.push(fileToAsset(directProofAsset));
+      } else {
+        for (const file of findProofAssetsByKeys(assets, { platformOrderNo, trackingNo })) {
+          shippingProofFiles.push(fileToAsset(file));
+        }
       }
 
       items.push({
         customerName,
-        platform: indexes.platform >= 0 ? text(row[indexes.platform]) : "",
+        platform,
         platformOrderNo,
-        trackingNo: indexes.trackingNo >= 0 ? text(row[indexes.trackingNo]) : "",
-        shippingLabelFile: labelMeta?.hyperlink || labelMeta?.text || "",
+        trackingNo,
+        shippingLabelFile,
         shippingLabelFiles,
-        shipped: indexes.shipped >= 0 ? parseShipped(row[indexes.shipped]) : false,
-        shippedAt: indexes.shippedAt >= 0 ? parseDate(row[indexes.shippedAt]) : null,
-        shippingProofFile: proofMeta?.hyperlink || proofMeta?.text || "",
+        shipped: parseShipped(shippedRaw),
+        shippedAt: parseDate(shippedAtRaw),
+        shippingProofFile:
+          carriedProofMeta.hyperlink || shippingProofFiles[0]?.relativePath || shippingProofFile || "",
         shippingProofFiles,
         sku,
         quantity: parseNumber(indexes.quantity >= 0 ? row[indexes.quantity] : null) ?? 0,
@@ -283,13 +373,11 @@ async function parseXlsxWorkbook(bytes: Uint8Array, assetFiles: AssetFile[]) {
         totalAmount: parseNumber(indexes.totalAmount >= 0 ? row[indexes.totalAmount] : null),
         paidAmount: parseNumber(indexes.paidAmount >= 0 ? row[indexes.paidAmount] : null),
         unpaidAmount: parseNumber(indexes.unpaidAmount >= 0 ? row[indexes.unpaidAmount] : null),
-        settledAt: indexes.settledAt >= 0 ? parseDate(row[indexes.settledAt]) : null,
+        settledAt: parseDate(indexes.settledAt >= 0 ? row[indexes.settledAt] : null),
       });
     }
 
-    if (items.length > parsedRows.length) {
-      parsedRows = items;
-    }
+    if (items.length > parsedRows.length) parsedRows = items;
   }
 
   return parsedRows;
@@ -306,33 +394,43 @@ function parseFlatWorkbook(bytes: ArrayBuffer) {
       defval: "",
       blankrows: false,
     }) as unknown[][];
-    const headers = matrix.map((row) => row.map((cell) => text(cell)));
-    const headerRowIndex = findHeaderRow(headers);
+    const rows = matrix.map((row) => row.map((cell) => text(cell)));
+    const headerRowIndex = findHeaderRow(rows);
     if (headerRowIndex < 0) continue;
 
-    const rowHeaders = headers[headerRowIndex] || [];
+    const rowHeaders = rows[headerRowIndex] || [];
     const indexes = Object.fromEntries(
       Object.entries(COLUMN_ALIASES).map(([key, aliases]) => [key, findColumnIndex(rowHeaders, aliases)]),
-    ) as Record<keyof typeof COLUMN_ALIASES, number>;
+    ) as Record<ColumnKey, number>;
 
     const items: DsLegacyImportRow[] = [];
-    for (let rowIndex = headerRowIndex + 1; rowIndex < matrix.length; rowIndex += 1) {
-      const row = matrix[rowIndex] || [];
-      const customerName = indexes.customerName >= 0 ? text(row[indexes.customerName]) : "";
-      const platformOrderNo = indexes.platformOrderNo >= 0 ? text(row[indexes.platformOrderNo]) : "";
+    const carriedValues: Partial<Record<ColumnKey, string>> = {};
+
+    for (let rowIndex = headerRowIndex + 1; rowIndex < rows.length; rowIndex += 1) {
+      const row = rows[rowIndex] || [];
+      const customerName = getCarriedValue(row, indexes, carriedValues, "customerName");
+      const platform = getCarriedValue(row, indexes, carriedValues, "platform");
+      const platformOrderNo = getCarriedValue(row, indexes, carriedValues, "platformOrderNo");
+      const trackingNo = getCarriedValue(row, indexes, carriedValues, "trackingNo");
       const sku = indexes.sku >= 0 ? text(row[indexes.sku]) : "";
+
       if (!customerName || !platformOrderNo || !sku) continue;
+
+      const shippedRaw = getCarriedValue(row, indexes, carriedValues, "shipped");
+      const shippedAtRaw = getCarriedValue(row, indexes, carriedValues, "shippedAt");
+      const shippingLabelFile = getCarriedValue(row, indexes, carriedValues, "shippingLabelFile");
+      const shippingProofFile = getCarriedValue(row, indexes, carriedValues, "shippingProofFile");
 
       items.push({
         customerName,
-        platform: indexes.platform >= 0 ? text(row[indexes.platform]) : "",
+        platform,
         platformOrderNo,
-        trackingNo: indexes.trackingNo >= 0 ? text(row[indexes.trackingNo]) : "",
-        shippingLabelFile: indexes.shippingLabelFile >= 0 ? text(row[indexes.shippingLabelFile]) : "",
+        trackingNo,
+        shippingLabelFile,
         shippingLabelFiles: [],
-        shipped: indexes.shipped >= 0 ? parseShipped(row[indexes.shipped]) : false,
-        shippedAt: indexes.shippedAt >= 0 ? parseDate(row[indexes.shippedAt]) : null,
-        shippingProofFile: indexes.shippingProofFile >= 0 ? text(row[indexes.shippingProofFile]) : "",
+        shipped: parseShipped(shippedRaw),
+        shippedAt: parseDate(shippedAtRaw),
+        shippingProofFile,
         shippingProofFiles: [],
         sku,
         quantity: parseNumber(indexes.quantity >= 0 ? row[indexes.quantity] : null) ?? 0,
@@ -351,13 +449,11 @@ function parseFlatWorkbook(bytes: ArrayBuffer) {
         totalAmount: parseNumber(indexes.totalAmount >= 0 ? row[indexes.totalAmount] : null),
         paidAmount: parseNumber(indexes.paidAmount >= 0 ? row[indexes.paidAmount] : null),
         unpaidAmount: parseNumber(indexes.unpaidAmount >= 0 ? row[indexes.unpaidAmount] : null),
-        settledAt: indexes.settledAt >= 0 ? parseDate(row[indexes.settledAt]) : null,
+        settledAt: parseDate(indexes.settledAt >= 0 ? row[indexes.settledAt] : null),
       });
     }
 
-    if (items.length > parsedRows.length) {
-      parsedRows = items;
-    }
+    if (items.length > parsedRows.length) parsedRows = items;
   }
 
   return parsedRows;
