@@ -137,6 +137,8 @@ function formatDateOnly(value: Date | null | undefined) {
   }).format(value);
 }
 
+const FIXED_WAREHOUSE = "PARKSONMX仓";
+
 async function loadProductImageBuffer(sku: string, barcode: string) {
   const keys = [sku, barcode].map((item) => item.trim()).filter(Boolean);
   if (keys.length === 0) return null;
@@ -428,7 +430,7 @@ export async function getBillingExportData(params: {
     },
   });
   const parsedRemark = parseBillingRemark(orderRow?.order_remark);
-  const fallbackIssueDate = formatDateOnly(updatedAt);
+  const exportDate = formatDateOnly(new Date());
 
   return {
     orderNo,
@@ -444,10 +446,10 @@ export async function getBillingExportData(params: {
     totalAmount,
     vipDiscountEnabled,
     items: Array.from(itemsMap.values()),
-    issueDateText: parsedRemark.meta.issueDate || fallbackIssueDate,
+    issueDateText: exportDate,
     boxCountText: parsedRemark.meta.boxCount,
     shipDateText: parsedRemark.meta.shipDate,
-    warehouseText: parsedRemark.meta.warehouse || orderRow?.store_label || "",
+    warehouseText: FIXED_WAREHOUSE,
     shippingMethodText: parsedRemark.meta.shippingMethod,
     recipientNameText:
       parsedRemark.meta.recipientName ||
@@ -717,6 +719,7 @@ export async function buildBillingPdf(data: BillingExportData) {
     const valueWidth = pageWidth - marginRight - valueX;
     const rows: Array<[string, string]> = [
       ["客户名称 Nom. Cte.", data.companyName || "-"],
+      ["订单号 NO. PED.", data.orderNo || "-"],
       ["出账日期 F. FACT.", data.issueDateText || "-"],
       ["合计金额 MTO. TOTAL", `$${toMoney(data.totalAmount)}`],
       ["商品总数量 TOTAL PROD.", String(data.totalQty || 0)],

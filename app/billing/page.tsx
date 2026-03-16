@@ -26,6 +26,8 @@ function formatMoney(value: number) {
   return value.toFixed(2);
 }
 
+const FIXED_WAREHOUSE = "PARKSONMX仓";
+
 function toDiscountFactor(value: number | null | undefined) {
   if (value === null || value === undefined) return null;
   if (!Number.isFinite(value) || value < 0) return null;
@@ -313,10 +315,10 @@ export default async function BillingPage({
       addressText: row.address_text || "",
       remarkText: parsedRemark.noteText,
       storeLabelText: row.store_label || "",
-      issueDateText: parsedRemark.meta.issueDate,
+      issueDateText: formatDateOnly(new Date()),
       boxCountText: parsedRemark.meta.boxCount,
       shipDateText: parsedRemark.meta.shipDate,
-      warehouseText: parsedRemark.meta.warehouse || row.store_label || "",
+      warehouseText: FIXED_WAREHOUSE,
       shippingMethodText: parsedRemark.meta.shippingMethod,
       recipientNameText: parsedRemark.meta.recipientName || contactName,
       recipientPhoneText: parsedRemark.meta.recipientPhone || row.contact_phone || "",
@@ -337,10 +339,10 @@ export default async function BillingPage({
         addressText: order?.addressText || "",
         remarkText: order?.remarkText || "",
         storeLabelText: order?.storeLabelText || "",
-        issueDateText: order?.issueDateText || "",
+        issueDateText: formatDateOnly(new Date()),
         boxCountText: order?.boxCountText || "",
         shipDateText: order?.shipDateText || "",
-        warehouseText: order?.warehouseText || "",
+        warehouseText: FIXED_WAREHOUSE,
         shippingMethodText: order?.shippingMethodText || "",
         recipientNameText: order?.recipientNameText || "",
         recipientPhoneText: order?.recipientPhoneText || "",

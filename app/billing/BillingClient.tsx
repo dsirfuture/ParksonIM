@@ -85,6 +85,15 @@ function PencilIcon() {
   );
 }
 
+function MapPinIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8">
+      <path d="M10 18s5-4.86 5-9a5 5 0 1 0-10 0c0 4.14 5 9 5 9Z" />
+      <circle cx="10" cy="9" r="1.75" />
+    </svg>
+  );
+}
+
 function toMoney(value: number) {
   return value.toFixed(2);
 }
@@ -202,10 +211,8 @@ export function BillingClient({
           remarkText: editState.remarkText.trim(),
           storeLabel: editState.storeLabelText.trim(),
           headerMeta: {
-            issueDate: editState.issueDateText.trim(),
             boxCount: editState.boxCountText.trim(),
             shipDate: editState.shipDateText.trim(),
-            warehouse: editState.warehouseText.trim(),
             shippingMethod: editState.shippingMethodText.trim(),
             recipientName: editState.recipientNameText.trim(),
             recipientPhone: editState.recipientPhoneText.trim(),
@@ -553,12 +560,16 @@ export function BillingClient({
                 <input value={editState.storeLabelText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, storeLabelText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" />
               </div>
               <div>
+                <label className="mb-1 block text-sm text-slate-600">订单号</label>
+                <input value={editState.orderNo} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none" />
+              </div>
+              <div>
                 <label className="mb-1 block text-sm text-slate-600">出账日期</label>
-                <input value={editState.issueDateText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, issueDateText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" />
+                <input value={editState.issueDateText} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none" />
               </div>
               <div>
                 <label className="mb-1 block text-sm text-slate-600">发货日期</label>
-                <input value={editState.shipDateText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, shipDateText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" />
+                <input type="date" value={editState.shipDateText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, shipDateText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" />
               </div>
               <div>
                 <label className="mb-1 block text-sm text-slate-600">装箱件数</label>
@@ -566,11 +577,15 @@ export function BillingClient({
               </div>
               <div>
                 <label className="mb-1 block text-sm text-slate-600">发货仓</label>
-                <input value={editState.warehouseText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, warehouseText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" />
+                <input value={editState.warehouseText} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none" />
               </div>
               <div>
                 <label className="mb-1 block text-sm text-slate-600">发货方式</label>
-                <input value={editState.shippingMethodText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, shippingMethodText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" />
+                <select value={editState.shippingMethodText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, shippingMethodText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary/40">
+                  <option value="">请选择</option>
+                  <option value="送托运">送托运</option>
+                  <option value="自提">自提</option>
+                </select>
               </div>
               <div>
                 <label className="mb-1 block text-sm text-slate-600">收货人</label>
@@ -586,11 +601,18 @@ export function BillingClient({
               </div>
               <div className="md:col-span-2">
                 <label className="mb-1 block text-sm text-slate-600">地址</label>
-                <input value={editState.addressText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, addressText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" />
-              </div>
-              <div className="md:col-span-2">
-                <label className="mb-1 block text-sm text-slate-600">备注</label>
-                <input value={editState.remarkText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, remarkText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" />
+                <div className="flex items-center gap-2">
+                  <input value={editState.addressText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, addressText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" />
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(editState.addressText || "")}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50"
+                    title="Google Maps"
+                  >
+                    <MapPinIcon />
+                  </a>
+                </div>
               </div>
               {saveError ? <div className="md:col-span-2 text-sm text-red-600">{saveError}</div> : null}
             </div>
