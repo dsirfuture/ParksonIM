@@ -540,7 +540,7 @@ export async function getBillingExportData(params: {
 export async function buildBillingXlsx(data: BillingExportData) {
   const workbook = new ExcelJS.Workbook();
   const logoBuffer = await loadBillingLogoBuffer();
-  const worksheet = workbook.addWorksheet("????", {
+  const worksheet = workbook.addWorksheet("Billing Detail", {
     views: [{ showGridLines: false }],
   });
 
