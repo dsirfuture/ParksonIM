@@ -168,6 +168,11 @@ function splitPossiblePaths(value: string) {
     .filter(Boolean);
 }
 
+function extractDispimgIds(value: string) {
+  const matches = value.match(/ID_[A-Z0-9]+/gi) || [];
+  return [...new Set(matches.map((item) => item.toLowerCase()))];
+}
+
 function fileToAsset(file: AssetFile): DsLegacyImportAsset {
   return {
     displayName: file.name,
@@ -197,24 +202,37 @@ function findAssetByPath(
     const byName = assets.byName.get(baseName(normalized).toLowerCase());
     if (byName?.length) return byName[0];
   }
+
+  const dispimgIds = extractDispimgIds(rawValue);
+  for (const id of dispimgIds) {
+    for (const file of assets.byPath.values()) {
+      const normalizedPath = normalizePath(file.path).toLowerCase();
+      if (!normalizedPath.startsWith(normalizePath(preferredFolder).toLowerCase())) continue;
+      if (normalizedPath.includes(id)) return file;
+    }
+  }
   return null;
 }
 
 function findProofAssetsByKeys(
   assets: ReturnType<typeof buildAssetIndexes>,
-  row: { platformOrderNo: string; trackingNo: string },
+  row: { platformOrderNo: string; trackingNo: string; proofRawValue: string },
 ) {
   const keywords = [row.platformOrderNo, row.trackingNo]
     .map((item) => text(item).toLowerCase())
     .filter(Boolean);
+  const dispimgIds = extractDispimgIds(row.proofRawValue);
 
-  if (keywords.length === 0) return [] as AssetFile[];
+  if (keywords.length === 0 && dispimgIds.length === 0) return [] as AssetFile[];
 
   const matches: AssetFile[] = [];
   for (const file of assets.byPath.values()) {
     const normalizedPath = normalizePath(file.path).toLowerCase();
     if (!normalizedPath.startsWith("发货凭据/")) continue;
-    if (keywords.some((keyword) => normalizedPath.includes(keyword))) {
+    if (
+      keywords.some((keyword) => normalizedPath.includes(keyword)) ||
+      dispimgIds.some((id) => normalizedPath.includes(id))
+    ) {
       matches.push(file);
     }
   }
@@ -339,7 +357,7 @@ async function parseXlsxWorkbook(bytes: Uint8Array, assetFiles: AssetFile[]) {
       if (directProofAsset) {
         shippingProofFiles.push(fileToAsset(directProofAsset));
       } else {
-        for (const file of findProofAssetsByKeys(assets, { platformOrderNo, trackingNo })) {
+        for (const file of findProofAssetsByKeys(assets, { platformOrderNo, trackingNo, proofRawValue: shippingProofFile })) {
           shippingProofFiles.push(fileToAsset(file));
         }
       }

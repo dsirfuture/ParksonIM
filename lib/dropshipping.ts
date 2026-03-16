@@ -347,6 +347,11 @@ function extname(fileName: string) {
   return index >= 0 ? fileName.slice(index).toLowerCase() : "";
 }
 
+function isAttachmentFormula(value: string) {
+  const normalized = value.trim();
+  return normalized.startsWith("=") || normalized.toUpperCase().includes("DISPIMG(");
+}
+
 function inferMimeType(fileName: string, fallback?: string) {
   if (fallback) return fallback;
   const ext = extname(fileName);
@@ -611,8 +616,8 @@ export async function importLegacyOrders(
       snapshot_unpaid_amount: row.unpaidAmount,
       settled_at: settledAtDate,
       notes: [
-        row.shippingLabelFile ? `label:${row.shippingLabelFile}` : "",
-        row.shippingProofFile ? `proof:${row.shippingProofFile}` : "",
+        row.shippingLabelFile && !isAttachmentFormula(row.shippingLabelFile) ? `label:${row.shippingLabelFile}` : "",
+        row.shippingProofFile && !isAttachmentFormula(row.shippingProofFile) ? `proof:${row.shippingProofFile}` : "",
       ]
         .filter(Boolean)
         .join(" | ") || null,
