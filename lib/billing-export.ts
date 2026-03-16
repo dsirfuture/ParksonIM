@@ -971,18 +971,5 @@ export async function buildBillingPdf(data: BillingExportData) {
     cursorY -= rowHeight;
   }
 
-  const footerTop = Math.max(cursorY - 20, bottomMargin + 70);
-  page.drawLine({
-    start: { x: contentRight - 170, y: footerTop },
-    end: { x: contentRight, y: footerTop },
-    thickness: 0.6,
-    color: rgb(0.86, 0.89, 0.92),
-  });
-  drawRightText(`$${toMoney(data.totalAmount)}`, contentRight, footerTop - 52, {
-    size: 28,
-    font: latinBoldFont,
-    color: { r: 0.07, g: 0.07, b: 0.08 },
-  });
-
   return pdfDoc.save({ useObjectStreams: true });
 }
