@@ -600,21 +600,18 @@ export async function buildBillingPdf(data: BillingExportData) {
   const pageWidth = 612;
   const pageHeight = 792;
   const marginX = 54;
-  const topMargin = 52;
+  const topMargin = 50;
   const bottomMargin = 48;
-  const contentWidth = pageWidth - marginX * 2;
   const columns = [
-    { key: "image", label: "图片", width: 52 },
-    { key: "item", label: "商品 / Producto", width: 210 },
-    { key: "qty", label: "数量", width: 40 },
-    { key: "price", label: "单价", width: 60 },
-    { key: "discount", label: "折扣", width: 52 },
-    { key: "amount", label: "金额", width: 54 },
+    { key: "item", label: "Producto", width: 308 },
+    { key: "qty", label: "Cant.", width: 38 },
+    { key: "price", label: "Precio", width: 64 },
+    { key: "discount", label: "Desc.", width: 50 },
+    { key: "amount", label: "Importe", width: 44 },
   ] as const;
 
   let page = pdfDoc.addPage([pageWidth, pageHeight]);
   let cursorY = pageHeight - topMargin;
-  let isFirstPage = true;
 
   const fontForText = (text: string, bold = false) => {
     if (hasChineseGlyph(text)) return zhFont;
@@ -648,30 +645,63 @@ export async function buildBillingPdf(data: BillingExportData) {
     drawText(text, rightX - textWidth(text, options?.size ?? 10, options?.bold), y, options);
   };
 
-  const drawLabelValue = (
+  const drawField = (
     label: string,
     value: string,
     x: number,
     y: number,
     width: number,
-    emphasize = false,
+    options?: { emphasize?: boolean; compact?: boolean },
   ) => {
-    drawText(label, x, y, { size: 7.2, color: [0.58, 0.6, 0.64] });
-    const lines = wrapTextByWidth(value || "-", fontForText(value || "-", emphasize), emphasize ? 12.5 : 9.6, width, unicodeSafe);
-    let lineY = y - 16;
+    const emphasize = Boolean(options?.emphasize);
+    const compact = Boolean(options?.compact);
+    const labelSize = compact ? 6.8 : 7.1;
+    const valueSize = emphasize ? 11.8 : compact ? 8.7 : 9.3;
+    const lineStep = compact ? 10 : 11.5;
+    drawText(label, x, y, { size: labelSize, color: [0.58, 0.6, 0.64] });
+    const lines = wrapTextByWidth(value || "-", fontForText(value || "-", emphasize), valueSize, width, unicodeSafe);
+    let lineY = y - 15;
     for (const line of lines) {
-      drawText(line, x, lineY, { size: emphasize ? 12.5 : 9.6, bold: emphasize, color: [0.14, 0.15, 0.17] });
-      lineY -= emphasize ? 14 : 11;
+      drawText(line, x, lineY, {
+        size: valueSize,
+        bold: emphasize,
+        color: emphasize ? [0.1, 0.11, 0.12] : [0.2, 0.21, 0.24],
+      });
+      lineY -= lineStep;
     }
-    return Math.max(30, lines.length * (emphasize ? 14 : 11) + 12);
+    return Math.max(compact ? 26 : 30, lines.length * lineStep + 12);
+  };
+
+  const drawSummaryCard = (x: number, y: number) => {
+    const cardWidth = 182;
+    const cardHeight = 118;
+    page.drawRectangle({
+      x,
+      y: y - cardHeight,
+      width: cardWidth,
+      height: cardHeight,
+      color: rgb(0.995, 0.995, 0.995),
+      borderColor: rgb(0.9, 0.91, 0.93),
+      borderWidth: 0.7,
+    });
+    let lineY = y - 18;
+    drawText("ORDER NO.", x + 16, lineY, { size: 7.2, color: [0.58, 0.6, 0.64] });
+    drawRightText(data.orderNo || "-", x + cardWidth - 16, lineY, { size: 10, bold: true, color: [0.18, 0.19, 0.22] });
+    lineY -= 28;
+    drawText("ISSUE DATE", x + 16, lineY, { size: 7.2, color: [0.58, 0.6, 0.64] });
+    drawRightText(data.issueDateText || "-", x + cardWidth - 16, lineY, { size: 9.6, color: [0.2, 0.21, 0.24] });
+    lineY -= 30;
+    drawText("TOTAL AMOUNT", x + 16, lineY, { size: 7.2, color: [0.58, 0.6, 0.64] });
+    drawRightText(`$${toMoney(data.totalAmount)}`, x + cardWidth - 16, lineY - 2, { size: 16.5, bold: true, color: [0.08, 0.09, 0.1] });
+    return cardHeight;
   };
 
   const drawHeader = async () => {
-    drawText("PARKSONMX", marginX, cursorY, { size: 11, bold: true, color: [0.38, 0.41, 0.46] });
+    drawText("PARKSONMX", marginX, cursorY, { size: 10.5, bold: true, color: [0.38, 0.41, 0.46] });
     if (logoBuffer) {
       try {
         const logo = await pdfDoc.embedPng(logoBuffer);
-        const scale = Math.min(44 / logo.width, 18 / logo.height);
+        const scale = Math.min(40 / logo.width, 16 / logo.height);
         page.drawImage(logo, {
           x: pageWidth - marginX - logo.width * scale,
           y: cursorY - 6,
@@ -683,67 +713,73 @@ export async function buildBillingPdf(data: BillingExportData) {
       }
     }
 
-    cursorY -= 54;
-    drawText("INVOICE", marginX, cursorY, { size: 28, bold: true, color: [0.06, 0.07, 0.08] });
-    drawRightText(data.orderNo, pageWidth - marginX, cursorY + 12, { size: 11, bold: true, color: [0.22, 0.24, 0.28] });
-    drawRightText(data.issueDateText || "-", pageWidth - marginX, cursorY - 6, { size: 9, color: [0.46, 0.48, 0.52] });
-    cursorY -= 50;
+    const summaryHeight = drawSummaryCard(pageWidth - marginX - 182, cursorY + 10);
 
-    const leftX = marginX;
-    const rightX = marginX + 270;
-    const leftWidth = 220;
-    const rightWidth = 150;
+    cursorY -= 58;
+    drawText("INVOICE", marginX, cursorY, { size: 31, bold: true, color: [0.06, 0.07, 0.08] });
+    drawText("MAS QUE PRODUCTOS, ENTREGAMOS SOLUCIONES", marginX, cursorY - 24, {
+      size: 8,
+      color: [0.5, 0.52, 0.56],
+    });
+    cursorY -= Math.max(52, summaryHeight - 48);
 
-    drawText("\u8d26\u5355\u5bf9\u8c61 / Client", leftX, cursorY, { size: 8, bold: true, color: [0.52, 0.54, 0.58] });
-    drawText("\u8d26\u5355\u4fe1\u606f / Billing", rightX, cursorY, { size: 8, bold: true, color: [0.52, 0.54, 0.58] });
-    cursorY -= 18;
+    const colGap = 18;
+    const boxWidth = (pageWidth - marginX * 2 - colGap * 2) / 3;
+    const sectionTop = cursorY;
+    const boxes = [
+      {
+        title: "CLIENT",
+        fields: [
+          ["NOM. CTE.", data.companyName || "-", true],
+          ["DEST.", data.recipientNameText || data.contactName || "-", false],
+          ["TEL. DEST.", data.recipientPhoneText || data.contactPhone || "-", false],
+          ["DIR. ENT.", data.addressText || "-", false],
+        ],
+      },
+      {
+        title: "BILLING",
+        fields: [
+          ["F. ENV.", data.shipDateText || "-", false],
+          ["STORE LABEL", data.storeLabelText || "-", false],
+          ["CONTACT", data.contactName || "-", false],
+        ],
+      },
+      {
+        title: "SHIPPING",
+        fields: [
+          ["DEP. ENVIO", data.warehouseText || "-", false],
+          ["MET. ENV.", data.shippingMethodText || "-", false],
+          ["EMP. TRANSP.", data.carrierCompanyText || "-", false],
+          ["CANT. CAJAS", data.boxCountText || "-", false],
+          ["TOTAL PROD.", String(data.totalQty || 0), false],
+        ],
+      },
+    ] as const;
 
-    const group1 = [
-      drawLabelValue("\u5ba2\u6237\u540d\u79f0 / Nom. Cte.", data.companyName || "-", leftX, cursorY, leftWidth, true),
-      drawLabelValue("\u8ba2\u5355\u53f7 / No. Ped.", data.orderNo || "-", rightX, cursorY, rightWidth),
-    ];
-    cursorY -= Math.max(...group1);
+    const sectionHeights = boxes.map((section, index) => {
+      const boxX = marginX + index * (boxWidth + colGap);
+      let boxY = sectionTop - 18;
+      let usedHeight = 0;
+      page.drawRectangle({
+        x: boxX,
+        y: sectionTop - 218,
+        width: boxWidth,
+        height: 218,
+        color: rgb(0.998, 0.998, 0.998),
+        borderColor: rgb(0.91, 0.92, 0.94),
+        borderWidth: 0.6,
+      });
+      drawText(section.title, boxX + 18, boxY, { size: 8.2, bold: true, color: [0.48, 0.5, 0.54] });
+      boxY -= 20;
+      for (const [label, value, emphasize] of section.fields) {
+        const fieldHeight = drawField(label, value, boxX + 18, boxY, boxWidth - 36, { emphasize, compact: true });
+        boxY -= fieldHeight + 6;
+        usedHeight += fieldHeight + 6;
+      }
+      return usedHeight + 26;
+    });
 
-    const group2 = [
-      drawLabelValue("\u6536\u8d27\u4eba / Dest.", data.recipientNameText || data.contactName || "-", leftX, cursorY, leftWidth),
-      drawLabelValue("\u51fa\u8d26\u65e5\u671f / F. Fact.", data.issueDateText || "-", rightX, cursorY, rightWidth),
-    ];
-    cursorY -= Math.max(...group2);
-
-    const group3 = [
-      drawLabelValue("\u6536\u8d27\u7535\u8bdd / Tel. Dest.", data.recipientPhoneText || data.contactPhone || "-", leftX, cursorY, leftWidth),
-      drawLabelValue("\u53d1\u8d27\u65e5\u671f / F. Env.", data.shipDateText || "-", rightX, cursorY, rightWidth),
-    ];
-    cursorY -= Math.max(...group3);
-
-    const group4 = [
-      drawLabelValue("\u9001\u8d27\u5730\u5740 / Dir. Ent.", data.addressText || "-", leftX, cursorY, leftWidth),
-      drawLabelValue("\u5408\u8ba1\u91d1\u989d / Mto. Total", `$${toMoney(data.totalAmount)}`, rightX, cursorY, rightWidth, true),
-    ];
-    cursorY -= Math.max(...group4);
-
-    cursorY -= 10;
-    drawText("\u7269\u6d41\u4fe1\u606f / Shipping", leftX, cursorY, { size: 8, bold: true, color: [0.52, 0.54, 0.58] });
-    cursorY -= 18;
-
-    const shippingCol1X = leftX;
-    const shippingCol2X = leftX + 170;
-    const shippingCol3X = leftX + 340;
-    const shippingWidth = 130;
-
-    const shipping1 = [
-      drawLabelValue("\u53d1\u8d27\u4ed3 / Dep. Envio", data.warehouseText || "-", shippingCol1X, cursorY, shippingWidth),
-      drawLabelValue("\u53d1\u8d27\u65b9\u5f0f / Met. Env.", data.shippingMethodText || "-", shippingCol2X, cursorY, shippingWidth),
-      drawLabelValue("\u6258\u8fd0\u516c\u53f8 / Emp. Transp.", data.carrierCompanyText || "-", shippingCol3X, cursorY, shippingWidth),
-    ];
-    cursorY -= Math.max(...shipping1);
-
-    const shipping2 = [
-      drawLabelValue("\u5546\u54c1\u603b\u6570\u91cf / Total Prod.", String(data.totalQty || 0), shippingCol1X, cursorY, shippingWidth),
-      drawLabelValue("\u88c5\u7bb1\u4ef6\u6570 / Cant. Cajas", data.boxCountText || "-", shippingCol2X, cursorY, shippingWidth),
-      0,
-    ];
-    cursorY -= Math.max(...shipping2, 8);
+    cursorY = sectionTop - Math.max(228, ...sectionHeights) - 10;
 
     page.drawLine({
       start: { x: marginX, y: cursorY },
@@ -751,14 +787,14 @@ export async function buildBillingPdf(data: BillingExportData) {
       thickness: 0.7,
       color: rgb(0.9, 0.91, 0.93),
     });
-    cursorY -= 24;
+    cursorY -= 20;
   };
 
   const drawItemsHeader = () => {
     let x = marginX;
     for (const col of columns) {
-      drawText(col.label, x + (col.key === "item" ? 2 : 0), cursorY, {
-        size: 7.2,
+      drawText(col.label, x + (col.key === "item" ? 0 : col.width - textWidth(col.label, 7.4, true) - 4), cursorY, {
+        size: 7.4,
         bold: true,
         color: [0.58, 0.6, 0.64],
       });
@@ -777,22 +813,20 @@ export async function buildBillingPdf(data: BillingExportData) {
   const newPage = async () => {
     page = pdfDoc.addPage([pageWidth, pageHeight]);
     cursorY = pageHeight - topMargin;
-    if (isFirstPage) {
-      isFirstPage = false;
-    }
     drawItemsHeader();
   };
 
   await drawHeader();
   drawItemsHeader();
-  isFirstPage = false;
 
   for (const item of data.items) {
-    const nameLines = wrapTextByWidth(item.nameZh || "-", zhFont, 10.5, 200, unicodeSafe);
-    const esLines = wrapTextByWidth(item.nameEs || "-", latinFont, 8.5, 200, unicodeSafe);
-    const metaLines = wrapTextByWidth(`SKU ${item.sku || "-"} / Barcode ${item.barcode || "-"}`, latinFont, 7.2, 200, unicodeSafe);
+    const primaryName = item.nameEs || item.nameZh || "-";
+    const secondaryName = item.nameZh && item.nameEs ? item.nameZh : "";
+    const nameLines = wrapTextByWidth(primaryName, fontForText(primaryName), 10.2, 210, unicodeSafe);
+    const secondaryLines = secondaryName ? wrapTextByWidth(secondaryName, zhFont, 8.5, 210, unicodeSafe) : [];
+    const metaLines = wrapTextByWidth(`SKU ${item.sku || "-"} / Barcode ${item.barcode || "-"}`, latinFont, 7.1, 210, unicodeSafe);
     const discountLines = [toPercentText(item.normalDiscount), ...(data.vipDiscountEnabled ? [`VIP ${toPercentText(item.vipDiscount)}`] : [])];
-    const rowHeight = Math.max(52, (nameLines.length * 12) + (esLines.length * 10) + (metaLines.length * 9) + 10);
+    const rowHeight = Math.max(54, nameLines.length * 12 + secondaryLines.length * 10 + metaLines.length * 9 + 16);
 
     if (cursorY - rowHeight < bottomMargin + 100) {
       await newPage();
@@ -825,34 +859,34 @@ export async function buildBillingPdf(data: BillingExportData) {
     } else {
       drawText("-", x + 18, rowBottom + rowHeight / 2, { size: 9, color: [0.65, 0.67, 0.7] });
     }
-    x += columns[0].width;
+    x += 50;
 
     let textY = rowTop - 10;
     for (const line of nameLines) {
-      drawText(line, x, textY, { size: 10.5, color: [0.12, 0.13, 0.15] });
+      drawText(line, x, textY, { size: 10.2, color: [0.12, 0.13, 0.15] });
       textY -= 12;
     }
-    for (const line of esLines) {
-      drawText(line, x, textY, { size: 8.5, color: [0.45, 0.47, 0.5] });
+    for (const line of secondaryLines) {
+      drawText(line, x, textY, { size: 8.5, color: [0.48, 0.5, 0.54] });
       textY -= 10;
     }
     for (const line of metaLines) {
-      drawText(line, x, textY, { size: 7.2, color: [0.64, 0.66, 0.69] });
+      drawText(line, x, textY, { size: 7.1, color: [0.64, 0.66, 0.69] });
       textY -= 9;
     }
-    x += columns[1].width;
+    x = marginX + columns[0].width;
 
-    drawRightText(String(item.qty), x + columns[2].width - 4, rowTop - 14, { size: 9.2 });
+    drawRightText(String(item.qty), x + columns[1].width - 4, rowTop - 14, { size: 9.2 });
+    x += columns[1].width;
+    drawRightText(`$${toMoney(item.unitPrice)}`, x + columns[2].width - 4, rowTop - 14, { size: 9.2 });
     x += columns[2].width;
-    drawRightText(`$${toMoney(item.unitPrice)}`, x + columns[3].width - 4, rowTop - 14, { size: 9.2 });
-    x += columns[3].width;
     let discountY = rowTop - 14;
     for (const line of discountLines) {
-      drawRightText(line, x + columns[4].width - 4, discountY, { size: line.startsWith("VIP") ? 7.5 : 9.2, color: line.startsWith("VIP") ? [0.55, 0.57, 0.61] : [0.17, 0.18, 0.2] });
+      drawRightText(line, x + columns[3].width - 4, discountY, { size: line.startsWith("VIP") ? 7.5 : 9.2, color: line.startsWith("VIP") ? [0.55, 0.57, 0.61] : [0.17, 0.18, 0.2] });
       discountY -= 10;
     }
-    x += columns[4].width;
-    drawRightText(`$${toMoney(item.lineTotal)}`, x + columns[5].width - 4, rowTop - 14, { size: 9.6, bold: true });
+    x += columns[3].width;
+    drawRightText(`$${toMoney(item.lineTotal)}`, x + columns[4].width - 4, rowTop - 14, { size: 9.6, bold: true });
 
     cursorY -= rowHeight;
   }

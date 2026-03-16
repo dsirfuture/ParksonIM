@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { StatCard } from "@/components/stat-card";
 import { TableCard } from "@/components/table-card";
 import { ProductImage } from "@/components/product-image";
@@ -146,6 +146,21 @@ function InvoiceHighlightField({
     <div className="space-y-1.5">
       <div className="text-[10px] uppercase tracking-[0.24em] text-slate-400">{label}</div>
       <div className={emphasize ? "text-[18px] font-medium tracking-tight text-slate-900" : "text-[14px] font-medium text-slate-700"}>{value}</div>
+    </div>
+  );
+}
+
+function InvoiceSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-[24px] border border-slate-200/70 bg-white/80 p-6">
+      <div className="mb-5 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400">{title}</div>
+      <div className="space-y-5">{children}</div>
     </div>
   );
 }
@@ -379,85 +394,85 @@ export function BillingClient({
             </div>
 
             <div className="max-h-[78vh] overflow-auto px-6 py-8">
-              <div className="mx-auto w-full max-w-[980px] rounded-[32px] bg-white px-8 py-8 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
-                <div className="flex flex-wrap items-start justify-between gap-10 border-b border-slate-200 pb-9">
+              <div className="mx-auto w-full max-w-[980px] rounded-[32px] bg-white px-8 py-9 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
+                <div className="flex flex-wrap items-start justify-between gap-10 border-b border-slate-200/80 pb-10">
                   <div className="max-w-[430px] pt-1">
                     <div className="text-[11px] font-medium uppercase tracking-[0.3em] text-slate-400">PARKSONMX</div>
-                    <h2 className="mt-6 text-[52px] font-semibold leading-none tracking-[-0.04em] text-slate-950">INVOICE</h2>
+                    <h2 className="mt-6 text-[54px] font-semibold leading-none tracking-[-0.045em] text-slate-950">INVOICE</h2>
                     <p className="mt-5 max-w-md text-sm leading-7 text-slate-500">MÁS QUE PRODUCTOS, ENTREGAMOS SOLUCIONES</p>
                   </div>
-                  <div className="grid min-w-[280px] gap-3 rounded-[24px] border border-slate-200/70 bg-slate-50/55 px-5 py-4">
+                  <div className="grid min-w-[280px] gap-3 rounded-[22px] border border-slate-200/60 bg-slate-50/35 px-5 py-4">
                     <InvoiceHighlightField label="Order No." value={detailRow?.orderNo || "-"} />
                     <InvoiceHighlightField label="Issue Date" value={detailRow?.issueDateText || "-"} />
                     <InvoiceHighlightField label="Total Amount" value={`$${toMoney(detailTotal)}`} emphasize />
                   </div>
                 </div>
 
-                <div className="mt-8 grid gap-5 lg:grid-cols-3">
-                  <div className="rounded-[24px] border border-slate-200/70 p-6">
-                    <div className="mb-5 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400">账单对象 / Client</div>
-                    <div className="space-y-5">
-                      <InvoiceField label="客户名称 / Nom. Cte." value={detailRow?.companyName || "-"} emphasize />
-                      <InvoiceField label="收货人 / Dest." value={detailRow?.recipientNameText || detailRow?.contactName || "-"} />
-                      <InvoiceField label="电话 / Tel. Dest." value={detailRow?.recipientPhoneText || detailRow?.contactPhone || "-"} />
-                      <InvoiceField label="送货地址 / Dir. Ent." value={detailRow?.addressText || "-"} />
-                    </div>
-                  </div>
-                  <div className="rounded-[24px] border border-slate-200/70 p-6">
-                    <div className="mb-5 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400">账单信息 / Billing</div>
-                    <div className="space-y-5">
-                      <InvoiceField label="发货日期 / F. Env." value={detailRow?.shipDateText || "-"} />
-                      <InvoiceField label="门店标记 / Store Label" value={detailRow?.storeLabelText || "-"} />
-                      <InvoiceField label="VIP 折扣 / VIP Discount" value={vipDiscountEnabled ? "已启用 / Enabled" : "未启用 / Disabled"} />
-                    </div>
-                  </div>
-                  <div className="rounded-[24px] border border-slate-200/70 p-6">
-                    <div className="mb-5 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400">物流信息 / Shipping</div>
-                    <div className="space-y-5">
-                      <InvoiceField label="发货仓 / Dep. Envío" value={detailRow?.warehouseText || "-"} />
-                      <InvoiceField label="发货方式 / Met. Env." value={detailRow?.shippingMethodText || "-"} />
-                      <InvoiceField label="托运公司 / Emp. Transp." value={detailRow?.carrierCompanyText || "-"} />
-                      <InvoiceField label="装箱件数 / Cant. Cajas" value={detailRow?.boxCountText || "-"} />
-                      <InvoiceField label="商品总数量 / Total Prod." value={String(detailQtyTotal || 0)} />
-                    </div>
-                  </div>
+                <div className="mt-8 grid items-start gap-5 lg:grid-cols-3">
+                  <InvoiceSection title="Client">
+                    <InvoiceField label="客户名称 / NOM. CTE." value={detailRow?.companyName || "-"} emphasize />
+                    <InvoiceField label="收货人 / DEST." value={detailRow?.recipientNameText || detailRow?.contactName || "-"} />
+                    <InvoiceField label="电话 / TEL. DEST." value={detailRow?.recipientPhoneText || detailRow?.contactPhone || "-"} />
+                    <InvoiceField label="送货地址 / DIR. ENT." value={detailRow?.addressText || "-"} valueClassName="leading-7" />
+                  </InvoiceSection>
+                  <InvoiceSection title="Billing">
+                    <InvoiceField label="发货日期 / F. ENV." value={detailRow?.shipDateText || "-"} />
+                    <InvoiceField label="门店标记 / STORE LABEL" value={detailRow?.storeLabelText || "-"} />
+                    <InvoiceField label="客户联系人 / CONTACT" value={detailRow?.contactName || "-"} />
+                  </InvoiceSection>
+                  <InvoiceSection title="Shipping">
+                    <InvoiceField label="发货仓 / DEP. ENVÍO" value={detailRow?.warehouseText || "-"} />
+                    <InvoiceField label="发货方式 / MET. ENV." value={detailRow?.shippingMethodText || "-"} />
+                    <InvoiceField label="托运公司 / EMP. TRANSP." value={detailRow?.carrierCompanyText || "-"} />
+                    <InvoiceField label="装箱件数 / CANT. CAJAS" value={detailRow?.boxCountText || "-"} />
+                    <InvoiceField label="商品总数量 / TOTAL PROD." value={String(detailQtyTotal || 0)} />
+                  </InvoiceSection>
                 </div>
 
-                <div className="mt-10">
-                  <div className="flex items-end justify-between gap-4 border-b border-slate-200/80 pb-4">
+                <div className="mt-11">
+                  <div className="flex items-end justify-between gap-4 border-b border-slate-200/70 pb-4">
                     <div>
                       <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400">Line Items</div>
                       <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950">商品明细</h3>
                     </div>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-[64px_minmax(280px,1.8fr)_70px_92px_92px_110px] gap-4 border-b border-slate-200 px-2 pb-3 text-[11px] uppercase tracking-[0.18em] text-slate-400">
-                    <div>图片</div>
-                    <div>商品 / Producto</div>
-                    <div className="text-right">数量</div>
-                    <div className="text-right">单价</div>
-                    <div className="text-right">折扣</div>
-                    <div className="text-right">金额</div>
+                  <div className="mt-4 grid grid-cols-[minmax(320px,1.8fr)_72px_92px_82px_110px] gap-4 border-b border-slate-200 px-2 pb-3 text-[11px] uppercase tracking-[0.22em] text-slate-400">
+                    <div>Producto</div>
+                    <div className="text-right">Cant.</div>
+                    <div className="text-right">Precio</div>
+                    <div className="text-right">Desc.</div>
+                    <div className="text-right">Importe</div>
                   </div>
 
                   {detailItems.length === 0 ? (
                     <div className="py-14 text-center text-sm text-slate-500">当前账单没有可显示的商品明细</div>
                   ) : (
-                    <div className="divide-y divide-slate-200">
+                    <div className="divide-y divide-slate-200/80">
                       {detailItems.map((item, idx) => (
-                        <div key={`${item.sku}-${item.barcode}-${idx}`} className="grid grid-cols-[64px_minmax(280px,1.8fr)_70px_92px_92px_110px] gap-4 px-2 py-5">
-                          <div className="flex items-start justify-center pt-1">
-                            <ProductImage sku={item.sku} alt={item.nameZh || item.nameEs || item.sku || item.barcode || "商品图片"} size={48} roundedClassName="rounded-xl" onClick={() => {
-                              const src = buildProductImageUrl(item.sku, "jpg");
-                              if (!src) return;
-                              const title = item.nameZh || item.nameEs || item.sku || item.barcode || "商品图片";
-                              setPreviewImage({ src, alt: title, title });
-                            }} />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="text-[15px] font-semibold leading-6 text-slate-900">{item.nameZh || "-"}</div>
-                            <div className="mt-1 text-sm leading-6 text-slate-500">{item.nameEs || "-"}</div>
-                            <div className="mt-2 text-xs uppercase tracking-[0.14em] text-slate-400">SKU {item.sku || "-"} / Barcode {item.barcode || "-"}</div>
+                        <div key={`${item.sku}-${item.barcode}-${idx}`} className="grid grid-cols-[minmax(320px,1.8fr)_72px_92px_82px_110px] gap-4 px-2 py-5">
+                          <div className="flex min-w-0 gap-4">
+                            <div className="flex w-[56px] shrink-0 items-start justify-center pt-1">
+                              <ProductImage
+                                sku={item.sku}
+                                alt={item.nameZh || item.nameEs || item.sku || item.barcode || "商品图片"}
+                                size={44}
+                                roundedClassName="rounded-xl"
+                                onClick={() => {
+                                  const src = buildProductImageUrl(item.sku, "jpg");
+                                  if (!src) return;
+                                  const title = item.nameZh || item.nameEs || item.sku || item.barcode || "商品图片";
+                                  setPreviewImage({ src, alt: title, title });
+                                }}
+                              />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[15px] font-medium leading-6 text-slate-900">{item.nameEs || item.nameZh || "-"}</div>
+                              {item.nameZh && item.nameEs ? (
+                                <div className="mt-1 text-sm leading-6 text-slate-500">{item.nameZh}</div>
+                              ) : null}
+                              <div className="mt-2 text-xs uppercase tracking-[0.14em] text-slate-400">SKU {item.sku || "-"} / Barcode {item.barcode || "-"}</div>
+                            </div>
                           </div>
                           <div className="text-right text-sm font-medium text-slate-700">{item.qty}</div>
                           <div className="text-right text-sm font-medium text-slate-700">${toMoney(item.unitPrice)}</div>
@@ -472,7 +487,7 @@ export function BillingClient({
                   )}
                 </div>
 
-                <div className="mt-10 flex justify-end border-t border-slate-200 pt-8">
+                <div className="mt-12 flex justify-end border-t border-slate-200/80 pt-8">
                   <div className="w-full max-w-[340px] space-y-4">
                     <InvoiceSummaryRow label="Subtotal" value={`$${toMoney(detailSubtotal)}`} />
                     <InvoiceSummaryRow label="Discounts" value={`$${toMoney(detailDiscountAmount)}`} />
