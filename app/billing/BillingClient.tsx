@@ -6,6 +6,7 @@ import { StatCard } from "@/components/stat-card";
 import { TableCard } from "@/components/table-card";
 import { ProductImage } from "@/components/product-image";
 import { ImageLightbox } from "@/components/image-lightbox";
+import { formatStoreLabelDisplay, getPaymentTermDisplayLines, normalizeStoreLabelInput } from "@/lib/billing-meta";
 import { buildProductImageUrl } from "@/lib/product-image-url";
 
 type TabKey = "customer" | "supplier";
@@ -105,12 +106,6 @@ function calcLineTotal(item: DetailItem, vipEnabled: boolean) {
   if (normal !== null) factor *= 1 - normal;
   if (vipEnabled && vip !== null) factor *= 1 - vip;
   return qty * unitPrice * factor;
-}
-
-function formatPaymentTerm(value: string) {
-  const text = String(value || "").trim();
-  if (!text) return "";
-  return text.endsWith("天") ? text : `${text}天`;
 }
 
 function VipBadgeIcon() {
@@ -238,7 +233,7 @@ export function BillingClient({
           contactPhone: editState.contactPhone.trim(),
           addressText: editState.addressText.trim(),
           remarkText: editState.remarkText.trim(),
-          storeLabel: editState.storeLabelText.trim(),
+          storeLabel: normalizeStoreLabelInput(editState.storeLabelText),
           headerMeta: {
             boxCount: editState.boxCountText.trim(),
             shipDate: editState.shipDateText.trim(),
@@ -260,7 +255,7 @@ export function BillingClient({
         contactPhone: result.data.contactText || row.contactPhone,
         addressText: result.data.addressText || row.addressText,
         remarkText: result.data.remarkText || row.remarkText,
-        storeLabelText: result.data.storeLabelText || row.storeLabelText,
+        storeLabelText: normalizeStoreLabelInput(result.data.storeLabelText || row.storeLabelText),
         issueDateText: result.data.issueDateText || row.issueDateText,
         boxCountText: result.data.boxCountText || row.boxCountText,
         shipDateText: result.data.shipDateText || row.shipDateText,
@@ -433,9 +428,16 @@ export function BillingClient({
                   </InvoiceSection>
                   <InvoiceSection title="账单信息 / FACT.">
                     <InvoiceField label="发货日期 / F. Env." value={detailRow?.shipDateText || "-"} />
-                    <InvoiceField label="门店标记 / Etiq. Tda." value={detailRow?.storeLabelText || "-"} />
-                    {formatPaymentTerm(detailRow?.paymentTermText || "") ? (
-                      <InvoiceField label="账期" value={formatPaymentTerm(detailRow?.paymentTermText || "")} />
+                    <InvoiceField label="门店标记 / Etiq. Tda." value={formatStoreLabelDisplay(detailRow?.storeLabelText || "") || "-"} />
+                    {getPaymentTermDisplayLines(detailRow?.paymentTermText || "").length > 0 ? (
+                      <div className="space-y-1.5">
+                        <div className="text-[10px] uppercase tracking-[0.22em] text-slate-400">账期</div>
+                        <div className="text-sm leading-6 text-slate-700">
+                          {getPaymentTermDisplayLines(detailRow?.paymentTermText || "").map((line) => (
+                            <div key={line}>{line}</div>
+                          ))}
+                        </div>
+                      </div>
                     ) : null}
                     {vipDiscountEnabled ? (
                       <div className="flex flex-col items-start gap-1.5 text-sm font-semibold leading-6 text-slate-950">
@@ -559,7 +561,7 @@ export function BillingClient({
                   </div>
                   <div className="flex flex-wrap gap-4">
                     <div className="min-w-0 flex-1"><label className="mb-1 block text-sm text-slate-600">公司名称</label><input value={editState.companyName} onChange={(e) => setEditState((prev) => (prev ? { ...prev, companyName: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
-                    <div className="w-full md:w-[150px]"><label className="mb-1 block text-sm text-slate-600">第几门店</label><input value={editState.storeLabelText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, storeLabelText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
+                    <div className="w-full md:w-[150px]"><label className="mb-1 block text-sm text-slate-600">第几门店</label><input value={editState.storeLabelText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, storeLabelText: normalizeStoreLabelInput(e.target.value) } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
                   </div>
                 </div>
               </section>

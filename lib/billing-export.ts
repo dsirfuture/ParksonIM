@@ -3,7 +3,7 @@ import path from "node:path";
 import ExcelJS from "exceljs";
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
-import { parseBillingRemark } from "@/lib/billing-meta";
+import { formatStoreLabelDisplay, getPaymentTermDisplayLines, normalizeStoreLabelInput, parseBillingRemark } from "@/lib/billing-meta";
 import { prisma } from "@/lib/prisma";
 import { buildProductImageUrls } from "@/lib/product-image-url";
 
@@ -309,23 +309,29 @@ function wrapTextByWidth(
   maxWidth: number,
   unicodeSafe: boolean,
 ) {
-  const normalized = safePdfText(text || "", unicodeSafe).trim();
+  const normalized = safePdfText(text || "", unicodeSafe).replace(/\r\n/g, "\n").trim();
   if (!normalized) return ["-"];
 
   const lines: string[] = [];
-  let current = "";
-
-  for (const char of normalized) {
-    const next = current + char;
-    if (font.widthOfTextAtSize(next, fontSize) <= maxWidth || current.length === 0) {
-      current = next;
+  for (const paragraph of normalized.split("\n")) {
+    if (!paragraph) {
+      lines.push("");
       continue;
     }
-    lines.push(current);
-    current = char;
-  }
 
-  if (current) lines.push(current);
+    let current = "";
+    for (const char of paragraph) {
+      const next = current + char;
+      if (font.widthOfTextAtSize(next, fontSize) <= maxWidth || current.length === 0) {
+        current = next;
+        continue;
+      }
+      lines.push(current);
+      current = char;
+    }
+
+    if (current) lines.push(current);
+  }
   return lines.length > 0 ? lines : ["-"];
 }
 
@@ -497,7 +503,7 @@ export async function getBillingExportData(params: {
     contactPhone: orderRow?.contact_phone || "-",
     addressText: orderRow?.address_text || "",
     remarkText: orderRow?.order_remark || "",
-    storeLabelText: orderRow?.store_label || "",
+    storeLabelText: normalizeStoreLabelInput(orderRow?.store_label || ""),
     updatedAt,
     itemCount: itemsMap.size,
     totalQty,
@@ -859,9 +865,9 @@ export async function buildBillingPdf(data: BillingExportData) {
     const sectionTop = cursorY;
     const billingFields = [
       { label: "\u53d1\u8d27\u65e5\u671f / F. Env.", value: data.shipDateText || "-", emphasize: false },
-      { label: "\u95e8\u5e97\u6807\u8bb0 / Etiq. Tda.", value: data.storeLabelText || "-", emphasize: false },
-      ...(formatPaymentTerm(data.paymentTermText)
-        ? [{ label: "账期", value: formatPaymentTerm(data.paymentTermText), emphasize: false }]
+      { label: "\u95e8\u5e97\u6807\u8bb0 / Etiq. Tda.", value: formatStoreLabelDisplay(data.storeLabelText) || "-", emphasize: false },
+      ...(getPaymentTermDisplayLines(data.paymentTermText).length > 0
+        ? [{ label: "账期", value: getPaymentTermDisplayLines(data.paymentTermText).join("\n"), emphasize: false }]
         : []),
       ...(data.vipDiscountEnabled
         ? [{ label: "VIP客户", value: "VIP客户", emphasize: true, strongLabel: true, icon: "vip" as const }]

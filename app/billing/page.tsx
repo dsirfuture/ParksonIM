@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/app-shell";
-import { parseBillingRemark } from "@/lib/billing-meta";
+import { normalizeStoreLabelInput, parseBillingRemark } from "@/lib/billing-meta";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
 import { BillingClient } from "./BillingClient";
@@ -315,7 +315,7 @@ export default async function BillingPage({
       contactPhone: row.contact_phone || "-",
       addressText: row.address_text || "",
       remarkText: parsedRemark.noteText,
-      storeLabelText: row.store_label || "",
+      storeLabelText: normalizeStoreLabelInput(row.store_label),
       issueDateText: formatDateOnly(new Date()),
       boxCountText: parsedRemark.meta.boxCount,
       shipDateText: parsedRemark.meta.shipDate,
@@ -340,7 +340,7 @@ export default async function BillingPage({
         contactPhone: order?.contactPhone || "-",
         addressText: order?.addressText || "",
         remarkText: order?.remarkText || "",
-        storeLabelText: order?.storeLabelText || "",
+        storeLabelText: normalizeStoreLabelInput(order?.storeLabelText || ""),
         issueDateText: formatDateOnly(new Date()),
         boxCountText: order?.boxCountText || "",
         shipDateText: order?.shipDateText || "",

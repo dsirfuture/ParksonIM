@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { buildBillingRemark, parseBillingRemark, type BillingHeaderMeta } from "@/lib/billing-meta";
+import { buildBillingRemark, normalizeStoreLabelInput, parseBillingRemark, type BillingHeaderMeta } from "@/lib/billing-meta";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
+
+const FIXED_WAREHOUSE = "PARKSONMX仓";
 
 function normalizeString(value: unknown) {
   if (typeof value !== "string") return null;
@@ -80,7 +82,7 @@ export async function PATCH(
       updateData.order_remark = buildBillingRemark(normalizeString(body.remarkText), headerMetaInput);
     }
     if ("storeLabel" in body) {
-      updateData.store_label = normalizeString(body.storeLabel);
+      updateData.store_label = normalizeStoreLabelInput(body.storeLabel) || null;
     }
 
     const updated = await prisma.ygOrderImport.update({
@@ -107,11 +109,11 @@ export async function PATCH(
         addressText: updated.address_text || "",
         contactText: updated.contact_phone || "",
         remarkText: parsedRemark.noteText,
-        storeLabelText: updated.store_label || "",
+        storeLabelText: normalizeStoreLabelInput(updated.store_label),
         issueDateText: parsedRemark.meta.issueDate,
         boxCountText: parsedRemark.meta.boxCount,
         shipDateText: parsedRemark.meta.shipDate,
-        warehouseText: parsedRemark.meta.warehouse || updated.store_label || "",
+        warehouseText: FIXED_WAREHOUSE,
         shippingMethodText: parsedRemark.meta.shippingMethod,
         recipientNameText: parsedRemark.meta.recipientName || updated.contact_name || "",
         recipientPhoneText: parsedRemark.meta.recipientPhone || updated.contact_phone || "",

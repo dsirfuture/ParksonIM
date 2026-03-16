@@ -23,9 +23,33 @@ export const EMPTY_BILLING_HEADER_META: BillingHeaderMeta = {
 };
 
 const BILLING_META_PREFIX = "[[BILLING_META]]";
+const STORE_LABEL_SUFFIX_RE = /(门店|店)$/g;
+const STORE_LABEL_ALLOWED_RE = /[0-9一二三四五六七八九十百千万零两〇]/g;
 
 function trimString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+export function normalizeStoreLabelInput(value: unknown) {
+  const text = trimString(value).replace(/\s+/g, "").replace(STORE_LABEL_SUFFIX_RE, "");
+  const matched = text.match(STORE_LABEL_ALLOWED_RE);
+  return matched ? matched.join("") : "";
+}
+
+export function formatStoreLabelDisplay(value: unknown) {
+  const normalized = normalizeStoreLabelInput(value);
+  return normalized ? `${normalized}门店` : "";
+}
+
+export function formatPaymentTermDays(value: unknown) {
+  const text = trimString(value).replace(/天$/g, "");
+  return text ? `${text}天` : "";
+}
+
+export function getPaymentTermDisplayLines(value: unknown) {
+  const days = formatPaymentTermDays(value);
+  if (!days) return [];
+  return [days, "发货日算起（默认）"];
 }
 
 export function normalizeBillingHeaderMeta(
