@@ -1,21 +1,31 @@
+import ExcelJS from "exceljs";
+import JSZip from "jszip";
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { importLegacyOrders } from "@/lib/dropshipping";
-import type { DsLegacyImportRow } from "@/lib/dropshipping-types";
+import type { DsLegacyImportAsset, DsLegacyImportRow } from "@/lib/dropshipping-types";
 import { hasPermission } from "@/lib/permissions";
 import { getSession } from "@/lib/tenant";
 
 export const runtime = "nodejs";
+
+type AssetFile = {
+  path: string;
+  name: string;
+  bytes: Uint8Array;
+};
+
+type CellMeta = {
+  text: string;
+  hyperlink: string;
+};
 
 function text(value: unknown) {
   return String(value ?? "").replace(/\r?\n/g, " ").trim();
 }
 
 function headerKey(value: unknown) {
-  return text(value)
-    .replace(/\s+/g, "")
-    .replace(/[：:]/g, "")
-    .toLowerCase();
+  return text(value).replace(/\s+/g, "").toLowerCase();
 }
 
 function parseNumber(value: unknown) {
@@ -50,16 +60,41 @@ function parseDiscount(value: unknown) {
   return parsed > 1 ? parsed / 100 : parsed;
 }
 
-const COLUMN_ALIASES: Record<keyof DsLegacyImportRow, string[]> = {
-  customerName: ["客户名称"],
-  platform: ["下单平台"],
-  platformOrderNo: ["后台订单号"],
-  trackingNo: ["面单物流号", "物流号"],
+function normalizePath(value: string) {
+  return value
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/^\.?\//, "")
+    .replace(/^\/+/, "")
+    .replace(/\/+/g, "/");
+}
+
+function baseName(filePath: string) {
+  const normalized = normalizePath(filePath);
+  const parts = normalized.split("/");
+  return parts[parts.length - 1] || normalized;
+}
+
+function mimeTypeFromName(fileName: string) {
+  const lower = fileName.toLowerCase();
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".gif")) return "image/gif";
+  return "application/octet-stream";
+}
+
+const COLUMN_ALIASES: Record<keyof Omit<DsLegacyImportRow, "shippingLabelFiles" | "shippingProofFiles">, string[]> = {
+  customerName: ["客户名称", "客户"],
+  platform: ["下单平台", "平台"],
+  platformOrderNo: ["后台订单号", "订单号"],
+  trackingNo: ["面单物流号", "物流号", "运单号"],
   shippingLabelFile: ["面单文件"],
   shipped: ["是否发货"],
   shippedAt: ["发货日期"],
   shippingProofFile: ["发货凭据", "发货凭证"],
-  sku: ["产品sku", "sku", "产品sku"],
+  sku: ["产品sku", "sku", "产品SKU"],
   quantity: ["下单数", "数量"],
   color: ["发货颜色", "颜色"],
   warehouse: ["发货仓", "仓库"],
@@ -67,10 +102,10 @@ const COLUMN_ALIASES: Record<keyof DsLegacyImportRow, string[]> = {
   productImageUrl: ["产品图"],
   productNameZh: ["产品中文名"],
   unitPrice: ["产品单价"],
-  discountRate: ["普通折扣", "普通折扣%"],
+  discountRate: ["普通折扣"],
   stockedQty: ["备货数量"],
   stockAmount: ["备货总金额"],
-  rateValue: ["rmb汇率", "汇率", "rmb汇率"],
+  rateValue: ["rmb汇率", "汇率", "RMB汇率"],
   exchangedAmount: ["汇率后金额"],
   shippingAmount: ["代发总金额"],
   totalAmount: ["总金额"],
@@ -79,7 +114,7 @@ const COLUMN_ALIASES: Record<keyof DsLegacyImportRow, string[]> = {
   settledAt: ["结账日期"],
 };
 
-function findHeaderRow(rows: unknown[][]) {
+function findHeaderRow(rows: string[][]) {
   return rows.findIndex((row) => {
     const keys = row.map((cell) => headerKey(cell));
     return (
@@ -96,54 +131,269 @@ function findColumnIndex(headers: string[], aliases: string[]) {
   return headers.findIndex((item) => normalizedAliases.includes(headerKey(item)));
 }
 
-function parseRows(sheetRows: unknown[][]) {
-  const headerRowIndex = findHeaderRow(sheetRows);
-  if (headerRowIndex < 0) return [] as DsLegacyImportRow[];
+function buildAssetIndexes(files: AssetFile[]) {
+  const byPath = new Map<string, AssetFile>();
+  const byName = new Map<string, AssetFile[]>();
 
-  const headers = (sheetRows[headerRowIndex] || []).map((cell) => text(cell));
-  const indexes = Object.fromEntries(
-    Object.entries(COLUMN_ALIASES).map(([key, aliases]) => [key, findColumnIndex(headers, aliases)]),
-  ) as Record<keyof DsLegacyImportRow, number>;
+  for (const file of files) {
+    const normalizedPath = normalizePath(file.path);
+    byPath.set(normalizedPath.toLowerCase(), file);
+    const name = file.name.toLowerCase();
+    const current = byName.get(name) || [];
+    current.push(file);
+    byName.set(name, current);
+  }
 
-  const items: DsLegacyImportRow[] = [];
-  for (let index = headerRowIndex + 1; index < sheetRows.length; index += 1) {
-    const row = sheetRows[index] || [];
-    const customerName = indexes.customerName >= 0 ? text(row[indexes.customerName]) : "";
-    const platformOrderNo = indexes.platformOrderNo >= 0 ? text(row[indexes.platformOrderNo]) : "";
-    const sku = indexes.sku >= 0 ? text(row[indexes.sku]) : "";
-    if (!customerName || !platformOrderNo || !sku) continue;
+  return { byPath, byName };
+}
 
-    items.push({
-      customerName,
-      platform: indexes.platform >= 0 ? text(row[indexes.platform]) : "",
-      platformOrderNo,
-      trackingNo: indexes.trackingNo >= 0 ? text(row[indexes.trackingNo]) : "",
-      shippingLabelFile: indexes.shippingLabelFile >= 0 ? text(row[indexes.shippingLabelFile]) : "",
-      shipped: indexes.shipped >= 0 ? parseShipped(row[indexes.shipped]) : false,
-      shippedAt: indexes.shippedAt >= 0 ? parseDate(row[indexes.shippedAt]) : null,
-      shippingProofFile: indexes.shippingProofFile >= 0 ? text(row[indexes.shippingProofFile]) : "",
-      sku,
-      quantity: parseNumber(indexes.quantity >= 0 ? row[indexes.quantity] : null) ?? 0,
-      color: indexes.color >= 0 ? text(row[indexes.color]) : "",
-      warehouse: indexes.warehouse >= 0 ? text(row[indexes.warehouse]) : "",
-      shippingFee: parseNumber(indexes.shippingFee >= 0 ? row[indexes.shippingFee] : null),
-      productImageUrl: indexes.productImageUrl >= 0 ? text(row[indexes.productImageUrl]) : "",
-      productNameZh: indexes.productNameZh >= 0 ? text(row[indexes.productNameZh]) : "",
-      unitPrice: parseNumber(indexes.unitPrice >= 0 ? row[indexes.unitPrice] : null),
-      discountRate: parseDiscount(indexes.discountRate >= 0 ? row[indexes.discountRate] : null),
-      stockedQty: parseNumber(indexes.stockedQty >= 0 ? row[indexes.stockedQty] : null),
-      stockAmount: parseNumber(indexes.stockAmount >= 0 ? row[indexes.stockAmount] : null),
-      rateValue: parseNumber(indexes.rateValue >= 0 ? row[indexes.rateValue] : null),
-      exchangedAmount: parseNumber(indexes.exchangedAmount >= 0 ? row[indexes.exchangedAmount] : null),
-      shippingAmount: parseNumber(indexes.shippingAmount >= 0 ? row[indexes.shippingAmount] : null),
-      totalAmount: parseNumber(indexes.totalAmount >= 0 ? row[indexes.totalAmount] : null),
-      paidAmount: parseNumber(indexes.paidAmount >= 0 ? row[indexes.paidAmount] : null),
-      unpaidAmount: parseNumber(indexes.unpaidAmount >= 0 ? row[indexes.unpaidAmount] : null),
-      settledAt: indexes.settledAt >= 0 ? parseDate(row[indexes.settledAt]) : null,
+function splitPossiblePaths(value: string) {
+  return value
+    .split(/\r?\n|[;,|]/)
+    .map((item) => normalizePath(item))
+    .filter(Boolean);
+}
+
+function resolveAsset(
+  rawValue: string,
+  hyperlink: string,
+  assets: ReturnType<typeof buildAssetIndexes>,
+  preferredFolder: "面单文件" | "发货凭据",
+) {
+  const candidates = [hyperlink, ...splitPossiblePaths(rawValue)];
+  for (const candidate of candidates) {
+    const normalized = normalizePath(candidate);
+    if (!normalized) continue;
+
+    const direct = assets.byPath.get(normalized.toLowerCase());
+    if (direct) return direct;
+
+    const preferred = assets.byPath.get(normalizePath(`${preferredFolder}/${baseName(normalized)}`).toLowerCase());
+    if (preferred) return preferred;
+
+    const byFileName = assets.byName.get(baseName(normalized).toLowerCase());
+    if (byFileName?.length) return byFileName[0];
+  }
+
+  return null;
+}
+
+async function parseXlsxWorkbook(bytes: Uint8Array, assetFiles: AssetFile[]) {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(Buffer.from(bytes) as unknown as Parameters<typeof workbook.xlsx.load>[0]);
+  const assets = buildAssetIndexes(assetFiles);
+
+  let parsedRows: DsLegacyImportRow[] = [];
+
+  for (const worksheet of workbook.worksheets) {
+    const matrix: string[][] = [];
+    const meta = new Map<string, CellMeta>();
+
+    worksheet.eachRow({ includeEmpty: false }, (row) => {
+      const current: string[] = [];
+      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        const cellValue = cell.value;
+        let displayText = "";
+        let hyperlink = "";
+
+        if (typeof cellValue === "object" && cellValue && "hyperlink" in cellValue) {
+          const candidate = cellValue as { text?: string; hyperlink?: string };
+          displayText = text(candidate.text || cell.text);
+          hyperlink = text(candidate.hyperlink);
+        } else {
+          displayText = text(cell.text || cellValue);
+          hyperlink = typeof cell.hyperlink === "string" ? cell.hyperlink : "";
+        }
+
+        current[colNumber - 1] = displayText;
+        if (displayText || hyperlink) {
+          meta.set(`${row.number}:${colNumber}`, { text: displayText, hyperlink });
+        }
+      });
+      matrix[row.number - 1] = current;
+    });
+
+    const headerRowIndex = findHeaderRow(matrix);
+    if (headerRowIndex < 0) continue;
+
+    const headers = (matrix[headerRowIndex] || []).map((cell) => text(cell));
+    const indexes = Object.fromEntries(
+      Object.entries(COLUMN_ALIASES).map(([key, aliases]) => [key, findColumnIndex(headers, aliases)]),
+    ) as Record<keyof typeof COLUMN_ALIASES, number>;
+
+    const items: DsLegacyImportRow[] = [];
+    for (let rowIndex = headerRowIndex + 1; rowIndex < matrix.length; rowIndex += 1) {
+      const row = matrix[rowIndex] || [];
+      const customerName = indexes.customerName >= 0 ? text(row[indexes.customerName]) : "";
+      const platformOrderNo = indexes.platformOrderNo >= 0 ? text(row[indexes.platformOrderNo]) : "";
+      const sku = indexes.sku >= 0 ? text(row[indexes.sku]) : "";
+      if (!customerName || !platformOrderNo || !sku) continue;
+
+      const labelMeta =
+        indexes.shippingLabelFile >= 0 ? meta.get(`${rowIndex + 1}:${indexes.shippingLabelFile + 1}`) : undefined;
+      const proofMeta =
+        indexes.shippingProofFile >= 0 ? meta.get(`${rowIndex + 1}:${indexes.shippingProofFile + 1}`) : undefined;
+
+      const shippingLabelFiles: DsLegacyImportAsset[] = [];
+      const labelAsset = resolveAsset(
+        labelMeta?.text || "",
+        labelMeta?.hyperlink || "",
+        assets,
+        "面单文件",
+      );
+      if (labelAsset) {
+        shippingLabelFiles.push({
+          displayName: labelAsset.name,
+          relativePath: labelAsset.path,
+          bytes: labelAsset.bytes,
+          mimeType: mimeTypeFromName(labelAsset.name),
+        });
+      }
+
+      const shippingProofFiles: DsLegacyImportAsset[] = [];
+      const proofAsset = resolveAsset(
+        proofMeta?.text || "",
+        proofMeta?.hyperlink || "",
+        assets,
+        "发货凭据",
+      );
+      if (proofAsset) {
+        shippingProofFiles.push({
+          displayName: proofAsset.name,
+          relativePath: proofAsset.path,
+          bytes: proofAsset.bytes,
+          mimeType: mimeTypeFromName(proofAsset.name),
+        });
+      }
+
+      items.push({
+        customerName,
+        platform: indexes.platform >= 0 ? text(row[indexes.platform]) : "",
+        platformOrderNo,
+        trackingNo: indexes.trackingNo >= 0 ? text(row[indexes.trackingNo]) : "",
+        shippingLabelFile: labelMeta?.hyperlink || labelMeta?.text || "",
+        shippingLabelFiles,
+        shipped: indexes.shipped >= 0 ? parseShipped(row[indexes.shipped]) : false,
+        shippedAt: indexes.shippedAt >= 0 ? parseDate(row[indexes.shippedAt]) : null,
+        shippingProofFile: proofMeta?.hyperlink || proofMeta?.text || "",
+        shippingProofFiles,
+        sku,
+        quantity: parseNumber(indexes.quantity >= 0 ? row[indexes.quantity] : null) ?? 0,
+        color: indexes.color >= 0 ? text(row[indexes.color]) : "",
+        warehouse: indexes.warehouse >= 0 ? text(row[indexes.warehouse]) : "",
+        shippingFee: parseNumber(indexes.shippingFee >= 0 ? row[indexes.shippingFee] : null),
+        productImageUrl: indexes.productImageUrl >= 0 ? text(row[indexes.productImageUrl]) : "",
+        productNameZh: indexes.productNameZh >= 0 ? text(row[indexes.productNameZh]) : "",
+        unitPrice: parseNumber(indexes.unitPrice >= 0 ? row[indexes.unitPrice] : null),
+        discountRate: parseDiscount(indexes.discountRate >= 0 ? row[indexes.discountRate] : null),
+        stockedQty: parseNumber(indexes.stockedQty >= 0 ? row[indexes.stockedQty] : null),
+        stockAmount: parseNumber(indexes.stockAmount >= 0 ? row[indexes.stockAmount] : null),
+        rateValue: parseNumber(indexes.rateValue >= 0 ? row[indexes.rateValue] : null),
+        exchangedAmount: parseNumber(indexes.exchangedAmount >= 0 ? row[indexes.exchangedAmount] : null),
+        shippingAmount: parseNumber(indexes.shippingAmount >= 0 ? row[indexes.shippingAmount] : null),
+        totalAmount: parseNumber(indexes.totalAmount >= 0 ? row[indexes.totalAmount] : null),
+        paidAmount: parseNumber(indexes.paidAmount >= 0 ? row[indexes.paidAmount] : null),
+        unpaidAmount: parseNumber(indexes.unpaidAmount >= 0 ? row[indexes.unpaidAmount] : null),
+        settledAt: indexes.settledAt >= 0 ? parseDate(row[indexes.settledAt]) : null,
+      });
+    }
+
+    if (items.length > parsedRows.length) {
+      parsedRows = items;
+    }
+  }
+
+  return parsedRows;
+}
+
+function parseFlatWorkbook(bytes: ArrayBuffer) {
+  const workbook = XLSX.read(bytes, { type: "array" });
+  let parsedRows: DsLegacyImportRow[] = [];
+  for (const sheetName of workbook.SheetNames) {
+    const matrix = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheetName], {
+      header: 1,
+      raw: false,
+      defval: "",
+      blankrows: false,
+    }) as unknown[][];
+    const headers = matrix.map((row) => row.map((cell) => text(cell)));
+    const headerRowIndex = findHeaderRow(headers);
+    if (headerRowIndex < 0) continue;
+
+    const rowHeaders = headers[headerRowIndex] || [];
+    const indexes = Object.fromEntries(
+      Object.entries(COLUMN_ALIASES).map(([key, aliases]) => [key, findColumnIndex(rowHeaders, aliases)]),
+    ) as Record<keyof typeof COLUMN_ALIASES, number>;
+    const items: DsLegacyImportRow[] = [];
+
+    for (let rowIndex = headerRowIndex + 1; rowIndex < matrix.length; rowIndex += 1) {
+      const row = matrix[rowIndex] || [];
+      const customerName = indexes.customerName >= 0 ? text(row[indexes.customerName]) : "";
+      const platformOrderNo = indexes.platformOrderNo >= 0 ? text(row[indexes.platformOrderNo]) : "";
+      const sku = indexes.sku >= 0 ? text(row[indexes.sku]) : "";
+      if (!customerName || !platformOrderNo || !sku) continue;
+
+      items.push({
+        customerName,
+        platform: indexes.platform >= 0 ? text(row[indexes.platform]) : "",
+        platformOrderNo,
+        trackingNo: indexes.trackingNo >= 0 ? text(row[indexes.trackingNo]) : "",
+        shippingLabelFile: indexes.shippingLabelFile >= 0 ? text(row[indexes.shippingLabelFile]) : "",
+        shippingLabelFiles: [],
+        shipped: indexes.shipped >= 0 ? parseShipped(row[indexes.shipped]) : false,
+        shippedAt: indexes.shippedAt >= 0 ? parseDate(row[indexes.shippedAt]) : null,
+        shippingProofFile: indexes.shippingProofFile >= 0 ? text(row[indexes.shippingProofFile]) : "",
+        shippingProofFiles: [],
+        sku,
+        quantity: parseNumber(indexes.quantity >= 0 ? row[indexes.quantity] : null) ?? 0,
+        color: indexes.color >= 0 ? text(row[indexes.color]) : "",
+        warehouse: indexes.warehouse >= 0 ? text(row[indexes.warehouse]) : "",
+        shippingFee: parseNumber(indexes.shippingFee >= 0 ? row[indexes.shippingFee] : null),
+        productImageUrl: indexes.productImageUrl >= 0 ? text(row[indexes.productImageUrl]) : "",
+        productNameZh: indexes.productNameZh >= 0 ? text(row[indexes.productNameZh]) : "",
+        unitPrice: parseNumber(indexes.unitPrice >= 0 ? row[indexes.unitPrice] : null),
+        discountRate: parseDiscount(indexes.discountRate >= 0 ? row[indexes.discountRate] : null),
+        stockedQty: parseNumber(indexes.stockedQty >= 0 ? row[indexes.stockedQty] : null),
+        stockAmount: parseNumber(indexes.stockAmount >= 0 ? row[indexes.stockAmount] : null),
+        rateValue: parseNumber(indexes.rateValue >= 0 ? row[indexes.rateValue] : null),
+        exchangedAmount: parseNumber(indexes.exchangedAmount >= 0 ? row[indexes.exchangedAmount] : null),
+        shippingAmount: parseNumber(indexes.shippingAmount >= 0 ? row[indexes.shippingAmount] : null),
+        totalAmount: parseNumber(indexes.totalAmount >= 0 ? row[indexes.totalAmount] : null),
+        paidAmount: parseNumber(indexes.paidAmount >= 0 ? row[indexes.paidAmount] : null),
+        unpaidAmount: parseNumber(indexes.unpaidAmount >= 0 ? row[indexes.unpaidAmount] : null),
+        settledAt: indexes.settledAt >= 0 ? parseDate(row[indexes.settledAt]) : null,
+      });
+    }
+
+    if (items.length > parsedRows.length) {
+      parsedRows = items;
+    }
+  }
+
+  return parsedRows;
+}
+
+async function parseZip(file: File) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const zip = await JSZip.loadAsync(bytes);
+  const entries = Object.values(zip.files).filter((entry) => !entry.dir);
+  const workbookEntry = entries.find((entry) => /\.xlsx$/i.test(entry.name));
+  if (!workbookEntry) {
+    throw new Error("压缩包里没有找到 xlsx 表格");
+  }
+
+  const workbookBytes = await workbookEntry.async("uint8array");
+  const assetFiles: AssetFile[] = [];
+  for (const entry of entries) {
+    if (entry.name === workbookEntry.name) continue;
+    assetFiles.push({
+      path: entry.name,
+      name: baseName(entry.name),
+      bytes: await entry.async("uint8array"),
     });
   }
 
-  return items;
+  return parseXlsxWorkbook(workbookBytes, assetFiles);
 }
 
 export async function POST(request: Request) {
@@ -157,30 +407,19 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const file = formData.get("file");
     if (!(file instanceof File)) {
-      return NextResponse.json({ ok: false, error: "请先选择导入文件" }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "请先选择历史导入文件" }, { status: 400 });
     }
 
-    const bytes = await file.arrayBuffer();
-    const workbook = XLSX.read(bytes, { type: "array" });
-    if (workbook.SheetNames.length === 0) {
-      return NextResponse.json({ ok: false, error: "未找到工作表" }, { status: 400 });
-    }
-
-    let parsedRows: DsLegacyImportRow[] = [];
-    for (const sheetName of workbook.SheetNames) {
-      const matrix = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheetName], {
-        header: 1,
-        raw: false,
-        defval: "",
-        blankrows: false,
-      });
-      const current = parseRows(matrix);
-      if (current.length > parsedRows.length) parsedRows = current;
-    }
+    const lowerName = file.name.toLowerCase();
+    const parsedRows = lowerName.endsWith(".zip")
+      ? await parseZip(file)
+      : lowerName.endsWith(".xlsx")
+        ? await parseXlsxWorkbook(new Uint8Array(await file.arrayBuffer()), [])
+        : parseFlatWorkbook(await file.arrayBuffer());
 
     if (parsedRows.length === 0) {
       return NextResponse.json(
-        { ok: false, error: "未识别到可导入数据，请确认列标题与模板一致" },
+        { ok: false, error: "没有识别到可导入数据，请确认列标题与模板一致" },
         { status: 400 },
       );
     }
@@ -189,7 +428,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, summary });
   } catch (error) {
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "导入失败" },
+      { ok: false, error: error instanceof Error ? error.message : "历史导入失败" },
       { status: 500 },
     );
   }

@@ -146,7 +146,7 @@ export function DropshippingClient({
         desc: "在现有 ParksonIM 后台内集中处理代发订单、SKU 备货、客户结算与汇率信息。",
         refresh: "刷新数据",
         create: "新增订单",
-        import: "导入文件",
+        import: "历史迁移导入",
         tabs: { overview: "总览", orders: "订单管理", inventory: "SKU备货", finance: "财务结算" },
         stats: {
           todayOrders: "今日录单",
@@ -176,6 +176,7 @@ export function DropshippingClient({
           trackingNo: "物流号",
           warehouse: "发货仓",
           shippingFee: "代发费",
+          attachments: "附件",
           productZh: "中文名",
           remaining: "剩余",
           stocked: "备货",
@@ -240,7 +241,7 @@ export function DropshippingClient({
         desc: "Gestiona pedidos, inventario SKU, liquidacion por cliente y tipo de cambio dentro del ParksonIM actual.",
         refresh: "Actualizar",
         create: "Nuevo pedido",
-        import: "Importar archivo",
+        import: "Importar historial",
         tabs: { overview: "Resumen", orders: "Pedidos", inventory: "Inventario SKU", finance: "Finanzas" },
         stats: {
           todayOrders: "Pedidos hoy",
@@ -270,6 +271,7 @@ export function DropshippingClient({
           trackingNo: "Guia",
           warehouse: "Almacen",
           shippingFee: "Cargo",
+          attachments: "Adjuntos",
           productZh: "Nombre ZH",
           remaining: "Restante",
           stocked: "Stock",
@@ -462,8 +464,8 @@ export function DropshippingClient({
       const summary = json.summary || {};
       setImportSummary(
         lang === "zh"
-          ? `已导入 ${summary.totalRows || 0} 行，新增订单 ${summary.createdOrders || 0}，更新订单 ${summary.updatedOrders || 0}，同步客户 ${summary.touchedCustomers || 0}，同步商品 ${summary.touchedProducts || 0}，导入付款快照 ${summary.seededPayments || 0}。`
-          : `Importadas ${summary.totalRows || 0} filas, pedidos nuevos ${summary.createdOrders || 0}, pedidos actualizados ${summary.updatedOrders || 0}, clientes ${summary.touchedCustomers || 0}, productos ${summary.touchedProducts || 0}, pagos sembrados ${summary.seededPayments || 0}.`,
+          ? `已导入 ${summary.totalRows || 0} 行，新增订单 ${summary.createdOrders || 0}，更新订单 ${summary.updatedOrders || 0}，同步客户 ${summary.touchedCustomers || 0}，同步商品 ${summary.touchedProducts || 0}，付款快照 ${summary.seededPayments || 0}，面单 ${summary.uploadedLabels || 0}，凭据 ${summary.uploadedProofs || 0}。`
+          : `Importadas ${summary.totalRows || 0} filas, pedidos nuevos ${summary.createdOrders || 0}, pedidos actualizados ${summary.updatedOrders || 0}, clientes ${summary.touchedCustomers || 0}, productos ${summary.touchedProducts || 0}, pagos ${summary.seededPayments || 0}, guias ${summary.uploadedLabels || 0}, pruebas ${summary.uploadedProofs || 0}.`,
       );
       await refreshAll();
     } catch (importError) {
@@ -495,7 +497,7 @@ export function DropshippingClient({
             <input
               ref={importInputRef}
               type="file"
-              accept=".xlsx,.xls,.csv"
+              accept=".zip,.xlsx,.xls,.csv"
               className="hidden"
               onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -662,6 +664,7 @@ export function DropshippingClient({
                     <th className="px-4 py-3 font-medium">{text.fields.status}</th>
                     <th className="px-4 py-3 font-medium">{text.fields.trackingNo}</th>
                     <th className="px-4 py-3 font-medium">{text.fields.shippingFee}</th>
+                    <th className="px-4 py-3 font-medium">{text.fields.attachments}</th>
                     <th className="px-4 py-3 font-medium">{text.warnings}</th>
                     <th className="px-4 py-3 text-right font-medium">Edit</th>
                   </tr>
@@ -682,6 +685,50 @@ export function DropshippingClient({
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-700">{row.trackingNo || "-"}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.shippingFee, lang)}</td>
+                      <td className="px-4 py-3 text-sm text-slate-700">
+                        <div className="flex flex-wrap gap-2">
+                          {row.shippingLabelAttachments[0]?.fileUrl ? (
+                            <a
+                              href={row.shippingLabelAttachments[0].fileUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                            >
+                              PDF
+                            </a>
+                          ) : row.shippingLabelFile ? (
+                            <a
+                              href={row.shippingLabelFile}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                            >
+                              PDF
+                            </a>
+                          ) : null}
+                          {row.shippingProofAttachments[0]?.fileUrl ? (
+                            <a
+                              href={row.shippingProofAttachments[0].fileUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                            >
+                              IMG{row.shippingProofAttachments.length > 1 ? ` x${row.shippingProofAttachments.length}` : ""}
+                            </a>
+                          ) : row.shippingProofFile ? (
+                            <a
+                              href={row.shippingProofFile}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                            >
+                              IMG
+                            </a>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-sm text-rose-600">{row.warnings.length > 0 ? row.warnings.join(", ") : "-"}</td>
                       <td className="px-4 py-3 text-right">
                         <button type="button" onClick={() => openEditModal(row)} className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700">

@@ -60,10 +60,22 @@ export type DsOrderRow = {
   shippingFee: number;
   shippingLabelFile: string;
   shippingProofFile: string;
+  shippingLabelAttachments: DsOrderAttachment[];
+  shippingProofAttachments: DsOrderAttachment[];
   createdAt: string;
   notes: string;
   currentInventoryQty: number | null;
   warnings: string[];
+};
+
+export type DsOrderAttachment = {
+  id: string;
+  type: "label" | "proof";
+  fileName: string;
+  fileUrl: string;
+  sourcePath: string;
+  mimeType: string;
+  sortOrder: number;
 };
 
 export type DsInventoryRow = {
@@ -118,9 +130,11 @@ export type DsLegacyImportRow = {
   platformOrderNo: string;
   trackingNo: string;
   shippingLabelFile: string;
+  shippingLabelFiles: DsLegacyImportAsset[];
   shipped: boolean;
   shippedAt: string | null;
   shippingProofFile: string;
+  shippingProofFiles: DsLegacyImportAsset[];
   sku: string;
   quantity: number;
   color: string;
@@ -141,6 +155,13 @@ export type DsLegacyImportRow = {
   settledAt: string | null;
 };
 
+export type DsLegacyImportAsset = {
+  displayName: string;
+  relativePath: string;
+  bytes?: Uint8Array;
+  mimeType?: string;
+};
+
 export type DsLegacyImportSummary = {
   totalRows: number;
   createdOrders: number;
@@ -148,4 +169,6 @@ export type DsLegacyImportSummary = {
   touchedCustomers: number;
   touchedProducts: number;
   seededPayments: number;
+  uploadedLabels: number;
+  uploadedProofs: number;
 };

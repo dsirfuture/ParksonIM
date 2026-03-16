@@ -24,6 +24,11 @@ enum DsFinanceStatus {
   paid
 }
 
+enum DsOrderAttachmentType {
+  label
+  proof
+}
+
 enum ReceiptStatus {
   pending
   in_progress
@@ -77,6 +82,7 @@ model Tenant {
   dsOrders             DropshippingOrder[]
   dsPayments           DropshippingPayment[]
   dsExchangeRates      DropshippingExchangeRate[]
+  dsOrderAttachments   DropshippingOrderAttachment[]
 }
 
 model Company {
@@ -118,6 +124,7 @@ model Company {
   dsOrders             DropshippingOrder[]
   dsPayments           DropshippingPayment[]
   dsExchangeRates      DropshippingExchangeRate[]
+  dsOrderAttachments   DropshippingOrderAttachment[]
 
   @@index([tenant_id])
 }
@@ -453,6 +460,7 @@ model DropshippingOrder {
   customer     DropshippingCustomer     @relation(fields: [customer_id], references: [id], onDelete: Cascade)
   product      DropshippingProduct      @relation(fields: [product_id], references: [id], onDelete: Cascade)
   exchangeRate DropshippingExchangeRate? @relation(fields: [exchange_rate_id], references: [id], onDelete: SetNull)
+  attachments  DropshippingOrderAttachment[]
 
   @@unique([tenant_id, company_id, customer_id, platform, platform_order_no])
   @@index([tenant_id, company_id])
@@ -460,6 +468,34 @@ model DropshippingOrder {
   @@index([product_id])
   @@index([shipping_status])
   @@map("ds_orders")
+}
+
+model DropshippingOrderAttachment {
+  id         String @id @default(uuid()) @db.Uuid
+  tenant_id  String @db.Uuid
+  company_id String @db.Uuid
+  order_id    String @db.Uuid
+
+  type        DsOrderAttachmentType
+  file_name   String
+  file_url    String
+  source_path String?
+  mime_type   String?
+  file_size   Int?
+  sort_order  Int     @default(0)
+  notes       String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant  Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company Company           @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  order   DropshippingOrder @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, company_id])
+  @@index([order_id])
+  @@index([type])
+  @@map("ds_order_attachments")
 }
 
 model DropshippingPayment {

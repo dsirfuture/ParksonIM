@@ -5,18 +5,47 @@ import type {
   DsExchangeRatePayload,
   DsFinanceRow,
   DsFinanceStatus,
+  DsLegacyImportAsset,
   DsInventoryRow,
   DsLegacyImportRow,
   DsLegacyImportSummary,
+  DsOrderAttachment,
   DsInventoryStatus,
   DsOrderRow,
   DsOverviewOrder,
   DsOverviewStats,
   DsShippingStatus,
 } from "@/lib/dropshipping-types";
+import { uploadR2Object } from "@/lib/r2-upload";
 
 const DEFAULT_RATE_VALUE = 0.08;
 const LOW_STOCK_THRESHOLD = 5;
+const orderAttachmentStore = prisma as typeof prisma & {
+  dropshippingOrderAttachment: {
+    deleteMany(args: unknown): Promise<unknown>;
+    create(args: unknown): Promise<{
+      id: string;
+      type: "label" | "proof";
+      file_name: string;
+      file_url: string;
+      source_path: string | null;
+      mime_type: string | null;
+      sort_order: number;
+    }>;
+    findMany(args: unknown): Promise<
+      Array<{
+        id: string;
+        order_id: string;
+        type: "label" | "proof";
+        file_name: string;
+        file_url: string;
+        source_path: string | null;
+        mime_type: string | null;
+        sort_order: number;
+      }>
+    >;
+  };
+};
 
 function startOfTodayInMexico() {
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -303,6 +332,112 @@ async function ensureInventoryRecord(
   });
 }
 
+function sanitizeStoragePart(value: string) {
+  return value
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase();
+}
+
+function extname(fileName: string) {
+  const index = fileName.lastIndexOf(".");
+  return index >= 0 ? fileName.slice(index).toLowerCase() : "";
+}
+
+function inferMimeType(fileName: string, fallback?: string) {
+  if (fallback) return fallback;
+  const ext = extname(fileName);
+  if (ext === ".pdf") return "application/pdf";
+  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+  if (ext === ".png") return "image/png";
+  if (ext === ".webp") return "image/webp";
+  if (ext === ".gif") return "image/gif";
+  return "application/octet-stream";
+}
+
+async function syncOrderAttachments(input: {
+  session: Session;
+  orderId: string;
+  orderKey: string;
+  assets: DsLegacyImportAsset[];
+  type: "label" | "proof";
+}) {
+  if (input.assets.length === 0) {
+    await orderAttachmentStore.dropshippingOrderAttachment.deleteMany({
+      where: {
+        tenant_id: input.session.tenantId,
+        company_id: input.session.companyId,
+        order_id: input.orderId,
+        type: input.type,
+      },
+    });
+    return [];
+  }
+
+  const prefix = input.type === "label" ? "dropshipping/labels" : "dropshipping/proofs";
+  const uploaded: Array<{
+    id?: string;
+    file_name: string;
+    file_url: string;
+    source_path: string;
+    mime_type: string;
+    file_size: number;
+    sort_order: number;
+  }> = [];
+
+  for (let index = 0; index < input.assets.length; index += 1) {
+    const asset = input.assets[index];
+    if (!asset.bytes || asset.bytes.length === 0) continue;
+
+    const fileName = asset.displayName.trim() || `file-${index + 1}${extname(asset.relativePath) || ""}`;
+    const safeKey = `${prefix}/${input.orderKey}/${index + 1}-${sanitizeStoragePart(fileName) || `file-${index + 1}`}`;
+    const uploadedFile = await uploadR2Object({
+      key: safeKey,
+      body: asset.bytes,
+      contentType: inferMimeType(fileName, asset.mimeType),
+    });
+
+    uploaded.push({
+      file_name: fileName,
+      file_url: uploadedFile.url,
+      source_path: asset.relativePath,
+      mime_type: inferMimeType(fileName, asset.mimeType),
+      file_size: asset.bytes.length,
+      sort_order: index,
+    });
+  }
+
+  await orderAttachmentStore.dropshippingOrderAttachment.deleteMany({
+    where: {
+      tenant_id: input.session.tenantId,
+      company_id: input.session.companyId,
+      order_id: input.orderId,
+      type: input.type,
+    },
+  });
+
+  if (uploaded.length === 0) return [];
+
+  const created = [];
+  for (const item of uploaded) {
+    created.push(
+      await orderAttachmentStore.dropshippingOrderAttachment.create({
+        data: {
+          tenant_id: input.session.tenantId,
+          company_id: input.session.companyId,
+          order_id: input.orderId,
+          type: input.type,
+          ...item,
+        },
+      }),
+    );
+  }
+  return created;
+}
+
 export async function saveOrder(
   session: Session,
   payload: {
@@ -379,6 +514,8 @@ export async function importLegacyOrders(
   const paymentSeededCustomers = new Set<string>();
   let createdOrders = 0;
   let updatedOrders = 0;
+  let uploadedLabels = 0;
+  let uploadedProofs = 0;
 
   const latestPaidSnapshotByCustomer = new Map<
     string,
@@ -480,14 +617,15 @@ export async function importLegacyOrders(
         .join(" | ") || null,
     };
 
+    let order;
     if (existingOrder) {
-      await prisma.dropshippingOrder.update({
+      order = await prisma.dropshippingOrder.update({
         where: { id: existingOrder.id },
         data: payload,
       });
       updatedOrders += 1;
     } else {
-      await prisma.dropshippingOrder.create({
+      order = await prisma.dropshippingOrder.create({
         data: {
           tenant_id: session.tenantId,
           company_id: session.companyId,
@@ -496,6 +634,36 @@ export async function importLegacyOrders(
       });
       createdOrders += 1;
     }
+
+    const orderKey = sanitizeStoragePart(
+      [row.customerName, row.platformOrderNo || row.trackingNo || product.sku].filter(Boolean).join("-"),
+    ) || order.id;
+
+    const labelAttachments = await syncOrderAttachments({
+      session,
+      orderId: order.id,
+      orderKey,
+      type: "label",
+      assets: row.shippingLabelFiles,
+    });
+    const proofAttachments = await syncOrderAttachments({
+      session,
+      orderId: order.id,
+      orderKey,
+      type: "proof",
+      assets: row.shippingProofFiles,
+    });
+
+    uploadedLabels += labelAttachments.length;
+    uploadedProofs += proofAttachments.length;
+
+    await prisma.dropshippingOrder.update({
+      where: { id: order.id },
+      data: {
+        shipping_label_file: labelAttachments[0]?.file_url || row.shippingLabelFile || null,
+        shipping_proof_file: proofAttachments[0]?.file_url || row.shippingProofFile || null,
+      },
+    });
 
     if (row.paidAmount !== null && row.paidAmount > 0) {
       const paidAt = settledAtDate || shippedAtDate || new Date();
@@ -553,6 +721,8 @@ export async function importLegacyOrders(
     touchedCustomers: touchedCustomers.size,
     touchedProducts: touchedProducts.size,
     seededPayments: paymentSeededCustomers.size,
+    uploadedLabels,
+    uploadedProofs,
   };
 }
 
@@ -568,6 +738,28 @@ export async function listOrders(session: Session) {
     },
     orderBy: [{ created_at: "desc" }, { platform_order_no: "desc" }],
   });
+  const attachments = await orderAttachmentStore.dropshippingOrderAttachment.findMany({
+    where: {
+      tenant_id: session.tenantId,
+      company_id: session.companyId,
+      order_id: { in: rows.map((row) => row.id) },
+    },
+    orderBy: [{ type: "asc" }, { sort_order: "asc" }],
+  });
+  const attachmentsByOrder = new Map<string, DsOrderAttachment[]>();
+  for (const item of attachments) {
+    const current = attachmentsByOrder.get(item.order_id) || [];
+    current.push({
+      id: item.id,
+      type: item.type,
+      fileName: item.file_name,
+      fileUrl: item.file_url,
+      sourcePath: item.source_path || "",
+      mimeType: item.mime_type || "",
+      sortOrder: item.sort_order,
+    });
+    attachmentsByOrder.set(item.order_id, current);
+  }
 
   const duplicateKeys = new Set<string>();
   const grouped = new Map<string, number>();
@@ -597,6 +789,7 @@ export async function listOrders(session: Session) {
   return rows.map((row): DsOrderRow => {
     const key = `${row.customer_id}::${row.platform}::${row.platform_order_no}`;
     const inventoryQty = inventoryMap.get(`${row.customer_id}::${row.product_id}`) ?? null;
+    const attachments = attachmentsByOrder.get(row.id) || [];
     return {
       id: row.id,
       customerId: row.customer_id,
@@ -617,6 +810,8 @@ export async function listOrders(session: Session) {
       shippingFee: toNumber(row.shipping_fee),
       shippingLabelFile: row.shipping_label_file || "",
       shippingProofFile: row.shipping_proof_file || "",
+      shippingLabelAttachments: attachments.filter((item) => item.type === "label"),
+      shippingProofAttachments: attachments.filter((item) => item.type === "proof"),
       createdAt: row.created_at.toISOString(),
       notes: row.notes || "",
       currentInventoryQty: inventoryQty,
