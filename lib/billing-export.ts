@@ -834,6 +834,9 @@ export async function buildBillingPdf(data: BillingExportData) {
   };
 
   const drawHeader = async () => {
+    const brandColor: [number, number, number] = [0.184, 0.235, 0.494];
+    const brandTextSize = 11;
+    const brandCenterY = cursorY + 1;
     if (logoBuffer) {
       try {
         const logo = await pdfDoc.embedPng(logoBuffer);
@@ -842,19 +845,28 @@ export async function buildBillingPdf(data: BillingExportData) {
         const logoHeight = logo.height * scale;
         page.drawImage(logo, {
           x: marginX,
-          y: cursorY - 10,
+          y: brandCenterY - logoHeight / 2,
           width: logoWidth,
           height: logoHeight,
         });
-        drawText("百盛供应链", marginX + logoWidth + 10, cursorY + 2, {
-          size: 10.5,
-          color: [0.31, 0.34, 0.38],
+        drawText("百盛供应链", marginX + logoWidth + 10, brandCenterY + 0.5, {
+          size: brandTextSize,
+          bold: true,
+          color: brandColor,
         });
       } catch {
-        drawText("百盛供应链", marginX, cursorY + 2, { size: 10.5, color: [0.31, 0.34, 0.38] });
+        drawText("百盛供应链", marginX, brandCenterY + 0.5, {
+          size: brandTextSize,
+          bold: true,
+          color: brandColor,
+        });
       }
     } else {
-      drawText("百盛供应链", marginX, cursorY + 2, { size: 10.5, color: [0.31, 0.34, 0.38] });
+      drawText("百盛供应链", marginX, brandCenterY + 0.5, {
+        size: brandTextSize,
+        bold: true,
+        color: brandColor,
+      });
     }
 
     const summaryHeight = drawSummaryCard(pageWidth - marginX - 182, cursorY + 10);
