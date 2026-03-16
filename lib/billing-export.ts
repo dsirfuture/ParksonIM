@@ -777,7 +777,7 @@ export async function buildBillingPdf(data: BillingExportData) {
     const textHeight = textFont.heightAtSize(textSize);
     const topPadding = 2;
     const iconLineHeight = 18;
-    const gapY = 4;
+    const gapY = 7;
     const textLineHeight = Math.max(14, textHeight + 2);
     const iconTopY = y - topPadding;
     const iconY = iconTopY - iconSize;
@@ -909,7 +909,9 @@ export async function buildBillingPdf(data: BillingExportData) {
       });
       drawText(section.title, boxX + 18, boxY, { size: 8.2, bold: true, color: [0.48, 0.5, 0.54] });
       boxY -= 20;
-      for (const field of section.fields) {
+      for (let fieldIndex = 0; fieldIndex < section.fields.length; fieldIndex += 1) {
+        const field = section.fields[fieldIndex]!;
+        const nextField = section.fields[fieldIndex + 1];
         const fieldHeight =
           "icon" in field && field.icon === "vip"
             ? drawVipField(field.label, boxX + 18, boxY)
@@ -918,8 +920,12 @@ export async function buildBillingPdf(data: BillingExportData) {
                 compact: true,
                 strongLabel: "strongLabel" in field ? field.strongLabel : false,
               });
-        boxY -= fieldHeight + 6;
-        usedHeight += fieldHeight + 6;
+        const gapAfterField =
+          nextField && "icon" in nextField && nextField.icon === "vip"
+            ? 2
+            : 6;
+        boxY -= fieldHeight + gapAfterField;
+        usedHeight += fieldHeight + gapAfterField;
       }
       return usedHeight + 26;
     });
