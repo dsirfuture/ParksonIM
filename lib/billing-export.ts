@@ -98,6 +98,8 @@ function formatPaymentTerm(value: string) {
   return text.endsWith("天") ? text : `${text}天`;
 }
 
+const VIP_ICON_PATH = "M10 2.4L13 7.4L17.3 5.7L15.5 15.6H4.5L2.7 5.7L7 7.4Z";
+
 function toPercentText(value: number | null) {
   if (value === null || !Number.isFinite(value)) return "-";
   const percent = value <= 1 ? value * 100 : value;
@@ -689,6 +691,21 @@ export async function buildBillingPdf(data: BillingExportData) {
     return Math.max(compact ? 26 : 30, lines.length * lineStep + 12);
   };
 
+  const drawVipField = (text: string, x: number, y: number) => {
+    page.drawSvgPath(VIP_ICON_PATH, {
+      x,
+      y: y - 13,
+      scale: 1.05,
+      color: rgb(0.08, 0.09, 0.1),
+    });
+    drawText(text, x + 22, y - 2, {
+      size: 10,
+      bold: true,
+      color: [0.08, 0.09, 0.1],
+    });
+    return 24;
+  };
+
   const drawSummaryCard = (x: number, y: number) => {
     const cardWidth = 182;
     const cardHeight = 118;
@@ -746,11 +763,11 @@ export async function buildBillingPdf(data: BillingExportData) {
     const billingFields = [
       { label: "\u53d1\u8d27\u65e5\u671f / F. Env.", value: data.shipDateText || "-", emphasize: false },
       { label: "\u95e8\u5e97\u6807\u8bb0 / Etiq. Tda.", value: data.storeLabelText || "-", emphasize: false },
-      ...(data.vipDiscountEnabled
-        ? [{ label: "VIP客户", value: "已启用", emphasize: true, strongLabel: true }]
-        : []),
       ...(formatPaymentTerm(data.paymentTermText)
         ? [{ label: "账期", value: formatPaymentTerm(data.paymentTermText), emphasize: false }]
+        : []),
+      ...(data.vipDiscountEnabled
+        ? [{ label: "VIP客户", value: "VIP客户", emphasize: true, strongLabel: true, icon: "vip" as const }]
         : []),
     ];
 
@@ -796,11 +813,14 @@ export async function buildBillingPdf(data: BillingExportData) {
       drawText(section.title, boxX + 18, boxY, { size: 8.2, bold: true, color: [0.48, 0.5, 0.54] });
       boxY -= 20;
       for (const field of section.fields) {
-        const fieldHeight = drawField(field.label, field.value, boxX + 18, boxY, boxWidth - 36, {
-          emphasize: field.emphasize,
-          compact: true,
-          strongLabel: "strongLabel" in field ? field.strongLabel : false,
-        });
+        const fieldHeight =
+          "icon" in field && field.icon === "vip"
+            ? drawVipField(field.label, boxX + 18, boxY - 1)
+            : drawField(field.label, field.value, boxX + 18, boxY, boxWidth - 36, {
+                emphasize: field.emphasize,
+                compact: true,
+                strongLabel: "strongLabel" in field ? field.strongLabel : false,
+              });
         boxY -= fieldHeight + 6;
         usedHeight += fieldHeight + 6;
       }

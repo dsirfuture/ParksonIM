@@ -112,6 +112,14 @@ function formatPaymentTerm(value: string) {
   return text.endsWith("天") ? text : `${text}天`;
 }
 
+function VipBadgeIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className="h-[18px] w-[18px] shrink-0">
+      <path d="M10 2.4 13 7.4l4.3-1.7-1.8 9.9H4.5L2.7 5.7 7 7.4 10 2.4Z" />
+    </svg>
+  );
+}
+
 function InvoiceField({
   label,
   value,
@@ -425,11 +433,14 @@ export function BillingClient({
                   <InvoiceSection title="账单信息 / FACT.">
                     <InvoiceField label="发货日期 / F. Env." value={detailRow?.shipDateText || "-"} />
                     <InvoiceField label="门店标记 / Etiq. Tda." value={detailRow?.storeLabelText || "-"} />
-                    {vipDiscountEnabled ? (
-                      <div className="text-sm font-semibold leading-6 text-slate-950">VIP客户</div>
-                    ) : null}
                     {formatPaymentTerm(detailRow?.paymentTermText || "") ? (
                       <InvoiceField label="账期" value={formatPaymentTerm(detailRow?.paymentTermText || "")} />
+                    ) : null}
+                    {vipDiscountEnabled ? (
+                      <div className="flex items-center gap-2 text-sm font-semibold leading-6 text-slate-950">
+                        <VipBadgeIcon />
+                        <span>VIP客户</span>
+                      </div>
                     ) : null}
                   </InvoiceSection>
                   <InvoiceSection title="物流信息 / ENVÍO">
