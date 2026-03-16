@@ -49,7 +49,7 @@ export function formatPaymentTermDays(value: unknown) {
 export function getPaymentTermDisplayLines(value: unknown) {
   const days = formatPaymentTermDays(value);
   if (!days) return [];
-  return [days, "发货日算起（默认）"];
+  return [`${days} 发货日算起`];
 }
 
 export function normalizeBillingHeaderMeta(
