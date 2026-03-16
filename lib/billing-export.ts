@@ -663,7 +663,7 @@ export async function buildBillingPdf(data: BillingExportData) {
       drawText(line, x, lineY, { size: emphasize ? 12.5 : 9.6, bold: emphasize, color: [0.14, 0.15, 0.17] });
       lineY -= emphasize ? 14 : 11;
     }
-    return Math.max(28, lines.length * (emphasize ? 14 : 11) + 10);
+    return Math.max(30, lines.length * (emphasize ? 14 : 11) + 12);
   };
 
   const drawHeader = async () => {
@@ -687,52 +687,63 @@ export async function buildBillingPdf(data: BillingExportData) {
     drawText("INVOICE", marginX, cursorY, { size: 28, bold: true, color: [0.06, 0.07, 0.08] });
     drawRightText(data.orderNo, pageWidth - marginX, cursorY + 12, { size: 11, bold: true, color: [0.22, 0.24, 0.28] });
     drawRightText(data.issueDateText || "-", pageWidth - marginX, cursorY - 6, { size: 9, color: [0.46, 0.48, 0.52] });
-    cursorY -= 44;
+    cursorY -= 50;
 
     const leftX = marginX;
-    const midX = marginX + 170;
-    const rightX = marginX + 340;
-    const blockWidth = 126;
+    const rightX = marginX + 270;
+    const leftWidth = 220;
+    const rightWidth = 150;
 
-    drawText("账单对象 / Client", leftX, cursorY, { size: 8, bold: true, color: [0.52, 0.54, 0.58] });
-    drawText("账单信息 / Billing", midX, cursorY, { size: 8, bold: true, color: [0.52, 0.54, 0.58] });
-    drawText("物流信息 / Shipping", rightX, cursorY, { size: 8, bold: true, color: [0.52, 0.54, 0.58] });
-    cursorY -= 16;
+    drawText("\u8d26\u5355\u5bf9\u8c61 / Client", leftX, cursorY, { size: 8, bold: true, color: [0.52, 0.54, 0.58] });
+    drawText("\u8d26\u5355\u4fe1\u606f / Billing", rightX, cursorY, { size: 8, bold: true, color: [0.52, 0.54, 0.58] });
+    cursorY -= 18;
 
-    const sectionHeights = [
-      drawLabelValue("客户名称 / Nom. Cte.", data.companyName || "-", leftX, cursorY, blockWidth, true),
-      drawLabelValue("订单号 / No. Ped.", data.orderNo || "-", midX, cursorY, blockWidth),
-      drawLabelValue("发货仓 / Dep. Envío", data.warehouseText || "-", rightX, cursorY, blockWidth),
+    const group1 = [
+      drawLabelValue("\u5ba2\u6237\u540d\u79f0 / Nom. Cte.", data.companyName || "-", leftX, cursorY, leftWidth, true),
+      drawLabelValue("\u8ba2\u5355\u53f7 / No. Ped.", data.orderNo || "-", rightX, cursorY, rightWidth),
     ];
-    cursorY -= Math.max(...sectionHeights);
+    cursorY -= Math.max(...group1);
 
-    const sectionHeights2 = [
-      drawLabelValue("收货人 / Dest.", data.recipientNameText || data.contactName || "-", leftX, cursorY, blockWidth),
-      drawLabelValue("出账日期 / F. Fact.", data.issueDateText || "-", midX, cursorY, blockWidth),
-      drawLabelValue("发货方式 / Met. Env.", data.shippingMethodText || "-", rightX, cursorY, blockWidth),
+    const group2 = [
+      drawLabelValue("\u6536\u8d27\u4eba / Dest.", data.recipientNameText || data.contactName || "-", leftX, cursorY, leftWidth),
+      drawLabelValue("\u51fa\u8d26\u65e5\u671f / F. Fact.", data.issueDateText || "-", rightX, cursorY, rightWidth),
     ];
-    cursorY -= Math.max(...sectionHeights2);
+    cursorY -= Math.max(...group2);
 
-    const sectionHeights3 = [
-      drawLabelValue("收货电话 / Tel. Dest.", data.recipientPhoneText || data.contactPhone || "-", leftX, cursorY, blockWidth),
-      drawLabelValue("发货日期 / F. Env.", data.shipDateText || "-", midX, cursorY, blockWidth),
-      drawLabelValue("托运公司 / Emp. Transp.", data.carrierCompanyText || "-", rightX, cursorY, blockWidth),
+    const group3 = [
+      drawLabelValue("\u6536\u8d27\u7535\u8bdd / Tel. Dest.", data.recipientPhoneText || data.contactPhone || "-", leftX, cursorY, leftWidth),
+      drawLabelValue("\u53d1\u8d27\u65e5\u671f / F. Env.", data.shipDateText || "-", rightX, cursorY, rightWidth),
     ];
-    cursorY -= Math.max(...sectionHeights3);
+    cursorY -= Math.max(...group3);
 
-    const sectionHeights4 = [
-      drawLabelValue("送货地址 / Dir. Ent.", data.addressText || "-", leftX, cursorY, 270),
-      drawLabelValue("合计金额 / Mto. Total", `$${toMoney(data.totalAmount)}`, rightX, cursorY, blockWidth, true),
-      drawLabelValue("商品总数量 / Total Prod.", String(data.totalQty || 0), midX, cursorY, blockWidth),
+    const group4 = [
+      drawLabelValue("\u9001\u8d27\u5730\u5740 / Dir. Ent.", data.addressText || "-", leftX, cursorY, leftWidth),
+      drawLabelValue("\u5408\u8ba1\u91d1\u989d / Mto. Total", `$${toMoney(data.totalAmount)}`, rightX, cursorY, rightWidth, true),
     ];
-    cursorY -= Math.max(...sectionHeights4);
+    cursorY -= Math.max(...group4);
 
-    const sectionHeights5 = [
+    cursorY -= 10;
+    drawText("\u7269\u6d41\u4fe1\u606f / Shipping", leftX, cursorY, { size: 8, bold: true, color: [0.52, 0.54, 0.58] });
+    cursorY -= 18;
+
+    const shippingCol1X = leftX;
+    const shippingCol2X = leftX + 170;
+    const shippingCol3X = leftX + 340;
+    const shippingWidth = 130;
+
+    const shipping1 = [
+      drawLabelValue("\u53d1\u8d27\u4ed3 / Dep. Envio", data.warehouseText || "-", shippingCol1X, cursorY, shippingWidth),
+      drawLabelValue("\u53d1\u8d27\u65b9\u5f0f / Met. Env.", data.shippingMethodText || "-", shippingCol2X, cursorY, shippingWidth),
+      drawLabelValue("\u6258\u8fd0\u516c\u53f8 / Emp. Transp.", data.carrierCompanyText || "-", shippingCol3X, cursorY, shippingWidth),
+    ];
+    cursorY -= Math.max(...shipping1);
+
+    const shipping2 = [
+      drawLabelValue("\u5546\u54c1\u603b\u6570\u91cf / Total Prod.", String(data.totalQty || 0), shippingCol1X, cursorY, shippingWidth),
+      drawLabelValue("\u88c5\u7bb1\u4ef6\u6570 / Cant. Cajas", data.boxCountText || "-", shippingCol2X, cursorY, shippingWidth),
       0,
-      drawLabelValue("装箱件数 / Cant. Cajas", data.boxCountText || "-", midX, cursorY, blockWidth),
-      0,
     ];
-    cursorY -= Math.max(...sectionHeights5, 8);
+    cursorY -= Math.max(...shipping2, 8);
 
     page.drawLine({
       start: { x: marginX, y: cursorY },
