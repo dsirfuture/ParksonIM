@@ -105,11 +105,21 @@ function calcLineTotal(item: DetailItem, vipEnabled: boolean) {
   return qty * unitPrice * factor;
 }
 
-function InvoiceField({ label, value, emphasize = false }: { label: string; value: string; emphasize?: boolean }) {
+function InvoiceField({
+  label,
+  value,
+  emphasize = false,
+  valueClassName = "",
+}: {
+  label: string;
+  value: string;
+  emphasize?: boolean;
+  valueClassName?: string;
+}) {
   return (
-    <div className="space-y-1">
-      <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">{label}</div>
-      <div className={emphasize ? "text-base font-medium text-slate-900" : "text-sm leading-6 text-slate-700"}>{value || "-"}</div>
+    <div className="space-y-1.5">
+      <div className="text-[10px] uppercase tracking-[0.22em] text-slate-400">{label}</div>
+      <div className={`${emphasize ? "text-[15px] font-medium text-slate-900" : "text-sm leading-6 text-slate-700"} ${valueClassName}`}>{value || "-"}</div>
     </div>
   );
 }
@@ -117,8 +127,25 @@ function InvoiceField({ label, value, emphasize = false }: { label: string; valu
 function InvoiceSummaryRow({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
   return (
     <div className={`flex items-end justify-between gap-6 ${strong ? "pt-4" : ""}`}>
-      <span className="text-xs uppercase tracking-[0.18em] text-slate-400">{label}</span>
+      <span className="text-[10px] uppercase tracking-[0.22em] text-slate-400">{label}</span>
       <span className={strong ? "text-3xl font-semibold tracking-tight text-slate-950" : "text-sm font-medium text-slate-700"}>{value}</span>
+    </div>
+  );
+}
+
+function InvoiceHighlightField({
+  label,
+  value,
+  emphasize = false,
+}: {
+  label: string;
+  value: string;
+  emphasize?: boolean;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="text-[10px] uppercase tracking-[0.24em] text-slate-400">{label}</div>
+      <div className={emphasize ? "text-[18px] font-medium tracking-tight text-slate-900" : "text-[14px] font-medium text-slate-700"}>{value}</div>
     </div>
   );
 }
@@ -353,41 +380,40 @@ export function BillingClient({
 
             <div className="max-h-[78vh] overflow-auto px-6 py-8">
               <div className="mx-auto w-full max-w-[980px] rounded-[32px] bg-white px-8 py-8 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
-                <div className="flex flex-wrap items-start justify-between gap-8 border-b border-slate-200 pb-8">
-                  <div className="max-w-[420px]">
-                    <div className="text-xs uppercase tracking-[0.28em] text-slate-400">ParksonMX</div>
-                    <h2 className="mt-5 text-[42px] font-semibold leading-none tracking-tight text-slate-950">INVOICE</h2>
-                    <p className="mt-4 max-w-md text-sm leading-7 text-slate-500">MÁS QUE PRODUCTOS, ENTREGAMOS SOLUCIONES</p>
+                <div className="flex flex-wrap items-start justify-between gap-10 border-b border-slate-200 pb-9">
+                  <div className="max-w-[430px] pt-1">
+                    <div className="text-[11px] font-medium uppercase tracking-[0.3em] text-slate-400">PARKSONMX</div>
+                    <h2 className="mt-6 text-[52px] font-semibold leading-none tracking-[-0.04em] text-slate-950">INVOICE</h2>
+                    <p className="mt-5 max-w-md text-sm leading-7 text-slate-500">MÁS QUE PRODUCTOS, ENTREGAMOS SOLUCIONES</p>
                   </div>
-                  <div className="grid min-w-[280px] gap-4 rounded-[24px] border border-slate-200 bg-slate-50/60 px-5 py-5">
-                    <InvoiceField label="Order No." value={detailRow?.orderNo || "-"} />
-                    <InvoiceField label="Issue Date" value={detailRow?.issueDateText || "-"} />
-                    <InvoiceField label="Total Amount" value={`$${toMoney(detailTotal)}`} emphasize />
+                  <div className="grid min-w-[280px] gap-3 rounded-[24px] border border-slate-200/70 bg-slate-50/55 px-5 py-4">
+                    <InvoiceHighlightField label="Order No." value={detailRow?.orderNo || "-"} />
+                    <InvoiceHighlightField label="Issue Date" value={detailRow?.issueDateText || "-"} />
+                    <InvoiceHighlightField label="Total Amount" value={`$${toMoney(detailTotal)}`} emphasize />
                   </div>
                 </div>
 
                 <div className="mt-8 grid gap-5 lg:grid-cols-3">
-                  <div className="rounded-[24px] border border-slate-200 p-5">
-                    <div className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">账单对象 / Client</div>
-                    <div className="space-y-4">
+                  <div className="rounded-[24px] border border-slate-200/70 p-6">
+                    <div className="mb-5 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400">账单对象 / Client</div>
+                    <div className="space-y-5">
                       <InvoiceField label="客户名称 / Nom. Cte." value={detailRow?.companyName || "-"} emphasize />
                       <InvoiceField label="收货人 / Dest." value={detailRow?.recipientNameText || detailRow?.contactName || "-"} />
                       <InvoiceField label="电话 / Tel. Dest." value={detailRow?.recipientPhoneText || detailRow?.contactPhone || "-"} />
                       <InvoiceField label="送货地址 / Dir. Ent." value={detailRow?.addressText || "-"} />
                     </div>
                   </div>
-                  <div className="rounded-[24px] border border-slate-200 p-5">
-                    <div className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">账单信息 / Billing</div>
-                    <div className="space-y-4">
-                      <InvoiceField label="订单号 / No. Ped." value={detailRow?.orderNo || "-"} />
-                      <InvoiceField label="出账日期 / F. Fact." value={detailRow?.issueDateText || "-"} />
+                  <div className="rounded-[24px] border border-slate-200/70 p-6">
+                    <div className="mb-5 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400">账单信息 / Billing</div>
+                    <div className="space-y-5">
                       <InvoiceField label="发货日期 / F. Env." value={detailRow?.shipDateText || "-"} />
-                      <InvoiceField label="合计金额 / Mto. Total" value={`$${toMoney(detailTotal)}`} emphasize />
+                      <InvoiceField label="门店标记 / Store Label" value={detailRow?.storeLabelText || "-"} />
+                      <InvoiceField label="VIP 折扣 / VIP Discount" value={vipDiscountEnabled ? "已启用 / Enabled" : "未启用 / Disabled"} />
                     </div>
                   </div>
-                  <div className="rounded-[24px] border border-slate-200 p-5">
-                    <div className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">物流信息 / Shipping</div>
-                    <div className="space-y-4">
+                  <div className="rounded-[24px] border border-slate-200/70 p-6">
+                    <div className="mb-5 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400">物流信息 / Shipping</div>
+                    <div className="space-y-5">
                       <InvoiceField label="发货仓 / Dep. Envío" value={detailRow?.warehouseText || "-"} />
                       <InvoiceField label="发货方式 / Met. Env." value={detailRow?.shippingMethodText || "-"} />
                       <InvoiceField label="托运公司 / Emp. Transp." value={detailRow?.carrierCompanyText || "-"} />
@@ -398,9 +424,9 @@ export function BillingClient({
                 </div>
 
                 <div className="mt-10">
-                  <div className="flex items-end justify-between gap-4 border-b border-slate-200 pb-4">
+                  <div className="flex items-end justify-between gap-4 border-b border-slate-200/80 pb-4">
                     <div>
-                      <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Line Items</div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400">Line Items</div>
                       <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950">商品明细</h3>
                     </div>
                   </div>
