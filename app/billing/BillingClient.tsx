@@ -355,8 +355,8 @@ export function BillingClient({
           <div className="max-h-[92vh] w-full max-w-7xl overflow-hidden rounded-[28px] border border-slate-200 bg-[#f7f6f3] shadow-[0_30px_80px_rgba(15,23,42,0.18)]" onClick={(e) => e.stopPropagation()}>
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 bg-white px-6 py-4">
               <div>
-                <div className="text-xs uppercase tracking-[0.24em] text-slate-400">Billing Preview</div>
-                <div className="mt-1 text-sm text-slate-600">账单号 <span className="font-semibold text-slate-900">{detailOrderNo}</span></div>
+                <div className="text-xs uppercase tracking-[0.24em] text-slate-400">账单预览 / VISTA</div>
+                <div className="mt-1 text-sm text-slate-600">账单号 / No. Ped. <span className="font-semibold text-slate-900">{detailOrderNo}</span></div>
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 {exportLinks ? (
@@ -402,47 +402,47 @@ export function BillingClient({
                     <p className="mt-5 max-w-md text-sm leading-7 text-slate-500">MÁS QUE PRODUCTOS, ENTREGAMOS SOLUCIONES</p>
                   </div>
                   <div className="grid min-w-[280px] gap-3 rounded-[22px] border border-slate-200/60 bg-slate-50/35 px-5 py-4">
-                    <InvoiceHighlightField label="Order No." value={detailRow?.orderNo || "-"} />
-                    <InvoiceHighlightField label="Issue Date" value={detailRow?.issueDateText || "-"} />
-                    <InvoiceHighlightField label="Total Amount" value={`$${toMoney(detailTotal)}`} emphasize />
+                    <InvoiceHighlightField label="订单号 / No. Ped." value={detailRow?.orderNo || "-"} />
+                    <InvoiceHighlightField label="出账日期 / F. Fact." value={detailRow?.issueDateText || "-"} />
+                    <InvoiceHighlightField label="合计金额 / Mto. Total" value={`$${toMoney(detailTotal)}`} emphasize />
                   </div>
                 </div>
 
                 <div className="mt-8 grid items-start gap-5 lg:grid-cols-3">
-                  <InvoiceSection title="Client">
-                    <InvoiceField label="客户名称 / NOM. CTE." value={detailRow?.companyName || "-"} emphasize />
-                    <InvoiceField label="收货人 / DEST." value={detailRow?.recipientNameText || detailRow?.contactName || "-"} />
-                    <InvoiceField label="电话 / TEL. DEST." value={detailRow?.recipientPhoneText || detailRow?.contactPhone || "-"} />
-                    <InvoiceField label="送货地址 / DIR. ENT." value={detailRow?.addressText || "-"} valueClassName="leading-7" />
+                  <InvoiceSection title="客户信息 / CLIENTE">
+                    <InvoiceField label="客户名称 / Nom. Clte." value={detailRow?.companyName || "-"} />
+                    <InvoiceField label="收货人 / Dest." value={detailRow?.recipientNameText || detailRow?.contactName || "-"} />
+                    <InvoiceField label="电话 / Tel. Dest." value={detailRow?.recipientPhoneText || detailRow?.contactPhone || "-"} />
+                    <InvoiceField label="送货地址 / Dir. Ent." value={detailRow?.addressText || "-"} valueClassName="leading-7" />
                   </InvoiceSection>
-                  <InvoiceSection title="Billing">
-                    <InvoiceField label="发货日期 / F. ENV." value={detailRow?.shipDateText || "-"} />
-                    <InvoiceField label="门店标记 / STORE LABEL" value={detailRow?.storeLabelText || "-"} />
-                    <InvoiceField label="客户联系人 / CONTACT" value={detailRow?.contactName || "-"} />
+                  <InvoiceSection title="账单信息 / FACT.">
+                    <InvoiceField label="发货日期 / F. Env." value={detailRow?.shipDateText || "-"} />
+                    <InvoiceField label="门店标记 / Etiq. Tda." value={detailRow?.storeLabelText || "-"} />
+                    <InvoiceField label="客户联系人 / Cont." value={detailRow?.contactName || "-"} />
                   </InvoiceSection>
-                  <InvoiceSection title="Shipping">
-                    <InvoiceField label="发货仓 / DEP. ENVÍO" value={detailRow?.warehouseText || "-"} />
-                    <InvoiceField label="发货方式 / MET. ENV." value={detailRow?.shippingMethodText || "-"} />
-                    <InvoiceField label="托运公司 / EMP. TRANSP." value={detailRow?.carrierCompanyText || "-"} />
-                    <InvoiceField label="装箱件数 / CANT. CAJAS" value={detailRow?.boxCountText || "-"} />
-                    <InvoiceField label="商品总数量 / TOTAL PROD." value={String(detailQtyTotal || 0)} />
+                  <InvoiceSection title="物流信息 / ENVÍO">
+                    <InvoiceField label="发货仓 / Dep. Env." value={detailRow?.warehouseText || "-"} />
+                    <InvoiceField label="发货方式 / Met. Env." value={detailRow?.shippingMethodText || "-"} />
+                    <InvoiceField label="托运公司 / Emp. Transp." value={detailRow?.carrierCompanyText || "-"} />
+                    <InvoiceField label="装箱件数 / Cant. Cajas" value={detailRow?.boxCountText || "-"} />
+                    <InvoiceField label="商品总数量 / Tot. Prod." value={String(detailQtyTotal || 0)} />
                   </InvoiceSection>
                 </div>
 
                 <div className="mt-11">
                   <div className="flex items-end justify-between gap-4 border-b border-slate-200/70 pb-4">
                     <div>
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400">Line Items</div>
-                      <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950">商品明细</h3>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400">商品明细 / DETALLE</div>
+                      <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950">商品明细 / Detalle</h3>
                     </div>
                   </div>
 
                   <div className="mt-4 grid grid-cols-[minmax(320px,1.8fr)_72px_92px_82px_110px] gap-4 border-b border-slate-200 px-2 pb-3 text-[11px] uppercase tracking-[0.22em] text-slate-400">
-                    <div>Producto</div>
-                    <div className="text-right">Cant.</div>
-                    <div className="text-right">Precio</div>
-                    <div className="text-right">Desc.</div>
-                    <div className="text-right">Importe</div>
+                    <div>产品 / Prod.</div>
+                    <div className="text-right">数量 / Cant.</div>
+                    <div className="text-right">单价 / P. Unit.</div>
+                    <div className="text-right">折扣 / Desc.</div>
+                    <div className="text-right">金额 / Importe</div>
                   </div>
 
                   {detailItems.length === 0 ? (
@@ -489,9 +489,9 @@ export function BillingClient({
 
                 <div className="mt-12 flex justify-end border-t border-slate-200/80 pt-8">
                   <div className="w-full max-w-[340px] space-y-4">
-                    <InvoiceSummaryRow label="Subtotal" value={`$${toMoney(detailSubtotal)}`} />
-                    <InvoiceSummaryRow label="Discounts" value={`$${toMoney(detailDiscountAmount)}`} />
-                    <InvoiceSummaryRow label="Total a pagar" value={`$${toMoney(detailTotal)}`} strong />
+                    <InvoiceSummaryRow label="小计 / Subtot." value={`$${toMoney(detailSubtotal)}`} />
+                    <InvoiceSummaryRow label="折扣后 / Desc." value={`$${toMoney(detailDiscountAmount)}`} />
+                    <InvoiceSummaryRow label="应付总额 / Mto. Total" value={`$${toMoney(detailTotal)}`} strong />
                   </div>
                 </div>
               </div>

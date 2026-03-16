@@ -603,11 +603,11 @@ export async function buildBillingPdf(data: BillingExportData) {
   const topMargin = 50;
   const bottomMargin = 48;
   const columns = [
-    { key: "item", label: "Producto", width: 308 },
-    { key: "qty", label: "Cant.", width: 38 },
-    { key: "price", label: "Precio", width: 64 },
-    { key: "discount", label: "Desc.", width: 50 },
-    { key: "amount", label: "Importe", width: 44 },
+    { key: "item", label: "\u4ea7\u54c1 / Prod.", width: 308 },
+    { key: "qty", label: "\u6570\u91cf / Cant.", width: 38 },
+    { key: "price", label: "\u5355\u4ef7 / P. Unit.", width: 64 },
+    { key: "discount", label: "\u6298\u6263 / Desc.", width: 50 },
+    { key: "amount", label: "\u91d1\u989d / Importe", width: 44 },
   ] as const;
 
   let page = pdfDoc.addPage([pageWidth, pageHeight]);
@@ -685,13 +685,13 @@ export async function buildBillingPdf(data: BillingExportData) {
       borderWidth: 0.7,
     });
     let lineY = y - 18;
-    drawText("ORDER NO.", x + 16, lineY, { size: 7.2, color: [0.58, 0.6, 0.64] });
+    drawText("\u8ba2\u5355\u53f7 / No. Ped.", x + 16, lineY, { size: 7.2, color: [0.58, 0.6, 0.64] });
     drawRightText(data.orderNo || "-", x + cardWidth - 16, lineY, { size: 10, bold: true, color: [0.18, 0.19, 0.22] });
     lineY -= 28;
-    drawText("ISSUE DATE", x + 16, lineY, { size: 7.2, color: [0.58, 0.6, 0.64] });
+    drawText("\u51fa\u8d26\u65e5\u671f / F. Fact.", x + 16, lineY, { size: 7.2, color: [0.58, 0.6, 0.64] });
     drawRightText(data.issueDateText || "-", x + cardWidth - 16, lineY, { size: 9.6, color: [0.2, 0.21, 0.24] });
     lineY -= 30;
-    drawText("TOTAL AMOUNT", x + 16, lineY, { size: 7.2, color: [0.58, 0.6, 0.64] });
+    drawText("\u5408\u8ba1\u91d1\u989d / Mto. Total", x + 16, lineY, { size: 7.2, color: [0.58, 0.6, 0.64] });
     drawRightText(`$${toMoney(data.totalAmount)}`, x + cardWidth - 16, lineY - 2, { size: 16.5, bold: true, color: [0.08, 0.09, 0.1] });
     return cardHeight;
   };
@@ -717,7 +717,7 @@ export async function buildBillingPdf(data: BillingExportData) {
 
     cursorY -= 58;
     drawText("INVOICE", marginX, cursorY, { size: 31, bold: true, color: [0.06, 0.07, 0.08] });
-    drawText("MAS QUE PRODUCTOS, ENTREGAMOS SOLUCIONES", marginX, cursorY - 24, {
+    drawText("M\u00c1S QUE PRODUCTOS, ENTREGAMOS SOLUCIONES", marginX, cursorY - 24, {
       size: 8,
       color: [0.5, 0.52, 0.56],
     });
@@ -728,30 +728,30 @@ export async function buildBillingPdf(data: BillingExportData) {
     const sectionTop = cursorY;
     const boxes = [
       {
-        title: "CLIENT",
+        title: "\u5ba2\u6237\u4fe1\u606f / CLIENTE",
         fields: [
-          ["NOM. CTE.", data.companyName || "-", true],
-          ["DEST.", data.recipientNameText || data.contactName || "-", false],
-          ["TEL. DEST.", data.recipientPhoneText || data.contactPhone || "-", false],
-          ["DIR. ENT.", data.addressText || "-", false],
+          ["\u5ba2\u6237\u540d\u79f0 / Nom. Clte.", data.companyName || "-", false],
+          ["\u6536\u8d27\u4eba / Dest.", data.recipientNameText || data.contactName || "-", false],
+          ["\u7535\u8bdd / Tel. Dest.", data.recipientPhoneText || data.contactPhone || "-", false],
+          ["\u9001\u8d27\u5730\u5740 / Dir. Ent.", data.addressText || "-", false],
         ],
       },
       {
-        title: "BILLING",
+        title: "\u8d26\u5355\u4fe1\u606f / FACT.",
         fields: [
-          ["F. ENV.", data.shipDateText || "-", false],
-          ["STORE LABEL", data.storeLabelText || "-", false],
-          ["CONTACT", data.contactName || "-", false],
+          ["\u53d1\u8d27\u65e5\u671f / F. Env.", data.shipDateText || "-", false],
+          ["\u95e8\u5e97\u6807\u8bb0 / Etiq. Tda.", data.storeLabelText || "-", false],
+          ["\u5ba2\u6237\u8054\u7cfb\u4eba / Cont.", data.contactName || "-", false],
         ],
       },
       {
-        title: "SHIPPING",
+        title: "\u7269\u6d41\u4fe1\u606f / ENV\u00cdO",
         fields: [
-          ["DEP. ENVIO", data.warehouseText || "-", false],
-          ["MET. ENV.", data.shippingMethodText || "-", false],
-          ["EMP. TRANSP.", data.carrierCompanyText || "-", false],
-          ["CANT. CAJAS", data.boxCountText || "-", false],
-          ["TOTAL PROD.", String(data.totalQty || 0), false],
+          ["\u53d1\u8d27\u4ed3 / Dep. Env.", data.warehouseText || "-", false],
+          ["\u53d1\u8d27\u65b9\u5f0f / Met. Env.", data.shippingMethodText || "-", false],
+          ["\u6258\u8fd0\u516c\u53f8 / Emp. Transp.", data.carrierCompanyText || "-", false],
+          ["\u88c5\u7bb1\u4ef6\u6570 / Cant. Cajas", data.boxCountText || "-", false],
+          ["\u5546\u54c1\u603b\u6570\u91cf / Tot. Prod.", String(data.totalQty || 0), false],
         ],
       },
     ] as const;
@@ -780,6 +780,12 @@ export async function buildBillingPdf(data: BillingExportData) {
     });
 
     cursorY = sectionTop - Math.max(228, ...sectionHeights) - 10;
+
+    drawText("\u5546\u54c1\u660e\u7ec6 / DETALLE", marginX, cursorY + 10, {
+      size: 8.2,
+      bold: true,
+      color: [0.48, 0.5, 0.54],
+    });
 
     page.drawLine({
       start: { x: marginX, y: cursorY },
@@ -908,13 +914,13 @@ export async function buildBillingPdf(data: BillingExportData) {
   cursorY -= 26;
 
   const summaryX = pageWidth - marginX - 220;
-  drawText("Subtotal", summaryX, cursorY, { size: 8, color: [0.58, 0.6, 0.64] });
+  drawText("\u5c0f\u8ba1 / Subtot.", summaryX, cursorY, { size: 8, color: [0.58, 0.6, 0.64] });
   drawRightText(`$${toMoney(summarySubtotal)}`, pageWidth - marginX, cursorY, { size: 10 });
   cursorY -= 20;
-  drawText("Discounts", summaryX, cursorY, { size: 8, color: [0.58, 0.6, 0.64] });
+  drawText("\u6298\u6263\u540e / Desc.", summaryX, cursorY, { size: 8, color: [0.58, 0.6, 0.64] });
   drawRightText(`$${toMoney(summaryDiscount)}`, pageWidth - marginX, cursorY, { size: 10 });
   cursorY -= 30;
-  drawText("TOTAL A PAGAR", summaryX, cursorY, { size: 8, bold: true, color: [0.4, 0.42, 0.46] });
+  drawText("\u5e94\u4ed8\u603b\u989d / Mto. Total", summaryX, cursorY, { size: 8, bold: true, color: [0.4, 0.42, 0.46] });
   drawRightText(`$${toMoney(data.totalAmount)}`, pageWidth - marginX, cursorY - 8, { size: 24, bold: true, color: [0.08, 0.09, 0.1] });
 
   return pdfDoc.save({ useObjectStreams: true });
