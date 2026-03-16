@@ -525,19 +525,17 @@ export function BillingClient({
             <div className="max-h-[78vh] overflow-auto px-6 py-8">
               <div className="relative mx-auto w-full max-w-[980px] rounded-[32px] bg-white px-8 py-9 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
                 {detailGenerated ? (
-                  <div className="pointer-events-none absolute right-[306px] top-[68px] z-10 rotate-[-9deg] opacity-80">
-                    <div className="w-[276px] rounded-[12px] border-[4px] border-[#b03127]/85 bg-[#fff7f5]/42 px-5 py-4 text-[#b03127] shadow-[0_10px_24px_rgba(176,49,39,0.10)]">
-                      <div className="rounded-[8px] border border-[#b03127]/30 px-4 py-2.5">
-                        <div className="flex justify-between text-[20px] font-black leading-none tracking-[0.08em]">
-                          <span>账单生成</span>
-                          <span>并锁定</span>
-                        </div>
-                        <div className="mt-3 border-t border-[#b03127]/35 pt-2.5">
-                          <div className="flex justify-between text-[11px] font-bold uppercase leading-none tracking-[0.18em]">
-                            <span>FACT. GEN.</span>
-                            <span>Y BLOQ.</span>
-                          </div>
-                        </div>
+                  <div className="pointer-events-none absolute right-[292px] top-[78px] z-10 rotate-[-11deg] opacity-[0.78]">
+                    <div className="relative w-[312px] border-[5px] border-[#b03127]/90 bg-[#fff8f5]/20 px-5 py-3 text-[#b03127] shadow-[0_10px_24px_rgba(176,49,39,0.08)]">
+                      <div className="pointer-events-none absolute inset-[6px] border border-[#b03127]/35" />
+                      <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={{ backgroundImage: "repeating-linear-gradient(135deg, rgba(176,49,39,0.35) 0 2px, transparent 2px 14px)" }} />
+                      <div className="relative flex justify-between text-[19px] font-black leading-none tracking-[0.02em]">
+                        <span>账单生成</span>
+                        <span>并锁定</span>
+                      </div>
+                      <div className="relative mt-2.5 flex justify-between border-t border-[#b03127]/35 pt-2 text-[10.5px] font-bold uppercase leading-none tracking-[0.12em]">
+                        <span>FACT. GEN.</span>
+                        <span>Y BLOQ.</span>
                       </div>
                     </div>
                   </div>
