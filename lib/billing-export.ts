@@ -201,43 +201,6 @@ async function loadPdfFontBytes() {
   return null;
 }
 
-async function loadPdfBoldFontBytes() {
-  const fontCandidates = [
-    path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Bold.otf"),
-    "C:\\Windows\\Fonts\\msyhbd.ttf",
-    "C:\\Windows\\Fonts\\simhei.ttf",
-  ];
-
-  for (const fontPath of fontCandidates) {
-    try {
-      return await fs.readFile(fontPath);
-    } catch {
-      // try next candidate
-    }
-  }
-
-  return null;
-}
-
-async function loadPdfLatinFontBytes() {
-  const fontCandidates = [
-    path.join(process.cwd(), "public", "fonts", "SourceSans3-Regular.ttf"),
-    path.join(process.cwd(), "public", "fonts", "SourceSans3-VariableFont_wght.ttf"),
-    "C:\\Windows\\Fonts\\arial.ttf",
-    "C:\\Windows\\Fonts\\calibri.ttf",
-  ];
-
-  for (const fontPath of fontCandidates) {
-    try {
-      return await fs.readFile(fontPath);
-    } catch {
-      // try next candidate
-    }
-  }
-
-  return null;
-}
-
 async function loadBillingLogoBuffer() {
   const filePath = path.join(process.cwd(), "public", "BSLOGO.png");
   try {
@@ -624,352 +587,290 @@ export async function buildBillingPdf(data: BillingExportData) {
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
 
-  const fontBytes = await loadPdfFontBytes();
-  const boldFontBytes = await loadPdfBoldFontBytes();
-  const latinFontBytes = await loadPdfLatinFontBytes();
-  const unicodeSafe = Boolean(fontBytes);
-
-  const bodyFont = fontBytes
-    ? await pdfDoc.embedFont(fontBytes, { subset: false })
-    : await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const bodyBoldFont = boldFontBytes
-    ? await pdfDoc.embedFont(boldFontBytes, { subset: false })
-    : bodyFont;
-  const esFont = latinFontBytes
-    ? await pdfDoc.embedFont(latinFontBytes, { subset: true })
-    : await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const latinBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const zhFontBytes = await loadPdfFontBytes();
   const logoBuffer = await loadBillingLogoBuffer();
-  const pageWidth = 792;
-  const pageHeight = 612;
-  const marginLeft = 28;
-  const marginRight = 28;
-  const topMargin = 24;
-  const bottomMargin = 28;
-  const tableFontSize = 7.6;
-  const lineGap = 9;
-  const cellPaddingX = 5;
-  const cellPaddingY = 6;
+  const unicodeSafe = Boolean(zhFontBytes);
 
+  const zhFont = zhFontBytes
+    ? await pdfDoc.embedFont(zhFontBytes, { subset: true })
+    : await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const latinFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const latinBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+  const pageWidth = 612;
+  const pageHeight = 792;
+  const marginX = 54;
+  const topMargin = 52;
+  const bottomMargin = 48;
+  const contentWidth = pageWidth - marginX * 2;
   const columns = [
-    { label: "\u56fe\u7247", width: 48, align: "center" as const },
-    { label: "\u7f16\u7801", width: 64, align: "center" as const },
-    { label: "\u6761\u5f62\u7801", width: 84, align: "center" as const },
-    { label: "\u4e2d\u6587\u540d", width: 112, align: "left" as const },
-    { label: "\u897f\u6587\u540d", width: 168, align: "left" as const },
-    { label: "\u6570\u91cf", width: 38, align: "center" as const },
-    { label: "\u5355\u4ef7", width: 54, align: "right" as const },
-    { label: "\u666e\u901a\u6298\u6263", width: 56, align: "center" as const },
-    ...(data.vipDiscountEnabled ? [{ label: "VIP\u6298\u6263", width: 56, align: "center" as const }] : []),
-    { label: "\u91d1\u989d", width: 62, align: "right" as const },
-  ];
-  const tableWidth = columns.reduce((sum, col) => sum + col.width, 0);
-  const contentLeft = Math.max(Math.floor((pageWidth - tableWidth) / 2), marginLeft);
-  const contentRight = contentLeft + tableWidth;
+    { key: "image", label: "图片", width: 52 },
+    { key: "item", label: "商品 / Producto", width: 210 },
+    { key: "qty", label: "数量", width: 40 },
+    { key: "price", label: "单价", width: 60 },
+    { key: "discount", label: "折扣", width: 52 },
+    { key: "amount", label: "金额", width: 54 },
+  ] as const;
 
   let page = pdfDoc.addPage([pageWidth, pageHeight]);
   let cursorY = pageHeight - topMargin;
+  let isFirstPage = true;
 
-  const fontForText = (text: string, preferBold = false) => {
-    if (hasChineseGlyph(text)) return preferBold ? bodyBoldFont : bodyFont;
-    return preferBold ? latinBoldFont : esFont;
+  const fontForText = (text: string, bold = false) => {
+    if (hasChineseGlyph(text)) return zhFont;
+    return bold ? latinBoldFont : latinFont;
   };
+
+  const textWidth = (text: string, size: number, bold = false) =>
+    fontForText(text, bold).widthOfTextAtSize(safePdfText(text, unicodeSafe), size);
 
   const drawText = (
     text: string,
     x: number,
     y: number,
-    options?: { size?: number; font?: PDFFont; color?: { r: number; g: number; b: number } },
+    options?: { size?: number; color?: [number, number, number]; bold?: boolean },
   ) => {
     page.drawText(safePdfText(text, unicodeSafe), {
       x,
       y,
-      size: options?.size ?? tableFontSize,
-      font: options?.font ?? fontForText(text),
-      color: rgb(options?.color?.r ?? 0.15, options?.color?.g ?? 0.2, options?.color?.b ?? 0.3),
+      size: options?.size ?? 10,
+      font: fontForText(text, options?.bold),
+      color: rgb(...(options?.color ?? [0.17, 0.18, 0.2])),
     });
-  };
-
-  const drawLeftText = (
-    text: string,
-    x: number,
-    y: number,
-    options?: { size?: number; font?: PDFFont; color?: { r: number; g: number; b: number } },
-  ) => {
-    drawText(text, x, y, options);
-  };
-
-  const drawCenteredText = (
-    text: string,
-    cellX: number,
-    cellY: number,
-    cellWidth: number,
-    cellHeight: number,
-    size = tableFontSize,
-    font?: PDFFont,
-  ) => {
-    const safeText = safePdfText(text, unicodeSafe);
-    const actualFont = font ?? fontForText(text);
-    const textWidth = actualFont.widthOfTextAtSize(safeText, size);
-    const x = cellX + Math.max((cellWidth - textWidth) / 2, 2);
-    const y = cellY + (cellHeight - size) / 2 + 1;
-    drawText(safeText, x, y, { size, font: actualFont });
   };
 
   const drawRightText = (
     text: string,
     rightX: number,
     y: number,
-    options?: { size?: number; font?: PDFFont; color?: { r: number; g: number; b: number } },
+    options?: { size?: number; color?: [number, number, number]; bold?: boolean },
   ) => {
-    const safeText = safePdfText(text, unicodeSafe);
-    const font = options?.font ?? fontForText(text);
-    const size = options?.size ?? tableFontSize;
-    const textWidth = font.widthOfTextAtSize(safeText, size);
-    drawText(safeText, rightX - textWidth, y, { ...options, size, font });
+    drawText(text, rightX - textWidth(text, options?.size ?? 10, options?.bold), y, options);
   };
 
-  const drawHeaderInfo = async () => {
-    drawText("PARKSONMX", contentLeft, cursorY - 2, {
-      size: 12,
-      font: latinBoldFont,
-      color: { r: 0.18, g: 0.31, b: 0.55 },
-    });
+  const drawLabelValue = (
+    label: string,
+    value: string,
+    x: number,
+    y: number,
+    width: number,
+    emphasize = false,
+  ) => {
+    drawText(label, x, y, { size: 7.2, color: [0.58, 0.6, 0.64] });
+    const lines = wrapTextByWidth(value || "-", fontForText(value || "-", emphasize), emphasize ? 12.5 : 9.6, width, unicodeSafe);
+    let lineY = y - 16;
+    for (const line of lines) {
+      drawText(line, x, lineY, { size: emphasize ? 12.5 : 9.6, bold: emphasize, color: [0.14, 0.15, 0.17] });
+      lineY -= emphasize ? 14 : 11;
+    }
+    return Math.max(28, lines.length * (emphasize ? 14 : 11) + 10);
+  };
+
+  const drawHeader = async () => {
+    drawText("PARKSONMX", marginX, cursorY, { size: 11, bold: true, color: [0.38, 0.41, 0.46] });
     if (logoBuffer) {
       try {
         const logo = await pdfDoc.embedPng(logoBuffer);
-        const logoScale = Math.min(74 / logo.width, 26 / logo.height);
-        const logoWidth = Math.max(1, logo.width * logoScale);
-        const logoHeight = Math.max(1, logo.height * logoScale);
+        const scale = Math.min(44 / logo.width, 18 / logo.height);
         page.drawImage(logo, {
-          x: contentRight - logoWidth,
-          y: cursorY - logoHeight + 6,
-          width: logoWidth,
-          height: logoHeight,
+          x: pageWidth - marginX - logo.width * scale,
+          y: cursorY - 6,
+          width: logo.width * scale,
+          height: logo.height * scale,
         });
       } catch {
-        // ignore logo failure
+        // ignore logo load failure
       }
     }
-    cursorY -= 24;
 
-    const sectionWidth = tableWidth;
-    const halfGap = 18;
-    const halfWidth = (sectionWidth - halfGap) / 2;
-    const leftBaseX = contentLeft;
-    const leftLabelX = leftBaseX + 10;
-    const leftValueX = leftBaseX + 188;
-    const rightBaseX = contentLeft + halfWidth + halfGap;
-    const rightLabelX = rightBaseX + 10;
-    const rightValueX = rightBaseX + 188;
-    const valueWidth = halfWidth - 196;
+    cursorY -= 54;
+    drawText("INVOICE", marginX, cursorY, { size: 28, bold: true, color: [0.06, 0.07, 0.08] });
+    drawRightText(data.orderNo, pageWidth - marginX, cursorY + 12, { size: 11, bold: true, color: [0.22, 0.24, 0.28] });
+    drawRightText(data.issueDateText || "-", pageWidth - marginX, cursorY - 6, { size: 9, color: [0.46, 0.48, 0.52] });
+    cursorY -= 44;
 
-    const drawField = (
-      label: string,
-      value: string,
-      baseX: number,
-      labelX: number,
-      valX: number,
-      rowTopY: number,
-    ) => {
-      const lines = wrapTextByWidth(value || "-", fontForText(value || "-"), 9.2, valueWidth, unicodeSafe);
-      drawLeftText(label, labelX, rowTopY - 16, {
-        size: 8.8,
-        font: fontForText(label, true),
-        color: { r: 0.12, g: 0.12, b: 0.14 },
-      });
-      let lineY = rowTopY - 16;
-      for (const line of lines) {
-        drawLeftText(line, valX, lineY, {
-          size: 8.8,
-          font: fontForText(line),
-          color: { r: 0.2, g: 0.26, b: 0.5 },
-        });
-        lineY -= 9.5;
-      }
-      const rowHeight = Math.max(19, lines.length * 9.5 + 6);
-      page.drawLine({
-        start: { x: baseX + 180, y: rowTopY - rowHeight + 2 },
-        end: { x: baseX + halfWidth, y: rowTopY - rowHeight + 2 },
-        thickness: 0.6,
-        color: rgb(0.86, 0.88, 0.91),
-      });
-      return rowHeight;
-    };
+    const leftX = marginX;
+    const midX = marginX + 170;
+    const rightX = marginX + 340;
+    const blockWidth = 126;
 
-    const firstRowHeight = Math.max(
-      drawField("\u5ba2\u6237\u540d\u79f0 Nom. Cte.", data.companyName || "-", leftBaseX, leftLabelX, leftValueX, cursorY),
-      drawField("\u8ba2\u5355\u53f7 NO. PED.", data.orderNo || "-", rightBaseX, rightLabelX, rightValueX, cursorY),
-    );
-    cursorY -= firstRowHeight + 4;
+    drawText("账单对象 / Client", leftX, cursorY, { size: 8, bold: true, color: [0.52, 0.54, 0.58] });
+    drawText("账单信息 / Billing", midX, cursorY, { size: 8, bold: true, color: [0.52, 0.54, 0.58] });
+    drawText("物流信息 / Shipping", rightX, cursorY, { size: 8, bold: true, color: [0.52, 0.54, 0.58] });
+    cursorY -= 16;
 
-    const pairs: Array<[[string, string], [string, string] | null]> = [
-      [["\u51fa\u8d26\u65e5\u671f F. FACT.", data.issueDateText || "-"], ["\u5408\u8ba1\u91d1\u989d MTO. TOTAL", `$${toMoney(data.totalAmount)}`]],
-      [["\u5546\u54c1\u603b\u6570\u91cf TOTAL PROD.", String(data.totalQty || 0)], ["\u88c5\u7bb1\u4ef6\u6570 CANT. CAJAS", data.boxCountText || "-"]],
-      [["\u53d1\u8d27\u65e5\u671f F. ENV.", data.shipDateText || "-"], ["\u53d1\u8d27\u4ed3 DEP. ENV\u00cdO", data.warehouseText || "-"]],
-      [["\u53d1\u8d27\u65b9\u5f0f MET. ENV.", data.shippingMethodText || "-"], ["\u6536\u8d27\u4eba DEST.", data.recipientNameText || "-"]],
-      [["\u9001\u8d27\u5730\u5740 DIR. ENT.", data.addressText || "-"], ["\u6536\u8d27\u7535\u8bdd TEL. DEST.", data.recipientPhoneText || "-"]],
-      [["\u6258\u8fd0\u516c\u53f8 EMP. TRANSP.", data.carrierCompanyText || "-"], null],
+    const sectionHeights = [
+      drawLabelValue("客户名称 / Nom. Cte.", data.companyName || "-", leftX, cursorY, blockWidth, true),
+      drawLabelValue("订单号 / No. Ped.", data.orderNo || "-", midX, cursorY, blockWidth),
+      drawLabelValue("发货仓 / Dep. Envío", data.warehouseText || "-", rightX, cursorY, blockWidth),
     ];
+    cursorY -= Math.max(...sectionHeights);
 
-    for (const [leftField, rightField] of pairs) {
-      const leftHeight = drawField(leftField[0], leftField[1], leftBaseX, leftLabelX, leftValueX, cursorY);
-      const rightHeight = rightField
-        ? drawField(rightField[0], rightField[1], rightBaseX, rightLabelX, rightValueX, cursorY)
-        : leftHeight;
-      cursorY -= Math.max(leftHeight, rightHeight) + 2;
-    }
+    const sectionHeights2 = [
+      drawLabelValue("收货人 / Dest.", data.recipientNameText || data.contactName || "-", leftX, cursorY, blockWidth),
+      drawLabelValue("出账日期 / F. Fact.", data.issueDateText || "-", midX, cursorY, blockWidth),
+      drawLabelValue("发货方式 / Met. Env.", data.shippingMethodText || "-", rightX, cursorY, blockWidth),
+    ];
+    cursorY -= Math.max(...sectionHeights2);
 
-    cursorY -= 6;
+    const sectionHeights3 = [
+      drawLabelValue("收货电话 / Tel. Dest.", data.recipientPhoneText || data.contactPhone || "-", leftX, cursorY, blockWidth),
+      drawLabelValue("发货日期 / F. Env.", data.shipDateText || "-", midX, cursorY, blockWidth),
+      drawLabelValue("托运公司 / Emp. Transp.", data.carrierCompanyText || "-", rightX, cursorY, blockWidth),
+    ];
+    cursorY -= Math.max(...sectionHeights3);
+
+    const sectionHeights4 = [
+      drawLabelValue("送货地址 / Dir. Ent.", data.addressText || "-", leftX, cursorY, 270),
+      drawLabelValue("合计金额 / Mto. Total", `$${toMoney(data.totalAmount)}`, rightX, cursorY, blockWidth, true),
+      drawLabelValue("商品总数量 / Total Prod.", String(data.totalQty || 0), midX, cursorY, blockWidth),
+    ];
+    cursorY -= Math.max(...sectionHeights4);
+
+    const sectionHeights5 = [
+      0,
+      drawLabelValue("装箱件数 / Cant. Cajas", data.boxCountText || "-", midX, cursorY, blockWidth),
+      0,
+    ];
+    cursorY -= Math.max(...sectionHeights5, 8);
+
+    page.drawLine({
+      start: { x: marginX, y: cursorY },
+      end: { x: pageWidth - marginX, y: cursorY },
+      thickness: 0.7,
+      color: rgb(0.9, 0.91, 0.93),
+    });
+    cursorY -= 24;
   };
 
-  const drawTableHeader = () => {
-    const headerHeight = 24;
-    let x = contentLeft;
+  const drawItemsHeader = () => {
+    let x = marginX;
     for (const col of columns) {
-      page.drawRectangle({
-        x,
-        y: cursorY - headerHeight + 4,
-        width: col.width,
-        height: headerHeight,
-        color: rgb(0.97, 0.98, 0.99),
-        borderColor: rgb(0.88, 0.9, 0.93),
-        borderWidth: 0.6,
+      drawText(col.label, x + (col.key === "item" ? 2 : 0), cursorY, {
+        size: 7.2,
+        bold: true,
+        color: [0.58, 0.6, 0.64],
       });
-      if (col.align === "right") {
-        drawRightText(col.label, x + col.width - 4, cursorY - headerHeight / 2 - 1, {
-          size: 7.6,
-          font: fontForText(col.label, true),
-          color: { r: 0.18, g: 0.2, b: 0.24 },
-        });
-      } else if (col.align === "center") {
-        drawCenteredText(col.label, x, cursorY - headerHeight + 4, col.width, headerHeight, 7.6, fontForText(col.label, true));
-      } else {
-        drawLeftText(col.label, x + 4, cursorY - headerHeight / 2 - 1, {
-          size: 7.6,
-          font: fontForText(col.label, true),
-          color: { r: 0.46, g: 0.48, b: 0.53 },
-        });
-      }
       x += col.width;
     }
-    cursorY -= headerHeight + 6;
+    cursorY -= 10;
+    page.drawLine({
+      start: { x: marginX, y: cursorY },
+      end: { x: pageWidth - marginX, y: cursorY },
+      thickness: 0.7,
+      color: rgb(0.9, 0.91, 0.93),
+    });
+    cursorY -= 14;
   };
 
-  const createNewPage = async () => {
+  const newPage = async () => {
     page = pdfDoc.addPage([pageWidth, pageHeight]);
     cursorY = pageHeight - topMargin;
-    drawTableHeader();
+    if (isFirstPage) {
+      isFirstPage = false;
+    }
+    drawItemsHeader();
   };
 
-  await drawHeaderInfo();
-  drawTableHeader();
+  await drawHeader();
+  drawItemsHeader();
+  isFirstPage = false;
 
   for (const item of data.items) {
-    const titleZh = item.nameZh || "-";
-    const titleEs = item.nameEs || "-";
-    const zhLines = wrapTextByWidth(
-      titleZh,
-      bodyFont,
-      tableFontSize,
-      columns[3].width - cellPaddingX * 2,
-      unicodeSafe,
-    );
-    const esLines = wrapTextByWidth(
-      titleEs,
-      esFont,
-      7.8,
-      columns[4].width - cellPaddingX * 2,
-      unicodeSafe,
-    );
-    const rowHeight = Math.max(
-      40,
-      Math.max(zhLines.length, esLines.length, 1) * lineGap + cellPaddingY * 2,
-    );
+    const nameLines = wrapTextByWidth(item.nameZh || "-", zhFont, 10.5, 200, unicodeSafe);
+    const esLines = wrapTextByWidth(item.nameEs || "-", latinFont, 8.5, 200, unicodeSafe);
+    const metaLines = wrapTextByWidth(`SKU ${item.sku || "-"} / Barcode ${item.barcode || "-"}`, latinFont, 7.2, 200, unicodeSafe);
+    const discountLines = [toPercentText(item.normalDiscount), ...(data.vipDiscountEnabled ? [`VIP ${toPercentText(item.vipDiscount)}`] : [])];
+    const rowHeight = Math.max(52, (nameLines.length * 12) + (esLines.length * 10) + (metaLines.length * 9) + 10);
 
-    if (cursorY - rowHeight < bottomMargin) {
-      await createNewPage();
+    if (cursorY - rowHeight < bottomMargin + 100) {
+      await newPage();
     }
 
-    const rowBottomY = cursorY - rowHeight + 2;
-    let borderX = contentLeft;
-    for (const col of columns) {
-      page.drawRectangle({
-        x: borderX,
-        y: rowBottomY,
-        width: col.width,
-        height: rowHeight,
-        borderColor: rgb(0.9, 0.92, 0.94),
-        borderWidth: 0.4,
-        color: rgb(1, 1, 1),
-      });
-      borderX += col.width;
-    }
+    const rowTop = cursorY;
+    const rowBottom = cursorY - rowHeight;
+    page.drawLine({
+      start: { x: marginX, y: rowTop + 2 },
+      end: { x: pageWidth - marginX, y: rowTop + 2 },
+      thickness: 0.5,
+      color: rgb(0.93, 0.94, 0.95),
+    });
 
-    let currentX = contentLeft;
-    const imageBuffer = await loadProductImageBuffer(item.sku, item.barcode);
-    if (imageBuffer) {
+    let x = marginX;
+    const image = await loadProductImageBuffer(item.sku, item.barcode);
+    if (image) {
       try {
-        const embedded =
-          imageBuffer.extension === "png"
-            ? await pdfDoc.embedPng(imageBuffer.buffer)
-            : await pdfDoc.embedJpg(imageBuffer.buffer);
-        const imageSize = Math.min(34, columns[0].width - 8, rowHeight - 8);
+        const embedded = image.extension === "png" ? await pdfDoc.embedPng(image.buffer) : await pdfDoc.embedJpg(image.buffer);
+        const size = 36;
         page.drawImage(embedded, {
-          x: currentX + (columns[0].width - imageSize) / 2,
-          y: rowBottomY + (rowHeight - imageSize) / 2,
-          width: imageSize,
-          height: imageSize,
+          x: x + 6,
+          y: rowBottom + (rowHeight - size) / 2,
+          width: size,
+          height: size,
         });
       } catch {
-        drawCenteredText("-", currentX, rowBottomY, columns[0].width, rowHeight);
+        drawText("-", x + 18, rowBottom + rowHeight / 2, { size: 9, color: [0.65, 0.67, 0.7] });
       }
     } else {
-      drawCenteredText("-", currentX, rowBottomY, columns[0].width, rowHeight);
+      drawText("-", x + 18, rowBottom + rowHeight / 2, { size: 9, color: [0.65, 0.67, 0.7] });
     }
-    currentX += columns[0].width;
+    x += columns[0].width;
 
-    drawCenteredText(item.sku || "-", currentX, rowBottomY, columns[1].width, rowHeight);
-    currentX += columns[1].width;
-    drawCenteredText(item.barcode || "-", currentX, rowBottomY, columns[2].width, rowHeight);
-    currentX += columns[2].width;
-
-    let zhY = rowBottomY + rowHeight - 14;
-    for (const line of zhLines) {
-      drawLeftText(line, currentX + cellPaddingX, zhY, {
-        size: tableFontSize,
-        font: bodyFont,
-        color: { r: 0.16, g: 0.18, b: 0.22 },
-      });
-      zhY -= lineGap;
+    let textY = rowTop - 10;
+    for (const line of nameLines) {
+      drawText(line, x, textY, { size: 10.5, color: [0.12, 0.13, 0.15] });
+      textY -= 12;
     }
-    currentX += columns[3].width;
-
-    let esY = rowBottomY + rowHeight - 14;
     for (const line of esLines) {
-      drawLeftText(line, currentX + cellPaddingX, esY, {
-        size: 7.8,
-        font: esFont,
-        color: { r: 0.42, g: 0.45, b: 0.5 },
-      });
-      esY -= lineGap;
+      drawText(line, x, textY, { size: 8.5, color: [0.45, 0.47, 0.5] });
+      textY -= 10;
     }
-    currentX += columns[4].width;
+    for (const line of metaLines) {
+      drawText(line, x, textY, { size: 7.2, color: [0.64, 0.66, 0.69] });
+      textY -= 9;
+    }
+    x += columns[1].width;
 
-    drawCenteredText(String(item.qty), currentX, rowBottomY, columns[5].width, rowHeight);
-    currentX += columns[5].width;
-    drawRightText(`$${toMoney(item.unitPrice)}`, currentX + columns[6].width - 6, rowBottomY + (rowHeight - tableFontSize) / 2 + 1);
-    currentX += columns[6].width;
-    drawCenteredText(toPercentText(item.normalDiscount), currentX, rowBottomY, columns[7].width, rowHeight);
-    currentX += columns[7].width;
-    if (data.vipDiscountEnabled) {
-      drawCenteredText(toPercentText(item.vipDiscount), currentX, rowBottomY, columns[8].width, rowHeight);
-      currentX += columns[8].width;
+    drawRightText(String(item.qty), x + columns[2].width - 4, rowTop - 14, { size: 9.2 });
+    x += columns[2].width;
+    drawRightText(`$${toMoney(item.unitPrice)}`, x + columns[3].width - 4, rowTop - 14, { size: 9.2 });
+    x += columns[3].width;
+    let discountY = rowTop - 14;
+    for (const line of discountLines) {
+      drawRightText(line, x + columns[4].width - 4, discountY, { size: line.startsWith("VIP") ? 7.5 : 9.2, color: line.startsWith("VIP") ? [0.55, 0.57, 0.61] : [0.17, 0.18, 0.2] });
+      discountY -= 10;
     }
-    drawRightText(`$${toMoney(item.lineTotal)}`, currentX + columns[columns.length - 1].width - 6, rowBottomY + (rowHeight - tableFontSize) / 2 + 1);
+    x += columns[4].width;
+    drawRightText(`$${toMoney(item.lineTotal)}`, x + columns[5].width - 4, rowTop - 14, { size: 9.6, bold: true });
 
     cursorY -= rowHeight;
   }
+
+  const summarySubtotal = data.items.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
+  const summaryDiscount = Math.max(summarySubtotal - data.totalAmount, 0);
+
+  if (cursorY < bottomMargin + 120) {
+    page = pdfDoc.addPage([pageWidth, pageHeight]);
+    cursorY = pageHeight - topMargin - 20;
+  }
+
+  page.drawLine({
+    start: { x: marginX, y: cursorY },
+    end: { x: pageWidth - marginX, y: cursorY },
+    thickness: 0.7,
+    color: rgb(0.9, 0.91, 0.93),
+  });
+  cursorY -= 26;
+
+  const summaryX = pageWidth - marginX - 220;
+  drawText("Subtotal", summaryX, cursorY, { size: 8, color: [0.58, 0.6, 0.64] });
+  drawRightText(`$${toMoney(summarySubtotal)}`, pageWidth - marginX, cursorY, { size: 10 });
+  cursorY -= 20;
+  drawText("Discounts", summaryX, cursorY, { size: 8, color: [0.58, 0.6, 0.64] });
+  drawRightText(`$${toMoney(summaryDiscount)}`, pageWidth - marginX, cursorY, { size: 10 });
+  cursorY -= 30;
+  drawText("TOTAL A PAGAR", summaryX, cursorY, { size: 8, bold: true, color: [0.4, 0.42, 0.46] });
+  drawRightText(`$${toMoney(data.totalAmount)}`, pageWidth - marginX, cursorY - 8, { size: 24, bold: true, color: [0.08, 0.09, 0.1] });
 
   return pdfDoc.save({ useObjectStreams: true });
 }
