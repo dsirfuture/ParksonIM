@@ -220,6 +220,27 @@ export function BillingClient({
     return { xlsx: `/api/billing/${encodedOrderNo}/export/xlsx?${vipQuery}`, pdf: `/api/billing/${encodedOrderNo}/export/pdf?${vipQuery}` };
   }, [detailOrderNo, vipDiscountEnabled]);
   const detailRow = useMemo(() => (detailOrderNo ? rows.find((row) => row.orderNo === detailOrderNo) || null : null), [detailOrderNo, rows]);
+  const rowAmountMap = useMemo(() => {
+    const map = new Map<string, { originalAmountText: string; discountedAmountText: string }>();
+    for (const row of rows) {
+      const items = detailsByOrderNo[row.orderNo] || [];
+      if (items.length === 0) {
+        map.set(row.orderNo, {
+          originalAmountText: row.originalAmountText,
+          discountedAmountText: row.discountedAmountText,
+        });
+        continue;
+      }
+
+      const originalAmount = items.reduce((sum, item) => sum + Number(item.qty || 0) * Number(item.unitPrice || 0), 0);
+      const discountedAmount = items.reduce((sum, item) => sum + calcLineTotal(item, vipDiscountEnabled), 0);
+      map.set(row.orderNo, {
+        originalAmountText: toMoney(originalAmount),
+        discountedAmountText: toMoney(discountedAmount),
+      });
+    }
+    return map;
+  }, [detailsByOrderNo, rows, vipDiscountEnabled]);
 
   async function saveEdit() {
     if (!editState) return;
@@ -302,8 +323,8 @@ export function BillingClient({
                     <th className="whitespace-nowrap px-4 py-3 font-semibold">公司名称</th>
                     <th className="whitespace-nowrap px-4 py-3 font-semibold">联系人</th>
                     <th className="whitespace-nowrap px-4 py-3 font-semibold">联系电话</th>
-                    <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">原金额</th>
-                    <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">折扣后金额</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold">原金额</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold">折扣后金额</th>
                     <th className="whitespace-nowrap px-4 py-3 font-semibold">订单汇总时间</th>
                     <th className="whitespace-nowrap px-4 py-3 text-right font-semibold"></th>
                   </tr>
@@ -317,8 +338,8 @@ export function BillingClient({
                       <td className="whitespace-nowrap px-4 py-4 text-sm text-stone-700">{row.companyName || "-"}</td>
                       <td className="whitespace-nowrap px-4 py-4 text-sm text-stone-700">{row.contactName || "-"}</td>
                       <td className="whitespace-nowrap px-4 py-4 text-sm text-stone-700">{row.contactPhone || "-"}</td>
-                      <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-stone-700">{row.originalAmountText}</td>
-                      <td className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-slate-900">{row.discountedAmountText}</td>
+                      <td className="whitespace-nowrap px-4 py-4 text-left text-sm text-stone-700">{rowAmountMap.get(row.orderNo)?.originalAmountText || row.originalAmountText}</td>
+                      <td className="whitespace-nowrap px-4 py-4 text-left text-sm font-semibold text-slate-900">{rowAmountMap.get(row.orderNo)?.discountedAmountText || row.discountedAmountText}</td>
                       <td className="whitespace-nowrap px-4 py-4 text-sm text-stone-500">{row.updatedAtText}</td>
                       <td className="px-4 py-4">
                         <div className="flex items-center justify-end gap-2">
