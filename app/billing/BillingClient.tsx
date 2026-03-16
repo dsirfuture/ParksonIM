@@ -543,15 +543,19 @@ export function BillingClient({
               <div className="relative mx-auto w-full max-w-[980px] rounded-[32px] bg-white px-8 py-9 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
                 {detailGenerated ? (
                   <div className="pointer-events-none absolute right-[292px] top-[78px] z-10 rotate-[-11deg] opacity-[0.78]">
-                    <div className="relative inline-block min-w-[302px] border-[5px] border-[#b03127]/90 bg-[#fff8f5]/20 px-5 py-3 text-[#b03127] shadow-[0_10px_24px_rgba(176,49,39,0.08)]">
+                    <div className="relative inline-block min-w-[336px] border-[5px] border-[#b03127]/90 bg-[#fff8f5]/20 px-5 py-3 text-[#b03127] shadow-[0_10px_24px_rgba(176,49,39,0.08)]">
                       <div className="pointer-events-none absolute inset-[6px] border border-[#b03127]/35" />
                       <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={{ backgroundImage: "repeating-linear-gradient(135deg, rgba(176,49,39,0.35) 0 2px, transparent 2px 14px)" }} />
-                      <div className="relative flex min-h-[82px] flex-col justify-between py-1">
-                        <div className="text-center text-[15px] font-black leading-none tracking-[0.01em]">
-                          账单生成并锁定
+                      <div className="relative flex min-h-[92px] flex-col justify-between py-1">
+                        <div className="flex items-center justify-between text-[22px] font-black leading-none tracking-[0.04em]">
+                          <span>账单生成</span>
+                          <span>并锁定</span>
                         </div>
-                        <div className="border-t border-[#b03127]/35 pt-3 text-center text-[15px] font-black uppercase leading-none tracking-[0.01em]">
-                          FACT. GEN. Y BLOQ.
+                        <div className="border-t border-[#b03127]/35 pt-3">
+                          <div className="flex items-center justify-between text-[22px] font-black uppercase leading-none tracking-[0.02em]">
+                            <span>FACT. GEN.</span>
+                            <span>Y BLOQ.</span>
+                          </div>
                         </div>
                       </div>
                     </div>
