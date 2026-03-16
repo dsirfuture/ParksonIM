@@ -505,7 +505,7 @@ export async function getBillingExportData(params: {
 
   return {
     orderNo,
-    companyName: orderRow.company_name || orderRow.customer_name || "-",
+    companyName: orderRow.customer_name || orderRow.company_name || "-",
     contactName: orderRow.contact_name || orderRow.customer_name || orderRow.company_name || "-",
     contactPhone: orderRow.contact_phone || "-",
     addressText: orderRow.address_text || "",

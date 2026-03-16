@@ -73,6 +73,7 @@ export async function PATCH(
     const currentRemark = parseBillingRemark(target.order_remark);
 
     const updateData: {
+      company_name?: string | null;
       customer_name?: string | null;
       address_text?: string | null;
       contact_phone?: string | null;
@@ -109,7 +110,9 @@ export async function PATCH(
     }
 
     if (!action && "customerName" in body) {
-      updateData.customer_name = normalizeString(body.customerName);
+      const normalizedCustomerName = normalizeString(body.customerName);
+      updateData.customer_name = normalizedCustomerName;
+      updateData.company_name = normalizedCustomerName;
     }
     if (!action && "addressText" in body) {
       updateData.address_text = normalizeString(body.addressText);
@@ -132,6 +135,7 @@ export async function PATCH(
       data: updateData,
       select: {
         id: true,
+        company_name: true,
         customer_name: true,
         contact_name: true,
         address_text: true,
@@ -146,7 +150,7 @@ export async function PATCH(
       ok: true,
       data: {
         id: updated.id,
-        customerName: updated.customer_name || "",
+        customerName: updated.customer_name || updated.company_name || "",
         contactName: updated.contact_name || "",
         addressText: updated.address_text || "",
         contactText: updated.contact_phone || "",

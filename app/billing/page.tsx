@@ -323,7 +323,7 @@ export default async function BillingPage({
 
   for (const row of ygOrders) {
     if (orderMap.has(row.order_no)) continue;
-    const companyName = row.company_name || row.customer_name || "-";
+    const companyName = row.customer_name || row.company_name || "-";
     const contactName = row.contact_name || row.customer_name || row.company_name || "-";
     const parsedRemark = parseBillingRemark(row.order_remark);
     orderMap.set(row.order_no, {
