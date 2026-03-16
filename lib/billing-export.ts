@@ -771,12 +771,19 @@ export async function buildBillingPdf(data: BillingExportData) {
   };
 
   const drawVipField = (text: string, x: number, y: number) => {
-    const rowHeight = 34;
+    const iconSize = 14;
     const textSize = 10;
-    const rowBottomY = y - rowHeight;
-    const iconSize = 15;
-    const iconY = rowBottomY + 17;
-    const textY = rowBottomY + 4;
+    const textFont = fontForText(text, true);
+    const textHeight = textFont.heightAtSize(textSize);
+    const topPadding = 2;
+    const iconLineHeight = 18;
+    const gapY = 4;
+    const textLineHeight = Math.max(14, textHeight + 2);
+    const iconTopY = y - topPadding;
+    const iconY = iconTopY - iconSize;
+    const textTopY = iconTopY - iconLineHeight - gapY;
+    const textY = textTopY - textHeight;
+    const rowHeight = topPadding + iconLineHeight + gapY + textLineHeight;
 
     if (vipSvgAsset) {
       page.drawSvgPath(vipSvgAsset.path, {
@@ -790,7 +797,7 @@ export async function buildBillingPdf(data: BillingExportData) {
       x,
       y: textY,
       size: textSize,
-      font: fontForText(text, true),
+      font: textFont,
       color: rgb(0.08, 0.09, 0.1),
     });
     return rowHeight;
