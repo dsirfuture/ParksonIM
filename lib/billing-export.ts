@@ -449,7 +449,9 @@ export async function getBillingExportData(params: {
       const sku = String(item.sku || "").trim();
       const barcode = String(item.barcode || "").trim();
       const qty = Number(item.expected_qty || 0);
-      const unitPrice = toNumber(item.sell_price) || 0;
+      // Billing export unit price must always come from the completed receipt's supplier price.
+      // `sell_price` in receipt import/export is the 验货单“供应价”, not a product catalog selling price.
+      const supplierUnitPrice = toNumber(item.sell_price) || 0;
       const catalogDiscount = productDiscountMap.get(sku);
       const normalDiscountRaw =
         catalogDiscount?.normalDiscount ??
@@ -461,7 +463,7 @@ export async function getBillingExportData(params: {
       const vipDiscount = toDiscountFactor(vipDiscountRaw);
       const lineTotal = computeLineTotal(
         qty,
-        unitPrice,
+        supplierUnitPrice,
         normalDiscount,
         vipDiscount,
         vipDiscountEnabled,
@@ -479,7 +481,7 @@ export async function getBillingExportData(params: {
           nameZh: String(item.name_zh || "").trim(),
           nameEs: String(item.name_es || "").trim(),
           qty,
-          unitPrice,
+          unitPrice: supplierUnitPrice,
           normalDiscount:
             normalDiscountRaw !== null && Number.isFinite(normalDiscountRaw) ? normalDiscountRaw : null,
           vipDiscount:

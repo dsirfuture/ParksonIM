@@ -198,7 +198,9 @@ export default async function BillingPage({
     for (const item of receipt.items) {
       const sku = String(item.sku || "").trim();
       const qty = Number(item.expected_qty || 0);
-      const unitPrice = item.sell_price ? Number(item.sell_price) : 0;
+      // Billing unit price must always come from the completed receipt's supplier price.
+      // `sell_price` here is the imported 验货单“供应价”, not the product catalog selling price.
+      const supplierUnitPrice = item.sell_price === null ? 0 : Number(item.sell_price);
       const catalogDiscount = productDiscountMap.get(sku);
       const normalDiscountRaw =
         catalogDiscount?.normalDiscount ??
@@ -208,9 +210,9 @@ export default async function BillingPage({
         (item.vip_discount === null ? null : Number(item.vip_discount));
       const normalDiscount = toDiscountFactor(normalDiscountRaw);
       const vipDiscount = toDiscountFactor(vipDiscountRaw);
-      const lineTotal = computeLineTotal(qty, unitPrice, normalDiscount, vipDiscount);
-      const lineOriginalTotal = qty * unitPrice;
-      const lineDiscountedTotal = computeLineTotalWithoutVip(qty, unitPrice, normalDiscount);
+      const lineTotal = computeLineTotal(qty, supplierUnitPrice, normalDiscount, vipDiscount);
+      const lineOriginalTotal = qty * supplierUnitPrice;
+      const lineDiscountedTotal = computeLineTotalWithoutVip(qty, supplierUnitPrice, normalDiscount);
 
       receiptOriginalAmount += lineOriginalTotal;
       receiptDiscountedAmount += lineDiscountedTotal;
@@ -225,7 +227,7 @@ export default async function BillingPage({
           nameZh: String(item.name_zh || "").trim(),
           nameEs: String(item.name_es || "").trim(),
           qty,
-          unitPrice,
+          unitPrice: supplierUnitPrice,
           normalDiscount:
             normalDiscountRaw !== null && Number.isFinite(normalDiscountRaw)
               ? normalDiscountRaw
