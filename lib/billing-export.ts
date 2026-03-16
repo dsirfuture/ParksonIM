@@ -714,52 +714,73 @@ export async function buildBillingPdf(data: BillingExportData) {
   };
 
   const drawHeaderInfo = async () => {
-    const labelX = marginLeft + 36;
-    const valueX = 270;
-    const valueWidth = pageWidth - marginRight - valueX;
-    const rows: Array<[string, string]> = [
-      ["客户名称 Nom. Cte.", data.companyName || "-"],
-      ["订单号 NO. PED.", data.orderNo || "-"],
-      ["出账日期 F. FACT.", data.issueDateText || "-"],
-      ["合计金额 MTO. TOTAL", `$${toMoney(data.totalAmount)}`],
-      ["商品总数量 TOTAL PROD.", String(data.totalQty || 0)],
-      ["装箱件数 CANT. CAJAS", data.boxCountText || "-"],
-      ["发货日期 F. ENV.", data.shipDateText || "-"],
-      ["发货仓 DEP. ENVIO", data.warehouseText || "-"],
-      ["发货方式 MET. ENV.", data.shippingMethodText || "-"],
-      ["送货地址 DIR. ENT.", data.addressText || "-"],
-      ["收货人 DEST.", data.recipientNameText || "-"],
-      ["收货电话 TEL. DEST.", data.recipientPhoneText || "-"],
-      ["托运公司 EMP. TRANSP.", data.carrierCompanyText || "-"],
-    ];
+    const sectionWidth = pageWidth - marginLeft - marginRight;
+    const halfGap = 18;
+    const halfWidth = (sectionWidth - halfGap) / 2;
+    const leftLabelX = marginLeft + 10;
+    const leftValueX = marginLeft + 188;
+    const rightBaseX = marginLeft + halfWidth + halfGap;
+    const rightLabelX = rightBaseX + 10;
+    const rightValueX = rightBaseX + 188;
+    const valueWidth = halfWidth - 196;
 
-    for (const [label, value] of rows) {
-      const valueLines = wrapTextByWidth(value, fontForText(value), 9.2, valueWidth - 8, unicodeSafe);
-      const rowHeight = Math.max(26, valueLines.length * 11 + 8);
-      drawLeftText(label, labelX, cursorY - 16, {
+    const drawField = (
+      label: string,
+      value: string,
+      baseX: number,
+      labelX: number,
+      valX: number,
+      rowTopY: number,
+    ) => {
+      const lines = wrapTextByWidth(value || "-", fontForText(value || "-"), 9.2, valueWidth, unicodeSafe);
+      drawLeftText(label, labelX, rowTopY - 16, {
         size: 9.2,
         font: fontForText(label, true),
         color: { r: 0.12, g: 0.12, b: 0.14 },
       });
-      let lineY = cursorY - 16;
-      for (const line of valueLines) {
-        drawLeftText(line, valueX + 8, lineY, {
+      let lineY = rowTopY - 16;
+      for (const line of lines) {
+        drawLeftText(line, valX, lineY, {
           size: 9.2,
           font: fontForText(line),
           color: { r: 0.2, g: 0.26, b: 0.5 },
         });
         lineY -= 11;
       }
+      const rowHeight = Math.max(26, lines.length * 11 + 8);
       page.drawLine({
-        start: { x: valueX, y: cursorY - rowHeight + 2 },
-        end: { x: pageWidth - marginRight, y: cursorY - rowHeight + 2 },
+        start: { x: baseX + 180, y: rowTopY - rowHeight + 2 },
+        end: { x: baseX + halfWidth, y: rowTopY - rowHeight + 2 },
         thickness: 0.6,
         color: rgb(0.86, 0.88, 0.91),
       });
-      cursorY -= rowHeight;
+      return rowHeight;
+    };
+
+    const firstRowHeight = Math.max(
+      drawField("客户名称 Nom. Cte.", data.companyName || "-", marginLeft, leftLabelX, leftValueX, cursorY),
+      drawField("订单号 NO. PED.", data.orderNo || "-", rightBaseX, rightLabelX, rightValueX, cursorY),
+    );
+    cursorY -= firstRowHeight + 8;
+
+    const pairs: Array<[[string, string], [string, string] | null]> = [
+      [["出账日期 F. FACT.", data.issueDateText || "-"], ["合计金额 MTO. TOTAL", `$${toMoney(data.totalAmount)}`]],
+      [["商品总数量 TOTAL PROD.", String(data.totalQty || 0)], ["装箱件数 CANT. CAJAS", data.boxCountText || "-"]],
+      [["发货日期 F. ENV.", data.shipDateText || "-"], ["发货仓 DEP. ENVIO", data.warehouseText || "-"]],
+      [["发货方式 MET. ENV.", data.shippingMethodText || "-"], ["收货人 DEST.", data.recipientNameText || "-"]],
+      [["送货地址 DIR. ENT.", data.addressText || "-"], ["收货电话 TEL. DEST.", data.recipientPhoneText || "-"]],
+      [["托运公司 EMP. TRANSP.", data.carrierCompanyText || "-"], null],
+    ];
+
+    for (const [leftField, rightField] of pairs) {
+      const leftHeight = drawField(leftField[0], leftField[1], marginLeft, leftLabelX, leftValueX, cursorY);
+      const rightHeight = rightField
+        ? drawField(rightField[0], rightField[1], rightBaseX, rightLabelX, rightValueX, cursorY)
+        : leftHeight;
+      cursorY -= Math.max(leftHeight, rightHeight) + 4;
     }
 
-    cursorY -= 10;
+    cursorY -= 8;
   };
 
   const drawTableHeader = () => {
