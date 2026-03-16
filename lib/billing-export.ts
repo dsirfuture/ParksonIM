@@ -625,12 +625,16 @@ export async function buildBillingPdf(data: BillingExportData) {
   pdfDoc.registerFontkit(fontkit);
 
   const fontBytes = await loadPdfFontBytes();
+  const boldFontBytes = await loadPdfBoldFontBytes();
   const latinFontBytes = await loadPdfLatinFontBytes();
   const unicodeSafe = Boolean(fontBytes);
 
   const bodyFont = fontBytes
-    ? await pdfDoc.embedFont(fontBytes, { subset: true })
+    ? await pdfDoc.embedFont(fontBytes, { subset: false })
     : await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const bodyBoldFont = boldFontBytes
+    ? await pdfDoc.embedFont(boldFontBytes, { subset: false })
+    : bodyFont;
   const esFont = latinFontBytes
     ? await pdfDoc.embedFont(latinFontBytes, { subset: true })
     : await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -667,7 +671,7 @@ export async function buildBillingPdf(data: BillingExportData) {
   let cursorY = pageHeight - topMargin;
 
   const fontForText = (text: string, preferBold = false) => {
-    if (hasChineseGlyph(text)) return bodyFont;
+    if (hasChineseGlyph(text)) return preferBold ? bodyBoldFont : bodyFont;
     return preferBold ? latinBoldFont : esFont;
   };
 
@@ -747,7 +751,7 @@ export async function buildBillingPdf(data: BillingExportData) {
         // ignore logo failure
       }
     }
-    cursorY -= 34;
+    cursorY -= 24;
 
     const sectionWidth = tableWidth;
     const halfGap = 18;
@@ -770,20 +774,20 @@ export async function buildBillingPdf(data: BillingExportData) {
     ) => {
       const lines = wrapTextByWidth(value || "-", fontForText(value || "-"), 9.2, valueWidth, unicodeSafe);
       drawLeftText(label, labelX, rowTopY - 16, {
-        size: 9.2,
+        size: 8.8,
         font: fontForText(label, true),
         color: { r: 0.12, g: 0.12, b: 0.14 },
       });
       let lineY = rowTopY - 16;
       for (const line of lines) {
         drawLeftText(line, valX, lineY, {
-          size: 9.2,
+          size: 8.8,
           font: fontForText(line),
           color: { r: 0.2, g: 0.26, b: 0.5 },
         });
-        lineY -= 11;
+        lineY -= 9.5;
       }
-      const rowHeight = Math.max(26, lines.length * 11 + 8);
+      const rowHeight = Math.max(19, lines.length * 9.5 + 6);
       page.drawLine({
         start: { x: baseX + 180, y: rowTopY - rowHeight + 2 },
         end: { x: baseX + halfWidth, y: rowTopY - rowHeight + 2 },
@@ -797,7 +801,7 @@ export async function buildBillingPdf(data: BillingExportData) {
       drawField("\u5ba2\u6237\u540d\u79f0 Nom. Cte.", data.companyName || "-", leftBaseX, leftLabelX, leftValueX, cursorY),
       drawField("\u8ba2\u5355\u53f7 NO. PED.", data.orderNo || "-", rightBaseX, rightLabelX, rightValueX, cursorY),
     );
-    cursorY -= firstRowHeight + 8;
+    cursorY -= firstRowHeight + 4;
 
     const pairs: Array<[[string, string], [string, string] | null]> = [
       [["\u51fa\u8d26\u65e5\u671f F. FACT.", data.issueDateText || "-"], ["\u5408\u8ba1\u91d1\u989d MTO. TOTAL", `$${toMoney(data.totalAmount)}`]],
@@ -813,10 +817,10 @@ export async function buildBillingPdf(data: BillingExportData) {
       const rightHeight = rightField
         ? drawField(rightField[0], rightField[1], rightBaseX, rightLabelX, rightValueX, cursorY)
         : leftHeight;
-      cursorY -= Math.max(leftHeight, rightHeight) + 4;
+      cursorY -= Math.max(leftHeight, rightHeight) + 2;
     }
 
-    cursorY -= 8;
+    cursorY -= 6;
   };
 
   const drawTableHeader = () => {
@@ -855,7 +859,6 @@ export async function buildBillingPdf(data: BillingExportData) {
   const createNewPage = async () => {
     page = pdfDoc.addPage([pageWidth, pageHeight]);
     cursorY = pageHeight - topMargin;
-    await drawHeaderInfo();
     drawTableHeader();
   };
 
