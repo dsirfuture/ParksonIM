@@ -591,14 +591,14 @@ export async function buildBillingPdf(data: BillingExportData) {
   const unicodeSafe = Boolean(fontBytes);
 
   const bodyFont = fontBytes
-    ? await pdfDoc.embedFont(fontBytes, { subset: true })
+    ? await pdfDoc.embedFont(fontBytes, { subset: false })
     : await pdfDoc.embedFont(StandardFonts.Helvetica);
   const esFont = latinFontBytes
     ? await pdfDoc.embedFont(latinFontBytes, { subset: true })
     : await pdfDoc.embedFont(StandardFonts.Helvetica);
   const latinBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const boldFont = boldFontBytes
-    ? await pdfDoc.embedFont(boldFontBytes, { subset: true })
+    ? await pdfDoc.embedFont(boldFontBytes, { subset: false })
     : bodyFont;
 
   const pageWidth = 842;
