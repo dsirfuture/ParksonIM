@@ -637,8 +637,8 @@ export async function buildBillingPdf(data: BillingExportData) {
     : await pdfDoc.embedFont(StandardFonts.Helvetica);
   const latinBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const logoBuffer = await loadBillingLogoBuffer();
-  const pageWidth = 595;
-  const pageHeight = 842;
+  const pageWidth = 612;
+  const pageHeight = 792;
   const marginLeft = 40;
   const marginRight = 40;
   const topMargin = 46;
