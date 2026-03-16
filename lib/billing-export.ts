@@ -544,13 +544,13 @@ export async function buildBillingXlsx(data: BillingExportData) {
     views: [{ showGridLines: false }],
   });
 
-  worksheet.properties.defaultRowHeight = 24;
+  worksheet.properties.defaultRowHeight = 22;
   worksheet.columns = [
-    { key: "image", width: 12 },
-    { key: "sku", width: 16 },
-    { key: "barcode", width: 20 },
-    { key: "nameZh", width: 22 },
-    { key: "nameEs", width: 28 },
+    { key: "image", width: 13 },
+    { key: "sku", width: 17 },
+    { key: "barcode", width: 21 },
+    { key: "nameZh", width: 23 },
+    { key: "nameEs", width: 30 },
     { key: "qty", width: 9 },
     { key: "unitPrice", width: 10 },
     { key: "normalDiscount", width: 12 },
@@ -562,8 +562,7 @@ export async function buildBillingXlsx(data: BillingExportData) {
   const labelColor = "FF94A3B8";
   const valueColor = "FF0F172A";
   const borderColor = "FFE2E8F0";
-  const softFill = "FFF8FAFC";
-  const panelFill = "FFFFFFFF";
+  const tableHeaderFill = "FFF1F5F9";
 
   const applyCellStyle = (
     cellRef: string,
@@ -577,6 +576,8 @@ export async function buildBillingXlsx(data: BillingExportData) {
       wrapText?: boolean;
       fill?: string;
       border?: boolean | { top?: boolean; left?: boolean; bottom?: boolean; right?: boolean };
+      indent?: number;
+      italic?: boolean;
     },
   ) => {
     const cell = worksheet.getCell(cellRef);
@@ -585,12 +586,14 @@ export async function buildBillingXlsx(data: BillingExportData) {
       name: getDocumentFontName(String(options?.value || ""), { chineseBold: options?.bold }),
       size: options?.fontSize ?? 10,
       bold: options?.bold ?? false,
+      italic: options?.italic ?? false,
       color: { argb: options?.color ?? valueColor },
     };
     cell.alignment = {
       vertical: options?.vertical ?? "middle",
       horizontal: options?.horizontal ?? "left",
       wrapText: options?.wrapText ?? false,
+      indent: options?.indent,
     };
     if (options?.fill) {
       cell.fill = {
@@ -614,82 +617,12 @@ export async function buildBillingXlsx(data: BillingExportData) {
     return cell;
   };
 
-  const applyRangeStyle = (
-    startColumn: number,
-    endColumn: number,
-    rowNumber: number,
-    options?: {
-      fill?: string;
-      border?: boolean | { top?: boolean; left?: boolean; bottom?: boolean; right?: boolean };
-    },
-  ) => {
-    for (let column = startColumn; column <= endColumn; column += 1) {
-      const cell = worksheet.getRow(rowNumber).getCell(column);
-      if (options?.fill) {
-        cell.fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: options.fill },
-        };
-      }
-      if (options?.border) {
-        const borderConfig =
-          typeof options.border === "boolean"
-            ? { top: true, left: true, bottom: true, right: true }
-            : options.border;
-        cell.border = {
-          top: borderConfig.top ? { style: "thin", color: { argb: borderColor } } : undefined,
-          left: borderConfig.left ? { style: "thin", color: { argb: borderColor } } : undefined,
-          bottom: borderConfig.bottom ? { style: "thin", color: { argb: borderColor } } : undefined,
-          right: borderConfig.right ? { style: "thin", color: { argb: borderColor } } : undefined,
-        };
-      }
-    }
+  const setRowHeight = (rowNumber: number, height: number) => {
+    worksheet.getRow(rowNumber).height = height;
   };
 
-  const writeLabelRow = (rowNumber: number, value: string) => {
-    worksheet.getRow(rowNumber).height = 20;
-    applyRangeStyle(1, 10, rowNumber, {
-      fill: panelFill,
-      border: { top: true, left: true, right: true, bottom: true },
-    });
-    applyCellStyle("A" + rowNumber, {
-      value,
-      fontSize: 9,
-      color: labelColor,
-      horizontal: "left",
-      vertical: "middle",
-    });
-  };
-
-  const writeValueRow = (
-    rowNumber: number,
-    value: string,
-    options?: { emphasize?: boolean; wrapText?: boolean; rowHeight?: number },
-  ) => {
-    worksheet.getRow(rowNumber).height = options?.rowHeight ?? (options?.wrapText ? 42 : 25);
-    applyRangeStyle(1, 10, rowNumber, {
-      fill: panelFill,
-      border: { left: true, right: true, bottom: true },
-    });
-    applyCellStyle("A" + rowNumber, {
-      value,
-      fontSize: options?.emphasize ? 18 : 12,
-      bold: true,
-      color: valueColor,
-      horizontal: "left",
-      vertical: "middle",
-      wrapText: options?.wrapText ?? false,
-    });
-  };
-
-  const writeSectionTitle = (rowNumber: number, value: string) => {
-    worksheet.getRow(rowNumber).height = 24;
-    applyRangeStyle(1, 10, rowNumber, {
-      fill: softFill,
-      border: { top: true, left: true, right: true, bottom: true },
-    });
-    applyCellStyle("A" + rowNumber, {
+  const writeSectionTitle = (cellRef: string, value: string) => {
+    applyCellStyle(cellRef, {
       value,
       fontSize: 11,
       bold: true,
@@ -699,38 +632,50 @@ export async function buildBillingXlsx(data: BillingExportData) {
     });
   };
 
-  const writeSummaryRow = (
-    rowNumber: number,
-    label: string,
-    value: string,
-    options?: { emphasize?: boolean },
-  ) => {
-    worksheet.getRow(rowNumber).height = options?.emphasize ? 28 : 24;
-    applyRangeStyle(7, 10, rowNumber, {
-      fill: panelFill,
-      border: { top: true, left: true, right: true, bottom: true },
-    });
-    applyCellStyle("G" + rowNumber, {
-      value: label,
+  const writeLabel = (cellRef: string, value: string) => {
+    applyCellStyle(cellRef, {
+      value,
       fontSize: 9,
       color: labelColor,
       horizontal: "left",
       vertical: "middle",
     });
-    applyCellStyle("I" + rowNumber, {
+  };
+
+  const writeValue = (
+    cellRef: string,
+    value: string,
+    options?: { emphasize?: boolean; wrapText?: boolean; rowHeight?: number; bold?: boolean },
+  ) => {
+    const rowNumber = Number(cellRef.match(/\d+$/)?.[0] || 0);
+    if (options?.rowHeight) setRowHeight(rowNumber, options.rowHeight);
+    applyCellStyle(cellRef, {
       value,
       fontSize: options?.emphasize ? 17 : 12,
-      bold: true,
+      bold: options?.bold ?? true,
       color: valueColor,
       horizontal: "left",
       vertical: "middle",
+      wrapText: options?.wrapText ?? false,
     });
+  };
+
+  const writeSummary = (
+    labelCell: string,
+    valueCell: string,
+    label: string,
+    value: string,
+    options?: { emphasize?: boolean },
+  ) => {
+    writeLabel(labelCell, label);
+    writeValue(valueCell, value, { emphasize: options?.emphasize, bold: true });
   };
 
   worksheet.getRow(1).height = 26;
   worksheet.getRow(2).height = 38;
   worksheet.getRow(3).height = 22;
-  worksheet.getRow(4).height = 14;
+  worksheet.getRow(4).height = 10;
+  worksheet.getRow(5).height = 10;
 
   if (logoBuffer) {
     const imageId = workbook.addImage({
@@ -752,7 +697,7 @@ export async function buildBillingXlsx(data: BillingExportData) {
     horizontal: "left",
     vertical: "middle",
   });
-  writeSummaryRow(1, "\u8ba2\u5355\u53f7 / No. Ped.", data.orderNo || "-");
+  writeSummary("G1", "I1", "\u8ba2\u5355\u53f7 / No. Ped.", data.orderNo || "-");
 
   applyCellStyle("A2", {
     value: "INVOICE",
@@ -762,7 +707,7 @@ export async function buildBillingXlsx(data: BillingExportData) {
     horizontal: "left",
     vertical: "middle",
   });
-  writeSummaryRow(2, "\u51fa\u8d26\u65e5\u671f / F. Fact.", data.issueDateText || "-");
+  writeSummary("G2", "I2", "\u51fa\u8d26\u65e5\u671f / F. Fact.", data.issueDateText || "-");
 
   applyCellStyle("A3", {
     value: "M\u00c1S QUE PRODUCTOS, ENTREGAMOS SOLUCIONES",
@@ -771,77 +716,79 @@ export async function buildBillingXlsx(data: BillingExportData) {
     horizontal: "left",
     vertical: "middle",
   });
-  writeSummaryRow(3, "\u5408\u8ba1\u91d1\u989d / Mto. Total", "$" + toMoney(data.totalAmount), {
+  writeSummary("G3", "I3", "\u5408\u8ba1\u91d1\u989d / Mto. Total", "$" + toMoney(data.totalAmount), {
     emphasize: true,
   });
 
-  let currentRow = 5;
+  const leftLabelCol = "A";
+  const leftValueCol = "A";
+  const middleLabelCol = "D";
+  const middleValueCol = "D";
+  const rightLabelCol = "G";
+  const rightValueCol = "G";
 
-  writeSectionTitle(currentRow, "\u5ba2\u6237\u4fe1\u606f / CLIENTE");
-  currentRow += 1;
-  writeLabelRow(currentRow, "\u5ba2\u6237\u540d\u79f0 / Nom. Clte.");
-  currentRow += 1;
-  writeValueRow(currentRow, data.companyName || "-");
-  currentRow += 1;
-  writeLabelRow(currentRow, "\u6536\u8d27\u4eba / Dest.");
-  currentRow += 1;
-  writeValueRow(currentRow, data.recipientNameText || data.contactName || "-");
-  currentRow += 1;
-  writeLabelRow(currentRow, "\u7535\u8bdd / Tel. Dest.");
-  currentRow += 1;
-  writeValueRow(currentRow, data.recipientPhoneText || data.contactPhone || "-");
-  currentRow += 1;
-  writeLabelRow(currentRow, "\u9001\u8d27\u5730\u5740 / Dir. Ent.");
-  currentRow += 1;
-  writeValueRow(currentRow, data.addressText || "-", { wrapText: true, rowHeight: 44 });
-  currentRow += 2;
+  const sectionTopRow = 6;
+  const sectionFields = {
+    left: [
+      { label: "\u5ba2\u6237\u4fe1\u606f / CLIENTE", type: "title" as const },
+      { label: "\u5ba2\u6237\u540d\u79f0 / Nom. Clte.", value: data.companyName || "-", wrapText: false },
+      { label: "\u6536\u8d27\u4eba / Dest.", value: data.recipientNameText || data.contactName || "-", wrapText: false },
+      { label: "\u7535\u8bdd / Tel. Dest.", value: data.recipientPhoneText || data.contactPhone || "-", wrapText: false },
+      { label: "\u9001\u8d27\u5730\u5740 / Dir. Ent.", value: data.addressText || "-", wrapText: true, rowHeight: 48 },
+    ],
+    middle: [
+      { label: "\u8d26\u5355\u4fe1\u606f / FACT.", type: "title" as const },
+      { label: "\u53d1\u8d27\u65e5\u671f / F. Env.", value: data.shipDateText || "-", wrapText: false },
+      { label: "\u95e8\u5e97\u6807\u8bb0 / Etiq. Tda.", value: formatStoreLabelDisplay(data.storeLabelText) || "-", wrapText: false },
+      { label: "\u8d26\u671f", value: getPaymentTermDisplayLines(data.paymentTermText).join(" ") || "-", wrapText: false },
+      ...(data.vipDiscountEnabled ? [{ label: "VIP\u5ba2\u6237", value: "VIP\u5ba2\u6237", wrapText: false }] : []),
+    ],
+    right: [
+      { label: "\u7269\u6d41\u4fe1\u606f / ENV\u00cdO", type: "title" as const },
+      { label: "\u53d1\u8d27\u4ed3 / Dep. Env.", value: data.warehouseText || "-", wrapText: false },
+      { label: "\u53d1\u8d27\u65b9\u5f0f / Met. Env.", value: data.shippingMethodText || "-", wrapText: false },
+      { label: "\u6258\u8fd0\u516c\u53f8 / Emp. Transp.", value: data.carrierCompanyText || "-", wrapText: false },
+      { label: "\u88c5\u7bb1\u4ef6\u6570 / Cant. Cajas", value: data.boxCountText || "-", wrapText: false },
+      { label: "\u5546\u54c1\u603b\u6570\u91cf / Tot. Prod.", value: String(data.totalQty || 0), wrapText: false },
+    ],
+  };
 
-  writeSectionTitle(currentRow, "\u8d26\u5355\u4fe1\u606f / FACT.");
-  currentRow += 1;
-  writeLabelRow(currentRow, "\u53d1\u8d27\u65e5\u671f / F. Env.");
-  currentRow += 1;
-  writeValueRow(currentRow, data.shipDateText || "-");
-  currentRow += 1;
-  writeLabelRow(currentRow, "\u95e8\u5e97\u6807\u8bb0 / Etiq. Tda.");
-  currentRow += 1;
-  writeValueRow(currentRow, formatStoreLabelDisplay(data.storeLabelText) || "-");
-  currentRow += 1;
-  writeLabelRow(currentRow, "\u8d26\u671f");
-  currentRow += 1;
-  writeValueRow(currentRow, getPaymentTermDisplayLines(data.paymentTermText).join(" ") || "-");
-  currentRow += 1;
-  if (data.vipDiscountEnabled) {
-    writeLabelRow(currentRow, "VIP\u5ba2\u6237");
-    currentRow += 1;
-    writeValueRow(currentRow, "VIP\u5ba2\u6237");
-    currentRow += 1;
-  }
-  currentRow += 1;
+  const renderSectionColumn = (
+    startRow: number,
+    labelColumn: string,
+    valueColumn: string,
+    entries: Array<
+      | { label: string; type: "title" }
+      | { label: string; value: string; wrapText?: boolean; rowHeight?: number }
+    >,
+  ) => {
+    let row = startRow;
+    for (const entry of entries) {
+      if ("type" in entry && entry.type === "title") {
+        setRowHeight(row, 24);
+        writeSectionTitle(labelColumn + row, entry.label);
+        row += 1;
+        continue;
+      }
+      const fieldEntry = entry as { label: string; value: string; wrapText?: boolean; rowHeight?: number };
+      setRowHeight(row, 18);
+      writeLabel(labelColumn + row, fieldEntry.label);
+      row += 1;
+      setRowHeight(row, fieldEntry.rowHeight ?? (fieldEntry.wrapText ? 48 : 26));
+      writeValue(valueColumn + row, fieldEntry.value, {
+        wrapText: fieldEntry.wrapText,
+        rowHeight: fieldEntry.rowHeight ?? (fieldEntry.wrapText ? 48 : 26),
+      });
+      row += 2;
+    }
+    return row;
+  };
 
-  writeSectionTitle(currentRow, "\u7269\u6d41\u4fe1\u606f / ENV\u00cdO");
-  currentRow += 1;
-  writeLabelRow(currentRow, "\u53d1\u8d27\u4ed3 / Dep. Env.");
-  currentRow += 1;
-  writeValueRow(currentRow, data.warehouseText || "-");
-  currentRow += 1;
-  writeLabelRow(currentRow, "\u53d1\u8d27\u65b9\u5f0f / Met. Env.");
-  currentRow += 1;
-  writeValueRow(currentRow, data.shippingMethodText || "-");
-  currentRow += 1;
-  writeLabelRow(currentRow, "\u6258\u8fd0\u516c\u53f8 / Emp. Transp.");
-  currentRow += 1;
-  writeValueRow(currentRow, data.carrierCompanyText || "-");
-  currentRow += 1;
-  writeLabelRow(currentRow, "\u88c5\u7bb1\u4ef6\u6570 / Cant. Cajas");
-  currentRow += 1;
-  writeValueRow(currentRow, data.boxCountText || "-");
-  currentRow += 1;
-  writeLabelRow(currentRow, "\u5546\u54c1\u603b\u6570\u91cf / Tot. Prod.");
-  currentRow += 1;
-  writeValueRow(currentRow, String(data.totalQty || 0));
-  currentRow += 2;
+  const leftEndRow = renderSectionColumn(sectionTopRow, leftLabelCol, leftValueCol, sectionFields.left);
+  const middleEndRow = renderSectionColumn(sectionTopRow, middleLabelCol, middleValueCol, sectionFields.middle);
+  const rightEndRow = renderSectionColumn(sectionTopRow, rightLabelCol, rightValueCol, sectionFields.right);
+  const headerRowNumber = Math.max(leftEndRow, middleEndRow, rightEndRow) + 1;
 
-  const headerRowNumber = currentRow;
   const headerValues = [
     "\u56fe\u7247",
     "\u7f16\u53f7",
@@ -868,7 +815,7 @@ export async function buildBillingXlsx(data: BillingExportData) {
     cell.fill = {
       type: "pattern",
       pattern: "solid",
-      fgColor: { argb: "FFF1F5F9" },
+      fgColor: { argb: tableHeaderFill },
     };
     cell.border = {
       top: { style: "thin", color: { argb: "FFD9E1EA" } },
