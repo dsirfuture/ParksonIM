@@ -453,13 +453,29 @@ export function DropshippingClient({
       setImporting(true);
       setError("");
       setImportSummary("");
+      if (file.size > 25 * 1024 * 1024) {
+        throw new Error(
+          lang === "zh"
+            ? `历史导入压缩包过大（${(file.size / 1024 / 1024).toFixed(1)} MB）。当前网站上传链路很可能被服务器限制，请先发我服务器日志或把压缩包拆小后再试。`
+            : `The import zip is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). The current upload path is likely limited by the server. Please check server logs or split the zip and try again.`,
+        );
+      }
       const formData = new FormData();
       formData.append("file", file);
       const response = await fetch("/api/dropshipping/import", {
         method: "POST",
         body: formData,
       });
-      const json = await response.json();
+      const raw = await response.text();
+      let json: { ok?: boolean; error?: string; summary?: Record<string, number> } | null = null;
+      try {
+        json = raw ? JSON.parse(raw) : null;
+      } catch {
+        if (!response.ok) {
+          throw new Error(raw || "import_failed");
+        }
+        throw new Error("import_failed");
+      }
       if (!response.ok || !json?.ok) throw new Error(json?.error || "import_failed");
       const summary = json.summary || {};
       setImportSummary(
@@ -469,7 +485,16 @@ export function DropshippingClient({
       );
       await refreshAll();
     } catch (importError) {
-      setError(importError instanceof Error ? importError.message : "import_failed");
+      const message = importError instanceof Error ? importError.message : "import_failed";
+      if (message.includes("Request Entity Too Large") || message.includes("request entity too large")) {
+        setError(
+          lang === "zh"
+            ? "历史导入压缩包被服务器拦截了，通常是上传体积超限。请把当前 zip 文件大小告诉我，我继续把上传链路改成可用方案。"
+            : "The history import zip was blocked by the server, usually because the upload is too large. Tell me the zip size and I will adjust the upload flow.",
+        );
+        return;
+      }
+      setError(message);
     } finally {
       setImporting(false);
     }
