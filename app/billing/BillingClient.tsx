@@ -525,9 +525,11 @@ export function BillingClient({
             <div className="max-h-[78vh] overflow-auto px-6 py-8">
               <div className="relative mx-auto w-full max-w-[980px] rounded-[32px] bg-white px-8 py-9 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
                 {detailGenerated ? (
-                  <div className="pointer-events-none absolute right-[330px] top-[72px] z-10 rotate-[-12deg] rounded-[28px] border-[3px] border-[#9f2f2f]/75 bg-[#fff5f5]/45 px-6 py-3 text-[#9f2f2f] shadow-[0_10px_24px_rgba(159,47,47,0.10)] backdrop-blur-[1px]">
-                    <div className="text-center text-[22px] font-bold leading-none tracking-[0.18em]">已生成</div>
-                    <div className="mt-2 border-t border-[#9f2f2f]/35 pt-2 text-center text-[13px] font-semibold tracking-[0.22em]">账单锁定</div>
+                  <div className="pointer-events-none absolute right-[330px] top-[72px] z-10 rotate-[-12deg] rounded-[28px] border-[3px] border-[#9f2f2f]/75 bg-[#fff5f5]/45 px-5 py-3 text-[#9f2f2f] shadow-[0_10px_24px_rgba(159,47,47,0.10)] backdrop-blur-[1px]">
+                    <div className="text-center text-[20px] font-bold leading-none tracking-[0.18em]">已生成</div>
+                    <div className="mt-1 text-center text-[10px] font-semibold uppercase leading-none tracking-[0.28em]">GEN.</div>
+                    <div className="mt-2 border-t border-[#9f2f2f]/35 pt-2 text-center text-[13px] font-semibold leading-none tracking-[0.18em]">账单锁定</div>
+                    <div className="mt-1 text-center text-[9px] font-semibold uppercase leading-none tracking-[0.22em]">Y FACT. BLOQUEADA.</div>
                   </div>
                 ) : null}
                 <div className="flex flex-wrap items-start justify-between gap-10 border-b border-slate-200/80 pb-10">
