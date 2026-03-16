@@ -304,8 +304,8 @@ export function BillingClient({
                     <th className="whitespace-nowrap px-4 py-3 font-semibold">联系电话</th>
                     <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">原金额</th>
                     <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">折扣后金额</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold">更新时间</th>
-                    <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">操作</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold">订单汇总时间</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-right font-semibold"></th>
                   </tr>
                 </thead>
                 <tbody>
