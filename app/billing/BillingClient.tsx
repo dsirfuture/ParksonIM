@@ -517,13 +517,19 @@ export function BillingClient({
                   <input type="checkbox" className="h-4 w-4 rounded border-slate-300" checked={vipDiscountEnabled} disabled={detailGenerated} onChange={(e) => setVipDiscountEnabled(e.target.checked)} />
                   启用 VIP 折扣
                 </label>
-                {detailGenerated ? <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">已生成，账单已锁定</span> : null}
+                {detailGenerated ? <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">已生成，账单锁定</span> : null}
                 <button type="button" className="rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-700 transition hover:bg-slate-50" onClick={() => setDetailOrderNo(null)}>关闭</button>
               </div>
             </div>
 
             <div className="max-h-[78vh] overflow-auto px-6 py-8">
-              <div className="mx-auto w-full max-w-[980px] rounded-[32px] bg-white px-8 py-9 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
+              <div className="relative mx-auto w-full max-w-[980px] rounded-[32px] bg-white px-8 py-9 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
+                {detailGenerated ? (
+                  <div className="pointer-events-none absolute right-[330px] top-[72px] z-10 rotate-[-12deg] rounded-[28px] border-[3px] border-[#9f2f2f]/75 bg-[#fff5f5]/45 px-6 py-3 text-[#9f2f2f] shadow-[0_10px_24px_rgba(159,47,47,0.10)] backdrop-blur-[1px]">
+                    <div className="text-center text-[22px] font-bold leading-none tracking-[0.18em]">已生成</div>
+                    <div className="mt-2 border-t border-[#9f2f2f]/35 pt-2 text-center text-[13px] font-semibold tracking-[0.22em]">账单锁定</div>
+                  </div>
+                ) : null}
                 <div className="flex flex-wrap items-start justify-between gap-10 border-b border-slate-200/80 pb-10">
                   <div className="max-w-[430px] pt-1">
                     <div className="text-[11px] font-medium uppercase tracking-[0.3em] text-slate-400">PARKSONMX</div>
