@@ -692,24 +692,23 @@ export async function buildBillingPdf(data: BillingExportData) {
   };
 
   const drawVipField = (text: string, x: number, y: number) => {
-    const rowHeight = 24;
+    const rowHeight = 34;
     const iconSize = 12;
     const textSize = 10;
-    const iconGap = 6;
     const rowBottomY = y - rowHeight;
-    const baselineY = rowBottomY + 7.5;
-    const iconWidth = zhFont.widthOfTextAtSize(VIP_ICON_TEXT, iconSize);
+    const iconY = rowBottomY + 18;
+    const textY = rowBottomY + 4;
 
     page.drawText(VIP_ICON_TEXT, {
       x,
-      y: baselineY,
+      y: iconY,
       size: iconSize,
       font: zhFont,
       color: rgb(0.08, 0.09, 0.1),
     });
     page.drawText(safePdfText(text, unicodeSafe), {
-      x: x + iconWidth + iconGap,
-      y: baselineY,
+      x,
+      y: textY,
       size: textSize,
       font: zhFont,
       color: rgb(0.08, 0.09, 0.1),

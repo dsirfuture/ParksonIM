@@ -437,7 +437,7 @@ export function BillingClient({
                       <InvoiceField label="账期" value={formatPaymentTerm(detailRow?.paymentTermText || "")} />
                     ) : null}
                     {vipDiscountEnabled ? (
-                      <div className="flex items-center gap-2 text-sm font-semibold leading-6 text-slate-950">
+                      <div className="flex flex-col items-start gap-1.5 text-sm font-semibold leading-6 text-slate-950">
                         <VipBadgeIcon />
                         <span>VIP客户</span>
                       </div>
