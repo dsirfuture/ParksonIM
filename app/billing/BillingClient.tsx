@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { StatCard } from "@/components/stat-card";
 import { TableCard } from "@/components/table-card";
@@ -114,9 +115,7 @@ function formatPaymentTerm(value: string) {
 
 function VipBadgeIcon() {
   return (
-    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className="h-[18px] w-[18px] shrink-0">
-      <path d="M10 2.4 13 7.4l4.3-1.7-1.8 9.9H4.5L2.7 5.7 7 7.4 10 2.4Z" />
-    </svg>
+    <Image src="/icons/vip.svg" alt="" aria-hidden="true" width={18} height={18} className="h-[18px] w-[18px] shrink-0" />
   );
 }
 
@@ -168,12 +167,14 @@ function InvoiceHighlightField({
 function InvoiceSection({
   title,
   children,
+  className = "",
 }: {
   title: string;
   children: ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="rounded-[24px] border border-slate-200/70 bg-white/80 p-6">
+    <div className={`flex h-full flex-col rounded-[24px] border border-slate-200/70 bg-white/80 p-6 ${className}`}>
       <div className="mb-5 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400">{title}</div>
       <div className="space-y-5">{children}</div>
     </div>
@@ -423,7 +424,7 @@ export function BillingClient({
                   </div>
                 </div>
 
-                <div className="mt-8 grid items-start gap-5 lg:grid-cols-3">
+                <div className="mt-8 grid items-stretch gap-5 lg:grid-cols-3">
                   <InvoiceSection title="客户信息 / CLIENTE">
                     <InvoiceField label="客户名称 / Nom. Clte." value={detailRow?.companyName || "-"} />
                     <InvoiceField label="收货人 / Dest." value={detailRow?.recipientNameText || detailRow?.contactName || "-"} />

@@ -54,6 +54,16 @@ export function buildBillingExportBaseName(data: Pick<BillingExportData, "orderN
   return `${data.orderNo}-${safeCompanyName}${data.vipDiscountEnabled ? "-vip" : ""}`;
 }
 
+export function buildBillingPdfFileName(data: Pick<BillingExportData, "orderNo" | "companyName">) {
+  const companyName = String(data.companyName || "")
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const safeCompanyName = companyName || "NoCompany";
+  return `${data.orderNo}_${safeCompanyName}_INVOICE`;
+}
+
 function hasChineseGlyph(value: string) {
   return /[\u3400-\u9FFF\uF900-\uFAFF]/.test(String(value || ""));
 }
@@ -97,8 +107,6 @@ function formatPaymentTerm(value: string) {
   if (!text) return "";
   return text.endsWith("天") ? text : `${text}天`;
 }
-
-const VIP_ICON_TEXT = "★";
 
 function toPercentText(value: number | null) {
   if (value === null || !Number.isFinite(value)) return "-";
@@ -214,6 +222,29 @@ async function loadPdfFontBytes() {
   return null;
 }
 
+async function loadPdfBoldFontBytes() {
+  const fontCandidates = [
+    "C:\\Windows\\Fonts\\msyhbd.ttf",
+    "C:\\Windows\\Fonts\\simhei.ttf",
+    path.join(process.cwd(), "public", "fonts", "NotoSansSC-Bold.ttf"),
+    path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Bold.otf"),
+  ];
+
+  for (const fontPath of fontCandidates) {
+    try {
+      return {
+        bytes: await fs.readFile(fontPath),
+        isOtf: fontPath.toLowerCase().endsWith(".otf"),
+        path: fontPath,
+      };
+    } catch {
+      // try next candidate
+    }
+  }
+
+  return null;
+}
+
 async function loadBillingLogoBuffer() {
   const filePath = path.join(process.cwd(), "public", "BSLOGO.png");
   try {
@@ -221,6 +252,48 @@ async function loadBillingLogoBuffer() {
   } catch {
     return null;
   }
+}
+
+async function loadBillingVipSvg() {
+  const filePath = path.join(process.cwd(), "public", "icons", "vip.svg");
+  try {
+    return await fs.readFile(filePath, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+function parseSvgHexColor(value: string | undefined) {
+  if (!value) return [0.08, 0.09, 0.1] as const;
+  const hex = value.trim().replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) return [0.08, 0.09, 0.1] as const;
+  const r = parseInt(hex.slice(0, 2), 16) / 255;
+  const g = parseInt(hex.slice(2, 4), 16) / 255;
+  const b = parseInt(hex.slice(4, 6), 16) / 255;
+  return [r, g, b] as const;
+}
+
+function parseVipSvgAsset(svgText: string | null) {
+  if (!svgText) return null;
+  const matches = Array.from(svgText.matchAll(/<path\b([^>]*)>/g));
+  const filled = matches
+    .map((match) => {
+      const attrs = match[1] || "";
+      const dMatch = attrs.match(/\bd="([^"]+)"/);
+      const fillMatch = attrs.match(/\bfill="([^"]+)"/);
+      return {
+        d: dMatch?.[1] || "",
+        fill: fillMatch?.[1],
+      };
+    })
+    .find((item) => item.d && item.fill && item.fill.toLowerCase() !== "none");
+
+  if (!filled) return null;
+
+  return {
+    path: filled.d,
+    color: parseSvgHexColor(filled.fill),
+  };
 }
 
 function safePdfText(value: string, unicodeSafe: boolean) {
@@ -602,12 +675,18 @@ export async function buildBillingPdf(data: BillingExportData) {
   pdfDoc.registerFontkit(fontkit);
 
   const zhFontSource = await loadPdfFontBytes();
+  const zhBoldFontSource = await loadPdfBoldFontBytes();
   const logoBuffer = await loadBillingLogoBuffer();
+  const vipSvgText = await loadBillingVipSvg();
+  const vipSvgAsset = parseVipSvgAsset(vipSvgText);
   const unicodeSafe = Boolean(zhFontSource?.bytes);
 
   const zhFont = zhFontSource?.bytes
     ? await pdfDoc.embedFont(zhFontSource.bytes, { subset: !zhFontSource.isOtf })
     : await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const zhBoldFont = zhBoldFontSource?.bytes
+    ? await pdfDoc.embedFont(zhBoldFontSource.bytes, { subset: !zhBoldFontSource.isOtf })
+    : zhFont;
   const latinFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const latinBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
@@ -628,7 +707,7 @@ export async function buildBillingPdf(data: BillingExportData) {
   let cursorY = pageHeight - topMargin;
 
   const fontForText = (text: string, bold = false) => {
-    if (hasChineseGlyph(text)) return zhFont;
+    if (hasChineseGlyph(text)) return bold ? zhBoldFont : zhFont;
     return bold ? latinBoldFont : latinFont;
   };
 
@@ -693,24 +772,25 @@ export async function buildBillingPdf(data: BillingExportData) {
 
   const drawVipField = (text: string, x: number, y: number) => {
     const rowHeight = 34;
-    const iconSize = 12;
     const textSize = 10;
     const rowBottomY = y - rowHeight;
-    const iconY = rowBottomY + 18;
+    const iconSize = 15;
+    const iconY = rowBottomY + 17;
     const textY = rowBottomY + 4;
 
-    page.drawText(VIP_ICON_TEXT, {
-      x,
-      y: iconY,
-      size: iconSize,
-      font: zhFont,
-      color: rgb(0.08, 0.09, 0.1),
-    });
+    if (vipSvgAsset) {
+      page.drawSvgPath(vipSvgAsset.path, {
+        x,
+        y: iconY,
+        scale: iconSize / 24,
+        color: rgb(...vipSvgAsset.color),
+      });
+    }
     page.drawText(safePdfText(text, unicodeSafe), {
       x,
       y: textY,
       size: textSize,
-      font: zhFont,
+      font: fontForText(text, true),
       color: rgb(0.08, 0.09, 0.1),
     });
     return rowHeight;

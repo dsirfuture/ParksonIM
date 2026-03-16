@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import {
-  buildBillingExportBaseName,
+  buildBillingPdfFileName,
   buildBillingPdf,
   getBillingExportData,
 } from "@/lib/billing-export";
@@ -34,7 +34,7 @@ export async function GET(
     }
 
     const buffer = await buildBillingPdf(data);
-    const fileName = `${buildBillingExportBaseName(data)}.pdf`;
+    const fileName = `${buildBillingPdfFileName(data)}.pdf`;
 
     return new NextResponse(Buffer.from(buffer), {
       status: 200,
