@@ -98,7 +98,7 @@ function formatPaymentTerm(value: string) {
   return text.endsWith("天") ? text : `${text}天`;
 }
 
-const VIP_ICON_PATH = "M10 2.4L13 7.4L17.3 5.7L15.5 15.6H4.5L2.7 5.7L7 7.4Z";
+const VIP_ICON_PATH = "M7.3 0L10.3 5L14.6 3.3L12.8 13.2H1.8L0 3.3L4.3 5Z";
 
 function toPercentText(value: number | null) {
   if (value === null || !Number.isFinite(value)) return "-";
@@ -693,12 +693,14 @@ export async function buildBillingPdf(data: BillingExportData) {
 
   const drawVipField = (text: string, x: number, y: number) => {
     const rowHeight = 24;
-    const iconScale = 1.05;
-    const iconHeight = (15.6 - 2.4) * iconScale;
+    const iconScale = 1.08;
+    const iconHeight = 13.2 * iconScale;
+    const iconWidth = 14.6 * iconScale;
+    const iconGap = 8;
     const textSize = 10;
     const rowCenterY = y - rowHeight / 2;
-    const iconY = rowCenterY - iconHeight / 2 - 2.4 * iconScale;
-    const textY = rowCenterY - textSize / 2 + 1;
+    const iconY = rowCenterY - iconHeight / 2;
+    const textY = rowCenterY - textSize / 2 + 0.8;
 
     page.drawSvgPath(VIP_ICON_PATH, {
       x,
@@ -706,7 +708,7 @@ export async function buildBillingPdf(data: BillingExportData) {
       scale: iconScale,
       color: rgb(0.08, 0.09, 0.1),
     });
-    drawText(text, x + 22, textY, {
+    drawText(text, x + iconWidth + iconGap, textY, {
       size: textSize,
       bold: true,
       color: [0.08, 0.09, 0.1],
