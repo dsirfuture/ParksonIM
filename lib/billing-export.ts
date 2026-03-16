@@ -539,7 +539,7 @@ export async function buildBillingXlsx(data: BillingExportData) {
   const workbook = new ExcelJS.Workbook();
   const logoBuffer = await loadBillingLogoBuffer();
   const worksheet = workbook.addWorksheet("账单明细", {
-    views: [{ state: "frozen", ySplit: 20, showGridLines: false }],
+    views: [{ showGridLines: false }],
   });
 
   worksheet.properties.defaultRowHeight = 24;
@@ -561,10 +561,12 @@ export async function buildBillingXlsx(data: BillingExportData) {
   const borderColor = "FFE2E8F0";
   const panelFill = "FFFFFFFF";
 
-  const applyMergedCellStyle = (
-    range: string,
+  const colIndex = (col: string) => col.charCodeAt(0) - 64;
+
+  const applyCellStyle = (
+    address: string,
     options?: {
-      value?: string;
+      value?: string | number;
       fontSize?: number;
       bold?: boolean;
       color?: string;
@@ -575,9 +577,8 @@ export async function buildBillingXlsx(data: BillingExportData) {
       border?: boolean | { top?: boolean; left?: boolean; bottom?: boolean; right?: boolean };
     },
   ) => {
-    worksheet.mergeCells(range);
-    const cell = worksheet.getCell(range.split(":")[0]);
-    cell.value = options?.value ?? "";
+    const cell = worksheet.getCell(address);
+    if (options && "value" in options) cell.value = options.value ?? "";
     cell.font = {
       name: getDocumentFontName(String(options?.value || ""), { chineseBold: options?.bold }),
       size: options?.fontSize ?? 10,
@@ -611,6 +612,33 @@ export async function buildBillingXlsx(data: BillingExportData) {
     return cell;
   };
 
+  const applyRangeStyle = (
+    startCol: string,
+    endCol: string,
+    row: number,
+    options?: {
+      value?: string | number;
+      fontSize?: number;
+      bold?: boolean;
+      color?: string;
+      horizontal?: ExcelJS.Alignment["horizontal"];
+      vertical?: ExcelJS.Alignment["vertical"];
+      wrapText?: boolean;
+      fill?: string;
+      border?: boolean | { top?: boolean; left?: boolean; bottom?: boolean; right?: boolean };
+    },
+  ) => {
+    const start = colIndex(startCol);
+    const end = colIndex(endCol);
+    for (let index = start; index <= end; index += 1) {
+      const col = String.fromCharCode(64 + index);
+      applyCellStyle(`${col}${row}`, {
+        ...options,
+        value: index === start ? options?.value ?? "" : "",
+      });
+    }
+  };
+
   const writeInfoBlock = (
     title: string,
     startCol: string,
@@ -621,7 +649,7 @@ export async function buildBillingXlsx(data: BillingExportData) {
     const filledRows = rows.filter((row) => String(row.label || "").trim() || String(row.value || "").trim());
     const fillerCount = Math.max(0, maxSlots - filledRows.length);
 
-    applyMergedCellStyle(`${startCol}8:${endCol}8`, {
+    applyRangeStyle(startCol, endCol, 8, {
       value: title,
       fontSize: 11,
       bold: true,
@@ -635,7 +663,7 @@ export async function buildBillingXlsx(data: BillingExportData) {
       const valueRow = labelRow + 1;
       const isLastFilled = index === filledRows.length - 1 && fillerCount === 0;
 
-      applyMergedCellStyle(`${startCol}${labelRow}:${endCol}${labelRow}`, {
+      applyRangeStyle(startCol, endCol, labelRow, {
         value: row.label,
         fontSize: 8.5,
         color: labelColor,
@@ -644,7 +672,7 @@ export async function buildBillingXlsx(data: BillingExportData) {
         vertical: "bottom",
       });
 
-      applyMergedCellStyle(`${startCol}${valueRow}:${endCol}${valueRow}`, {
+      applyRangeStyle(startCol, endCol, valueRow, {
         value: row.value,
         fontSize: 11,
         bold: false,
@@ -661,7 +689,7 @@ export async function buildBillingXlsx(data: BillingExportData) {
       const labelRow = 9 + slotIndex * 2;
       const valueRow = labelRow + 1;
       const isLast = i === fillerCount - 1;
-      applyMergedCellStyle(`${startCol}${labelRow}:${endCol}${labelRow}`, {
+      applyRangeStyle(startCol, endCol, labelRow, {
         value: "",
         fontSize: 8.5,
         color: labelColor,
@@ -669,7 +697,7 @@ export async function buildBillingXlsx(data: BillingExportData) {
         border: { left: true, right: true },
         vertical: "bottom",
       });
-      applyMergedCellStyle(`${startCol}${valueRow}:${endCol}${valueRow}`, {
+      applyRangeStyle(startCol, endCol, valueRow, {
         value: "",
         fontSize: 11,
         color: valueColor,
@@ -704,21 +732,21 @@ export async function buildBillingXlsx(data: BillingExportData) {
     });
   }
 
-  applyMergedCellStyle("B1:E1", {
+  applyRangeStyle("B", "E", 1, {
     value: "百盛供应链",
     fontSize: 12,
     bold: true,
     color: brandColor,
     vertical: "bottom",
   });
-  applyMergedCellStyle("A2:E3", {
+  applyCellStyle("A2", {
     value: "INVOICE",
     fontSize: 28,
     bold: true,
     color: valueColor,
     vertical: "middle",
   });
-  applyMergedCellStyle("A5:E5", {
+  applyRangeStyle("A", "E", 5, {
     value: "MÁS QUE PRODUCTOS, ENTREGAMOS SOLUCIONES",
     fontSize: 9,
     color: "FF64748B",
@@ -729,19 +757,21 @@ export async function buildBillingXlsx(data: BillingExportData) {
     { labelRange: "G3:J3", valueRange: "G4:J4", label: "出账日期 / F. Fact.", value: data.issueDateText || "-" },
     { labelRange: "G5:J5", valueRange: "G6:J6", label: "合计金额 / Mto. Total", value: `$${toMoney(data.totalAmount)}`, emphasize: true },
   ].forEach((item) => {
-    applyMergedCellStyle(item.labelRange, {
+    const [labelStart, labelEnd] = item.labelRange.split(":");
+    const [valueStart, valueEnd] = item.valueRange.split(":");
+    applyRangeStyle(labelStart.replace(/\d+/g, ""), labelEnd.replace(/\d+/g, ""), Number(labelStart.replace(/[A-Z]/g, "")), {
       value: item.label,
       fontSize: 9,
       color: labelColor,
       fill: panelFill,
       border: true,
     });
-    applyMergedCellStyle(item.valueRange, {
+    applyRangeStyle(valueStart.replace(/\d+/g, ""), valueEnd.replace(/\d+/g, ""), Number(valueStart.replace(/[A-Z]/g, "")), {
       value: item.value,
       fontSize: item.emphasize ? 18 : 11,
       bold: true,
       color: valueColor,
-      horizontal: item.emphasize ? "right" : "left",
+      horizontal: "left",
       fill: panelFill,
       border: true,
     });
