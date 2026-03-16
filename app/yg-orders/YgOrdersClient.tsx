@@ -102,6 +102,8 @@ function extractPhone(contactPhone: string, remarkText: string) {
 
 function cleanRemarkText(value: string) {
   return (value || "")
+    .replace(/\[\[BILLING_META\]\][^\n]*(?:\n|$)/gi, " ")
+    .replace(/BILLING_META\s*\{[^]*$/gi, " ")
     .replace(/[\[\]【】]/g, " ")
     .replace(/\s{2,}/g, " ")
     .trim();

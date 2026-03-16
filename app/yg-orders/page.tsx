@@ -1,4 +1,5 @@
 ﻿import { AppShell } from "@/components/app-shell";
+import { parseBillingRemark } from "@/lib/billing-meta";
 import { prisma } from "@/lib/prisma";
 import { parseYogoDiscountParts } from "@/lib/yogo-product-utils";
 import { getSession } from "@/lib/tenant";
@@ -123,13 +124,17 @@ function numberOrNull(value: unknown) {
 
 function normalizeOrderStatus(value: string | null | undefined) {
   const raw = String(value || "").trim();
-  if (!raw) return "-";
+  if (!raw) return "新订单";
   const key = raw.toLowerCase();
   if (key === "1" || key === "new" || key === "new_order" || key === "new order" || raw === "新订单") return "新订单";
   if (key === "2" || key === "packing" || key === "picking" || raw === "配货中") return "配货中";
   if (/^\s*鏂/.test(raw)) return "新订单";
   if (/^\s*閰/.test(raw)) return "配货中";
   return raw;
+}
+
+function resolveOrderStatus(value: string | null | undefined) {
+  return normalizeOrderStatus(value) || "新订单";
 }
 function normalizeProductText(value: string | null | undefined) {
   const raw = String(value || "")
@@ -447,10 +452,11 @@ export default async function YgOrdersPage() {
     const orderDateText = orderCreatedAt
       ? formatDateTime(orderCreatedAt)
       : parseOrderNoDateText(row.order_no) || "-";
+    const parsedRemark = parseBillingRemark(row.order_remark);
     return {
     id: row.id,
     orderNo: row.order_no,
-    orderStatus: normalizeOrderStatus(statusById.get(row.id)),
+    orderStatus: resolveOrderStatus(statusById.get(row.id)),
     orderDateText,
     orderAmountText: formatMoney(row.order_amount),
     companyName: row.company_name || row.customer_name || "-",
@@ -458,7 +464,7 @@ export default async function YgOrdersPage() {
     contactName: row.contact_name || row.customer_name || "-",
     contactPhone: row.contact_phone || "",
     addressText: row.address_text || "",
-    remarkText: row.order_remark || "",
+    remarkText: parsedRemark.noteText,
     storeLabelText: row.store_label || "",
     createdAtText: formatDateTime(row.created_at),
     supplierCount: uniqueLocations.size > 0 ? uniqueLocations.size : row.supplier_count,

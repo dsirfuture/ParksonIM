@@ -1,6 +1,7 @@
 ﻿import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { parseBillingRemark } from "@/lib/billing-meta";
 import { ProductImage } from "@/components/product-image";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
@@ -172,20 +173,45 @@ export default async function YogoOrdersPreviewPage(props: {
       SELECT column_name
       FROM information_schema.columns
       WHERE table_name = 'yg_order_imports'
-        AND column_name IN ('header_status', 'header_status_id', 'order_created_at')
+        AND column_name IN ('header_status', 'header_status_id', 'latest_status', 'order_created_at')
     `,
   );
   const hasHeaderStatus = statusColumns.some((col) => col.column_name === "header_status");
   const hasHeaderStatusId = statusColumns.some((col) => col.column_name === "header_status_id");
+  const hasLatestStatus = statusColumns.some((col) => col.column_name === "latest_status");
   const hasOrderCreatedAt = statusColumns.some((col) => col.column_name === "order_created_at");
   let statusById = new Map<string, string>();
   let orderCreatedAtById = new Map<string, Date>();
-  if (hasHeaderStatus || hasHeaderStatusId) {
+  if (hasHeaderStatus || hasHeaderStatusId || hasLatestStatus) {
     const statusExpr = hasHeaderStatus
-      ? "NULLIF(TRIM(CAST(header_status AS text)), '')"
+      ? `
+        CASE
+          WHEN header_status IS NULL THEN NULL
+          WHEN LOWER(TRIM(CAST(header_status AS text))) IN ('', '-', '—', 'n/a', 'null', 'none')
+            THEN NULL
+          ELSE TRIM(CAST(header_status AS text))
+        END
+      `
       : "NULL";
     const statusIdExpr = hasHeaderStatusId
-      ? "NULLIF(TRIM(CAST(header_status_id AS text)), '')"
+      ? `
+        CASE
+          WHEN header_status_id IS NULL THEN NULL
+          WHEN LOWER(TRIM(CAST(header_status_id AS text))) IN ('', '-', '—', 'n/a', 'null', 'none')
+            THEN NULL
+          ELSE TRIM(CAST(header_status_id AS text))
+        END
+      `
+      : "NULL";
+    const latestStatusExpr = hasLatestStatus
+      ? `
+        CASE
+          WHEN latest_status IS NULL THEN NULL
+          WHEN LOWER(TRIM(CAST(latest_status AS text))) IN ('', '-', '—', 'n/a', 'null', 'none')
+            THEN NULL
+          ELSE TRIM(CAST(latest_status AS text))
+        END
+      `
       : "NULL";
     const createdAtExpr = hasOrderCreatedAt
       ? "order_created_at"
@@ -196,7 +222,7 @@ export default async function YogoOrdersPreviewPage(props: {
       `
         SELECT
           CAST(id AS text) AS id,
-          COALESCE(${statusExpr}, ${statusIdExpr}) AS header_status,
+          COALESCE(${statusExpr}, ${statusIdExpr}, ${latestStatusExpr}) AS header_status,
           ${createdAtExpr} AS order_created_at
         FROM yg_order_imports
         WHERE tenant_id = $1::uuid
@@ -208,7 +234,7 @@ export default async function YogoOrdersPreviewPage(props: {
     statusById = new Map(
       statusRows
         .filter((row) => row.header_status)
-        .map((row) => [row.id, String(row.header_status || "").trim()]),
+        .map((row) => [row.id, String(row.header_status || "").trim() || "新订单"]),
     );
     orderCreatedAtById = new Map(
       statusRows
@@ -363,14 +389,16 @@ export default async function YogoOrdersPreviewPage(props: {
                   </td>
                 </tr>
               ) : (
-                rows.map((row) => (
+                rows.map((row) => {
+                  const parsedRemark = parseBillingRemark(row.order_remark);
+                  return (
                   <tr
                     key={row.id}
                     className={`border-t border-slate-100 ${selectedOrderKey === row.id ? "bg-indigo-50/40" : ""}`}
                   >
                     <td className="px-3 py-2 font-semibold text-slate-900">{row.order_no}</td>
                     <td className="px-3 py-2 text-slate-600">
-                      {statusById.get(row.id) || "-"}
+                      {statusById.get(row.id) || "新订单"}
                     </td>
                     <td className="px-3 py-2 text-slate-600">
                       {formatDateTime(orderCreatedAtById.get(row.id) || row.created_at)}
@@ -382,7 +410,7 @@ export default async function YogoOrdersPreviewPage(props: {
                       {row.contact_name || row.customer_name || "-"}
                     </td>
                     <td className="px-3 py-2 text-slate-700">
-                      {extractPhone(row.contact_phone, row.contact_name, row.order_remark)}
+                      {extractPhone(row.contact_phone, row.contact_name, parsedRemark.noteText)}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-700">
                       {toMoney(
@@ -393,7 +421,7 @@ export default async function YogoOrdersPreviewPage(props: {
                       )}
                     </td>
                     <td className="max-w-[240px] truncate px-3 py-2 text-slate-600">
-                      {row.order_remark || "-"}
+                      {parsedRemark.noteText || "-"}
                     </td>
                     <td className="px-3 py-2 text-slate-600">
                       <Link
@@ -404,7 +432,8 @@ export default async function YogoOrdersPreviewPage(props: {
                       </Link>
                     </td>
                   </tr>
-                ))
+                );
+                })
               )}
             </tbody>
           </table>
