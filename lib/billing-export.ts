@@ -170,6 +170,37 @@ async function loadProductImageBuffer(sku: string, barcode: string) {
   return null;
 }
 
+async function optimizeImageForPdf(
+  image: { buffer: Buffer; extension: "png" | "jpeg" } | null,
+) {
+  if (!image) return null;
+
+  try {
+    const sharpModule = await import("sharp");
+    const sharp = sharpModule.default;
+    const optimized = await sharp(image.buffer, { failOn: "none" })
+      .rotate()
+      .resize(96, 96, {
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .flatten({ background: "#ffffff" })
+      .jpeg({
+        quality: 52,
+        mozjpeg: true,
+        chromaSubsampling: "4:2:0",
+      })
+      .toBuffer();
+
+    return {
+      buffer: optimized,
+      extension: "jpeg" as const,
+    };
+  } catch {
+    return image;
+  }
+}
+
 async function loadPdfFontBytes() {
   const fontCandidates = [
     path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Regular.otf"),
@@ -752,13 +783,12 @@ export async function buildBillingPdf(data: BillingExportData) {
       x += col.width;
     }
 
-    const imageBuffer = await loadProductImageBuffer(item.sku, item.barcode);
+    const imageBuffer = await optimizeImageForPdf(
+      await loadProductImageBuffer(item.sku, item.barcode),
+    );
     if (imageBuffer) {
       try {
-        const embedded =
-          imageBuffer.extension === "png"
-            ? await pdfDoc.embedPng(imageBuffer.buffer)
-            : await pdfDoc.embedJpg(imageBuffer.buffer);
+        const embedded = await pdfDoc.embedJpg(imageBuffer.buffer);
         const imageSize = Math.min(26, columns[0].width - 8, rowHeight - 8);
         page.drawImage(embedded, {
           x: marginLeft + (columns[0].width - imageSize) / 2,
