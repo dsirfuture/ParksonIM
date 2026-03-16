@@ -383,7 +383,7 @@ export function BillingClient({
                     <th className="whitespace-nowrap px-4 py-3 font-semibold">联系电话</th>
                     <th className="whitespace-nowrap px-4 py-3 font-semibold">原金额</th>
                     <th className="whitespace-nowrap px-4 py-3 font-semibold">折扣后金额</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold">订单汇总时间</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold">账单汇总时间</th>
                     <th className="whitespace-nowrap px-4 py-3 text-right font-semibold"></th>
                   </tr>
                 </thead>
@@ -640,7 +640,10 @@ export function BillingClient({
             </div>
             <div className="space-y-4 px-6 py-5">
               <div>
-                <label className="mb-1 block text-sm text-slate-600">完整订单号</label>
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <label className="text-sm text-slate-600">完整账单号</label>
+                  <span className="text-xs text-slate-400">此账单号：{detailRow.orderNo}</span>
+                </div>
                 <input value={revokeState.confirmOrderNo} onChange={(e) => setRevokeState((prev) => prev ? { ...prev, confirmOrderNo: e.target.value, error: "" } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" />
               </div>
               <div>
@@ -651,7 +654,7 @@ export function BillingClient({
             </div>
             <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-4">
               <button type="button" onClick={() => setRevokeState(null)} className="h-10 rounded-xl border border-slate-200 px-4 text-sm text-slate-600 hover:bg-slate-50">取消</button>
-              <button type="button" disabled={statusActionLoading === "revoke"} onClick={() => updateGeneratedState("revoke", { confirmOrderNo: revokeState.confirmOrderNo, revokeReason: revokeState.reason })} className="h-10 rounded-xl bg-amber-500 px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">确认撤销</button>
+              <button type="button" disabled={statusActionLoading === "revoke"} onClick={() => updateGeneratedState("revoke", { confirmOrderNo: revokeState.confirmOrderNo, revokeReason: revokeState.reason })} className="h-10 rounded-xl bg-primary px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">确认撤销</button>
             </div>
           </div>
         </div>
