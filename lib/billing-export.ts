@@ -783,7 +783,7 @@ export async function buildBillingPdf(data: BillingExportData) {
       return usedHeight + 26;
     });
 
-    cursorY = sectionTop - Math.max(228, ...sectionHeights) - 10;
+    cursorY = sectionTop - Math.max(228, ...sectionHeights) - 16;
 
     drawText("\u5546\u54c1\u660e\u7ec6 / DETALLE", marginX, cursorY + 10, {
       size: 8.2,
@@ -845,7 +845,8 @@ export async function buildBillingPdf(data: BillingExportData) {
   await drawHeader();
   drawItemsHeader();
 
-  for (const item of data.items) {
+  for (let itemIndex = 0; itemIndex < data.items.length; itemIndex += 1) {
+    const item = data.items[itemIndex];
     const primaryName = item.nameEs || item.nameZh || "-";
     const secondaryName = item.nameZh && item.nameEs ? item.nameZh : "";
     const nameLines = wrapTextByWidth(primaryName, fontForText(primaryName), 10.2, 210, unicodeSafe);
@@ -860,34 +861,37 @@ export async function buildBillingPdf(data: BillingExportData) {
 
     const rowTop = cursorY;
     const rowBottom = cursorY - rowHeight;
-    page.drawLine({
-      start: { x: marginX, y: rowTop + 2 },
-      end: { x: pageWidth - marginX, y: rowTop + 2 },
-      thickness: 0.5,
-      color: rgb(0.93, 0.94, 0.95),
-    });
+    if (itemIndex > 0) {
+      page.drawLine({
+        start: { x: marginX, y: rowTop + 2 },
+        end: { x: pageWidth - marginX, y: rowTop + 2 },
+        thickness: 0.5,
+        color: rgb(0.93, 0.94, 0.95),
+      });
+    }
 
     let x = marginX;
     const image = await loadProductImageBuffer(item.sku, item.barcode);
+    const imageSize = 36;
+    const imageTopY = rowTop - 6;
     if (image) {
       try {
         const embedded = image.extension === "png" ? await pdfDoc.embedPng(image.buffer) : await pdfDoc.embedJpg(image.buffer);
-        const size = 36;
         page.drawImage(embedded, {
           x: x + 6,
-          y: rowBottom + (rowHeight - size) / 2,
-          width: size,
-          height: size,
+          y: imageTopY - imageSize,
+          width: imageSize,
+          height: imageSize,
         });
       } catch {
-        drawText("-", x + 18, rowBottom + rowHeight / 2, { size: 9, color: [0.65, 0.67, 0.7] });
+        drawText("-", x + 18, imageTopY - 18, { size: 9, color: [0.65, 0.67, 0.7] });
       }
     } else {
-      drawText("-", x + 18, rowBottom + rowHeight / 2, { size: 9, color: [0.65, 0.67, 0.7] });
+      drawText("-", x + 18, imageTopY - 18, { size: 9, color: [0.65, 0.67, 0.7] });
     }
     x += 50;
 
-    let textY = rowTop - 10;
+    let textY = rowTop - 14;
     for (const line of nameLines) {
       drawText(line, x, textY, { size: 10.2, color: [0.12, 0.13, 0.15] });
       textY -= 12;
