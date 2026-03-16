@@ -238,6 +238,15 @@ async function loadPdfLatinFontBytes() {
   return null;
 }
 
+async function loadBillingLogoBuffer() {
+  const filePath = path.join(process.cwd(), "public", "BSLOGO.png");
+  try {
+    return await fs.readFile(filePath);
+  } catch {
+    return null;
+  }
+}
+
 function safePdfText(value: string, unicodeSafe: boolean) {
   const normalized = String(value || "").replace(/[\r\n\t]+/g, " ");
   if (unicodeSafe) return normalized;
@@ -626,6 +635,7 @@ export async function buildBillingPdf(data: BillingExportData) {
     ? await pdfDoc.embedFont(latinFontBytes, { subset: true })
     : await pdfDoc.embedFont(StandardFonts.Helvetica);
   const latinBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const logoBuffer = await loadBillingLogoBuffer();
   const pageWidth = 792;
   const pageHeight = 612;
   const marginLeft = 28;
@@ -650,6 +660,8 @@ export async function buildBillingPdf(data: BillingExportData) {
     { label: "\u91d1\u989d", width: 62, align: "right" as const },
   ];
   const tableWidth = columns.reduce((sum, col) => sum + col.width, 0);
+  const contentLeft = Math.max(Math.floor((pageWidth - tableWidth) / 2), marginLeft);
+  const contentRight = contentLeft + tableWidth;
 
   let page = pdfDoc.addPage([pageWidth, pageHeight]);
   let cursorY = pageHeight - topMargin;
@@ -714,12 +726,36 @@ export async function buildBillingPdf(data: BillingExportData) {
   };
 
   const drawHeaderInfo = async () => {
-    const sectionWidth = pageWidth - marginLeft - marginRight;
+    drawText("PARKSONMX", contentLeft, cursorY - 2, {
+      size: 12,
+      font: latinBoldFont,
+      color: { r: 0.18, g: 0.31, b: 0.55 },
+    });
+    if (logoBuffer) {
+      try {
+        const logo = await pdfDoc.embedPng(logoBuffer);
+        const logoScale = Math.min(74 / logo.width, 26 / logo.height);
+        const logoWidth = Math.max(1, logo.width * logoScale);
+        const logoHeight = Math.max(1, logo.height * logoScale);
+        page.drawImage(logo, {
+          x: contentRight - logoWidth,
+          y: cursorY - logoHeight + 6,
+          width: logoWidth,
+          height: logoHeight,
+        });
+      } catch {
+        // ignore logo failure
+      }
+    }
+    cursorY -= 34;
+
+    const sectionWidth = tableWidth;
     const halfGap = 18;
     const halfWidth = (sectionWidth - halfGap) / 2;
-    const leftLabelX = marginLeft + 10;
-    const leftValueX = marginLeft + 188;
-    const rightBaseX = marginLeft + halfWidth + halfGap;
+    const leftBaseX = contentLeft;
+    const leftLabelX = leftBaseX + 10;
+    const leftValueX = leftBaseX + 188;
+    const rightBaseX = contentLeft + halfWidth + halfGap;
     const rightLabelX = rightBaseX + 10;
     const rightValueX = rightBaseX + 188;
     const valueWidth = halfWidth - 196;
@@ -758,22 +794,22 @@ export async function buildBillingPdf(data: BillingExportData) {
     };
 
     const firstRowHeight = Math.max(
-      drawField("客户名称 Nom. Cte.", data.companyName || "-", marginLeft, leftLabelX, leftValueX, cursorY),
-      drawField("订单号 NO. PED.", data.orderNo || "-", rightBaseX, rightLabelX, rightValueX, cursorY),
+      drawField("\u5ba2\u6237\u540d\u79f0 Nom. Cte.", data.companyName || "-", leftBaseX, leftLabelX, leftValueX, cursorY),
+      drawField("\u8ba2\u5355\u53f7 NO. PED.", data.orderNo || "-", rightBaseX, rightLabelX, rightValueX, cursorY),
     );
     cursorY -= firstRowHeight + 8;
 
     const pairs: Array<[[string, string], [string, string] | null]> = [
-      [["出账日期 F. FACT.", data.issueDateText || "-"], ["合计金额 MTO. TOTAL", `$${toMoney(data.totalAmount)}`]],
-      [["商品总数量 TOTAL PROD.", String(data.totalQty || 0)], ["装箱件数 CANT. CAJAS", data.boxCountText || "-"]],
-      [["发货日期 F. ENV.", data.shipDateText || "-"], ["发货仓 DEP. ENVIO", data.warehouseText || "-"]],
-      [["发货方式 MET. ENV.", data.shippingMethodText || "-"], ["收货人 DEST.", data.recipientNameText || "-"]],
-      [["送货地址 DIR. ENT.", data.addressText || "-"], ["收货电话 TEL. DEST.", data.recipientPhoneText || "-"]],
-      [["托运公司 EMP. TRANSP.", data.carrierCompanyText || "-"], null],
+      [["\u51fa\u8d26\u65e5\u671f F. FACT.", data.issueDateText || "-"], ["\u5408\u8ba1\u91d1\u989d MTO. TOTAL", `$${toMoney(data.totalAmount)}`]],
+      [["\u5546\u54c1\u603b\u6570\u91cf TOTAL PROD.", String(data.totalQty || 0)], ["\u88c5\u7bb1\u4ef6\u6570 CANT. CAJAS", data.boxCountText || "-"]],
+      [["\u53d1\u8d27\u65e5\u671f F. ENV.", data.shipDateText || "-"], ["\u53d1\u8d27\u4ed3 DEP. ENV\u00cdO", data.warehouseText || "-"]],
+      [["\u53d1\u8d27\u65b9\u5f0f MET. ENV.", data.shippingMethodText || "-"], ["\u6536\u8d27\u4eba DEST.", data.recipientNameText || "-"]],
+      [["\u9001\u8d27\u5730\u5740 DIR. ENT.", data.addressText || "-"], ["\u6536\u8d27\u7535\u8bdd TEL. DEST.", data.recipientPhoneText || "-"]],
+      [["\u6258\u8fd0\u516c\u53f8 EMP. TRANSP.", data.carrierCompanyText || "-"], null],
     ];
 
     for (const [leftField, rightField] of pairs) {
-      const leftHeight = drawField(leftField[0], leftField[1], marginLeft, leftLabelX, leftValueX, cursorY);
+      const leftHeight = drawField(leftField[0], leftField[1], leftBaseX, leftLabelX, leftValueX, cursorY);
       const rightHeight = rightField
         ? drawField(rightField[0], rightField[1], rightBaseX, rightLabelX, rightValueX, cursorY)
         : leftHeight;
@@ -785,7 +821,7 @@ export async function buildBillingPdf(data: BillingExportData) {
 
   const drawTableHeader = () => {
     const headerHeight = 24;
-    let x = marginLeft;
+    let x = contentLeft;
     for (const col of columns) {
       page.drawRectangle({
         x,
@@ -853,7 +889,7 @@ export async function buildBillingPdf(data: BillingExportData) {
     }
 
     const rowBottomY = cursorY - rowHeight + 2;
-    let borderX = marginLeft;
+    let borderX = contentLeft;
     for (const col of columns) {
       page.drawRectangle({
         x: borderX,
@@ -867,7 +903,7 @@ export async function buildBillingPdf(data: BillingExportData) {
       borderX += col.width;
     }
 
-    let currentX = marginLeft;
+    let currentX = contentLeft;
     const imageBuffer = await loadProductImageBuffer(item.sku, item.barcode);
     if (imageBuffer) {
       try {
@@ -934,12 +970,12 @@ export async function buildBillingPdf(data: BillingExportData) {
 
   const footerTop = Math.max(cursorY - 20, bottomMargin + 70);
   page.drawLine({
-    start: { x: pageWidth - marginRight - 170, y: footerTop },
-    end: { x: pageWidth - marginRight, y: footerTop },
+    start: { x: contentRight - 170, y: footerTop },
+    end: { x: contentRight, y: footerTop },
     thickness: 0.6,
     color: rgb(0.86, 0.89, 0.92),
   });
-  drawRightText(`$${toMoney(data.totalAmount)}`, pageWidth - marginRight, footerTop - 52, {
+  drawRightText(`$${toMoney(data.totalAmount)}`, contentRight, footerTop - 52, {
     size: 28,
     font: latinBoldFont,
     color: { r: 0.07, g: 0.07, b: 0.08 },
