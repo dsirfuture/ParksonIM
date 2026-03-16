@@ -184,15 +184,19 @@ async function loadProductImageBuffer(sku: string, barcode: string) {
 
 async function loadPdfFontBytes() {
   const fontCandidates = [
-    path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Regular.otf"),
-    path.join(process.cwd(), "public", "fonts", "NotoSansSC-Regular.ttf"),
     "C:\\Windows\\Fonts\\msyh.ttf",
     "C:\\Windows\\Fonts\\simhei.ttf",
+    path.join(process.cwd(), "public", "fonts", "NotoSansSC-Regular.ttf"),
+    path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Regular.otf"),
   ];
 
   for (const fontPath of fontCandidates) {
     try {
-      return await fs.readFile(fontPath);
+      return {
+        bytes: await fs.readFile(fontPath),
+        isOtf: fontPath.toLowerCase().endsWith(".otf"),
+        path: fontPath,
+      };
     } catch {
       // try next candidate
     }
@@ -587,12 +591,12 @@ export async function buildBillingPdf(data: BillingExportData) {
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
 
-  const zhFontBytes = await loadPdfFontBytes();
+  const zhFontSource = await loadPdfFontBytes();
   const logoBuffer = await loadBillingLogoBuffer();
-  const unicodeSafe = Boolean(zhFontBytes);
+  const unicodeSafe = Boolean(zhFontSource?.bytes);
 
-  const zhFont = zhFontBytes
-    ? await pdfDoc.embedFont(zhFontBytes, { subset: true })
+  const zhFont = zhFontSource?.bytes
+    ? await pdfDoc.embedFont(zhFontSource.bytes, { subset: !zhFontSource.isOtf })
     : await pdfDoc.embedFont(StandardFonts.Helvetica);
   const latinFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const latinBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);

@@ -433,7 +433,6 @@ export function BillingClient({
                   <div className="flex items-end justify-between gap-4 border-b border-slate-200/70 pb-4">
                     <div>
                       <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400">商品明细 / DETALLE</div>
-                      <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950">商品明细 / Detalle</h3>
                     </div>
                   </div>
 
