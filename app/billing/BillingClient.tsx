@@ -525,22 +525,19 @@ export function BillingClient({
             <div className="max-h-[78vh] overflow-auto px-6 py-8">
               <div className="relative mx-auto w-full max-w-[980px] rounded-[32px] bg-white px-8 py-9 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
                 {detailGenerated ? (
-                  <div className="pointer-events-none absolute right-[308px] top-[42px] z-10 rotate-[-12deg] opacity-80">
-                    <div className="relative h-[230px] w-[230px] text-[#b03127]">
-                      <div className="absolute inset-0 rounded-full border-[4px] border-current" />
-                      <div className="absolute inset-[12px] rounded-full border-[2px] border-current" />
-                      <div className="absolute inset-[22px] rounded-full border-[3px] border-current" />
-                      <div className="absolute inset-[34px] rounded-full border border-current/75" />
-                      <div className="absolute left-1/2 top-[24px] w-[138px] -translate-x-1/2 text-center text-[14px] font-bold uppercase tracking-[0.34em]">
-                        GEN.
-                      </div>
-                      <div className="absolute bottom-[24px] left-1/2 w-[188px] -translate-x-1/2 text-center text-[10px] font-bold uppercase tracking-[0.24em]">
-                        Y FACT. BLOQUEADA.
-                      </div>
-                      <div className="absolute inset-[54px] rounded-full border border-current/30" />
-                      <div className="absolute inset-x-[38px] top-1/2 -translate-y-1/2 -rotate-[4deg] rounded-[14px] border-[4px] border-current bg-[#fff5f5]/70 px-4 py-3 shadow-[0_8px_18px_rgba(176,49,39,0.10)]">
-                        <div className="text-center text-[24px] font-black leading-none tracking-[0.14em]">已生成</div>
-                        <div className="mt-2 border-t border-current/35 pt-2 text-center text-[15px] font-bold leading-none tracking-[0.18em]">账单锁定</div>
+                  <div className="pointer-events-none absolute right-[306px] top-[68px] z-10 rotate-[-9deg] opacity-80">
+                    <div className="w-[276px] rounded-[12px] border-[4px] border-[#b03127]/85 bg-[#fff7f5]/42 px-5 py-4 text-[#b03127] shadow-[0_10px_24px_rgba(176,49,39,0.10)]">
+                      <div className="rounded-[8px] border border-[#b03127]/30 px-4 py-2.5">
+                        <div className="flex justify-between text-[20px] font-black leading-none tracking-[0.08em]">
+                          <span>账单生成</span>
+                          <span>并锁定</span>
+                        </div>
+                        <div className="mt-3 border-t border-[#b03127]/35 pt-2.5">
+                          <div className="flex justify-between text-[11px] font-bold uppercase leading-none tracking-[0.18em]">
+                            <span>FACT. GEN.</span>
+                            <span>Y BLOQ.</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
