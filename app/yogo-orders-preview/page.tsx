@@ -234,7 +234,7 @@ export default async function YogoOrdersPreviewPage(props: {
     statusById = new Map(
       statusRows
         .filter((row) => row.header_status)
-        .map((row) => [row.id, String(row.header_status || "").trim() || "新订单"]),
+        .map((row) => [row.id, String(row.header_status || "").trim()]),
     );
     orderCreatedAtById = new Map(
       statusRows
@@ -398,7 +398,7 @@ export default async function YogoOrdersPreviewPage(props: {
                   >
                     <td className="px-3 py-2 font-semibold text-slate-900">{row.order_no}</td>
                     <td className="px-3 py-2 text-slate-600">
-                      {statusById.get(row.id) || "新订单"}
+                      {statusById.get(row.id) || "-"}
                     </td>
                     <td className="px-3 py-2 text-slate-600">
                       {formatDateTime(orderCreatedAtById.get(row.id) || row.created_at)}

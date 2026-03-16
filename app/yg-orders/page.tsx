@@ -124,17 +124,13 @@ function numberOrNull(value: unknown) {
 
 function normalizeOrderStatus(value: string | null | undefined) {
   const raw = String(value || "").trim();
-  if (!raw) return "新订单";
+  if (!raw) return "";
   const key = raw.toLowerCase();
   if (key === "1" || key === "new" || key === "new_order" || key === "new order" || raw === "新订单") return "新订单";
   if (key === "2" || key === "packing" || key === "picking" || raw === "配货中") return "配货中";
   if (/^\s*鏂/.test(raw)) return "新订单";
   if (/^\s*閰/.test(raw)) return "配货中";
   return raw;
-}
-
-function resolveOrderStatus(value: string | null | undefined) {
-  return normalizeOrderStatus(value) || "新订单";
 }
 function normalizeProductText(value: string | null | undefined) {
   const raw = String(value || "")
@@ -456,7 +452,7 @@ export default async function YgOrdersPage() {
     return {
     id: row.id,
     orderNo: row.order_no,
-    orderStatus: resolveOrderStatus(statusById.get(row.id)),
+    orderStatus: normalizeOrderStatus(statusById.get(row.id)) || "-",
     orderDateText,
     orderAmountText: formatMoney(row.order_amount),
     companyName: row.company_name || row.customer_name || "-",
