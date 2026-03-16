@@ -29,6 +29,7 @@ type BillingRow = {
   recipientNameText: string;
   recipientPhoneText: string;
   carrierCompanyText: string;
+  paymentTermText: string;
 };
 
 type DetailItem = {
@@ -49,7 +50,6 @@ type EditState = {
   id: string;
   orderNo: string;
   companyName: string;
-  contactName: string;
   contactPhone: string;
   addressText: string;
   remarkText: string;
@@ -62,6 +62,7 @@ type EditState = {
   recipientNameText: string;
   recipientPhoneText: string;
   carrierCompanyText: string;
+  paymentTermText: string;
 };
 
 const PAGE_SIZE = 8;
@@ -103,6 +104,12 @@ function calcLineTotal(item: DetailItem, vipEnabled: boolean) {
   if (normal !== null) factor *= 1 - normal;
   if (vipEnabled && vip !== null) factor *= 1 - vip;
   return qty * unitPrice * factor;
+}
+
+function formatPaymentTerm(value: string) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return text.endsWith("天") ? text : `${text}天`;
 }
 
 function InvoiceField({
@@ -219,7 +226,6 @@ export function BillingClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customerName: editState.companyName.trim(),
-          contactName: editState.contactName.trim(),
           contactPhone: editState.contactPhone.trim(),
           addressText: editState.addressText.trim(),
           remarkText: editState.remarkText.trim(),
@@ -231,6 +237,7 @@ export function BillingClient({
             recipientName: editState.recipientNameText.trim(),
             recipientPhone: editState.recipientPhoneText.trim(),
             carrierCompany: editState.carrierCompanyText.trim(),
+            paymentTerm: editState.paymentTermText.trim(),
           },
         }),
       });
@@ -241,7 +248,6 @@ export function BillingClient({
         ...row,
         companyName: result.data.customerName || row.companyName,
         customerName: result.data.customerName || row.customerName,
-        contactName: result.data.contactName || row.contactName,
         contactPhone: result.data.contactText || row.contactPhone,
         addressText: result.data.addressText || row.addressText,
         remarkText: result.data.remarkText || row.remarkText,
@@ -254,6 +260,7 @@ export function BillingClient({
         recipientNameText: result.data.recipientNameText || row.recipientNameText,
         recipientPhoneText: result.data.recipientPhoneText || row.recipientPhoneText,
         carrierCompanyText: result.data.carrierCompanyText || row.carrierCompanyText,
+        paymentTermText: result.data.paymentTermText || row.paymentTermText,
       }));
       setEditState(null);
     } catch (error) {
@@ -313,7 +320,6 @@ export function BillingClient({
                             id: row.id,
                             orderNo: row.orderNo,
                             companyName: row.companyName === "-" ? "" : row.companyName,
-                            contactName: row.contactName === "-" ? "" : row.contactName,
                             contactPhone: row.contactPhone === "-" ? "" : row.contactPhone,
                             addressText: row.addressText,
                             remarkText: row.remarkText,
@@ -326,6 +332,7 @@ export function BillingClient({
                             recipientNameText: row.recipientNameText,
                             recipientPhoneText: row.recipientPhoneText,
                             carrierCompanyText: row.carrierCompanyText,
+                            paymentTermText: row.paymentTermText,
                           })}><PencilIcon /></button>
                         </div>
                       </td>
@@ -370,7 +377,6 @@ export function BillingClient({
                     id: detailRow.id,
                     orderNo: detailRow.orderNo,
                     companyName: detailRow.companyName === "-" ? "" : detailRow.companyName,
-                    contactName: detailRow.contactName === "-" ? "" : detailRow.contactName,
                     contactPhone: detailRow.contactPhone === "-" ? "" : detailRow.contactPhone,
                     addressText: detailRow.addressText,
                     remarkText: detailRow.remarkText,
@@ -383,6 +389,7 @@ export function BillingClient({
                     recipientNameText: detailRow.recipientNameText,
                     recipientPhoneText: detailRow.recipientPhoneText,
                     carrierCompanyText: detailRow.carrierCompanyText,
+                    paymentTermText: detailRow.paymentTermText,
                   })}>编辑表头</button>
                 ) : null}
                 <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
@@ -418,7 +425,12 @@ export function BillingClient({
                   <InvoiceSection title="账单信息 / FACT.">
                     <InvoiceField label="发货日期 / F. Env." value={detailRow?.shipDateText || "-"} />
                     <InvoiceField label="门店标记 / Etiq. Tda." value={detailRow?.storeLabelText || "-"} />
-                    <InvoiceField label="客户联系人 / Cont." value={detailRow?.contactName || "-"} />
+                    {vipDiscountEnabled ? (
+                      <div className="text-sm font-semibold leading-6 text-slate-950">VIP客户</div>
+                    ) : null}
+                    {formatPaymentTerm(detailRow?.paymentTermText || "") ? (
+                      <InvoiceField label="账期" value={formatPaymentTerm(detailRow?.paymentTermText || "")} />
+                    ) : null}
                   </InvoiceSection>
                   <InvoiceSection title="物流信息 / ENVÍO">
                     <InvoiceField label="发货仓 / Dep. Env." value={detailRow?.warehouseText || "-"} />
@@ -523,9 +535,9 @@ export function BillingClient({
             </div>
             <div className="grid gap-4 p-6 md:grid-cols-2">
               <div><label className="mb-1 block text-sm text-slate-600">公司名称</label><input value={editState.companyName} onChange={(e) => setEditState((prev) => (prev ? { ...prev, companyName: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
-              <div><label className="mb-1 block text-sm text-slate-600">联系人</label><input value={editState.contactName} onChange={(e) => setEditState((prev) => (prev ? { ...prev, contactName: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
               <div><label className="mb-1 block text-sm text-slate-600">联系电话</label><input value={editState.contactPhone} onChange={(e) => setEditState((prev) => (prev ? { ...prev, contactPhone: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
               <div><label className="mb-1 block text-sm text-slate-600">第几门店</label><input value={editState.storeLabelText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, storeLabelText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
+              <div><label className="mb-1 block text-sm text-slate-600">账期</label><input inputMode="numeric" value={editState.paymentTermText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, paymentTermText: e.target.value.replace(/[^\d]/g, "") } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
               <div><label className="mb-1 block text-sm text-slate-600">订单号</label><input value={editState.orderNo} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none" /></div>
               <div><label className="mb-1 block text-sm text-slate-600">出账日期</label><input value={editState.issueDateText} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none" /></div>
               <div><label className="mb-1 block text-sm text-slate-600">发货日期</label><input type="date" value={editState.shipDateText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, shipDateText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>

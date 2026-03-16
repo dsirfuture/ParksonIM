@@ -41,6 +41,7 @@ export type BillingExportData = {
   recipientNameText: string;
   recipientPhoneText: string;
   carrierCompanyText: string;
+  paymentTermText: string;
 };
 
 export function buildBillingExportBaseName(data: Pick<BillingExportData, "orderNo" | "companyName" | "vipDiscountEnabled">) {
@@ -89,6 +90,12 @@ function toNumber(value: unknown): number | null {
 
 function toMoney(value: number) {
   return value.toFixed(2);
+}
+
+function formatPaymentTerm(value: string) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return text.endsWith("天") ? text : `${text}天`;
 }
 
 function toPercentText(value: number | null) {
@@ -435,6 +442,7 @@ export async function getBillingExportData(params: {
       "",
     recipientPhoneText: parsedRemark.meta.recipientPhone || orderRow?.contact_phone || "",
     carrierCompanyText: parsedRemark.meta.carrierCompany,
+    paymentTermText: parsedRemark.meta.paymentTerm,
   } satisfies BillingExportData;
 }
 
@@ -655,14 +663,19 @@ export async function buildBillingPdf(data: BillingExportData) {
     x: number,
     y: number,
     width: number,
-    options?: { emphasize?: boolean; compact?: boolean },
+    options?: { emphasize?: boolean; compact?: boolean; strongLabel?: boolean },
   ) => {
     const emphasize = Boolean(options?.emphasize);
     const compact = Boolean(options?.compact);
+    const strongLabel = Boolean(options?.strongLabel);
     const labelSize = compact ? 6.8 : 7.1;
     const valueSize = emphasize ? 11.8 : compact ? 8.7 : 9.3;
     const lineStep = compact ? 10 : 11.5;
-    drawText(label, x, y, { size: labelSize, color: [0.58, 0.6, 0.64] });
+    drawText(label, x, y, {
+      size: strongLabel ? (compact ? 8.7 : 9.4) : labelSize,
+      bold: strongLabel,
+      color: strongLabel ? [0.08, 0.09, 0.1] : [0.58, 0.6, 0.64],
+    });
     const lines = wrapTextByWidth(value || "-", fontForText(value || "-", emphasize), valueSize, width, unicodeSafe);
     let lineY = y - 15;
     for (const line of lines) {
@@ -730,32 +743,39 @@ export async function buildBillingPdf(data: BillingExportData) {
     const colGap = 18;
     const boxWidth = (pageWidth - marginX * 2 - colGap * 2) / 3;
     const sectionTop = cursorY;
+    const billingFields = [
+      { label: "\u53d1\u8d27\u65e5\u671f / F. Env.", value: data.shipDateText || "-", emphasize: false },
+      { label: "\u95e8\u5e97\u6807\u8bb0 / Etiq. Tda.", value: data.storeLabelText || "-", emphasize: false },
+      ...(data.vipDiscountEnabled
+        ? [{ label: "VIP客户", value: "已启用", emphasize: true, strongLabel: true }]
+        : []),
+      ...(formatPaymentTerm(data.paymentTermText)
+        ? [{ label: "账期", value: formatPaymentTerm(data.paymentTermText), emphasize: false }]
+        : []),
+    ];
+
     const boxes = [
       {
         title: "\u5ba2\u6237\u4fe1\u606f / CLIENTE",
         fields: [
-          ["\u5ba2\u6237\u540d\u79f0 / Nom. Clte.", data.companyName || "-", false],
-          ["\u6536\u8d27\u4eba / Dest.", data.recipientNameText || data.contactName || "-", false],
-          ["\u7535\u8bdd / Tel. Dest.", data.recipientPhoneText || data.contactPhone || "-", false],
-          ["\u9001\u8d27\u5730\u5740 / Dir. Ent.", data.addressText || "-", false],
+          { label: "\u5ba2\u6237\u540d\u79f0 / Nom. Clte.", value: data.companyName || "-", emphasize: false },
+          { label: "\u6536\u8d27\u4eba / Dest.", value: data.recipientNameText || data.contactName || "-", emphasize: false },
+          { label: "\u7535\u8bdd / Tel. Dest.", value: data.recipientPhoneText || data.contactPhone || "-", emphasize: false },
+          { label: "\u9001\u8d27\u5730\u5740 / Dir. Ent.", value: data.addressText || "-", emphasize: false },
         ],
       },
       {
         title: "\u8d26\u5355\u4fe1\u606f / FACT.",
-        fields: [
-          ["\u53d1\u8d27\u65e5\u671f / F. Env.", data.shipDateText || "-", false],
-          ["\u95e8\u5e97\u6807\u8bb0 / Etiq. Tda.", data.storeLabelText || "-", false],
-          ["\u5ba2\u6237\u8054\u7cfb\u4eba / Cont.", data.contactName || "-", false],
-        ],
+        fields: billingFields,
       },
       {
         title: "\u7269\u6d41\u4fe1\u606f / ENV\u00cdO",
         fields: [
-          ["\u53d1\u8d27\u4ed3 / Dep. Env.", data.warehouseText || "-", false],
-          ["\u53d1\u8d27\u65b9\u5f0f / Met. Env.", data.shippingMethodText || "-", false],
-          ["\u6258\u8fd0\u516c\u53f8 / Emp. Transp.", data.carrierCompanyText || "-", false],
-          ["\u88c5\u7bb1\u4ef6\u6570 / Cant. Cajas", data.boxCountText || "-", false],
-          ["\u5546\u54c1\u603b\u6570\u91cf / Tot. Prod.", String(data.totalQty || 0), false],
+          { label: "\u53d1\u8d27\u4ed3 / Dep. Env.", value: data.warehouseText || "-", emphasize: false },
+          { label: "\u53d1\u8d27\u65b9\u5f0f / Met. Env.", value: data.shippingMethodText || "-", emphasize: false },
+          { label: "\u6258\u8fd0\u516c\u53f8 / Emp. Transp.", value: data.carrierCompanyText || "-", emphasize: false },
+          { label: "\u88c5\u7bb1\u4ef6\u6570 / Cant. Cajas", value: data.boxCountText || "-", emphasize: false },
+          { label: "\u5546\u54c1\u603b\u6570\u91cf / Tot. Prod.", value: String(data.totalQty || 0), emphasize: false },
         ],
       },
     ] as const;
@@ -775,8 +795,12 @@ export async function buildBillingPdf(data: BillingExportData) {
       });
       drawText(section.title, boxX + 18, boxY, { size: 8.2, bold: true, color: [0.48, 0.5, 0.54] });
       boxY -= 20;
-      for (const [label, value, emphasize] of section.fields) {
-        const fieldHeight = drawField(label, value, boxX + 18, boxY, boxWidth - 36, { emphasize, compact: true });
+      for (const field of section.fields) {
+        const fieldHeight = drawField(field.label, field.value, boxX + 18, boxY, boxWidth - 36, {
+          emphasize: field.emphasize,
+          compact: true,
+          strongLabel: "strongLabel" in field ? field.strongLabel : false,
+        });
         boxY -= fieldHeight + 6;
         usedHeight += fieldHeight + 6;
       }

@@ -298,6 +298,7 @@ export default async function BillingPage({
       recipientNameText: string;
       recipientPhoneText: string;
       carrierCompanyText: string;
+      paymentTermText: string;
     }
   >();
 
@@ -323,6 +324,7 @@ export default async function BillingPage({
       recipientNameText: parsedRemark.meta.recipientName || contactName,
       recipientPhoneText: parsedRemark.meta.recipientPhone || row.contact_phone || "",
       carrierCompanyText: parsedRemark.meta.carrierCompany,
+      paymentTermText: parsedRemark.meta.paymentTerm,
     });
   }
 
@@ -347,6 +349,7 @@ export default async function BillingPage({
         recipientNameText: order?.recipientNameText || "",
         recipientPhoneText: order?.recipientPhoneText || "",
         carrierCompanyText: order?.carrierCompanyText || "",
+        paymentTermText: order?.paymentTermText || "",
         amountText: formatMoney(row.totalAmount),
         updatedAtText: formatDateOnly(row.latestAt),
       };

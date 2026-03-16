@@ -36,7 +36,6 @@ export async function PATCH(
 
     const body = (await request.json()) as {
       customerName?: unknown;
-      contactName?: unknown;
       addressText?: unknown;
       contactPhone?: unknown;
       remarkText?: unknown;
@@ -59,7 +58,6 @@ export async function PATCH(
 
     const updateData: {
       customer_name?: string | null;
-      contact_name?: string | null;
       address_text?: string | null;
       contact_phone?: string | null;
       order_remark?: string | null;
@@ -68,9 +66,6 @@ export async function PATCH(
 
     if ("customerName" in body) {
       updateData.customer_name = normalizeString(body.customerName);
-    }
-    if ("contactName" in body) {
-      updateData.contact_name = normalizeString(body.contactName);
     }
     if ("addressText" in body) {
       updateData.address_text = normalizeString(body.addressText);
@@ -121,6 +116,7 @@ export async function PATCH(
         recipientNameText: parsedRemark.meta.recipientName || updated.contact_name || "",
         recipientPhoneText: parsedRemark.meta.recipientPhone || updated.contact_phone || "",
         carrierCompanyText: parsedRemark.meta.carrierCompany,
+        paymentTermText: parsedRemark.meta.paymentTerm,
       },
     });
   } catch (error) {

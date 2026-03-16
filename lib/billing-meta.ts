@@ -7,6 +7,7 @@ export type BillingHeaderMeta = {
   recipientName: string;
   recipientPhone: string;
   carrierCompany: string;
+  paymentTerm: string;
 };
 
 export const EMPTY_BILLING_HEADER_META: BillingHeaderMeta = {
@@ -18,6 +19,7 @@ export const EMPTY_BILLING_HEADER_META: BillingHeaderMeta = {
   recipientName: "",
   recipientPhone: "",
   carrierCompany: "",
+  paymentTerm: "",
 };
 
 const BILLING_META_PREFIX = "[[BILLING_META]]";
@@ -38,6 +40,7 @@ export function normalizeBillingHeaderMeta(
     recipientName: trimString(value?.recipientName),
     recipientPhone: trimString(value?.recipientPhone),
     carrierCompany: trimString(value?.carrierCompany),
+    paymentTerm: trimString(value?.paymentTerm),
   };
 }
 
