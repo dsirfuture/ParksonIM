@@ -550,13 +550,16 @@ export function BillingClient({
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">基础信息区</div>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div><label className="mb-1 block text-sm text-slate-600">公司名称</label><input value={editState.companyName} onChange={(e) => setEditState((prev) => (prev ? { ...prev, companyName: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
-                </div>
-                <div className="flex flex-wrap gap-4">
-                  <div className="w-full md:w-[150px]"><label className="mb-1 block text-sm text-slate-600">第几门店</label><input value={editState.storeLabelText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, storeLabelText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
-                  <div className="w-full md:w-[240px]"><label className="mb-1 block text-sm text-slate-600">订单号</label><input value={editState.orderNo} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none" /></div>
-                  <div className="w-full md:w-[170px]"><label className="mb-1 block text-sm text-slate-600">出账日期</label><input value={editState.issueDateText} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none" /></div>
+                <div className="space-y-4">
+                  <div className="flex flex-wrap gap-4">
+                    <div className="w-full md:w-[240px]"><label className="mb-1 block text-sm text-slate-600">订单号</label><input value={editState.orderNo} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none" /></div>
+                    <div className="w-full md:w-[170px]"><label className="mb-1 block text-sm text-slate-600">出账日期</label><input value={editState.issueDateText} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none" /></div>
+                    <div className="w-full md:w-[130px]"><label className="mb-1 block text-sm text-slate-600">账期</label><input inputMode="numeric" value={editState.paymentTermText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, paymentTermText: e.target.value.replace(/[^\d]/g, "") } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
+                  </div>
+                  <div className="flex flex-wrap gap-4">
+                    <div className="min-w-0 flex-1"><label className="mb-1 block text-sm text-slate-600">公司名称</label><input value={editState.companyName} onChange={(e) => setEditState((prev) => (prev ? { ...prev, companyName: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
+                    <div className="w-full md:w-[150px]"><label className="mb-1 block text-sm text-slate-600">第几门店</label><input value={editState.storeLabelText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, storeLabelText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
+                  </div>
                 </div>
               </section>
 
@@ -566,21 +569,18 @@ export function BillingClient({
                 </div>
                 <div className="space-y-4">
                   <div className="flex flex-wrap gap-4">
+                    <div className="w-full md:w-[180px]"><label className="mb-1 block text-sm text-slate-600">发货仓</label><input value={editState.warehouseText} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none" /></div>
                     <div className="w-full md:w-[170px]"><label className="mb-1 block text-sm text-slate-600">发货日期</label><input type="date" value={editState.shipDateText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, shipDateText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
-                    <div className="w-full md:w-[150px]"><label className="mb-1 block text-sm text-slate-600">装箱件数</label><input value={editState.boxCountText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, boxCountText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
-                    <div className="w-full md:w-[150px]"><label className="mb-1 block text-sm text-slate-600">账期</label><input inputMode="numeric" value={editState.paymentTermText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, paymentTermText: e.target.value.replace(/[^\d]/g, "") } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div><label className="mb-1 block text-sm text-slate-600">发货仓</label><input value={editState.warehouseText} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none" /></div>
-                    <div><label className="mb-1 block text-sm text-slate-600">发货方式</label><select value={editState.shippingMethodText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, shippingMethodText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary/40"><option value="">请选择</option><option value="送托运">送托运</option><option value="自提">自提</option></select></div>
+                    <div className="w-full md:w-[110px]"><label className="mb-1 block text-sm text-slate-600">装箱件数</label><input value={editState.boxCountText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, boxCountText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
+                    <div className="w-full md:w-[160px]"><label className="mb-1 block text-sm text-slate-600">发货方式</label><select value={editState.shippingMethodText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, shippingMethodText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary/40"><option value="">请选择</option><option value="送托运">送托运</option><option value="自提">自提</option></select></div>
+                    <div className="min-w-0 flex-1"><label className="mb-1 block text-sm text-slate-600">托运公司</label><input value={editState.carrierCompanyText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, carrierCompanyText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
                   </div>
                   <div className="grid gap-4 md:grid-cols-2">
                     <div><label className="mb-1 block text-sm text-slate-600">收货人</label><input value={editState.recipientNameText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, recipientNameText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
                     <div><label className="mb-1 block text-sm text-slate-600">收货电话</label><input value={editState.recipientPhoneText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, recipientPhoneText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
                   </div>
-                  <div className="md:max-w-[360px]"><label className="mb-1 block text-sm text-slate-600">托运公司</label><input value={editState.carrierCompanyText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, carrierCompanyText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
                   <div className="md:col-span-2">
-                    <label className="mb-1 block text-sm text-slate-600">地址</label>
+                    <label className="mb-1 block text-sm text-slate-600">收货地址</label>
                     <div className="flex items-center gap-2">
                       <input value={editState.addressText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, addressText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" />
                       <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(editState.addressText || "")}`} target="_blank" rel="noreferrer" className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50" title="Google Maps"><MapPinIcon /></a>
