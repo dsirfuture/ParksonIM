@@ -547,14 +547,12 @@ export function BillingClient({
                       <div className="pointer-events-none absolute inset-[6px] border border-[#b03127]/35" />
                       <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={{ backgroundImage: "repeating-linear-gradient(135deg, rgba(176,49,39,0.35) 0 2px, transparent 2px 14px)" }} />
                       <div className="relative flex min-h-[92px] flex-col justify-between py-1">
-                        <div className="flex items-center justify-between text-[22px] font-black leading-none tracking-[0.04em]">
-                          <span>账单生成</span>
-                          <span>并锁定</span>
+                        <div className="text-center text-[22px] font-black leading-none tracking-[0.01em]">
+                          账单生成并锁定
                         </div>
                         <div className="border-t border-[#b03127]/35 pt-3">
-                          <div className="flex items-center justify-between text-[22px] font-black uppercase leading-none tracking-[0.02em]">
-                            <span>FACT. GEN.</span>
-                            <span>Y BLOQ.</span>
+                          <div className="text-center text-[22px] font-black uppercase leading-none tracking-[0.01em]">
+                            FACT. GEN. Y BLOQ.
                           </div>
                         </div>
                       </div>
