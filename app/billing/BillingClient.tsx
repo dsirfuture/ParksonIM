@@ -437,12 +437,27 @@ export function BillingClient({
                     </div>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-[minmax(320px,1.8fr)_72px_92px_82px_110px] gap-4 border-b border-slate-200 px-2 pb-3 text-[11px] uppercase tracking-[0.22em] text-slate-400">
-                    <div>产品 / Prod.</div>
-                    <div className="text-right">数量 / Cant.</div>
-                    <div className="text-right">单价 / P. Unit.</div>
-                    <div className="text-right">折扣 / Desc.</div>
-                    <div className="text-right">金额 / Importe</div>
+                  <div className="mt-4 grid grid-cols-[minmax(320px,1.8fr)_72px_92px_82px_110px] gap-4 border-b border-slate-200 px-2 pb-3 text-[11px] text-slate-400">
+                    <div className="leading-[1.15]">
+                      <div className="uppercase tracking-[0.22em]">产品</div>
+                      <div className="mt-1 text-[10px] uppercase tracking-[0.18em]">Prod.</div>
+                    </div>
+                    <div className="text-right leading-[1.15]">
+                      <div className="uppercase tracking-[0.22em]">数量</div>
+                      <div className="mt-1 text-[10px] uppercase tracking-[0.18em]">Cant.</div>
+                    </div>
+                    <div className="text-right leading-[1.15]">
+                      <div className="uppercase tracking-[0.22em]">单价</div>
+                      <div className="mt-1 text-[10px] uppercase tracking-[0.18em]">P. Unit.</div>
+                    </div>
+                    <div className="text-right leading-[1.15]">
+                      <div className="uppercase tracking-[0.22em]">折扣</div>
+                      <div className="mt-1 text-[10px] uppercase tracking-[0.18em]">Desc.</div>
+                    </div>
+                    <div className="text-right leading-[1.15]">
+                      <div className="uppercase tracking-[0.22em]">金额</div>
+                      <div className="mt-1 text-[10px] uppercase tracking-[0.18em]">Importe</div>
+                    </div>
                   </div>
 
                   {detailItems.length === 0 ? (

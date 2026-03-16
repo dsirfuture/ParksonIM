@@ -603,11 +603,11 @@ export async function buildBillingPdf(data: BillingExportData) {
   const topMargin = 50;
   const bottomMargin = 48;
   const columns = [
-    { key: "item", label: "\u4ea7\u54c1 / Prod.", width: 308 },
-    { key: "qty", label: "\u6570\u91cf / Cant.", width: 38 },
-    { key: "price", label: "\u5355\u4ef7 / P. Unit.", width: 64 },
-    { key: "discount", label: "\u6298\u6263 / Desc.", width: 50 },
-    { key: "amount", label: "\u91d1\u989d / Importe", width: 44 },
+    { key: "item", labelZh: "\u4ea7\u54c1", labelEs: "Prod.", width: 308 },
+    { key: "qty", labelZh: "\u6570\u91cf", labelEs: "Cant.", width: 38 },
+    { key: "price", labelZh: "\u5355\u4ef7", labelEs: "P. Unit.", width: 64 },
+    { key: "discount", labelZh: "\u6298\u6263", labelEs: "Desc.", width: 50 },
+    { key: "amount", labelZh: "\u91d1\u989d", labelEs: "Importe", width: 44 },
   ] as const;
 
   let page = pdfDoc.addPage([pageWidth, pageHeight]);
@@ -799,21 +799,37 @@ export async function buildBillingPdf(data: BillingExportData) {
   const drawItemsHeader = () => {
     let x = marginX;
     for (const col of columns) {
-      drawText(col.label, x + (col.key === "item" ? 0 : col.width - textWidth(col.label, 7.4, true) - 4), cursorY, {
-        size: 7.4,
-        bold: true,
-        color: [0.58, 0.6, 0.64],
-      });
+      if (col.key === "item") {
+        drawText(col.labelZh, x, cursorY + 2, {
+          size: 7.4,
+          bold: true,
+          color: [0.58, 0.6, 0.64],
+        });
+        drawText(col.labelEs, x, cursorY - 8, {
+          size: 6.7,
+          color: [0.62, 0.64, 0.68],
+        });
+      } else {
+        drawRightText(col.labelZh, x + col.width - 4, cursorY + 2, {
+          size: 7.4,
+          bold: true,
+          color: [0.58, 0.6, 0.64],
+        });
+        drawRightText(col.labelEs, x + col.width - 4, cursorY - 8, {
+          size: 6.7,
+          color: [0.62, 0.64, 0.68],
+        });
+      }
       x += col.width;
     }
-    cursorY -= 10;
+    cursorY -= 18;
     page.drawLine({
       start: { x: marginX, y: cursorY },
       end: { x: pageWidth - marginX, y: cursorY },
       thickness: 0.7,
       color: rgb(0.9, 0.91, 0.93),
     });
-    cursorY -= 14;
+    cursorY -= 10;
   };
 
   const newPage = async () => {
