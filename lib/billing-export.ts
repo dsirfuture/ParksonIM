@@ -537,8 +537,9 @@ export async function getBillingExportData(params: {
 
 export async function buildBillingXlsx(data: BillingExportData) {
   const workbook = new ExcelJS.Workbook();
+  const logoBuffer = await loadBillingLogoBuffer();
   const worksheet = workbook.addWorksheet("账单明细", {
-    views: [{ state: "frozen", ySplit: 7, showGridLines: true }],
+    views: [{ state: "frozen", ySplit: 19, showGridLines: true }],
   });
 
   worksheet.properties.defaultRowHeight = 24;
@@ -554,46 +555,193 @@ export async function buildBillingXlsx(data: BillingExportData) {
     ...(data.vipDiscountEnabled ? [{ key: "vipDiscount", width: 12 }] : []),
     { key: "lineTotal", width: 12 },
   ];
+  const brandColor = "FF2F3C7E";
+  const labelColor = "FF94A3B8";
+  const valueColor = "FF0F172A";
+  const borderColor = "FFE2E8F0";
+  const panelFill = "FFFFFFFF";
 
-  worksheet.mergeCells("A1:B1");
-  worksheet.getCell("A1").value = "ParksonMX";
-  worksheet.getCell("A1").font = {
-    name: getDocumentFontName("ParksonMX", { chineseBold: true }),
-    size: 20,
-    bold: true,
-    color: { argb: "FF111827" },
+  const applyMergedCellStyle = (
+    range: string,
+    options?: {
+      value?: string;
+      fontSize?: number;
+      bold?: boolean;
+      color?: string;
+      horizontal?: ExcelJS.Alignment["horizontal"];
+      vertical?: ExcelJS.Alignment["vertical"];
+      wrapText?: boolean;
+      fill?: string;
+      border?: boolean;
+    },
+  ) => {
+    worksheet.mergeCells(range);
+    const cell = worksheet.getCell(range.split(":")[0]);
+    cell.value = options?.value ?? "";
+    cell.font = {
+      name: getDocumentFontName(String(options?.value || ""), { chineseBold: options?.bold }),
+      size: options?.fontSize ?? 10,
+      bold: options?.bold ?? false,
+      color: { argb: options?.color ?? valueColor },
+    };
+    cell.alignment = {
+      vertical: options?.vertical ?? "middle",
+      horizontal: options?.horizontal ?? "left",
+      wrapText: options?.wrapText ?? false,
+    };
+    if (options?.fill) {
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: options.fill },
+      };
+    }
+    if (options?.border) {
+      cell.border = {
+        top: { style: "thin", color: { argb: borderColor } },
+        left: { style: "thin", color: { argb: borderColor } },
+        bottom: { style: "thin", color: { argb: borderColor } },
+        right: { style: "thin", color: { argb: borderColor } },
+      };
+    }
+    return cell;
   };
-  worksheet.getCell("A1").alignment = { vertical: "middle", horizontal: "left" };
-  worksheet.getRow(1).height = 34;
 
-  const infoRows = [
-    ["账单号", data.orderNo],
-    ["商品数", String(data.itemCount)],
-    ["合计", toMoney(data.totalAmount)],
-    ["VIP折扣", data.vipDiscountEnabled ? "启用" : "关闭"],
-    ["更新时间", formatDateOnly(data.updatedAt)],
-  ];
-
-  infoRows.forEach(([label, value], index) => {
-    const rowNumber = index + 2;
-    worksheet.getCell(`A${rowNumber}`).value = label;
-    worksheet.getCell(`B${rowNumber}`).value = value;
-    worksheet.getCell(`A${rowNumber}`).font = {
-      name: getDocumentFontName(label, { chineseBold: true }),
-      size: 11,
+  const writeInfoBlock = (
+    title: string,
+    startCol: string,
+    endCol: string,
+    rows: Array<{ label: string; value: string }>,
+  ) => {
+    applyMergedCellStyle(`${startCol}7:${endCol}7`, {
+      value: title,
+      fontSize: 11,
       bold: true,
-      color: { argb: "FF111827" },
-    };
-    worksheet.getCell(`B${rowNumber}`).font = {
-      name: getDocumentFontName(String(value || "")),
-      size: 11,
-      color: { argb: "FF111827" },
-    };
-    worksheet.getCell(`A${rowNumber}`).alignment = { vertical: "middle", horizontal: "left" };
-    worksheet.getCell(`B${rowNumber}`).alignment = { vertical: "middle", horizontal: "left" };
+      color: brandColor,
+      fill: panelFill,
+      border: true,
+    });
+
+    const normalizedRows = [...rows];
+    while (normalizedRows.length < 5) normalizedRows.push({ label: "", value: "" });
+
+    normalizedRows.forEach((row, index) => {
+      const labelRow = 8 + index * 2;
+      const valueRow = labelRow + 1;
+
+      applyMergedCellStyle(`${startCol}${labelRow}:${endCol}${labelRow}`, {
+        value: row.label,
+        fontSize: 8.5,
+        color: labelColor,
+        fill: panelFill,
+        border: true,
+        vertical: "bottom",
+      });
+
+      applyMergedCellStyle(`${startCol}${valueRow}:${endCol}${valueRow}`, {
+        value: row.value || "-",
+        fontSize: 11,
+        bold: false,
+        color: valueColor,
+        fill: panelFill,
+        border: true,
+        wrapText: true,
+        vertical: "top",
+      });
+    });
+  };
+
+  worksheet.getRow(1).height = 28;
+  worksheet.getRow(2).height = 28;
+  worksheet.getRow(3).height = 22;
+  worksheet.getRow(4).height = 18;
+  worksheet.getRow(5).height = 26;
+  worksheet.getRow(6).height = 12;
+  for (let rowNumber = 7; rowNumber <= 17; rowNumber += 1) {
+    worksheet.getRow(rowNumber).height = rowNumber % 2 === 0 ? 18 : rowNumber === 15 ? 40 : 24;
+  }
+  worksheet.getRow(18).height = 12;
+
+  if (logoBuffer) {
+    const imageId = workbook.addImage({
+      base64: `data:image/png;base64,${logoBuffer.toString("base64")}`,
+      extension: "png",
+    });
+    worksheet.addImage(imageId, {
+      tl: { col: 0.05, row: 0.2 },
+      ext: { width: 26, height: 26 },
+      editAs: "oneCell",
+    });
+  }
+
+  applyMergedCellStyle("B1:D1", {
+    value: "百盛供应链",
+    fontSize: 12,
+    bold: true,
+    color: brandColor,
+    vertical: "bottom",
+  });
+  applyMergedCellStyle("A2:D3", {
+    value: "INVOICE",
+    fontSize: 28,
+    bold: true,
+    color: valueColor,
+    vertical: "middle",
+  });
+  applyMergedCellStyle("A5:D5", {
+    value: "MÁS QUE PRODUCTOS, ENTREGAMOS SOLUCIONES",
+    fontSize: 9,
+    color: "FF64748B",
   });
 
-  const headerRowNumber = 7;
+  [
+    { labelRange: "F1:H1", valueRange: "I1:J1", label: "订单号 / No. Ped.", value: data.orderNo || "-" },
+    { labelRange: "F3:H3", valueRange: "I3:J3", label: "出账日期 / F. Fact.", value: data.issueDateText || "-" },
+    { labelRange: "F5:H5", valueRange: "I5:J5", label: "合计金额 / Mto. Total", value: `$${toMoney(data.totalAmount)}`, emphasize: true },
+  ].forEach((item) => {
+    applyMergedCellStyle(item.labelRange, {
+      value: item.label,
+      fontSize: 9,
+      color: labelColor,
+      fill: panelFill,
+      border: true,
+    });
+    applyMergedCellStyle(item.valueRange, {
+      value: item.value,
+      fontSize: item.emphasize ? 18 : 11,
+      bold: true,
+      color: valueColor,
+      horizontal: "right",
+      fill: panelFill,
+      border: true,
+    });
+  });
+
+  writeInfoBlock("客户信息 / CLIENTE", "A", "C", [
+    { label: "客户名称 / Nom. Clte.", value: data.companyName || "-" },
+    { label: "收货人 / Dest.", value: data.recipientNameText || data.contactName || "-" },
+    { label: "电话 / Tel. Dest.", value: data.recipientPhoneText || data.contactPhone || "-" },
+    { label: "送货地址 / Dir. Ent.", value: data.addressText || "-" },
+  ]);
+
+  writeInfoBlock("账单信息 / FACT.", "D", "F", [
+    { label: "发货日期 / F. Env.", value: data.shipDateText || "-" },
+    { label: "门店标记 / Etiq. Tda.", value: formatStoreLabelDisplay(data.storeLabelText) || "-" },
+    ...(getPaymentTermDisplayLines(data.paymentTermText).length > 0
+      ? [{ label: "账期", value: getPaymentTermDisplayLines(data.paymentTermText).join(" ") }]
+      : []),
+    ...(data.vipDiscountEnabled ? [{ label: "VIP客户", value: "VIP客户" }] : []),
+  ]);
+
+  writeInfoBlock("物流信息 / ENVÍO", "G", "J", [
+    { label: "发货仓 / Dep. Env.", value: data.warehouseText || "-" },
+    { label: "发货方式 / Met. Env.", value: data.shippingMethodText || "-" },
+    { label: "托运公司 / Emp. Transp.", value: data.carrierCompanyText || "-" },
+    { label: "装箱件数 / Cant. Cajas", value: data.boxCountText || "-" },
+    { label: "商品总数量 / Tot. Prod.", value: String(data.totalQty || 0) },
+  ]);
+
+  const headerRowNumber = 19;
   const headerValues = [
     "图片",
     "编号",
