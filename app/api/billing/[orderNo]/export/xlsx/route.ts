@@ -19,14 +19,10 @@ export async function GET(
     }
 
     const { orderNo } = await params;
-    const { searchParams } = new URL(request.url);
-    const vipDiscountEnabled = searchParams.get("vip") === "1";
-
     const data = await getBillingExportData({
       orderNo,
       tenantId: session.tenantId,
       companyId: session.companyId,
-      vipDiscountEnabled,
     });
 
     if (!data) {
@@ -45,6 +41,9 @@ export async function GET(
       },
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "请先生成账单后再导出") {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "导出 XLSX 失败" },
       { status: 500 },

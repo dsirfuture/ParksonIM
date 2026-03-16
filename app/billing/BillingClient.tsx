@@ -238,9 +238,8 @@ export function BillingClient({
   const exportLinks = useMemo(() => {
     if (!detailOrderNo) return null;
     const encodedOrderNo = encodeURIComponent(detailOrderNo);
-    const vipQuery = vipDiscountEnabled ? "vip=1" : "vip=0";
-    return { xlsx: `/api/billing/${encodedOrderNo}/export/xlsx?${vipQuery}`, pdf: `/api/billing/${encodedOrderNo}/export/pdf?${vipQuery}` };
-  }, [detailOrderNo, vipDiscountEnabled]);
+    return { xlsx: `/api/billing/${encodedOrderNo}/export/xlsx`, pdf: `/api/billing/${encodedOrderNo}/export/pdf` };
+  }, [detailOrderNo]);
   const detailRow = useMemo(() => (detailOrderNo ? rows.find((row) => row.orderNo === detailOrderNo) || null : null), [detailOrderNo, rows]);
   const detailGenerated = Boolean(detailRow?.generatedAtText);
   const rowAmountMap = useMemo(() => {
@@ -273,6 +272,11 @@ export function BillingClient({
     if (!detailRow?.generatedAtText) return;
     setVipDiscountEnabled(detailRow.generatedVipEnabled);
   }, [detailRow?.generatedAtText, detailRow?.generatedVipEnabled]);
+
+  function handleExport(kind: "xlsx" | "pdf") {
+    if (!detailGenerated || !exportLinks) return;
+    window.location.assign(exportLinks[kind]);
+  }
 
   async function updateGeneratedState(action: "generate" | "revoke", options?: { confirmOrderNo?: string; revokeReason?: string }) {
     if (!detailRow) return;
@@ -482,8 +486,22 @@ export function BillingClient({
               <div className="flex flex-wrap items-center gap-3">
                 {exportLinks ? (
                   <>
-                    <a href={exportLinks.xlsx} className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50">导出 XLSX</a>
-                    <a href={exportLinks.pdf} className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50">导出 PDF</a>
+                    <button
+                      type="button"
+                      disabled={!detailGenerated}
+                      onClick={() => handleExport("xlsx")}
+                      className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-slate-100"
+                    >
+                      导出 XLSX
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!detailGenerated}
+                      onClick={() => handleExport("pdf")}
+                      className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-slate-100"
+                    >
+                      导出 PDF
+                    </button>
                   </>
                 ) : null}
                 {detailRow ? (
@@ -525,14 +543,16 @@ export function BillingClient({
               <div className="relative mx-auto w-full max-w-[980px] rounded-[32px] bg-white px-8 py-9 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
                 {detailGenerated ? (
                   <div className="pointer-events-none absolute right-[292px] top-[78px] z-10 rotate-[-11deg] opacity-[0.78]">
-                    <div className="relative w-[312px] border-[5px] border-[#b03127]/90 bg-[#fff8f5]/20 px-5 py-3 text-[#b03127] shadow-[0_10px_24px_rgba(176,49,39,0.08)]">
+                    <div className="relative inline-block min-w-[302px] border-[5px] border-[#b03127]/90 bg-[#fff8f5]/20 px-5 py-3 text-[#b03127] shadow-[0_10px_24px_rgba(176,49,39,0.08)]">
                       <div className="pointer-events-none absolute inset-[6px] border border-[#b03127]/35" />
                       <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={{ backgroundImage: "repeating-linear-gradient(135deg, rgba(176,49,39,0.35) 0 2px, transparent 2px 14px)" }} />
-                      <div className="relative text-center text-[19px] font-black leading-none tracking-[0.01em]">
-                        账单生成并锁定
-                      </div>
-                      <div className="relative mt-2.5 border-t border-[#b03127]/35 pt-2 text-center text-[10.5px] font-black uppercase leading-none tracking-[0.02em]">
-                        FACT. GEN. Y BLOQ.
+                      <div className="relative flex min-h-[82px] flex-col justify-between py-1">
+                        <div className="text-center text-[15px] font-black leading-none tracking-[0.01em]">
+                          账单生成并锁定
+                        </div>
+                        <div className="border-t border-[#b03127]/35 pt-3 text-center text-[15px] font-black uppercase leading-none tracking-[0.01em]">
+                          FACT. GEN. Y BLOQ.
+                        </div>
                       </div>
                     </div>
                   </div>

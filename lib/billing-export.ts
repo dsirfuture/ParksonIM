@@ -3,7 +3,7 @@ import path from "node:path";
 import ExcelJS from "exceljs";
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
-import { formatStoreLabelDisplay, getPaymentTermDisplayLines, normalizeStoreLabelInput, parseBillingRemark } from "@/lib/billing-meta";
+import { formatStoreLabelDisplay, getPaymentTermDisplayLines, normalizeStoreLabelInput, parseBillingBooleanFlag, parseBillingRemark } from "@/lib/billing-meta";
 import { prisma } from "@/lib/prisma";
 import { buildProductImageUrls } from "@/lib/product-image-url";
 
@@ -42,6 +42,7 @@ export type BillingExportData = {
   recipientPhoneText: string;
   carrierCompanyText: string;
   paymentTermText: string;
+  generatedAtText: string;
 };
 
 export function buildBillingExportBaseName(data: Pick<BillingExportData, "orderNo" | "companyName" | "vipDiscountEnabled">) {
@@ -339,9 +340,32 @@ export async function getBillingExportData(params: {
   orderNo: string;
   tenantId: string;
   companyId: string;
-  vipDiscountEnabled: boolean;
 }) {
-  const { orderNo, tenantId, companyId, vipDiscountEnabled } = params;
+  const { orderNo, tenantId, companyId } = params;
+
+  const orderRow = await prisma.ygOrderImport.findFirst({
+    where: {
+      tenant_id: tenantId,
+      company_id: companyId,
+      order_no: orderNo,
+    },
+    select: {
+      company_name: true,
+      customer_name: true,
+      contact_name: true,
+      contact_phone: true,
+      address_text: true,
+      order_remark: true,
+      store_label: true,
+    },
+  });
+  if (!orderRow) return null;
+
+  const parsedRemark = parseBillingRemark(orderRow.order_remark);
+  if (!parsedRemark.meta.generatedAt) {
+    throw new Error("请先生成账单后再导出");
+  }
+  const vipDiscountEnabled = parseBillingBooleanFlag(parsedRemark.meta.generatedVipEnabled);
 
   const receipts = await prisma.receipt.findMany({
     where: {
@@ -477,33 +501,16 @@ export async function getBillingExportData(params: {
     }
   }
 
-  const orderRow = await prisma.ygOrderImport.findFirst({
-    where: {
-      tenant_id: tenantId,
-      company_id: companyId,
-      order_no: orderNo,
-    },
-    select: {
-      company_name: true,
-      customer_name: true,
-      contact_name: true,
-      contact_phone: true,
-      address_text: true,
-      order_remark: true,
-      store_label: true,
-    },
-  });
-  const parsedRemark = parseBillingRemark(orderRow?.order_remark);
   const exportDate = formatDateOnly(new Date());
 
   return {
     orderNo,
-    companyName: orderRow?.company_name || orderRow?.customer_name || "-",
-    contactName: orderRow?.contact_name || orderRow?.customer_name || orderRow?.company_name || "-",
-    contactPhone: orderRow?.contact_phone || "-",
-    addressText: orderRow?.address_text || "",
-    remarkText: orderRow?.order_remark || "",
-    storeLabelText: normalizeStoreLabelInput(orderRow?.store_label || ""),
+    companyName: orderRow.company_name || orderRow.customer_name || "-",
+    contactName: orderRow.contact_name || orderRow.customer_name || orderRow.company_name || "-",
+    contactPhone: orderRow.contact_phone || "-",
+    addressText: orderRow.address_text || "",
+    remarkText: orderRow.order_remark || "",
+    storeLabelText: normalizeStoreLabelInput(orderRow.store_label || ""),
     updatedAt,
     itemCount: itemsMap.size,
     totalQty,
@@ -517,13 +524,14 @@ export async function getBillingExportData(params: {
     shippingMethodText: parsedRemark.meta.shippingMethod,
     recipientNameText:
       parsedRemark.meta.recipientName ||
-      orderRow?.contact_name ||
-      orderRow?.customer_name ||
-      orderRow?.company_name ||
+      orderRow.contact_name ||
+      orderRow.customer_name ||
+      orderRow.company_name ||
       "",
-    recipientPhoneText: parsedRemark.meta.recipientPhone || orderRow?.contact_phone || "",
+    recipientPhoneText: parsedRemark.meta.recipientPhone || orderRow.contact_phone || "",
     carrierCompanyText: parsedRemark.meta.carrierCompany,
     paymentTermText: parsedRemark.meta.paymentTerm,
+    generatedAtText: parsedRemark.meta.generatedAt,
   } satisfies BillingExportData;
 }
 
@@ -836,7 +844,7 @@ export async function buildBillingPdf(data: BillingExportData) {
   const drawHeader = async () => {
     const brandColor: [number, number, number] = [0.184, 0.235, 0.494];
     const brandTextSize = 11;
-    const brandCenterY = cursorY + 1;
+    const brandBottomY = cursorY - 1;
     if (logoBuffer) {
       try {
         const logo = await pdfDoc.embedPng(logoBuffer);
@@ -845,24 +853,24 @@ export async function buildBillingPdf(data: BillingExportData) {
         const logoHeight = logo.height * scale;
         page.drawImage(logo, {
           x: marginX,
-          y: brandCenterY - logoHeight / 2,
+          y: brandBottomY - logoHeight,
           width: logoWidth,
           height: logoHeight,
         });
-        drawText("百盛供应链", marginX + logoWidth + 10, brandCenterY + 0.5, {
+        drawText("百盛供应链", marginX + logoWidth + 10, brandBottomY, {
           size: brandTextSize,
           bold: true,
           color: brandColor,
         });
       } catch {
-        drawText("百盛供应链", marginX, brandCenterY + 0.5, {
+        drawText("百盛供应链", marginX, brandBottomY, {
           size: brandTextSize,
           bold: true,
           color: brandColor,
         });
       }
     } else {
-      drawText("百盛供应链", marginX, brandCenterY + 0.5, {
+      drawText("百盛供应链", marginX, brandBottomY, {
         size: brandTextSize,
         bold: true,
         color: brandColor,
