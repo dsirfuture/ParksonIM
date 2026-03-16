@@ -46,6 +46,16 @@ function computeLineTotal(
   return qty * unitPrice * factor;
 }
 
+function computeLineTotalWithoutVip(
+  qty: number,
+  unitPrice: number,
+  normalDiscount: number | null,
+) {
+  let factor = 1;
+  if (normalDiscount !== null) factor *= 1 - normalDiscount;
+  return qty * unitPrice * factor;
+}
+
 function baseOrderNo(receiptNo: string) {
   const head = String(receiptNo || "")
     .trim()
@@ -146,7 +156,8 @@ export default async function BillingPage({
     string,
     {
       orderNo: string;
-      totalAmount: number;
+      originalAmount: number;
+      discountedAmount: number;
       latestAt: Date | null;
     }
   >();
@@ -175,12 +186,14 @@ export default async function BillingPage({
       grouped.get(orderNo) ||
       ({
         orderNo,
-        totalAmount: 0,
+        originalAmount: 0,
+        discountedAmount: 0,
         latestAt: null,
       } as const);
 
     const orderDetail = detailMap.get(orderNo) || new Map();
-    let receiptAmount = 0;
+    let receiptOriginalAmount = 0;
+    let receiptDiscountedAmount = 0;
 
     for (const item of receipt.items) {
       const sku = String(item.sku || "").trim();
@@ -196,8 +209,11 @@ export default async function BillingPage({
       const normalDiscount = toDiscountFactor(normalDiscountRaw);
       const vipDiscount = toDiscountFactor(vipDiscountRaw);
       const lineTotal = computeLineTotal(qty, unitPrice, normalDiscount, vipDiscount);
+      const lineOriginalTotal = qty * unitPrice;
+      const lineDiscountedTotal = computeLineTotalWithoutVip(qty, unitPrice, normalDiscount);
 
-      receiptAmount += lineTotal;
+      receiptOriginalAmount += lineOriginalTotal;
+      receiptDiscountedAmount += lineDiscountedTotal;
 
       const barcode = String(item.barcode || "").trim();
       const key = `${sku}|${barcode}`;
@@ -249,7 +265,8 @@ export default async function BillingPage({
 
     grouped.set(orderNo, {
       orderNo,
-      totalAmount: row.totalAmount + receiptAmount,
+      originalAmount: row.originalAmount + receiptOriginalAmount,
+      discountedAmount: row.discountedAmount + receiptDiscountedAmount,
       latestAt,
     });
   }
@@ -350,7 +367,8 @@ export default async function BillingPage({
         recipientPhoneText: order?.recipientPhoneText || "",
         carrierCompanyText: order?.carrierCompanyText || "",
         paymentTermText: order?.paymentTermText || "",
-        amountText: formatMoney(row.totalAmount),
+        originalAmountText: formatMoney(row.originalAmount),
+        discountedAmountText: formatMoney(row.discountedAmount),
         updatedAtText: formatDateOnly(row.latestAt),
       };
     })

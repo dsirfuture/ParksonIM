@@ -17,7 +17,8 @@ type BillingRow = {
   companyName: string;
   contactName: string;
   contactPhone: string;
-  amountText: string;
+  originalAmountText: string;
+  discountedAmountText: string;
   updatedAtText: string;
   customerName: string;
   addressText: string;
@@ -301,21 +302,23 @@ export function BillingClient({
                     <th className="whitespace-nowrap px-4 py-3 font-semibold">公司名称</th>
                     <th className="whitespace-nowrap px-4 py-3 font-semibold">联系人</th>
                     <th className="whitespace-nowrap px-4 py-3 font-semibold">联系电话</th>
-                    <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">合计金额</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">原金额</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">折扣后金额</th>
                     <th className="whitespace-nowrap px-4 py-3 font-semibold">更新时间</th>
                     <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pageRows.length === 0 ? (
-                    <tr><td colSpan={7} className="px-4 py-12 text-center text-sm text-stone-500">当前没有待出账单记录</td></tr>
+                    <tr><td colSpan={8} className="px-4 py-12 text-center text-sm text-stone-500">当前没有待出账单记录</td></tr>
                   ) : pageRows.map((row) => (
                     <tr key={row.orderNo} className="border-t border-stone-200/70 bg-white/80">
                       <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-slate-900">{row.orderNo}</td>
                       <td className="whitespace-nowrap px-4 py-4 text-sm text-stone-700">{row.companyName || "-"}</td>
                       <td className="whitespace-nowrap px-4 py-4 text-sm text-stone-700">{row.contactName || "-"}</td>
                       <td className="whitespace-nowrap px-4 py-4 text-sm text-stone-700">{row.contactPhone || "-"}</td>
-                      <td className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-slate-900">{row.amountText}</td>
+                      <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-stone-700">{row.originalAmountText}</td>
+                      <td className="whitespace-nowrap px-4 py-4 text-right text-sm font-semibold text-slate-900">{row.discountedAmountText}</td>
                       <td className="whitespace-nowrap px-4 py-4 text-sm text-stone-500">{row.updatedAtText}</td>
                       <td className="px-4 py-4">
                         <div className="flex items-center justify-end gap-2">
