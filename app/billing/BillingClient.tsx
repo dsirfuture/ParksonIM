@@ -21,6 +21,14 @@ type BillingRow = {
   addressText: string;
   remarkText: string;
   storeLabelText: string;
+  issueDateText: string;
+  boxCountText: string;
+  shipDateText: string;
+  warehouseText: string;
+  shippingMethodText: string;
+  recipientNameText: string;
+  recipientPhoneText: string;
+  carrierCompanyText: string;
 };
 
 type DetailItem = {
@@ -46,6 +54,14 @@ type EditState = {
   addressText: string;
   remarkText: string;
   storeLabelText: string;
+  issueDateText: string;
+  boxCountText: string;
+  shipDateText: string;
+  warehouseText: string;
+  shippingMethodText: string;
+  recipientNameText: string;
+  recipientPhoneText: string;
+  carrierCompanyText: string;
 };
 
 const PAGE_SIZE = 8;
@@ -165,6 +181,10 @@ export function BillingClient({
       pdf: `/api/billing/${encodedOrderNo}/export/pdf?${vipQuery}`,
     };
   }, [detailOrderNo, vipDiscountEnabled]);
+  const detailRow = useMemo(
+    () => (detailOrderNo ? rows.find((row) => row.orderNo === detailOrderNo) || null : null),
+    [detailOrderNo, rows],
+  );
 
   async function saveEdit() {
     if (!editState) return;
@@ -181,6 +201,16 @@ export function BillingClient({
           addressText: editState.addressText.trim(),
           remarkText: editState.remarkText.trim(),
           storeLabel: editState.storeLabelText.trim(),
+          headerMeta: {
+            issueDate: editState.issueDateText.trim(),
+            boxCount: editState.boxCountText.trim(),
+            shipDate: editState.shipDateText.trim(),
+            warehouse: editState.warehouseText.trim(),
+            shippingMethod: editState.shippingMethodText.trim(),
+            recipientName: editState.recipientNameText.trim(),
+            recipientPhone: editState.recipientPhoneText.trim(),
+            carrierCompany: editState.carrierCompanyText.trim(),
+          },
         }),
       });
       const result = await res.json();
@@ -200,6 +230,14 @@ export function BillingClient({
                 addressText: result.data.addressText || row.addressText,
                 remarkText: result.data.remarkText || row.remarkText,
                 storeLabelText: result.data.storeLabelText || row.storeLabelText,
+                issueDateText: result.data.issueDateText || row.issueDateText,
+                boxCountText: result.data.boxCountText || row.boxCountText,
+                shipDateText: result.data.shipDateText || row.shipDateText,
+                warehouseText: result.data.warehouseText || row.warehouseText,
+                shippingMethodText: result.data.shippingMethodText || row.shippingMethodText,
+                recipientNameText: result.data.recipientNameText || row.recipientNameText,
+                recipientPhoneText: result.data.recipientPhoneText || row.recipientPhoneText,
+                carrierCompanyText: result.data.carrierCompanyText || row.carrierCompanyText,
               }
             : row,
         ),
@@ -288,6 +326,14 @@ export function BillingClient({
                                   addressText: row.addressText,
                                   remarkText: row.remarkText,
                                   storeLabelText: row.storeLabelText,
+                                  issueDateText: row.issueDateText,
+                                  boxCountText: row.boxCountText,
+                                  shipDateText: row.shipDateText,
+                                  warehouseText: row.warehouseText,
+                                  shippingMethodText: row.shippingMethodText,
+                                  recipientNameText: row.recipientNameText,
+                                  recipientPhoneText: row.recipientPhoneText,
+                                  carrierCompanyText: row.carrierCompanyText,
                                 })
                               }
                             >
@@ -372,6 +418,34 @@ export function BillingClient({
                       导出 PDF
                     </a>
                   </>
+                ) : null}
+                {detailRow ? (
+                  <button
+                    type="button"
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+                    onClick={() =>
+                      setEditState({
+                        id: detailRow.id,
+                        orderNo: detailRow.orderNo,
+                        companyName: detailRow.companyName === "-" ? "" : detailRow.companyName,
+                        contactName: detailRow.contactName === "-" ? "" : detailRow.contactName,
+                        contactPhone: detailRow.contactPhone === "-" ? "" : detailRow.contactPhone,
+                        addressText: detailRow.addressText,
+                        remarkText: detailRow.remarkText,
+                        storeLabelText: detailRow.storeLabelText,
+                        issueDateText: detailRow.issueDateText,
+                        boxCountText: detailRow.boxCountText,
+                        shipDateText: detailRow.shipDateText,
+                        warehouseText: detailRow.warehouseText,
+                        shippingMethodText: detailRow.shippingMethodText,
+                        recipientNameText: detailRow.recipientNameText,
+                        recipientPhoneText: detailRow.recipientPhoneText,
+                        carrierCompanyText: detailRow.carrierCompanyText,
+                      })
+                    }
+                  >
+                    编辑表头
+                  </button>
                 ) : null}
                 <label className="inline-flex items-center gap-2 text-sm text-slate-600">
                   <input
@@ -477,6 +551,38 @@ export function BillingClient({
               <div>
                 <label className="mb-1 block text-sm text-slate-600">第几门店</label>
                 <input value={editState.storeLabelText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, storeLabelText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">出账日期</label>
+                <input value={editState.issueDateText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, issueDateText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">发货日期</label>
+                <input value={editState.shipDateText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, shipDateText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">装箱件数</label>
+                <input value={editState.boxCountText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, boxCountText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">发货仓</label>
+                <input value={editState.warehouseText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, warehouseText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">发货方式</label>
+                <input value={editState.shippingMethodText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, shippingMethodText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">收货人</label>
+                <input value={editState.recipientNameText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, recipientNameText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">收货电话</label>
+                <input value={editState.recipientPhoneText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, recipientPhoneText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">托运公司</label>
+                <input value={editState.carrierCompanyText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, carrierCompanyText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" />
               </div>
               <div className="md:col-span-2">
                 <label className="mb-1 block text-sm text-slate-600">地址</label>

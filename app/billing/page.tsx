@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/app-shell";
+import { parseBillingRemark } from "@/lib/billing-meta";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
 import { BillingClient } from "./BillingClient";
@@ -287,6 +288,14 @@ export default async function BillingPage({
       addressText: string;
       remarkText: string;
       storeLabelText: string;
+      issueDateText: string;
+      boxCountText: string;
+      shipDateText: string;
+      warehouseText: string;
+      shippingMethodText: string;
+      recipientNameText: string;
+      recipientPhoneText: string;
+      carrierCompanyText: string;
     }
   >();
 
@@ -294,6 +303,7 @@ export default async function BillingPage({
     if (orderMap.has(row.order_no)) continue;
     const companyName = row.company_name || row.customer_name || "-";
     const contactName = row.contact_name || row.customer_name || row.company_name || "-";
+    const parsedRemark = parseBillingRemark(row.order_remark);
     orderMap.set(row.order_no, {
       id: row.id,
       companyName,
@@ -301,8 +311,16 @@ export default async function BillingPage({
       contactName,
       contactPhone: row.contact_phone || "-",
       addressText: row.address_text || "",
-      remarkText: row.order_remark || "",
+      remarkText: parsedRemark.noteText,
       storeLabelText: row.store_label || "",
+      issueDateText: parsedRemark.meta.issueDate,
+      boxCountText: parsedRemark.meta.boxCount,
+      shipDateText: parsedRemark.meta.shipDate,
+      warehouseText: parsedRemark.meta.warehouse || row.store_label || "",
+      shippingMethodText: parsedRemark.meta.shippingMethod,
+      recipientNameText: parsedRemark.meta.recipientName || contactName,
+      recipientPhoneText: parsedRemark.meta.recipientPhone || row.contact_phone || "",
+      carrierCompanyText: parsedRemark.meta.carrierCompany,
     });
   }
 
@@ -319,6 +337,14 @@ export default async function BillingPage({
         addressText: order?.addressText || "",
         remarkText: order?.remarkText || "",
         storeLabelText: order?.storeLabelText || "",
+        issueDateText: order?.issueDateText || "",
+        boxCountText: order?.boxCountText || "",
+        shipDateText: order?.shipDateText || "",
+        warehouseText: order?.warehouseText || "",
+        shippingMethodText: order?.shippingMethodText || "",
+        recipientNameText: order?.recipientNameText || "",
+        recipientPhoneText: order?.recipientPhoneText || "",
+        carrierCompanyText: order?.carrierCompanyText || "",
         amountText: formatMoney(row.totalAmount),
         updatedAtText: formatDateOnly(row.latestAt),
       };

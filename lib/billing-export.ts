@@ -3,6 +3,7 @@ import path from "node:path";
 import ExcelJS from "exceljs";
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
+import { parseBillingRemark } from "@/lib/billing-meta";
 import { prisma } from "@/lib/prisma";
 import { buildProductImageUrls } from "@/lib/product-image-url";
 
@@ -28,9 +29,18 @@ export type BillingExportData = {
   storeLabelText: string;
   updatedAt: Date | null;
   itemCount: number;
+  totalQty: number;
   totalAmount: number;
   vipDiscountEnabled: boolean;
   items: BillingExportItem[];
+  issueDateText: string;
+  boxCountText: string;
+  shipDateText: string;
+  warehouseText: string;
+  shippingMethodText: string;
+  recipientNameText: string;
+  recipientPhoneText: string;
+  carrierCompanyText: string;
 };
 
 export function buildBillingExportBaseName(data: Pick<BillingExportData, "orderNo" | "companyName" | "vipDiscountEnabled">) {
@@ -168,46 +178,6 @@ async function loadProductImageBuffer(sku: string, barcode: string) {
   }
 
   return null;
-}
-
-async function optimizeImageForPdf(
-  image: { buffer: Buffer; extension: "png" | "jpeg" } | null,
-) {
-  if (!image) return null;
-
-  try {
-    const sharpModule = await import("sharp");
-    const sharp = sharpModule.default;
-    const optimized = await sharp(image.buffer, { failOn: "none" })
-      .rotate()
-      .resize(56, 56, {
-        fit: "inside",
-        withoutEnlargement: true,
-      })
-      .flatten({ background: "#ffffff" })
-      .jpeg({
-        quality: 34,
-        mozjpeg: true,
-        chromaSubsampling: "4:2:0",
-      })
-      .toBuffer();
-
-    return {
-      buffer: optimized,
-      extension: "jpeg" as const,
-    };
-  } catch {
-    return image;
-  }
-}
-
-async function loadBillingLogoBuffer() {
-  const filePath = path.join(process.cwd(), "public", "BSLOGO.png");
-  try {
-    return await fs.readFile(filePath);
-  } catch {
-    return null;
-  }
 }
 
 async function loadPdfFontBytes() {
@@ -377,6 +347,7 @@ export async function getBillingExportData(params: {
 
   const itemsMap = new Map<string, BillingExportItem>();
   let totalAmount = 0;
+  let totalQty = 0;
   let updatedAt: Date | null = null;
 
   for (const receipt of matchedReceipts) {
@@ -407,6 +378,7 @@ export async function getBillingExportData(params: {
       );
 
       totalAmount += lineTotal;
+      totalQty += qty;
 
       const key = `${sku}|${barcode}`;
       const old = itemsMap.get(key);
@@ -455,6 +427,8 @@ export async function getBillingExportData(params: {
       store_label: true,
     },
   });
+  const parsedRemark = parseBillingRemark(orderRow?.order_remark);
+  const fallbackIssueDate = formatDateOnly(updatedAt);
 
   return {
     orderNo,
@@ -466,9 +440,23 @@ export async function getBillingExportData(params: {
     storeLabelText: orderRow?.store_label || "",
     updatedAt,
     itemCount: itemsMap.size,
+    totalQty,
     totalAmount,
     vipDiscountEnabled,
     items: Array.from(itemsMap.values()),
+    issueDateText: parsedRemark.meta.issueDate || fallbackIssueDate,
+    boxCountText: parsedRemark.meta.boxCount,
+    shipDateText: parsedRemark.meta.shipDate,
+    warehouseText: parsedRemark.meta.warehouse || orderRow?.store_label || "",
+    shippingMethodText: parsedRemark.meta.shippingMethod,
+    recipientNameText:
+      parsedRemark.meta.recipientName ||
+      orderRow?.contact_name ||
+      orderRow?.customer_name ||
+      orderRow?.company_name ||
+      "",
+    recipientPhoneText: parsedRemark.meta.recipientPhone || orderRow?.contact_phone || "",
+    carrierCompanyText: parsedRemark.meta.carrierCompany,
   } satisfies BillingExportData;
 }
 
@@ -636,12 +624,11 @@ export async function buildBillingPdf(data: BillingExportData) {
     ? await pdfDoc.embedFont(latinFontBytes, { subset: true })
     : await pdfDoc.embedFont(StandardFonts.Helvetica);
   const latinBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const logoBuffer = await loadBillingLogoBuffer();
   const pageWidth = 792;
   const pageHeight = 612;
   const marginLeft = 28;
   const marginRight = 28;
-  const topMargin = 28;
+  const topMargin = 24;
   const bottomMargin = 28;
   const tableFontSize = 7.6;
   const lineGap = 9;
@@ -725,110 +712,51 @@ export async function buildBillingPdf(data: BillingExportData) {
   };
 
   const drawHeaderInfo = async () => {
-    drawText("PARKSONMX", marginLeft, cursorY - 2, {
-      size: 12,
-      font: latinBoldFont,
-      color: { r: 0.18, g: 0.31, b: 0.55 },
-    });
-
-    if (logoBuffer) {
-      try {
-        const logo = await pdfDoc.embedPng(logoBuffer);
-        const logoScale = Math.min(96 / logo.width, 36 / logo.height);
-        const logoWidth = Math.max(1, logo.width * logoScale);
-        const logoHeight = Math.max(1, logo.height * logoScale);
-        page.drawImage(logo, {
-          x: pageWidth - marginRight - logoWidth,
-          y: cursorY - logoHeight + 6,
-          width: logoWidth,
-          height: logoHeight,
-        });
-      } catch {
-        // ignore logo failure
-      }
-    }
-    cursorY -= 38;
-
-    drawText("INVOICE", marginLeft, cursorY, {
-      size: 24,
-      font: latinBoldFont,
-      color: { r: 0.07, g: 0.07, b: 0.08 },
-    });
-    cursorY -= 34;
-
-    const infoLabelX = marginLeft;
-    const infoValueX = marginLeft + 72;
-    const rightLabelX = 430;
-    const rightValueX = 500;
-    const infoRows = [
-      ["\u5ba2\u6237\u540d\u79f0\uff1a", data.companyName || "-"],
-      ["\u8054\u7cfb\u4eba\uff1a", data.contactName || "-"],
-      ["\u8054\u7cfb\u7535\u8bdd\uff1a", data.contactPhone || "-"],
-      ["\u9001\u8d27\u5730\u5740\uff1a", data.addressText || "-"],
+    const labelX = marginLeft + 36;
+    const valueX = 270;
+    const valueWidth = pageWidth - marginRight - valueX;
+    const rows: Array<[string, string]> = [
+      ["客户名称 Nom. Cte.", data.companyName || "-"],
+      ["出账日期 F. FACT.", data.issueDateText || "-"],
+      ["合计金额 MTO. TOTAL", `$${toMoney(data.totalAmount)}`],
+      ["商品总数量 TOTAL PROD.", String(data.totalQty || 0)],
+      ["装箱件数 CANT. CAJAS", data.boxCountText || "-"],
+      ["发货日期 F. ENV.", data.shipDateText || "-"],
+      ["发货仓 DEP. ENVIO", data.warehouseText || "-"],
+      ["发货方式 MET. ENV.", data.shippingMethodText || "-"],
+      ["送货地址 DIR. ENT.", data.addressText || "-"],
+      ["收货人 DEST.", data.recipientNameText || "-"],
+      ["收货电话 TEL. DEST.", data.recipientPhoneText || "-"],
+      ["托运公司 EMP. TRANSP.", data.carrierCompanyText || "-"],
     ];
 
-    for (const [label, value] of infoRows) {
-      drawLeftText(label, infoLabelX, cursorY, {
-        size: 9.4,
+    for (const [label, value] of rows) {
+      const valueLines = wrapTextByWidth(value, fontForText(value), 9.2, valueWidth - 8, unicodeSafe);
+      const rowHeight = Math.max(26, valueLines.length * 11 + 8);
+      drawLeftText(label, labelX, cursorY - 16, {
+        size: 9.2,
         font: fontForText(label, true),
-        color: { r: 0.16, g: 0.18, b: 0.22 },
+        color: { r: 0.12, g: 0.12, b: 0.14 },
       });
-      drawLeftText(value, infoValueX, cursorY, {
-        size: 9.4,
-        font: fontForText(value),
-        color: { r: 0.46, g: 0.48, b: 0.53 },
+      let lineY = cursorY - 16;
+      for (const line of valueLines) {
+        drawLeftText(line, valueX + 8, lineY, {
+          size: 9.2,
+          font: fontForText(line),
+          color: { r: 0.2, g: 0.26, b: 0.5 },
+        });
+        lineY -= 11;
+      }
+      page.drawLine({
+        start: { x: valueX, y: cursorY - rowHeight + 2 },
+        end: { x: pageWidth - marginRight, y: cursorY - rowHeight + 2 },
+        thickness: 0.6,
+        color: rgb(0.86, 0.88, 0.91),
       });
-      cursorY -= 24;
+      cursorY -= rowHeight;
     }
 
-    cursorY += 96;
-    drawLeftText("\u8d26\u5355\u53f7\uff1a", rightLabelX, cursorY, {
-      size: 9.4,
-      font: fontForText("\u8d26\u5355\u53f7\uff1a", true),
-      color: { r: 0.16, g: 0.18, b: 0.22 },
-    });
-    drawLeftText(data.orderNo, rightValueX, cursorY, {
-      size: 9.4,
-      font: fontForText(data.orderNo),
-      color: { r: 0.46, g: 0.48, b: 0.53 },
-    });
-    cursorY -= 24;
-    drawLeftText("\u5546\u54c1\u6570\uff1a", rightLabelX, cursorY, {
-      size: 9.4,
-      font: fontForText("\u5546\u54c1\u6570\uff1a", true),
-      color: { r: 0.16, g: 0.18, b: 0.22 },
-    });
-    drawLeftText(String(data.itemCount), rightValueX, cursorY, {
-      size: 9.4,
-      font: fontForText(String(data.itemCount)),
-      color: { r: 0.46, g: 0.48, b: 0.53 },
-    });
-    cursorY -= 24;
-    drawLeftText("VIP\u6298\u6263\uff1a", rightLabelX, cursorY, {
-      size: 9.4,
-      font: fontForText("VIP\u6298\u6263\uff1a", true),
-      color: { r: 0.16, g: 0.18, b: 0.22 },
-    });
-    drawLeftText(
-      data.vipDiscountEnabled ? "\u542f\u7528" : "\u5173\u95ed",
-      rightValueX,
-      cursorY,
-      {
-        size: 9.4,
-        font: fontForText(data.vipDiscountEnabled ? "\u542f\u7528" : "\u5173\u95ed"),
-        color: { r: 0.46, g: 0.48, b: 0.53 },
-      },
-    );
-
-    cursorY -= 26;
-    page.drawLine({
-      start: { x: marginLeft, y: cursorY },
-      end: { x: pageWidth - marginRight, y: cursorY },
-      thickness: 0.6,
-      color: rgb(0.88, 0.9, 0.93),
-    });
-
-    cursorY -= 16;
+    cursorY -= 10;
   };
 
   const drawTableHeader = () => {

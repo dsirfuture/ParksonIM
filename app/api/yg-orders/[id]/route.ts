@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { buildBillingRemark, parseBillingRemark, type BillingHeaderMeta } from "@/lib/billing-meta";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
 
@@ -40,6 +41,7 @@ export async function PATCH(
       contactPhone?: unknown;
       remarkText?: unknown;
       storeLabel?: unknown;
+      headerMeta?: Partial<Record<keyof BillingHeaderMeta, unknown>>;
     };
 
     const target = await prisma.ygOrderImport.findFirst({
@@ -77,7 +79,10 @@ export async function PATCH(
       updateData.contact_phone = normalizeMexicoPhone(body.contactPhone);
     }
     if ("remarkText" in body) {
-      updateData.order_remark = normalizeString(body.remarkText);
+      const headerMetaInput = Object.fromEntries(
+        Object.entries(body.headerMeta || {}).map(([key, value]) => [key, typeof value === "string" ? value : ""]),
+      ) as Partial<BillingHeaderMeta>;
+      updateData.order_remark = buildBillingRemark(normalizeString(body.remarkText), headerMetaInput);
     }
     if ("storeLabel" in body) {
       updateData.store_label = normalizeString(body.storeLabel);
@@ -96,6 +101,7 @@ export async function PATCH(
         store_label: true,
       },
     });
+    const parsedRemark = parseBillingRemark(updated.order_remark);
 
     return NextResponse.json({
       ok: true,
@@ -105,8 +111,16 @@ export async function PATCH(
         contactName: updated.contact_name || "",
         addressText: updated.address_text || "",
         contactText: updated.contact_phone || "",
-        remarkText: updated.order_remark || "",
+        remarkText: parsedRemark.noteText,
         storeLabelText: updated.store_label || "",
+        issueDateText: parsedRemark.meta.issueDate,
+        boxCountText: parsedRemark.meta.boxCount,
+        shipDateText: parsedRemark.meta.shipDate,
+        warehouseText: parsedRemark.meta.warehouse || updated.store_label || "",
+        shippingMethodText: parsedRemark.meta.shippingMethod,
+        recipientNameText: parsedRemark.meta.recipientName || updated.contact_name || "",
+        recipientPhoneText: parsedRemark.meta.recipientPhone || updated.contact_phone || "",
+        carrierCompanyText: parsedRemark.meta.carrierCompany,
       },
     });
   } catch (error) {
