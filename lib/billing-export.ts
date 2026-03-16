@@ -834,20 +834,27 @@ export async function buildBillingPdf(data: BillingExportData) {
   };
 
   const drawHeader = async () => {
-    drawText("PARKSONMX", marginX, cursorY, { size: 10.5, bold: true, color: [0.38, 0.41, 0.46] });
     if (logoBuffer) {
       try {
         const logo = await pdfDoc.embedPng(logoBuffer);
-        const scale = Math.min(40 / logo.width, 16 / logo.height);
+        const scale = Math.min(22 / logo.width, 22 / logo.height);
+        const logoWidth = logo.width * scale;
+        const logoHeight = logo.height * scale;
         page.drawImage(logo, {
-          x: pageWidth - marginX - logo.width * scale,
-          y: cursorY - 6,
-          width: logo.width * scale,
-          height: logo.height * scale,
+          x: marginX,
+          y: cursorY - 10,
+          width: logoWidth,
+          height: logoHeight,
+        });
+        drawText("百盛供应链", marginX + logoWidth + 10, cursorY + 2, {
+          size: 10.5,
+          color: [0.31, 0.34, 0.38],
         });
       } catch {
-        // ignore logo load failure
+        drawText("百盛供应链", marginX, cursorY + 2, { size: 10.5, color: [0.31, 0.34, 0.38] });
       }
+    } else {
+      drawText("百盛供应链", marginX, cursorY + 2, { size: 10.5, color: [0.31, 0.34, 0.38] });
     }
 
     const summaryHeight = drawSummaryCard(pageWidth - marginX - 182, cursorY + 10);
