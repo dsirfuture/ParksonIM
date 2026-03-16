@@ -692,18 +692,26 @@ export async function buildBillingPdf(data: BillingExportData) {
   };
 
   const drawVipField = (text: string, x: number, y: number) => {
+    const rowHeight = 24;
+    const iconScale = 1.05;
+    const iconHeight = (15.6 - 2.4) * iconScale;
+    const textSize = 10;
+    const rowCenterY = y - rowHeight / 2;
+    const iconY = rowCenterY - iconHeight / 2 - 2.4 * iconScale;
+    const textY = rowCenterY - textSize / 2 + 1;
+
     page.drawSvgPath(VIP_ICON_PATH, {
       x,
-      y: y - 13,
-      scale: 1.05,
+      y: iconY,
+      scale: iconScale,
       color: rgb(0.08, 0.09, 0.1),
     });
-    drawText(text, x + 22, y - 2, {
-      size: 10,
+    drawText(text, x + 22, textY, {
+      size: textSize,
       bold: true,
       color: [0.08, 0.09, 0.1],
     });
-    return 24;
+    return rowHeight;
   };
 
   const drawSummaryCard = (x: number, y: number) => {
