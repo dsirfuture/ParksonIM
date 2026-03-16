@@ -617,42 +617,34 @@ export async function buildBillingPdf(data: BillingExportData) {
   pdfDoc.registerFontkit(fontkit);
 
   const fontBytes = await loadPdfFontBytes();
-  const boldFontBytes = await loadPdfBoldFontBytes();
   const latinFontBytes = await loadPdfLatinFontBytes();
   const unicodeSafe = Boolean(fontBytes);
 
   const bodyFont = fontBytes
-    ? await pdfDoc.embedFont(fontBytes, { subset: false })
+    ? await pdfDoc.embedFont(fontBytes, { subset: true })
     : await pdfDoc.embedFont(StandardFonts.Helvetica);
   const esFont = latinFontBytes
     ? await pdfDoc.embedFont(latinFontBytes, { subset: true })
     : await pdfDoc.embedFont(StandardFonts.Helvetica);
   const latinBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const boldFont = boldFontBytes
-    ? await pdfDoc.embedFont(boldFontBytes, { subset: false })
-    : bodyFont;
-
-  const pageWidth = 842;
-  const pageHeight = 595;
-  const marginLeft = 26;
-  const topMargin = 36;
-  const bottomMargin = 24;
-  const tableFontSize = 8;
+  const pageWidth = 595;
+  const pageHeight = 842;
+  const marginLeft = 40;
+  const marginRight = 40;
+  const topMargin = 46;
+  const bottomMargin = 42;
+  const tableFontSize = 8.5;
   const lineGap = 10;
-  const cellPaddingX = 5;
-  const cellPaddingY = 6;
+  const cellPaddingX = 6;
+  const cellPaddingY = 7;
 
   const columns = [
-    { label: "图片", width: 42, align: "center" as const },
-    { label: "编号", width: 64, align: "center" as const },
-    { label: "条形码", width: 88, align: "center" as const },
-    { label: "中文名", width: 120, align: "left" as const },
-    { label: "西文名", width: 180, align: "left" as const },
-    { label: "数量", width: 44, align: "center" as const },
-    { label: "单价", width: 50, align: "center" as const },
-    { label: "普通折扣", width: 56, align: "center" as const },
-    ...(data.vipDiscountEnabled ? [{ label: "VIP折扣", width: 56, align: "center" as const }] : []),
-    { label: "金额", width: 60, align: "center" as const },
+    { label: "商品", width: 250, align: "left" as const },
+    { label: "数量", width: 42, align: "center" as const },
+    { label: "单价", width: 58, align: "right" as const },
+    { label: "普通折扣", width: 60, align: "center" as const },
+    ...(data.vipDiscountEnabled ? [{ label: "VIP折扣", width: 60, align: "center" as const }] : []),
+    { label: "金额", width: 65, align: "right" as const },
   ];
   const tableWidth = columns.reduce((sum, col) => sum + col.width, 0);
 
@@ -660,7 +652,7 @@ export async function buildBillingPdf(data: BillingExportData) {
   let cursorY = pageHeight - topMargin;
 
   const fontForText = (text: string, preferBold = false) => {
-    if (hasChineseGlyph(text)) return preferBold ? boldFont : bodyFont;
+    if (hasChineseGlyph(text)) return bodyFont;
     return preferBold ? latinBoldFont : esFont;
   };
 
@@ -696,6 +688,19 @@ export async function buildBillingPdf(data: BillingExportData) {
     drawText(safeText, x, y, { size, font: actualFont });
   };
 
+  const drawRightText = (
+    text: string,
+    rightX: number,
+    y: number,
+    options?: { size?: number; font?: PDFFont; color?: { r: number; g: number; b: number } },
+  ) => {
+    const safeText = safePdfText(text, unicodeSafe);
+    const font = options?.font ?? fontForText(text);
+    const size = options?.size ?? tableFontSize;
+    const textWidth = font.widthOfTextAtSize(safeText, size);
+    drawText(safeText, rightX - textWidth, y, { ...options, size, font });
+  };
+
   const drawLeftAlignedWrappedText = (
     lines: string[],
     cellX: number,
@@ -712,40 +717,105 @@ export async function buildBillingPdf(data: BillingExportData) {
   };
 
   const drawHeaderInfo = () => {
-    drawText("ParksonMX", marginLeft, cursorY, {
-      size: 18,
+    drawText("ParksonMX", marginLeft, cursorY + 2, {
+      size: 11,
       font: fontForText("ParksonMX", true),
-      color: { r: 0.12, g: 0.22, b: 0.43 },
+      color: { r: 0.5, g: 0.55, b: 0.62 },
     });
-    cursorY -= 28;
-    const orderLine = `账单号: ${data.orderNo}`;
-    drawText(orderLine, marginLeft, cursorY, { size: 10, font: fontForText(orderLine, true) });
-    cursorY -= 18;
-    const summaryLine = `商品数: ${data.itemCount}    合计: ${toMoney(data.totalAmount)}`;
-    drawText(summaryLine, marginLeft, cursorY, { size: 9, font: fontForText(summaryLine) });
-    cursorY -= 16;
-    const vipLine = `VIP折扣: ${data.vipDiscountEnabled ? "启用" : "关闭"}`;
-    drawText(vipLine, marginLeft, cursorY, { size: 9, font: fontForText(vipLine) });
-    cursorY -= 22;
+    drawRightText(formatDateOnly(data.updatedAt), pageWidth - marginRight, cursorY + 2, {
+      size: 10,
+      font: fontForText(formatDateOnly(data.updatedAt)),
+      color: { r: 0.5, g: 0.55, b: 0.62 },
+    });
+    cursorY -= 42;
+
+    drawText("Invoice", marginLeft, cursorY, {
+      size: 28,
+      font: latinBoldFont,
+      color: { r: 0.07, g: 0.07, b: 0.08 },
+    });
+    cursorY -= 54;
+
+    const infoLabelX = marginLeft;
+    const infoValueX = marginLeft + 72;
+    const rightLabelX = 315;
+    const rightValueX = 395;
+    const infoRows = [
+      ["公司名称", data.companyName || "-"],
+      ["联系人", data.contactName || "-"],
+      ["地址", data.addressText || "-"],
+      ["电话", data.contactPhone || "-"],
+    ];
+
+    for (const [label, value] of infoRows) {
+      drawText(label, infoLabelX, cursorY, {
+        size: 10,
+        font: fontForText(label, true),
+        color: { r: 0.16, g: 0.18, b: 0.22 },
+      });
+      drawText(value, infoValueX, cursorY, {
+        size: 10,
+        font: fontForText(value),
+        color: { r: 0.46, g: 0.48, b: 0.53 },
+      });
+      cursorY -= 24;
+    }
+
+    cursorY += 96;
+    drawText("账单号", rightLabelX, cursorY, {
+      size: 10,
+      font: fontForText("账单号", true),
+      color: { r: 0.16, g: 0.18, b: 0.22 },
+    });
+    drawText(data.orderNo, rightValueX, cursorY, {
+      size: 10,
+      font: fontForText(data.orderNo),
+      color: { r: 0.46, g: 0.48, b: 0.53 },
+    });
+    cursorY -= 24;
+    drawText("商品数", rightLabelX, cursorY, {
+      size: 10,
+      font: fontForText("商品数", true),
+      color: { r: 0.16, g: 0.18, b: 0.22 },
+    });
+    drawText(String(data.itemCount), rightValueX, cursorY, {
+      size: 10,
+      font: fontForText(String(data.itemCount)),
+      color: { r: 0.46, g: 0.48, b: 0.53 },
+    });
+    cursorY -= 24;
+    drawText("VIP折扣", rightLabelX, cursorY, {
+      size: 10,
+      font: fontForText("VIP折扣", true),
+      color: { r: 0.16, g: 0.18, b: 0.22 },
+    });
+    drawText(data.vipDiscountEnabled ? "启用" : "关闭", rightValueX, cursorY, {
+      size: 10,
+      font: fontForText(data.vipDiscountEnabled ? "启用" : "关闭"),
+      color: { r: 0.46, g: 0.48, b: 0.53 },
+    });
+
+    cursorY -= 38;
   };
 
   const drawTableHeader = () => {
-    const headerHeight = 22;
+    const headerHeight = 24;
     let x = marginLeft;
     for (const col of columns) {
-      page.drawRectangle({
-        x,
-        y: cursorY - headerHeight + 4,
-        width: col.width,
-        height: headerHeight,
-        color: rgb(0.95, 0.96, 0.98),
-        borderColor: rgb(0.86, 0.89, 0.92),
-        borderWidth: 0.6,
+      page.drawLine({
+        start: { x, y: cursorY - headerHeight + 2 },
+        end: { x: x + col.width, y: cursorY - headerHeight + 2 },
+        thickness: 0.6,
+        color: rgb(0.88, 0.9, 0.93),
       });
-      drawCenteredText(col.label, x, cursorY - headerHeight + 4, col.width, headerHeight, 8, fontForText(col.label, true));
+      drawText(col.label, x + 2, cursorY - headerHeight / 2 - 1, {
+        size: 8,
+        font: fontForText(col.label, true),
+        color: { r: 0.18, g: 0.2, b: 0.24 },
+      });
       x += col.width;
     }
-    cursorY -= headerHeight + 6;
+    cursorY -= headerHeight + 8;
   };
 
   const createNewPage = () => {
@@ -759,73 +829,81 @@ export async function buildBillingPdf(data: BillingExportData) {
   drawTableHeader();
 
   for (const item of data.items) {
-    const zhLines = wrapTextByWidth(item.nameZh || "-", bodyFont, tableFontSize, 120 - cellPaddingX * 2, unicodeSafe);
-    const esLines = wrapTextByWidth(item.nameEs || "-", esFont, tableFontSize, 180 - cellPaddingX * 2, unicodeSafe);
-    const maxLineCount = Math.max(1, zhLines.length, esLines.length);
-    const rowHeight = Math.max(34, maxLineCount * lineGap + cellPaddingY * 2);
+    const itemTitle = item.nameZh || item.nameEs || item.sku || item.barcode || "-";
+    const itemMeta = [item.sku ? `SKU: ${item.sku}` : "", item.barcode ? `Barcode: ${item.barcode}` : ""]
+      .filter(Boolean)
+      .join("   ");
+    const titleLines = wrapTextByWidth(
+      itemTitle,
+      hasChineseGlyph(itemTitle) ? bodyFont : esFont,
+      tableFontSize,
+      columns[0].width - cellPaddingX * 2,
+      unicodeSafe,
+    );
+    const metaLines = itemMeta
+      ? wrapTextByWidth(itemMeta, esFont, 7.5, columns[0].width - cellPaddingX * 2, unicodeSafe)
+      : [];
+    const lineCount = Math.max(1, titleLines.length + metaLines.length);
+    const rowHeight = Math.max(34, lineCount * lineGap + cellPaddingY * 2);
 
     if (cursorY - rowHeight < bottomMargin) {
       createNewPage();
     }
 
     const rowBottomY = cursorY - rowHeight + 2;
-    let x = marginLeft;
-    for (const col of columns) {
-      page.drawRectangle({
-        x,
-        y: rowBottomY,
-        width: col.width,
-        height: rowHeight,
-        borderColor: rgb(0.86, 0.89, 0.92),
-        borderWidth: 0.6,
-        color: rgb(1, 1, 1),
+    page.drawLine({
+      start: { x: marginLeft, y: rowBottomY },
+      end: { x: marginLeft + tableWidth, y: rowBottomY },
+      thickness: 0.4,
+      color: rgb(0.9, 0.92, 0.94),
+    });
+
+    let currentX = marginLeft;
+    const textLines = [...titleLines, ...metaLines];
+    let lineY = rowBottomY + rowHeight - 14;
+    for (const [index, line] of textLines.entries()) {
+      const isMeta = index >= titleLines.length;
+      drawText(line, currentX + cellPaddingX, lineY, {
+        size: isMeta ? 7.5 : tableFontSize,
+        font: isMeta ? esFont : hasChineseGlyph(line) ? bodyFont : esFont,
+        color: isMeta ? { r: 0.52, g: 0.55, b: 0.6 } : { r: 0.16, g: 0.18, b: 0.22 },
       });
-      x += col.width;
+      lineY -= lineGap;
     }
+    currentX += columns[0].width;
 
-    const imageBuffer = await optimizeImageForPdf(
-      await loadProductImageBuffer(item.sku, item.barcode),
-    );
-    if (imageBuffer) {
-      try {
-        const embedded = await pdfDoc.embedJpg(imageBuffer.buffer);
-        const imageSize = Math.min(26, columns[0].width - 8, rowHeight - 8);
-        page.drawImage(embedded, {
-          x: marginLeft + (columns[0].width - imageSize) / 2,
-          y: rowBottomY + (rowHeight - imageSize) / 2,
-          width: imageSize,
-          height: imageSize,
-        });
-      } catch {
-        drawCenteredText("-", marginLeft, rowBottomY, columns[0].width, rowHeight);
-      }
-    } else {
-      drawCenteredText("-", marginLeft, rowBottomY, columns[0].width, rowHeight);
-    }
-
-    let currentX = marginLeft + columns[0].width;
-    drawCenteredText(item.sku || "-", currentX, rowBottomY, columns[1].width, rowHeight);
+    drawCenteredText(String(item.qty), currentX, rowBottomY, columns[1].width, rowHeight);
     currentX += columns[1].width;
-    drawCenteredText(item.barcode || "-", currentX, rowBottomY, columns[2].width, rowHeight);
+    drawRightText(toMoney(item.unitPrice), currentX + columns[2].width - 6, rowBottomY + (rowHeight - tableFontSize) / 2 + 1);
     currentX += columns[2].width;
-    drawLeftAlignedWrappedText(zhLines, currentX, rowBottomY, rowHeight, bodyFont);
+    drawCenteredText(toPercentText(item.normalDiscount), currentX, rowBottomY, columns[3].width, rowHeight);
     currentX += columns[3].width;
-    drawLeftAlignedWrappedText(esLines, currentX, rowBottomY, rowHeight, esFont);
-    currentX += columns[4].width;
-    drawCenteredText(String(item.qty), currentX, rowBottomY, columns[5].width, rowHeight);
-    currentX += columns[5].width;
-    drawCenteredText(toMoney(item.unitPrice), currentX, rowBottomY, columns[6].width, rowHeight);
-    currentX += columns[6].width;
-    drawCenteredText(toPercentText(item.normalDiscount), currentX, rowBottomY, columns[7].width, rowHeight);
-    currentX += columns[7].width;
     if (data.vipDiscountEnabled) {
-      drawCenteredText(toPercentText(item.vipDiscount), currentX, rowBottomY, columns[8].width, rowHeight);
-      currentX += columns[8].width;
+      drawCenteredText(toPercentText(item.vipDiscount), currentX, rowBottomY, columns[4].width, rowHeight);
+      currentX += columns[4].width;
     }
-    drawCenteredText(toMoney(item.lineTotal), currentX, rowBottomY, columns[columns.length - 1].width, rowHeight);
+    drawRightText(toMoney(item.lineTotal), currentX + columns[columns.length - 1].width - 6, rowBottomY + (rowHeight - tableFontSize) / 2 + 1);
 
     cursorY -= rowHeight;
   }
+
+  const footerTop = Math.max(cursorY - 20, bottomMargin + 70);
+  page.drawLine({
+    start: { x: pageWidth - marginRight - 170, y: footerTop },
+    end: { x: pageWidth - marginRight, y: footerTop },
+    thickness: 0.6,
+    color: rgb(0.86, 0.89, 0.92),
+  });
+  drawText("Razon de pago", pageWidth - marginRight - 110, footerTop - 18, {
+    size: 9,
+    font: esFont,
+    color: { r: 0.55, g: 0.58, b: 0.62 },
+  });
+  drawRightText(`${toMoney(data.totalAmount)}`, pageWidth - marginRight, footerTop - 52, {
+    size: 28,
+    font: latinBoldFont,
+    color: { r: 0.07, g: 0.07, b: 0.08 },
+  });
 
   return pdfDoc.save({ useObjectStreams: true });
 }
