@@ -54,6 +54,11 @@ export async function AppShell({
       label: lang === "zh" ? "账单" : "Bill",
       visible: !session || perms?.viewReports,
     },
+    {
+      href: "/dropshipping",
+      label: lang === "zh" ? "一件代发" : "Drops",
+      visible: !session || perms?.viewReports,
+    },
   ];
 
   return (

@@ -12,6 +12,18 @@ enum Role {
   worker
 }
 
+enum DsOrderShippingStatus {
+  pending
+  shipped
+  cancelled
+}
+
+enum DsFinanceStatus {
+  unpaid
+  partial
+  paid
+}
+
 enum ReceiptStatus {
   pending
   in_progress
@@ -59,6 +71,12 @@ model Tenant {
   customers            CustomerProfile[]
   catalogConfigs       CatalogConfig[]
   categoryMaps         ProductCategoryMap[]
+  dsCustomers          DropshippingCustomer[]
+  dsProducts           DropshippingProduct[]
+  dsInventories        DropshippingCustomerInventory[]
+  dsOrders             DropshippingOrder[]
+  dsPayments           DropshippingPayment[]
+  dsExchangeRates      DropshippingExchangeRate[]
 }
 
 model Company {
@@ -94,6 +112,12 @@ model Company {
   customers            CustomerProfile[]
   catalogConfigs       CatalogConfig[]
   categoryMaps         ProductCategoryMap[]
+  dsCustomers          DropshippingCustomer[]
+  dsProducts           DropshippingProduct[]
+  dsInventories        DropshippingCustomerInventory[]
+  dsOrders             DropshippingOrder[]
+  dsPayments           DropshippingPayment[]
+  dsExchangeRates      DropshippingExchangeRate[]
 
   @@index([tenant_id])
 }
@@ -269,6 +293,188 @@ model ProductCategoryMap {
   @@unique([tenant_id, company_id, yogo_code])
   @@index([tenant_id, company_id])
   @@map("product_category_maps")
+}
+
+model DropshippingCustomer {
+  id         String @id @default(uuid()) @db.Uuid
+  tenant_id  String @db.Uuid
+  company_id String @db.Uuid
+
+  name                String
+  contact_name        String?
+  phone               String?
+  notes               String?
+  default_platform    String?
+  default_rate_mode   String?
+  default_settle_rule String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  inventories DropshippingCustomerInventory[]
+  orders      DropshippingOrder[]
+  payments    DropshippingPayment[]
+
+  @@unique([tenant_id, company_id, name])
+  @@index([tenant_id, company_id])
+  @@index([name])
+  @@map("ds_customers")
+}
+
+model DropshippingProduct {
+  id         String @id @default(uuid()) @db.Uuid
+  tenant_id  String @db.Uuid
+  company_id String @db.Uuid
+
+  sku                  String
+  name_zh              String
+  name_es              String?
+  image_url            String?
+  unit_price           Decimal? @db.Decimal(14, 2)
+  discount_rate        Decimal? @db.Decimal(8, 4)
+  default_shipping_fee Decimal? @db.Decimal(14, 2)
+  default_warehouse    String?
+  is_active            Boolean  @default(true)
+  notes                String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  inventories DropshippingCustomerInventory[]
+  orders      DropshippingOrder[]
+
+  @@unique([tenant_id, company_id, sku])
+  @@index([tenant_id, company_id])
+  @@index([sku])
+  @@map("ds_products")
+}
+
+model DropshippingCustomerInventory {
+  id         String @id @default(uuid()) @db.Uuid
+  tenant_id  String @db.Uuid
+  company_id String @db.Uuid
+
+  customer_id String @db.Uuid
+  product_id  String @db.Uuid
+
+  stocked_qty           Int
+  locked_unit_price     Decimal? @db.Decimal(14, 2)
+  locked_discount_rate  Decimal? @db.Decimal(8, 4)
+  warehouse             String?
+  notes                 String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant   Tenant              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company  Company             @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  customer DropshippingCustomer @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  product  DropshippingProduct  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, company_id, customer_id, product_id])
+  @@index([tenant_id, company_id])
+  @@index([customer_id])
+  @@index([product_id])
+  @@map("ds_customer_inventories")
+}
+
+model DropshippingExchangeRate {
+  id         String @id @default(uuid()) @db.Uuid
+  tenant_id  String @db.Uuid
+  company_id String @db.Uuid
+
+  rate_date       DateTime
+  base_currency   String   @default("RMB")
+  target_currency String   @default("MXN")
+  rate_value      Decimal  @db.Decimal(14, 6)
+  source_name     String?
+  fetched_at      DateTime?
+  is_manual       Boolean  @default(false)
+  manual_note     String?
+  fetch_failed    Boolean  @default(false)
+  failure_reason  String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  orders DropshippingOrder[]
+
+  @@unique([tenant_id, company_id, rate_date, base_currency, target_currency])
+  @@index([tenant_id, company_id])
+  @@index([rate_date])
+  @@map("ds_exchange_rates")
+}
+
+model DropshippingOrder {
+  id         String @id @default(uuid()) @db.Uuid
+  tenant_id  String @db.Uuid
+  company_id String @db.Uuid
+
+  customer_id String @db.Uuid
+  product_id  String @db.Uuid
+
+  platform             String
+  platform_order_no    String
+  tracking_no          String?
+  shipping_label_file  String?
+  quantity             Int
+  color                String?
+  warehouse            String?
+  shipping_status      DsOrderShippingStatus @default(pending)
+  shipped_at           DateTime?
+  shipping_proof_file  String?
+  shipping_fee         Decimal? @db.Decimal(14, 2)
+  exchange_rate_id     String? @db.Uuid
+  notes                String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant       Tenant                   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company      Company                  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  customer     DropshippingCustomer     @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  product      DropshippingProduct      @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  exchangeRate DropshippingExchangeRate? @relation(fields: [exchange_rate_id], references: [id], onDelete: SetNull)
+
+  @@unique([tenant_id, company_id, customer_id, platform, platform_order_no])
+  @@index([tenant_id, company_id])
+  @@index([customer_id])
+  @@index([product_id])
+  @@index([shipping_status])
+  @@map("ds_orders")
+}
+
+model DropshippingPayment {
+  id         String @id @default(uuid()) @db.Uuid
+  tenant_id  String @db.Uuid
+  company_id String @db.Uuid
+
+  customer_id     String @db.Uuid
+  amount          Decimal @db.Decimal(14, 2)
+  paid_at         DateTime
+  payment_method  String?
+  notes           String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant   Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company  Company              @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  customer DropshippingCustomer @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, company_id])
+  @@index([customer_id])
+  @@index([paid_at])
+  @@map("ds_payments")
 }
 
 model Receipt {
