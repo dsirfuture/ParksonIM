@@ -517,7 +517,6 @@ export function BillingClient({
                   <input type="checkbox" className="h-4 w-4 rounded border-slate-300" checked={vipDiscountEnabled} disabled={detailGenerated} onChange={(e) => setVipDiscountEnabled(e.target.checked)} />
                   启用 VIP 折扣
                 </label>
-                {detailGenerated ? <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">已生成，账单锁定</span> : null}
                 <button type="button" className="rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-700 transition hover:bg-slate-50" onClick={() => setDetailOrderNo(null)}>关闭</button>
               </div>
             </div>
@@ -529,13 +528,11 @@ export function BillingClient({
                     <div className="relative w-[312px] border-[5px] border-[#b03127]/90 bg-[#fff8f5]/20 px-5 py-3 text-[#b03127] shadow-[0_10px_24px_rgba(176,49,39,0.08)]">
                       <div className="pointer-events-none absolute inset-[6px] border border-[#b03127]/35" />
                       <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={{ backgroundImage: "repeating-linear-gradient(135deg, rgba(176,49,39,0.35) 0 2px, transparent 2px 14px)" }} />
-                      <div className="relative flex justify-between text-[19px] font-black leading-none tracking-[0.02em]">
-                        <span>账单生成</span>
-                        <span>并锁定</span>
+                      <div className="relative text-center text-[19px] font-black leading-none tracking-[0.01em]">
+                        账单生成并锁定
                       </div>
-                      <div className="relative mt-2.5 flex justify-between border-t border-[#b03127]/35 pt-2 text-[10.5px] font-bold uppercase leading-none tracking-[0.12em]">
-                        <span>FACT. GEN.</span>
-                        <span>Y BLOQ.</span>
+                      <div className="relative mt-2.5 border-t border-[#b03127]/35 pt-2 text-center text-[10.5px] font-black uppercase leading-none tracking-[0.02em]">
+                        FACT. GEN. Y BLOQ.
                       </div>
                     </div>
                   </div>
