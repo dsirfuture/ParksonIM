@@ -617,6 +617,10 @@ export async function buildBillingXlsx(data: BillingExportData) {
     endCol: string,
     rows: Array<{ label: string; value: string }>,
   ) => {
+    const maxSlots = 5;
+    const filledRows = rows.filter((row) => String(row.label || "").trim() || String(row.value || "").trim());
+    const fillerCount = Math.max(0, maxSlots - filledRows.length);
+
     applyMergedCellStyle(`${startCol}8:${endCol}8`, {
       value: title,
       fontSize: 11,
@@ -626,15 +630,13 @@ export async function buildBillingXlsx(data: BillingExportData) {
       border: true,
     });
 
-    const normalizedRows = [...rows];
-    while (normalizedRows.length < 5) normalizedRows.push({ label: "", value: "" });
-
-    normalizedRows.forEach((row, index) => {
+    filledRows.forEach((row, index) => {
       const labelRow = 9 + index * 2;
       const valueRow = labelRow + 1;
+      const isLastFilled = index === filledRows.length - 1 && fillerCount === 0;
 
       applyMergedCellStyle(`${startCol}${labelRow}:${endCol}${labelRow}`, {
-        value: row.label || " ",
+        value: row.label,
         fontSize: 8.5,
         color: labelColor,
         fill: panelFill,
@@ -643,16 +645,39 @@ export async function buildBillingXlsx(data: BillingExportData) {
       });
 
       applyMergedCellStyle(`${startCol}${valueRow}:${endCol}${valueRow}`, {
-        value: row.value || " ",
+        value: row.value,
         fontSize: 11,
         bold: false,
         color: valueColor,
         fill: panelFill,
-        border: { left: true, right: true, bottom: true },
+        border: { left: true, right: true, bottom: isLastFilled },
         wrapText: true,
         vertical: "top",
       });
     });
+
+    for (let i = 0; i < fillerCount; i += 1) {
+      const slotIndex = filledRows.length + i;
+      const labelRow = 9 + slotIndex * 2;
+      const valueRow = labelRow + 1;
+      const isLast = i === fillerCount - 1;
+      applyMergedCellStyle(`${startCol}${labelRow}:${endCol}${labelRow}`, {
+        value: "",
+        fontSize: 8.5,
+        color: labelColor,
+        fill: panelFill,
+        border: { left: true, right: true },
+        vertical: "bottom",
+      });
+      applyMergedCellStyle(`${startCol}${valueRow}:${endCol}${valueRow}`, {
+        value: "",
+        fontSize: 11,
+        color: valueColor,
+        fill: panelFill,
+        border: { left: true, right: true, bottom: isLast },
+        vertical: "top",
+      });
+    }
   };
 
   worksheet.getRow(1).height = 24;
