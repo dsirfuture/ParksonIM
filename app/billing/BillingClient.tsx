@@ -109,7 +109,7 @@ function InvoiceField({ label, value, emphasize = false }: { label: string; valu
   return (
     <div className="space-y-1">
       <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">{label}</div>
-      <div className={emphasize ? "text-base font-semibold text-slate-900" : "text-sm leading-6 text-slate-700"}>{value || "-"}</div>
+      <div className={emphasize ? "text-base font-medium text-slate-900" : "text-sm leading-6 text-slate-700"}>{value || "-"}</div>
     </div>
   );
 }
@@ -356,8 +356,8 @@ export function BillingClient({
                 <div className="flex flex-wrap items-start justify-between gap-8 border-b border-slate-200 pb-8">
                   <div className="max-w-[420px]">
                     <div className="text-xs uppercase tracking-[0.28em] text-slate-400">ParksonMX</div>
-                    <h2 className="mt-5 font-serif text-[42px] leading-none tracking-tight text-slate-950">INVOICE</h2>
-                    <p className="mt-4 max-w-md text-sm leading-7 text-slate-500">简洁、正式、适合打印与发送给客户查看的专业账单预览。</p>
+                    <h2 className="mt-5 text-[42px] font-semibold leading-none tracking-tight text-slate-950">INVOICE</h2>
+                    <p className="mt-4 max-w-md text-sm leading-7 text-slate-500">MÁS QUE PRODUCTOS, ENTREGAMOS SOLUCIONES</p>
                   </div>
                   <div className="grid min-w-[280px] gap-4 rounded-[24px] border border-slate-200 bg-slate-50/60 px-5 py-5">
                     <InvoiceField label="Order No." value={detailRow?.orderNo || "-"} />
@@ -368,7 +368,7 @@ export function BillingClient({
 
                 <div className="mt-8 grid gap-5 lg:grid-cols-3">
                   <div className="rounded-[24px] border border-slate-200 p-5">
-                    <div className="mb-4 text-xs uppercase tracking-[0.22em] text-slate-400">账单对象 / Client</div>
+                    <div className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">账单对象 / Client</div>
                     <div className="space-y-4">
                       <InvoiceField label="客户名称 / Nom. Cte." value={detailRow?.companyName || "-"} emphasize />
                       <InvoiceField label="收货人 / Dest." value={detailRow?.recipientNameText || detailRow?.contactName || "-"} />
@@ -377,7 +377,7 @@ export function BillingClient({
                     </div>
                   </div>
                   <div className="rounded-[24px] border border-slate-200 p-5">
-                    <div className="mb-4 text-xs uppercase tracking-[0.22em] text-slate-400">账单信息 / Billing</div>
+                    <div className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">账单信息 / Billing</div>
                     <div className="space-y-4">
                       <InvoiceField label="订单号 / No. Ped." value={detailRow?.orderNo || "-"} />
                       <InvoiceField label="出账日期 / F. Fact." value={detailRow?.issueDateText || "-"} />
@@ -386,7 +386,7 @@ export function BillingClient({
                     </div>
                   </div>
                   <div className="rounded-[24px] border border-slate-200 p-5">
-                    <div className="mb-4 text-xs uppercase tracking-[0.22em] text-slate-400">物流信息 / Shipping</div>
+                    <div className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">物流信息 / Shipping</div>
                     <div className="space-y-4">
                       <InvoiceField label="发货仓 / Dep. Envío" value={detailRow?.warehouseText || "-"} />
                       <InvoiceField label="发货方式 / Met. Env." value={detailRow?.shippingMethodText || "-"} />
@@ -400,10 +400,9 @@ export function BillingClient({
                 <div className="mt-10">
                   <div className="flex items-end justify-between gap-4 border-b border-slate-200 pb-4">
                     <div>
-                      <div className="text-xs uppercase tracking-[0.24em] text-slate-400">Line Items</div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Line Items</div>
                       <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950">商品明细</h3>
                     </div>
-                    <div className="text-sm text-slate-500">{detailItems.length} items</div>
                   </div>
 
                   <div className="mt-4 grid grid-cols-[64px_minmax(280px,1.8fr)_70px_92px_92px_110px] gap-4 border-b border-slate-200 px-2 pb-3 text-[11px] uppercase tracking-[0.18em] text-slate-400">
