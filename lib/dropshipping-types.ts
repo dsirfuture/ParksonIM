@@ -111,3 +111,41 @@ export type DsExchangeRatePayload = {
   fetchFailed: boolean;
   failureReason: string | null;
 };
+
+export type DsLegacyImportRow = {
+  customerName: string;
+  platform: string;
+  platformOrderNo: string;
+  trackingNo: string;
+  shippingLabelFile: string;
+  shipped: boolean;
+  shippedAt: string | null;
+  shippingProofFile: string;
+  sku: string;
+  quantity: number;
+  color: string;
+  warehouse: string;
+  shippingFee: number | null;
+  productImageUrl: string;
+  productNameZh: string;
+  unitPrice: number | null;
+  discountRate: number | null;
+  stockedQty: number | null;
+  stockAmount: number | null;
+  rateValue: number | null;
+  exchangedAmount: number | null;
+  shippingAmount: number | null;
+  totalAmount: number | null;
+  paidAmount: number | null;
+  unpaidAmount: number | null;
+  settledAt: string | null;
+};
+
+export type DsLegacyImportSummary = {
+  totalRows: number;
+  createdOrders: number;
+  updatedOrders: number;
+  touchedCustomers: number;
+  touchedProducts: number;
+  seededPayments: number;
+};

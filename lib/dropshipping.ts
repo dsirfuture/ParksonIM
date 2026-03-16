@@ -6,6 +6,8 @@ import type {
   DsFinanceRow,
   DsFinanceStatus,
   DsInventoryRow,
+  DsLegacyImportRow,
+  DsLegacyImportSummary,
   DsInventoryStatus,
   DsOrderRow,
   DsOverviewOrder,
@@ -55,6 +57,65 @@ function toNumber(value: unknown) {
 function toOptionalNumber(value: unknown) {
   const num = toNumber(value);
   return num === 0 && (value === null || value === undefined || value === "") ? null : num;
+}
+
+function startOfMexicoDay(value: Date | null | undefined) {
+  const target = value || new Date();
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = formatter.formatToParts(target);
+  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return new Date(`${map.year}-${map.month}-${map.day}T00:00:00.000-06:00`);
+}
+
+async function ensureRateByDate(
+  session: Session,
+  input: { date: Date | null; value: number | null; sourceName?: string },
+) {
+  const rateDate = startOfMexicoDay(input.date);
+  const existing = await prisma.dropshippingExchangeRate.findFirst({
+    where: {
+      tenant_id: session.tenantId,
+      company_id: session.companyId,
+      rate_date: rateDate,
+      base_currency: "RMB",
+      target_currency: "MXN",
+    },
+    orderBy: { created_at: "desc" },
+  });
+
+  if (existing) {
+    if (input.value && toNumber(existing.rate_value) !== input.value) {
+      return prisma.dropshippingExchangeRate.update({
+        where: { id: existing.id },
+        data: {
+          rate_value: input.value,
+          source_name: input.sourceName || existing.source_name,
+          fetched_at: new Date(),
+        },
+      });
+    }
+    return existing;
+  }
+
+  return prisma.dropshippingExchangeRate.create({
+    data: {
+      tenant_id: session.tenantId,
+      company_id: session.companyId,
+      rate_date: rateDate,
+      base_currency: "RMB",
+      target_currency: "MXN",
+      rate_value: input.value ?? DEFAULT_RATE_VALUE,
+      source_name: input.sourceName || "legacy-import",
+      fetched_at: new Date(),
+      is_manual: true,
+      fetch_failed: false,
+    },
+  });
 }
 
 export function computeStockAmount(unitPrice: number, stockedQty: number, discountRate: number) {
@@ -196,6 +257,18 @@ async function ensureProduct(
     });
   }
 
+  const nextData: Record<string, unknown> = {};
+  if (input.nameZh.trim() && product.name_zh !== input.nameZh.trim()) nextData.name_zh = input.nameZh.trim();
+  if (input.nameEs?.trim() && product.name_es !== input.nameEs.trim()) nextData.name_es = input.nameEs.trim();
+  if (input.shippingFee !== undefined && input.shippingFee !== null) nextData.default_shipping_fee = input.shippingFee;
+  if (input.warehouse?.trim()) nextData.default_warehouse = input.warehouse.trim();
+  if (Object.keys(nextData).length > 0) {
+    product = await prisma.dropshippingProduct.update({
+      where: { id: product.id },
+      data: nextData,
+    });
+  }
+
   return product;
 }
 
@@ -295,6 +368,192 @@ export async function saveOrder(
       ...data,
     },
   });
+}
+
+export async function importLegacyOrders(
+  session: Session,
+  rows: DsLegacyImportRow[],
+): Promise<DsLegacyImportSummary> {
+  const touchedCustomers = new Set<string>();
+  const touchedProducts = new Set<string>();
+  const paymentSeededCustomers = new Set<string>();
+  let createdOrders = 0;
+  let updatedOrders = 0;
+
+  const latestPaidSnapshotByCustomer = new Map<
+    string,
+    { amount: number; paidAt: Date; customerId: string }
+  >();
+
+  for (const row of rows) {
+    const customer = await ensureCustomer(session, row.customerName);
+    touchedCustomers.add(customer.id);
+
+    const product = await ensureProduct(session, {
+      sku: row.sku,
+      nameZh: row.productNameZh,
+      shippingFee: row.shippingFee ?? undefined,
+      warehouse: row.warehouse || undefined,
+    });
+    touchedProducts.add(product.id);
+
+    if (row.productImageUrl || row.unitPrice !== null || row.discountRate !== null) {
+      await prisma.dropshippingProduct.update({
+        where: { id: product.id },
+        data: {
+          image_url: row.productImageUrl || undefined,
+          unit_price: row.unitPrice ?? undefined,
+          discount_rate: row.discountRate ?? undefined,
+        },
+      });
+    }
+
+    const inventory = await ensureInventoryRecord(session, {
+      customerId: customer.id,
+      productId: product.id,
+      warehouse: row.warehouse || undefined,
+    });
+
+    const nextStockedQty = row.stockedQty ?? inventory.stocked_qty;
+    await prisma.dropshippingCustomerInventory.update({
+      where: { id: inventory.id },
+      data: {
+        stocked_qty: nextStockedQty,
+        locked_unit_price: row.unitPrice ?? undefined,
+        locked_discount_rate: row.discountRate ?? undefined,
+        warehouse: row.warehouse || inventory.warehouse || undefined,
+        notes:
+          row.stockAmount !== null
+            ? `legacy-stock-amount:${row.stockAmount.toFixed(2)}`
+            : inventory.notes || undefined,
+      },
+    });
+
+    const shippedAtDate = row.shippedAt ? new Date(row.shippedAt) : null;
+    const settledAtDate = row.settledAt ? new Date(row.settledAt) : null;
+    const rate = await ensureRateByDate(session, {
+      date: settledAtDate || shippedAtDate,
+      value: row.rateValue,
+      sourceName: "legacy-import",
+    });
+
+    const existingOrder = await prisma.dropshippingOrder.findFirst({
+      where: {
+        tenant_id: session.tenantId,
+        company_id: session.companyId,
+        customer_id: customer.id,
+        platform: row.platform,
+        platform_order_no: row.platformOrderNo,
+      },
+      select: { id: true },
+    });
+
+    const payload = {
+      customer_id: customer.id,
+      product_id: product.id,
+      platform: row.platform.trim(),
+      platform_order_no: row.platformOrderNo.trim(),
+      tracking_no: row.trackingNo || null,
+      shipping_label_file: row.shippingLabelFile || null,
+      quantity: row.quantity,
+      color: row.color || null,
+      warehouse: row.warehouse || null,
+      shipping_status: (row.shipped ? "shipped" : "pending") as DsShippingStatus,
+      shipped_at: shippedAtDate,
+      shipping_proof_file: row.shippingProofFile || null,
+      shipping_fee: row.shippingFee ?? null,
+      exchange_rate_id: rate.id,
+      snapshot_stocked_qty: row.stockedQty,
+      snapshot_stock_amount: row.stockAmount,
+      snapshot_rate_value: row.rateValue,
+      snapshot_exchanged_amount: row.exchangedAmount,
+      snapshot_shipping_amount: row.shippingAmount,
+      snapshot_total_amount: row.totalAmount,
+      snapshot_paid_amount: row.paidAmount,
+      snapshot_unpaid_amount: row.unpaidAmount,
+      settled_at: settledAtDate,
+      notes: [
+        row.shippingLabelFile ? `label:${row.shippingLabelFile}` : "",
+        row.shippingProofFile ? `proof:${row.shippingProofFile}` : "",
+      ]
+        .filter(Boolean)
+        .join(" | ") || null,
+    };
+
+    if (existingOrder) {
+      await prisma.dropshippingOrder.update({
+        where: { id: existingOrder.id },
+        data: payload,
+      });
+      updatedOrders += 1;
+    } else {
+      await prisma.dropshippingOrder.create({
+        data: {
+          tenant_id: session.tenantId,
+          company_id: session.companyId,
+          ...payload,
+        },
+      });
+      createdOrders += 1;
+    }
+
+    if (row.paidAmount !== null && row.paidAmount > 0) {
+      const paidAt = settledAtDate || shippedAtDate || new Date();
+      const prev = latestPaidSnapshotByCustomer.get(customer.id);
+      if (!prev || prev.paidAt.getTime() <= paidAt.getTime()) {
+        latestPaidSnapshotByCustomer.set(customer.id, {
+          amount: row.paidAmount,
+          paidAt,
+          customerId: customer.id,
+        });
+      }
+    }
+  }
+
+  for (const item of latestPaidSnapshotByCustomer.values()) {
+    const existingPayment = await prisma.dropshippingPayment.findFirst({
+      where: {
+        tenant_id: session.tenantId,
+        company_id: session.companyId,
+        customer_id: item.customerId,
+        payment_method: "legacy-import",
+      },
+      orderBy: { paid_at: "desc" },
+    });
+
+    if (existingPayment) {
+      await prisma.dropshippingPayment.update({
+        where: { id: existingPayment.id },
+        data: {
+          amount: item.amount,
+          paid_at: item.paidAt,
+          notes: "legacy-import-snapshot",
+        },
+      });
+    } else {
+      await prisma.dropshippingPayment.create({
+        data: {
+          tenant_id: session.tenantId,
+          company_id: session.companyId,
+          customer_id: item.customerId,
+          amount: item.amount,
+          paid_at: item.paidAt,
+          payment_method: "legacy-import",
+          notes: "legacy-import-snapshot",
+        },
+      });
+    }
+    paymentSeededCustomers.add(item.customerId);
+  }
+
+  return {
+    totalRows: rows.length,
+    createdOrders,
+    updatedOrders,
+    touchedCustomers: touchedCustomers.size,
+    touchedProducts: touchedProducts.size,
+    seededPayments: paymentSeededCustomers.size,
+  };
 }
 
 export async function listOrders(session: Session) {

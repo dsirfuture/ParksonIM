@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
@@ -130,7 +130,10 @@ export function DropshippingClient({
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<OrderFormState>(EMPTY_ORDER_FORM);
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importSummary, setImportSummary] = useState<string>("");
   const [error, setError] = useState("");
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setLang(getClientLang());
@@ -143,6 +146,7 @@ export function DropshippingClient({
         desc: "在现有 ParksonIM 后台内集中处理代发订单、SKU 备货、客户结算与汇率信息。",
         refresh: "刷新数据",
         create: "新增订单",
+        import: "导入文件",
         tabs: { overview: "总览", orders: "订单管理", inventory: "SKU备货", finance: "财务结算" },
         stats: {
           todayOrders: "今日录单",
@@ -228,6 +232,7 @@ export function DropshippingClient({
         },
         warnings: "异常",
         saving: "保存中...",
+        importing: "导入中...",
       }
     : {
         badge: "Modulo interno",
@@ -235,6 +240,7 @@ export function DropshippingClient({
         desc: "Gestiona pedidos, inventario SKU, liquidacion por cliente y tipo de cambio dentro del ParksonIM actual.",
         refresh: "Actualizar",
         create: "Nuevo pedido",
+        import: "Importar archivo",
         tabs: { overview: "Resumen", orders: "Pedidos", inventory: "Inventario SKU", finance: "Finanzas" },
         stats: {
           todayOrders: "Pedidos hoy",
@@ -320,6 +326,7 @@ export function DropshippingClient({
         },
         warnings: "Alertas",
         saving: "Guardando...",
+        importing: "Importando...",
       };
 
   async function refreshAll() {
@@ -439,6 +446,33 @@ export function DropshippingClient({
     }
   }
 
+  async function handleImport(file: File) {
+    try {
+      setImporting(true);
+      setError("");
+      setImportSummary("");
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch("/api/dropshipping/import", {
+        method: "POST",
+        body: formData,
+      });
+      const json = await response.json();
+      if (!response.ok || !json?.ok) throw new Error(json?.error || "import_failed");
+      const summary = json.summary || {};
+      setImportSummary(
+        lang === "zh"
+          ? `已导入 ${summary.totalRows || 0} 行，新增订单 ${summary.createdOrders || 0}，更新订单 ${summary.updatedOrders || 0}，同步客户 ${summary.touchedCustomers || 0}，同步商品 ${summary.touchedProducts || 0}，导入付款快照 ${summary.seededPayments || 0}。`
+          : `Importadas ${summary.totalRows || 0} filas, pedidos nuevos ${summary.createdOrders || 0}, pedidos actualizados ${summary.updatedOrders || 0}, clientes ${summary.touchedCustomers || 0}, productos ${summary.touchedProducts || 0}, pagos sembrados ${summary.seededPayments || 0}.`,
+      );
+      await refreshAll();
+    } catch (importError) {
+      setError(importError instanceof Error ? importError.message : "import_failed");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   const tabButtonClass = (tab: TabKey) =>
     `inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-semibold transition ${
       activeTab === tab ? "bg-primary text-white shadow-soft" : "bg-white text-slate-600 hover:bg-slate-100"
@@ -458,12 +492,30 @@ export function DropshippingClient({
         }
         actions={
           <>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void handleImport(file);
+                event.currentTarget.value = "";
+              }}
+            />
             <button
               type="button"
               onClick={() => void refreshAll()}
               className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
             >
               {text.refresh}
+            </button>
+            <button
+              type="button"
+              onClick={() => importInputRef.current?.click()}
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              {importing ? text.importing : text.import}
             </button>
             <button
               type="button"
@@ -478,6 +530,10 @@ export function DropshippingClient({
 
       {error ? (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">{error}</div>
+      ) : null}
+
+      {importSummary ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{importSummary}</div>
       ) : null}
 
       <div className="flex flex-wrap gap-2">

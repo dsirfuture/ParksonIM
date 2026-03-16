@@ -434,6 +434,15 @@ model DropshippingOrder {
   shipping_proof_file  String?
   shipping_fee         Decimal? @db.Decimal(14, 2)
   exchange_rate_id     String? @db.Uuid
+  snapshot_stocked_qty Int?
+  snapshot_stock_amount Decimal? @db.Decimal(14, 2)
+  snapshot_rate_value Decimal? @db.Decimal(14, 6)
+  snapshot_exchanged_amount Decimal? @db.Decimal(14, 2)
+  snapshot_shipping_amount Decimal? @db.Decimal(14, 2)
+  snapshot_total_amount Decimal? @db.Decimal(14, 2)
+  snapshot_paid_amount Decimal? @db.Decimal(14, 2)
+  snapshot_unpaid_amount Decimal? @db.Decimal(14, 2)
+  settled_at          DateTime?
   notes                String?
 
   created_at DateTime @default(now())
