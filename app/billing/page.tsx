@@ -352,6 +352,16 @@ export default async function BillingPage({
   const initialRows = Array.from(grouped.values())
     .map((row) => {
       const order = orderMap.get(row.orderNo);
+      const detailItems = Array.from(detailMap.get(row.orderNo)?.values() || []);
+      const effectiveVipEnabled = Boolean(order?.generatedAtText && order?.generatedVipEnabled);
+      const finalDiscountedAmount = detailItems.reduce((sum, item) => {
+        let factor = 1;
+        const normalDiscount = toDiscountFactor(item.normalDiscount);
+        const vipDiscount = toDiscountFactor(item.vipDiscount);
+        if (normalDiscount !== null) factor *= 1 - normalDiscount;
+        if (effectiveVipEnabled && vipDiscount !== null) factor *= 1 - vipDiscount;
+        return sum + Number(item.qty || 0) * Number(item.unitPrice || 0) * factor;
+      }, 0);
       return {
         id: order?.id || "",
         orderNo: row.orderNo,
@@ -374,7 +384,7 @@ export default async function BillingPage({
         generatedAtText: order?.generatedAtText || "",
         generatedVipEnabled: order?.generatedVipEnabled || false,
         originalAmountText: formatMoney(row.originalAmount),
-        discountedAmountText: formatMoney(row.discountedAmount),
+        discountedAmountText: formatMoney(finalDiscountedAmount),
         updatedAtText: formatDateOnly(row.latestAt),
       };
     })

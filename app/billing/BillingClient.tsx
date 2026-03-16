@@ -254,14 +254,18 @@ export function BillingClient({
       }
 
       const originalAmount = items.reduce((sum, item) => sum + Number(item.qty || 0) * Number(item.unitPrice || 0), 0);
-      const discountedAmount = items.reduce((sum, item) => sum + calcLineTotal(item, vipDiscountEnabled), 0);
+      const effectiveVipEnabled =
+        row.orderNo === detailOrderNo
+          ? vipDiscountEnabled
+          : Boolean(row.generatedAtText && row.generatedVipEnabled);
+      const discountedAmount = items.reduce((sum, item) => sum + calcLineTotal(item, effectiveVipEnabled), 0);
       map.set(row.orderNo, {
         originalAmountText: toMoney(originalAmount),
         discountedAmountText: toMoney(discountedAmount),
       });
     }
     return map;
-  }, [detailsByOrderNo, rows, vipDiscountEnabled]);
+  }, [detailOrderNo, detailsByOrderNo, rows, vipDiscountEnabled]);
 
   useEffect(() => {
     if (!detailRow?.generatedAtText) return;
