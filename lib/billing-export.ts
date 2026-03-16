@@ -845,6 +845,10 @@ export async function buildBillingPdf(data: BillingExportData) {
     const brandColor: [number, number, number] = [0.184, 0.235, 0.494];
     const brandTextSize = 11;
     const brandBottomY = cursorY - 1;
+    const brandText = "百盛供应链";
+    const brandTextFont = fontForText(brandText, true);
+    const brandTextHeight = brandTextFont.heightAtSize(brandTextSize);
+    const brandTextY = brandBottomY - brandTextHeight + 1.5;
     if (logoBuffer) {
       try {
         const logo = await pdfDoc.embedPng(logoBuffer);
@@ -857,20 +861,20 @@ export async function buildBillingPdf(data: BillingExportData) {
           width: logoWidth,
           height: logoHeight,
         });
-        drawText("百盛供应链", marginX + logoWidth + 10, brandBottomY, {
+        drawText(brandText, marginX + logoWidth + 10, brandTextY, {
           size: brandTextSize,
           bold: true,
           color: brandColor,
         });
       } catch {
-        drawText("百盛供应链", marginX, brandBottomY, {
+        drawText(brandText, marginX, brandTextY, {
           size: brandTextSize,
           bold: true,
           color: brandColor,
         });
       }
     } else {
-      drawText("百盛供应链", marginX, brandBottomY, {
+      drawText(brandText, marginX, brandTextY, {
         size: brandTextSize,
         bold: true,
         color: brandColor,
