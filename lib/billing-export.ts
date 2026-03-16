@@ -745,14 +745,14 @@ export async function buildBillingXlsx(data: BillingExportData) {
   }
 
   applyCellStyle("B1", {
-    value: "?????",
+    value: "\u767e\u76db\u4f9b\u5e94\u94fe",
     fontSize: 12,
     bold: true,
     color: brandColor,
     horizontal: "left",
     vertical: "middle",
   });
-  writeSummaryRow(1, "??? / No. Ped.", data.orderNo || "-");
+  writeSummaryRow(1, "\u8ba2\u5355\u53f7 / No. Ped.", data.orderNo || "-");
 
   applyCellStyle("A2", {
     value: "INVOICE",
@@ -762,95 +762,97 @@ export async function buildBillingXlsx(data: BillingExportData) {
     horizontal: "left",
     vertical: "middle",
   });
-  writeSummaryRow(2, "???? / F. Fact.", data.issueDateText || "-");
+  writeSummaryRow(2, "\u51fa\u8d26\u65e5\u671f / F. Fact.", data.issueDateText || "-");
 
   applyCellStyle("A3", {
-    value: "M?S QUE PRODUCTOS, ENTREGAMOS SOLUCIONES",
+    value: "M\u00c1S QUE PRODUCTOS, ENTREGAMOS SOLUCIONES",
     fontSize: 9,
     color: "FF64748B",
     horizontal: "left",
     vertical: "middle",
   });
-  writeSummaryRow(3, "???? / Mto. Total", "$" + toMoney(data.totalAmount), { emphasize: true });
+  writeSummaryRow(3, "\u5408\u8ba1\u91d1\u989d / Mto. Total", "$" + toMoney(data.totalAmount), {
+    emphasize: true,
+  });
 
   let currentRow = 5;
 
-  writeSectionTitle(currentRow, "???? / CLIENTE");
+  writeSectionTitle(currentRow, "\u5ba2\u6237\u4fe1\u606f / CLIENTE");
   currentRow += 1;
-  writeLabelRow(currentRow, "???? / Nom. Clte.");
+  writeLabelRow(currentRow, "\u5ba2\u6237\u540d\u79f0 / Nom. Clte.");
   currentRow += 1;
   writeValueRow(currentRow, data.companyName || "-");
   currentRow += 1;
-  writeLabelRow(currentRow, "??? / Dest.");
+  writeLabelRow(currentRow, "\u6536\u8d27\u4eba / Dest.");
   currentRow += 1;
   writeValueRow(currentRow, data.recipientNameText || data.contactName || "-");
   currentRow += 1;
-  writeLabelRow(currentRow, "?? / Tel. Dest.");
+  writeLabelRow(currentRow, "\u7535\u8bdd / Tel. Dest.");
   currentRow += 1;
   writeValueRow(currentRow, data.recipientPhoneText || data.contactPhone || "-");
   currentRow += 1;
-  writeLabelRow(currentRow, "???? / Dir. Ent.");
+  writeLabelRow(currentRow, "\u9001\u8d27\u5730\u5740 / Dir. Ent.");
   currentRow += 1;
   writeValueRow(currentRow, data.addressText || "-", { wrapText: true, rowHeight: 44 });
   currentRow += 2;
 
-  writeSectionTitle(currentRow, "???? / FACT.");
+  writeSectionTitle(currentRow, "\u8d26\u5355\u4fe1\u606f / FACT.");
   currentRow += 1;
-  writeLabelRow(currentRow, "???? / F. Env.");
+  writeLabelRow(currentRow, "\u53d1\u8d27\u65e5\u671f / F. Env.");
   currentRow += 1;
   writeValueRow(currentRow, data.shipDateText || "-");
   currentRow += 1;
-  writeLabelRow(currentRow, "???? / Etiq. Tda.");
+  writeLabelRow(currentRow, "\u95e8\u5e97\u6807\u8bb0 / Etiq. Tda.");
   currentRow += 1;
   writeValueRow(currentRow, formatStoreLabelDisplay(data.storeLabelText) || "-");
   currentRow += 1;
-  writeLabelRow(currentRow, "??");
+  writeLabelRow(currentRow, "\u8d26\u671f");
   currentRow += 1;
   writeValueRow(currentRow, getPaymentTermDisplayLines(data.paymentTermText).join(" ") || "-");
   currentRow += 1;
   if (data.vipDiscountEnabled) {
-    writeLabelRow(currentRow, "VIP??");
+    writeLabelRow(currentRow, "VIP\u5ba2\u6237");
     currentRow += 1;
-    writeValueRow(currentRow, "VIP??");
+    writeValueRow(currentRow, "VIP\u5ba2\u6237");
     currentRow += 1;
   }
   currentRow += 1;
 
-  writeSectionTitle(currentRow, "???? / ENV?O");
+  writeSectionTitle(currentRow, "\u7269\u6d41\u4fe1\u606f / ENV\u00cdO");
   currentRow += 1;
-  writeLabelRow(currentRow, "??? / Dep. Env.");
+  writeLabelRow(currentRow, "\u53d1\u8d27\u4ed3 / Dep. Env.");
   currentRow += 1;
   writeValueRow(currentRow, data.warehouseText || "-");
   currentRow += 1;
-  writeLabelRow(currentRow, "???? / Met. Env.");
+  writeLabelRow(currentRow, "\u53d1\u8d27\u65b9\u5f0f / Met. Env.");
   currentRow += 1;
   writeValueRow(currentRow, data.shippingMethodText || "-");
   currentRow += 1;
-  writeLabelRow(currentRow, "???? / Emp. Transp.");
+  writeLabelRow(currentRow, "\u6258\u8fd0\u516c\u53f8 / Emp. Transp.");
   currentRow += 1;
   writeValueRow(currentRow, data.carrierCompanyText || "-");
   currentRow += 1;
-  writeLabelRow(currentRow, "???? / Cant. Cajas");
+  writeLabelRow(currentRow, "\u88c5\u7bb1\u4ef6\u6570 / Cant. Cajas");
   currentRow += 1;
   writeValueRow(currentRow, data.boxCountText || "-");
   currentRow += 1;
-  writeLabelRow(currentRow, "????? / Tot. Prod.");
+  writeLabelRow(currentRow, "\u5546\u54c1\u603b\u6570\u91cf / Tot. Prod.");
   currentRow += 1;
   writeValueRow(currentRow, String(data.totalQty || 0));
   currentRow += 2;
 
   const headerRowNumber = currentRow;
   const headerValues = [
-    "??",
-    "??",
-    "???",
-    "???",
-    "???",
-    "??",
-    "??",
-    "????",
-    ...(data.vipDiscountEnabled ? ["VIP??"] : []),
-    "??",
+    "\u56fe\u7247",
+    "\u7f16\u53f7",
+    "\u6761\u5f62\u7801",
+    "\u4e2d\u6587\u540d",
+    "\u897f\u6587\u540d",
+    "\u6570\u91cf",
+    "\u5355\u4ef7",
+    "\u666e\u901a\u6298\u6263",
+    ...(data.vipDiscountEnabled ? ["VIP\u6298\u6263"] : []),
+    "\u91d1\u989d",
   ];
   const headerRow = worksheet.getRow(headerRowNumber);
   headerRow.values = headerValues;
