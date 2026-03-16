@@ -542,18 +542,23 @@ export function BillingClient({
             <div className="max-h-[78vh] overflow-auto px-6 py-8">
               <div className="relative mx-auto w-full max-w-[980px] rounded-[32px] bg-white px-8 py-9 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
                 {detailGenerated ? (
-                  <div className="pointer-events-none absolute right-[292px] top-[78px] z-10 rotate-[-11deg] opacity-[0.78]">
-                    <div className="relative inline-block min-w-[336px] border-[5px] border-[#b03127]/90 bg-[#fff8f5]/20 px-5 py-3 text-[#b03127] shadow-[0_10px_24px_rgba(176,49,39,0.08)]">
-                      <div className="pointer-events-none absolute inset-[6px] border border-[#b03127]/35" />
-                      <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={{ backgroundImage: "repeating-linear-gradient(135deg, rgba(176,49,39,0.35) 0 2px, transparent 2px 14px)" }} />
-                      <div className="relative flex min-h-[92px] flex-col justify-between py-1">
-                        <div className="text-center text-[22px] font-black leading-none tracking-[0.01em]">
+                  <div className="pointer-events-none absolute right-[284px] top-[88px] z-10 rotate-[-11deg] opacity-[0.82]">
+                    <div className="relative inline-block min-w-[386px] border-[6px] border-[#b03127]/90 bg-[#fffaf8]/45 px-5 py-4 text-[#b03127] shadow-[0_12px_26px_rgba(176,49,39,0.08)]">
+                      <div className="pointer-events-none absolute inset-[8px] border-[2px] border-[#b03127]/38" />
+                      <div
+                        className="pointer-events-none absolute inset-0 opacity-[0.28]"
+                        style={{
+                          backgroundImage:
+                            "radial-gradient(circle at 10% 18%, rgba(176,49,39,0.22) 0 1.1px, transparent 1.1px), radial-gradient(circle at 74% 26%, rgba(176,49,39,0.16) 0 1px, transparent 1px), radial-gradient(circle at 22% 76%, rgba(176,49,39,0.18) 0 1.1px, transparent 1.1px), radial-gradient(circle at 86% 68%, rgba(176,49,39,0.12) 0 0.9px, transparent 0.9px), repeating-linear-gradient(135deg, rgba(176,49,39,0.12) 0 2px, transparent 2px 15px)",
+                        }}
+                      />
+                      <div className="pointer-events-none absolute inset-x-[18px] top-1/2 h-px -translate-y-1/2 bg-[#b03127]/34" />
+                      <div className="relative flex min-h-[112px] flex-col justify-between py-1">
+                        <div className="text-center text-[31px] font-black leading-none tracking-[0.01em] text-[#b03127]">
                           账单生成并锁定
                         </div>
-                        <div className="border-t border-[#b03127]/35 pt-3">
-                          <div className="text-center text-[22px] font-black uppercase leading-none tracking-[0.01em]">
-                            FACT. GEN. Y BLOQ.
-                          </div>
+                        <div className="text-center text-[31px] font-black uppercase leading-none tracking-[0.01em] text-[#b03127]">
+                          FACT. GEN. Y BLOQ.
                         </div>
                       </div>
                     </div>
