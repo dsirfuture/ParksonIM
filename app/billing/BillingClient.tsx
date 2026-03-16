@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { StatCard } from "@/components/stat-card";
 import { TableCard } from "@/components/table-card";
 import { ProductImage } from "@/components/product-image";
 import { ImageLightbox } from "@/components/image-lightbox";
@@ -212,8 +211,18 @@ export function BillingClient({
   }, [activeTab]);
 
   const theme = currentTab === "supplier"
-    ? { panel: "border-stone-200 bg-white", tabActive: "border-amber-300 bg-amber-50 text-amber-900", tabInactive: "border-transparent bg-stone-100 text-stone-500", accentValue: "text-amber-700", contentBg: "bg-stone-50" }
-    : { panel: "border-stone-200 bg-white", tabActive: "border-slate-300 bg-slate-100 text-slate-900", tabInactive: "border-transparent bg-stone-100 text-stone-500", accentValue: "text-slate-800", contentBg: "bg-stone-50" };
+    ? {
+        panel: "border-stone-200 bg-white",
+        tabActive: "border-amber-200 bg-amber-50 text-amber-900",
+        tabInactive: "border-stone-200 bg-stone-100 text-stone-500",
+        contentBg: "border-amber-100 bg-[linear-gradient(180deg,#fffaf1_0%,#fffdf9_100%)]",
+      }
+    : {
+        panel: "border-stone-200 bg-white",
+        tabActive: "border-sky-200 bg-sky-50 text-sky-950",
+        tabInactive: "border-stone-200 bg-stone-100 text-stone-500",
+        contentBg: "border-sky-100 bg-[linear-gradient(180deg,#f7fbff_0%,#ffffff_100%)]",
+      };
 
   const totalCount = rows.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
@@ -358,20 +367,25 @@ export function BillingClient({
     <section className={`mt-0 overflow-hidden rounded-[30px] border ${theme.panel}`}>
       <div className="border-b border-stone-200 bg-white px-5 pt-4">
         <div className="flex flex-wrap items-end gap-2">
-          <button type="button" onClick={() => setCurrentTab("customer")} className={`inline-flex min-w-[148px] items-center justify-center rounded-t-2xl border px-4 py-2 text-sm font-semibold ${currentTab === "customer" ? theme.tabActive : theme.tabInactive}`}>客户出账单</button>
-          <button type="button" onClick={() => setCurrentTab("supplier")} className={`inline-flex min-w-[148px] items-center justify-center rounded-t-2xl border px-4 py-2 text-sm font-semibold ${currentTab === "supplier" ? theme.tabActive : theme.tabInactive}`}>供应商账单</button>
+          <button
+            type="button"
+            onClick={() => setCurrentTab("customer")}
+            className={`relative inline-flex min-w-[148px] items-center justify-center rounded-t-[18px] border px-5 py-2.5 text-sm font-semibold transition ${currentTab === "customer" ? `${theme.tabActive} z-10 border-b-transparent shadow-[0_-1px_0_rgba(255,255,255,0.6)]` : theme.tabInactive}`}
+          >
+            客户出账单
+          </button>
+          <button
+            type="button"
+            onClick={() => setCurrentTab("supplier")}
+            className={`relative inline-flex min-w-[148px] items-center justify-center rounded-t-[18px] border px-5 py-2.5 text-sm font-semibold transition ${currentTab === "supplier" ? `${theme.tabActive} z-10 border-b-transparent shadow-[0_-1px_0_rgba(255,255,255,0.6)]` : theme.tabInactive}`}
+          >
+            供应商账单
+          </button>
         </div>
       </div>
 
-      <div className={`m-3 rounded-[24px] p-5 ${theme.contentBg}`}>
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="待出账单" value={totalCount} hint="验货完成后等待汇总出账" valueClassName={theme.accentValue} />
-          <StatCard label="待生成" value="0" hint="当前没有待生成的账单" valueClassName="text-stone-700" />
-          <StatCard label="待复核" value="0" hint="导出前需要人工复核" valueClassName="text-stone-700" />
-          <StatCard label="可导出" value={totalCount} hint="可直接下载 XLSX 与 PDF" valueClassName="text-stone-900" />
-        </section>
-
-        <div className="mt-5">
+      <div className={`m-3 mt-0 rounded-[28px] border p-5 shadow-[0_12px_36px_rgba(15,23,42,0.04)] ${theme.contentBg}`}>
+        <div>
           <TableCard title="待出账单列表" description={`共 ${totalCount} 条待导出账单`}>
             <div className="overflow-x-auto">
               <table className="min-w-full border-separate border-spacing-0">
@@ -384,12 +398,13 @@ export function BillingClient({
                     <th className="whitespace-nowrap px-4 py-3 font-semibold">原金额</th>
                     <th className="whitespace-nowrap px-4 py-3 font-semibold">折扣后金额</th>
                     <th className="whitespace-nowrap px-4 py-3 font-semibold">账单汇总时间</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold">账单生成</th>
                     <th className="whitespace-nowrap px-4 py-3 text-right font-semibold"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {pageRows.length === 0 ? (
-                    <tr><td colSpan={8} className="px-4 py-12 text-center text-sm text-stone-500">当前没有待出账单记录</td></tr>
+                    <tr><td colSpan={9} className="px-4 py-12 text-center text-sm text-stone-500">当前没有待出账单记录</td></tr>
                   ) : pageRows.map((row) => (
                     <tr key={row.orderNo} className="border-t border-stone-200/70 bg-white/80">
                       <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-slate-900">{row.orderNo}</td>
@@ -399,6 +414,11 @@ export function BillingClient({
                       <td className="whitespace-nowrap px-4 py-4 text-left text-sm text-stone-700">{rowAmountMap.get(row.orderNo)?.originalAmountText || row.originalAmountText}</td>
                       <td className="whitespace-nowrap px-4 py-4 text-left text-sm font-semibold text-slate-900">{rowAmountMap.get(row.orderNo)?.discountedAmountText || row.discountedAmountText}</td>
                       <td className="whitespace-nowrap px-4 py-4 text-sm text-stone-500">{row.updatedAtText}</td>
+                      <td className="whitespace-nowrap px-4 py-4 text-sm">
+                        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${row.generatedAtText ? "bg-emerald-50 text-emerald-700" : "bg-stone-100 text-stone-500"}`}>
+                          {row.generatedAtText ? "已生成" : "未生成"}
+                        </span>
+                      </td>
                       <td className="px-4 py-4">
                         <div className="flex items-center justify-end gap-2">
                           <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-stone-300 hover:text-slate-900" title="查看账单" onClick={() => setDetailOrderNo(row.orderNo)}><EyeIcon /></button>
