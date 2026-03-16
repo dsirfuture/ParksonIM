@@ -98,7 +98,7 @@ function formatPaymentTerm(value: string) {
   return text.endsWith("天") ? text : `${text}天`;
 }
 
-const VIP_ICON_PATH = "M7.3 0L10.3 5L14.6 3.3L12.8 13.2H1.8L0 3.3L4.3 5Z";
+const VIP_ICON_TEXT = "★";
 
 function toPercentText(value: number | null) {
   if (value === null || !Number.isFinite(value)) return "-";
@@ -693,27 +693,26 @@ export async function buildBillingPdf(data: BillingExportData) {
 
   const drawVipField = (text: string, x: number, y: number) => {
     const rowHeight = 24;
-    const iconScale = 1.08;
-    const iconHeight = 13.2 * iconScale;
-    const iconWidth = 14.6 * iconScale;
-    const iconGap = 8;
+    const iconSize = 12;
     const textSize = 10;
-    const textFont = fontForText(text, true);
-    const textHeight = textFont.heightAtSize(textSize);
+    const iconGap = 6;
     const rowBottomY = y - rowHeight;
-    const iconY = rowBottomY + (rowHeight - iconHeight) / 2;
-    const textY = rowBottomY + (rowHeight - textHeight) / 2;
+    const baselineY = rowBottomY + 7.5;
+    const iconWidth = zhFont.widthOfTextAtSize(VIP_ICON_TEXT, iconSize);
 
-    page.drawSvgPath(VIP_ICON_PATH, {
+    page.drawText(VIP_ICON_TEXT, {
       x,
-      y: iconY,
-      scale: iconScale,
+      y: baselineY,
+      size: iconSize,
+      font: zhFont,
       color: rgb(0.08, 0.09, 0.1),
     });
-    drawText(text, x + iconWidth + iconGap, textY, {
+    page.drawText(safePdfText(text, unicodeSafe), {
+      x: x + iconWidth + iconGap,
+      y: baselineY,
       size: textSize,
-      bold: true,
-      color: [0.08, 0.09, 0.1],
+      font: zhFont,
+      color: rgb(0.08, 0.09, 0.1),
     });
     return rowHeight;
   };
