@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
-import { buildBillingRemark, normalizeStoreLabelInput, parseBillingRemark, type BillingHeaderMeta } from "@/lib/billing-meta";
+import {
+  buildBillingRemark,
+  normalizeStoreLabelInput,
+  parseBillingRemark,
+  parseBillingBooleanFlag,
+  toBillingBooleanFlag,
+  type BillingHeaderMeta,
+} from "@/lib/billing-meta";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
 
@@ -37,11 +44,15 @@ export async function PATCH(
     }
 
     const body = (await request.json()) as {
+      action?: unknown;
       customerName?: unknown;
       addressText?: unknown;
       contactPhone?: unknown;
       remarkText?: unknown;
       storeLabel?: unknown;
+      confirmOrderNo?: unknown;
+      revokeReason?: unknown;
+      generatedVipEnabled?: unknown;
       headerMeta?: Partial<Record<keyof BillingHeaderMeta, unknown>>;
     };
 
@@ -51,12 +62,15 @@ export async function PATCH(
         tenant_id: session.tenantId,
         company_id: session.companyId,
       },
-      select: { id: true },
+      select: { id: true, order_no: true, contact_name: true, order_remark: true },
     });
 
     if (!target) {
       return NextResponse.json({ ok: false, error: "记录不存在" }, { status: 404 });
     }
+
+    const action = normalizeString(body.action);
+    const currentRemark = parseBillingRemark(target.order_remark);
 
     const updateData: {
       customer_name?: string | null;
@@ -66,22 +80,50 @@ export async function PATCH(
       store_label?: string | null;
     } = {};
 
-    if ("customerName" in body) {
+    if (action === "generate") {
+      const nextMeta: BillingHeaderMeta = {
+        ...currentRemark.meta,
+        generatedAt: new Date().toISOString(),
+        generatedVipEnabled: toBillingBooleanFlag(Boolean(body.generatedVipEnabled)),
+        revokeReason: "",
+      };
+      updateData.order_remark = buildBillingRemark(currentRemark.noteText, nextMeta);
+    } else if (action === "revoke") {
+      const confirmOrderNo = normalizeString(body.confirmOrderNo);
+      const revokeReason = normalizeString(body.revokeReason);
+      if (confirmOrderNo !== target.order_no) {
+        return NextResponse.json({ ok: false, error: "请输入完整且正确的订单号" }, { status: 400 });
+      }
+      if (!revokeReason) {
+        return NextResponse.json({ ok: false, error: "请填写撤销原因" }, { status: 400 });
+      }
+      const nextMeta: BillingHeaderMeta = {
+        ...currentRemark.meta,
+        generatedAt: "",
+        generatedVipEnabled: "",
+        revokeReason,
+      };
+      updateData.order_remark = buildBillingRemark(currentRemark.noteText, nextMeta);
+    } else if (currentRemark.meta.generatedAt) {
+      return NextResponse.json({ ok: false, error: "账单已生成，请先撤销生成后再编辑" }, { status: 409 });
+    }
+
+    if (!action && "customerName" in body) {
       updateData.customer_name = normalizeString(body.customerName);
     }
-    if ("addressText" in body) {
+    if (!action && "addressText" in body) {
       updateData.address_text = normalizeString(body.addressText);
     }
-    if ("contactPhone" in body) {
+    if (!action && "contactPhone" in body) {
       updateData.contact_phone = normalizeMexicoPhone(body.contactPhone);
     }
-    if ("remarkText" in body) {
+    if (!action && "remarkText" in body) {
       const headerMetaInput = Object.fromEntries(
         Object.entries(body.headerMeta || {}).map(([key, value]) => [key, typeof value === "string" ? value : ""]),
       ) as Partial<BillingHeaderMeta>;
       updateData.order_remark = buildBillingRemark(normalizeString(body.remarkText), headerMetaInput);
     }
-    if ("storeLabel" in body) {
+    if (!action && "storeLabel" in body) {
       updateData.store_label = normalizeStoreLabelInput(body.storeLabel) || null;
     }
 
@@ -119,6 +161,8 @@ export async function PATCH(
         recipientPhoneText: parsedRemark.meta.recipientPhone || updated.contact_phone || "",
         carrierCompanyText: parsedRemark.meta.carrierCompany,
         paymentTermText: parsedRemark.meta.paymentTerm,
+        generatedAtText: parsedRemark.meta.generatedAt,
+        generatedVipEnabled: parseBillingBooleanFlag(parsedRemark.meta.generatedVipEnabled),
       },
     });
   } catch (error) {

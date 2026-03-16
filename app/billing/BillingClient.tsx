@@ -33,6 +33,8 @@ type BillingRow = {
   recipientPhoneText: string;
   carrierCompanyText: string;
   paymentTermText: string;
+  generatedAtText: string;
+  generatedVipEnabled: boolean;
 };
 
 type DetailItem = {
@@ -66,6 +68,12 @@ type EditState = {
   recipientPhoneText: string;
   carrierCompanyText: string;
   paymentTermText: string;
+};
+
+type RevokeState = {
+  confirmOrderNo: string;
+  reason: string;
+  error: string;
 };
 
 const PAGE_SIZE = 8;
@@ -195,6 +203,9 @@ export function BillingClient({
   const [editState, setEditState] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [statusActionLoading, setStatusActionLoading] = useState<"generate" | "revoke" | "">("");
+  const [statusActionError, setStatusActionError] = useState("");
+  const [revokeState, setRevokeState] = useState<RevokeState | null>(null);
 
   useEffect(() => {
     setCurrentTab(activeTab);
@@ -220,6 +231,7 @@ export function BillingClient({
     return { xlsx: `/api/billing/${encodedOrderNo}/export/xlsx?${vipQuery}`, pdf: `/api/billing/${encodedOrderNo}/export/pdf?${vipQuery}` };
   }, [detailOrderNo, vipDiscountEnabled]);
   const detailRow = useMemo(() => (detailOrderNo ? rows.find((row) => row.orderNo === detailOrderNo) || null : null), [detailOrderNo, rows]);
+  const detailGenerated = Boolean(detailRow?.generatedAtText);
   const rowAmountMap = useMemo(() => {
     const map = new Map<string, { originalAmountText: string; discountedAmountText: string }>();
     for (const row of rows) {
@@ -241,6 +253,52 @@ export function BillingClient({
     }
     return map;
   }, [detailsByOrderNo, rows, vipDiscountEnabled]);
+
+  useEffect(() => {
+    if (!detailRow?.generatedAtText) return;
+    setVipDiscountEnabled(detailRow.generatedVipEnabled);
+  }, [detailRow?.generatedAtText, detailRow?.generatedVipEnabled]);
+
+  async function updateGeneratedState(action: "generate" | "revoke", options?: { confirmOrderNo?: string; revokeReason?: string }) {
+    if (!detailRow) return;
+    setStatusActionError("");
+    setStatusActionLoading(action);
+    try {
+      const res = await fetch(`/api/yg-orders/${detailRow.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          generatedVipEnabled: vipDiscountEnabled,
+          confirmOrderNo: options?.confirmOrderNo,
+          revokeReason: options?.revokeReason,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok || !result?.ok) {
+        throw new Error(result?.error || (action === "generate" ? "生成账单失败" : "撤销生成失败"));
+      }
+
+      setRows((prev) => prev.map((row) => row.id !== detailRow.id ? row : {
+        ...row,
+        generatedAtText: result.data.generatedAtText || "",
+        generatedVipEnabled: Boolean(result.data.generatedVipEnabled),
+      }));
+
+      if (action === "revoke") {
+        setRevokeState(null);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : (action === "generate" ? "生成账单失败" : "撤销生成失败");
+      if (action === "revoke") {
+        setRevokeState((prev) => prev ? { ...prev, error: message } : prev);
+      } else {
+        setStatusActionError(message);
+      }
+    } finally {
+      setStatusActionLoading("");
+    }
+  }
 
   async function saveEdit() {
     if (!editState) return;
@@ -344,7 +402,7 @@ export function BillingClient({
                       <td className="px-4 py-4">
                         <div className="flex items-center justify-end gap-2">
                           <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-stone-300 hover:text-slate-900" title="查看账单" onClick={() => setDetailOrderNo(row.orderNo)}><EyeIcon /></button>
-                          <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-stone-300 hover:text-slate-900" title="编辑客户信息" onClick={() => setEditState({
+                          <button type="button" disabled={Boolean(row.generatedAtText)} className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-stone-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-300" title={row.generatedAtText ? "账单已生成，需先撤销生成" : "编辑客户信息"} onClick={() => setEditState({
                             id: row.id,
                             orderNo: row.orderNo,
                             companyName: row.companyName === "-" ? "" : row.companyName,
@@ -392,16 +450,24 @@ export function BillingClient({
               <div>
                 <div className="text-xs uppercase tracking-[0.24em] text-slate-400">账单预览 / VISTA</div>
                 <div className="mt-1 text-sm text-slate-600">账单号 / No. Ped. <span className="font-semibold text-slate-900">{detailOrderNo}</span></div>
+                {statusActionError ? <div className="mt-2 text-sm text-red-600">{statusActionError}</div> : null}
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 {exportLinks ? (
                   <>
                     <a href={exportLinks.xlsx} className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50">导出 XLSX</a>
-                    <a href={exportLinks.pdf} className="rounded-full border border-slate-900 bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800">导出 PDF</a>
+                    <a href={exportLinks.pdf} className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50">导出 PDF</a>
                   </>
                 ) : null}
                 {detailRow ? (
-                  <button type="button" className="rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-700 transition hover:bg-slate-50" onClick={() => setEditState({
+                  detailGenerated ? (
+                    <button type="button" disabled={statusActionLoading === "revoke"} className="rounded-full bg-amber-100 px-4 py-2 text-sm font-medium text-amber-900 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60" onClick={() => setRevokeState({ confirmOrderNo: "", reason: "", error: "" })}>撤销生成</button>
+                  ) : (
+                    <button type="button" disabled={statusActionLoading === "generate"} className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60" onClick={() => updateGeneratedState("generate")}>生成账单</button>
+                  )
+                ) : null}
+                {detailRow ? (
+                  <button type="button" disabled={detailGenerated} className="rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300 disabled:hover:bg-transparent" onClick={() => setEditState({
                     id: detailRow.id,
                     orderNo: detailRow.orderNo,
                     companyName: detailRow.companyName === "-" ? "" : detailRow.companyName,
@@ -420,10 +486,11 @@ export function BillingClient({
                     paymentTermText: detailRow.paymentTermText,
                   })}>编辑表头</button>
                 ) : null}
-                <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
-                  <input type="checkbox" className="h-4 w-4 rounded border-slate-300" checked={vipDiscountEnabled} onChange={(e) => setVipDiscountEnabled(e.target.checked)} />
+                <label className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm ${detailGenerated ? "border-slate-200 bg-slate-100 text-slate-400" : "border-slate-200 bg-white text-slate-600"}`}>
+                  <input type="checkbox" className="h-4 w-4 rounded border-slate-300" checked={vipDiscountEnabled} disabled={detailGenerated} onChange={(e) => setVipDiscountEnabled(e.target.checked)} />
                   启用 VIP 折扣
                 </label>
+                {detailGenerated ? <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">已生成，账单已锁定</span> : null}
                 <button type="button" className="rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-700 transition hover:bg-slate-50" onClick={() => setDetailOrderNo(null)}>关闭</button>
               </div>
             </div>
@@ -559,6 +626,32 @@ export function BillingClient({
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {revokeState && detailRow ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/40 p-4" onClick={() => setRevokeState(null)}>
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="border-b border-slate-200 px-6 py-4">
+              <h3 className="text-lg font-semibold text-slate-900">撤销生成</h3>
+              <p className="mt-1 text-sm text-slate-500">请输入完整订单号并填写撤销原因后继续。</p>
+            </div>
+            <div className="space-y-4 px-6 py-5">
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">完整订单号</label>
+                <input value={revokeState.confirmOrderNo} onChange={(e) => setRevokeState((prev) => prev ? { ...prev, confirmOrderNo: e.target.value, error: "" } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">撤销原因</label>
+                <textarea value={revokeState.reason} onChange={(e) => setRevokeState((prev) => prev ? { ...prev, reason: e.target.value, error: "" } : prev)} className="min-h-[110px] w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-primary/40" />
+              </div>
+              {revokeState.error ? <div className="text-sm text-red-600">{revokeState.error}</div> : null}
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-4">
+              <button type="button" onClick={() => setRevokeState(null)} className="h-10 rounded-xl border border-slate-200 px-4 text-sm text-slate-600 hover:bg-slate-50">取消</button>
+              <button type="button" disabled={statusActionLoading === "revoke"} onClick={() => updateGeneratedState("revoke", { confirmOrderNo: revokeState.confirmOrderNo, revokeReason: revokeState.reason })} className="h-10 rounded-xl bg-amber-500 px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">确认撤销</button>
             </div>
           </div>
         </div>

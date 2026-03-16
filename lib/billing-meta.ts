@@ -8,6 +8,9 @@ export type BillingHeaderMeta = {
   recipientPhone: string;
   carrierCompany: string;
   paymentTerm: string;
+  generatedAt: string;
+  generatedVipEnabled: string;
+  revokeReason: string;
 };
 
 export const EMPTY_BILLING_HEADER_META: BillingHeaderMeta = {
@@ -20,6 +23,9 @@ export const EMPTY_BILLING_HEADER_META: BillingHeaderMeta = {
   recipientPhone: "",
   carrierCompany: "",
   paymentTerm: "",
+  generatedAt: "",
+  generatedVipEnabled: "",
+  revokeReason: "",
 };
 
 const BILLING_META_PREFIX = "[[BILLING_META]]";
@@ -52,6 +58,15 @@ export function getPaymentTermDisplayLines(value: unknown) {
   return [`${days} 发货日算起`];
 }
 
+export function parseBillingBooleanFlag(value: unknown) {
+  const text = trimString(value).toLowerCase();
+  return text === "1" || text === "true" || text === "yes";
+}
+
+export function toBillingBooleanFlag(value: unknown) {
+  return value ? "1" : "";
+}
+
 export function normalizeBillingHeaderMeta(
   value: Partial<BillingHeaderMeta> | null | undefined,
 ): BillingHeaderMeta {
@@ -65,6 +80,9 @@ export function normalizeBillingHeaderMeta(
     recipientPhone: trimString(value?.recipientPhone),
     carrierCompany: trimString(value?.carrierCompany),
     paymentTerm: trimString(value?.paymentTerm),
+    generatedAt: trimString(value?.generatedAt),
+    generatedVipEnabled: trimString(value?.generatedVipEnabled),
+    revokeReason: trimString(value?.revokeReason),
   };
 }
 

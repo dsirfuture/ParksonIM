@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/app-shell";
-import { normalizeStoreLabelInput, parseBillingRemark } from "@/lib/billing-meta";
+import { normalizeStoreLabelInput, parseBillingBooleanFlag, parseBillingRemark } from "@/lib/billing-meta";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
 import { BillingClient } from "./BillingClient";
@@ -316,6 +316,8 @@ export default async function BillingPage({
       recipientPhoneText: string;
       carrierCompanyText: string;
       paymentTermText: string;
+      generatedAtText: string;
+      generatedVipEnabled: boolean;
     }
   >();
 
@@ -342,6 +344,8 @@ export default async function BillingPage({
       recipientPhoneText: parsedRemark.meta.recipientPhone || row.contact_phone || "",
       carrierCompanyText: parsedRemark.meta.carrierCompany,
       paymentTermText: parsedRemark.meta.paymentTerm,
+      generatedAtText: parsedRemark.meta.generatedAt,
+      generatedVipEnabled: parseBillingBooleanFlag(parsedRemark.meta.generatedVipEnabled),
     });
   }
 
@@ -367,6 +371,8 @@ export default async function BillingPage({
         recipientPhoneText: order?.recipientPhoneText || "",
         carrierCompanyText: order?.carrierCompanyText || "",
         paymentTermText: order?.paymentTermText || "",
+        generatedAtText: order?.generatedAtText || "",
+        generatedVipEnabled: order?.generatedVipEnabled || false,
         originalAmountText: formatMoney(row.originalAmount),
         discountedAmountText: formatMoney(row.discountedAmount),
         updatedAtText: formatDateOnly(row.latestAt),
