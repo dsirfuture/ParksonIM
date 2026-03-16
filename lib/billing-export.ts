@@ -539,7 +539,7 @@ export async function buildBillingXlsx(data: BillingExportData) {
   const workbook = new ExcelJS.Workbook();
   const logoBuffer = await loadBillingLogoBuffer();
   const worksheet = workbook.addWorksheet("账单明细", {
-    views: [{ state: "frozen", ySplit: 19, showGridLines: true }],
+    views: [{ state: "frozen", ySplit: 20, showGridLines: false }],
   });
 
   worksheet.properties.defaultRowHeight = 24;
@@ -572,7 +572,7 @@ export async function buildBillingXlsx(data: BillingExportData) {
       vertical?: ExcelJS.Alignment["vertical"];
       wrapText?: boolean;
       fill?: string;
-      border?: boolean;
+      border?: boolean | { top?: boolean; left?: boolean; bottom?: boolean; right?: boolean };
     },
   ) => {
     worksheet.mergeCells(range);
@@ -597,11 +597,15 @@ export async function buildBillingXlsx(data: BillingExportData) {
       };
     }
     if (options?.border) {
+      const borderConfig =
+        typeof options.border === "boolean"
+          ? { top: true, left: true, bottom: true, right: true }
+          : options.border;
       cell.border = {
-        top: { style: "thin", color: { argb: borderColor } },
-        left: { style: "thin", color: { argb: borderColor } },
-        bottom: { style: "thin", color: { argb: borderColor } },
-        right: { style: "thin", color: { argb: borderColor } },
+        top: borderConfig.top ? { style: "thin", color: { argb: borderColor } } : undefined,
+        left: borderConfig.left ? { style: "thin", color: { argb: borderColor } } : undefined,
+        bottom: borderConfig.bottom ? { style: "thin", color: { argb: borderColor } } : undefined,
+        right: borderConfig.right ? { style: "thin", color: { argb: borderColor } } : undefined,
       };
     }
     return cell;
@@ -613,12 +617,12 @@ export async function buildBillingXlsx(data: BillingExportData) {
     endCol: string,
     rows: Array<{ label: string; value: string }>,
   ) => {
-    applyMergedCellStyle(`${startCol}7:${endCol}7`, {
+    applyMergedCellStyle(`${startCol}8:${endCol}8`, {
       value: title,
       fontSize: 11,
       bold: true,
       color: brandColor,
-      fill: panelFill,
+      fill: "FFF8FAFC",
       border: true,
     });
 
@@ -626,41 +630,42 @@ export async function buildBillingXlsx(data: BillingExportData) {
     while (normalizedRows.length < 5) normalizedRows.push({ label: "", value: "" });
 
     normalizedRows.forEach((row, index) => {
-      const labelRow = 8 + index * 2;
+      const labelRow = 9 + index * 2;
       const valueRow = labelRow + 1;
 
       applyMergedCellStyle(`${startCol}${labelRow}:${endCol}${labelRow}`, {
-        value: row.label,
+        value: row.label || " ",
         fontSize: 8.5,
         color: labelColor,
         fill: panelFill,
-        border: true,
+        border: { left: true, right: true },
         vertical: "bottom",
       });
 
       applyMergedCellStyle(`${startCol}${valueRow}:${endCol}${valueRow}`, {
-        value: row.value || "-",
+        value: row.value || " ",
         fontSize: 11,
         bold: false,
         color: valueColor,
         fill: panelFill,
-        border: true,
+        border: { left: true, right: true, bottom: true },
         wrapText: true,
         vertical: "top",
       });
     });
   };
 
-  worksheet.getRow(1).height = 28;
+  worksheet.getRow(1).height = 24;
   worksheet.getRow(2).height = 28;
-  worksheet.getRow(3).height = 22;
+  worksheet.getRow(3).height = 26;
   worksheet.getRow(4).height = 18;
-  worksheet.getRow(5).height = 26;
-  worksheet.getRow(6).height = 12;
-  for (let rowNumber = 7; rowNumber <= 17; rowNumber += 1) {
-    worksheet.getRow(rowNumber).height = rowNumber % 2 === 0 ? 18 : rowNumber === 15 ? 40 : 24;
+  worksheet.getRow(5).height = 22;
+  worksheet.getRow(6).height = 24;
+  worksheet.getRow(7).height = 12;
+  for (let rowNumber = 8; rowNumber <= 18; rowNumber += 1) {
+    worksheet.getRow(rowNumber).height = rowNumber % 2 === 1 ? 18 : rowNumber === 16 ? 38 : 24;
   }
-  worksheet.getRow(18).height = 12;
+  worksheet.getRow(19).height = 12;
 
   if (logoBuffer) {
     const imageId = workbook.addImage({
@@ -668,36 +673,36 @@ export async function buildBillingXlsx(data: BillingExportData) {
       extension: "png",
     });
     worksheet.addImage(imageId, {
-      tl: { col: 0.05, row: 0.2 },
+      tl: { col: 0.08, row: 0.18 },
       ext: { width: 26, height: 26 },
       editAs: "oneCell",
     });
   }
 
-  applyMergedCellStyle("B1:D1", {
+  applyMergedCellStyle("B1:E1", {
     value: "百盛供应链",
     fontSize: 12,
     bold: true,
     color: brandColor,
     vertical: "bottom",
   });
-  applyMergedCellStyle("A2:D3", {
+  applyMergedCellStyle("A2:E3", {
     value: "INVOICE",
     fontSize: 28,
     bold: true,
     color: valueColor,
     vertical: "middle",
   });
-  applyMergedCellStyle("A5:D5", {
+  applyMergedCellStyle("A5:E5", {
     value: "MÁS QUE PRODUCTOS, ENTREGAMOS SOLUCIONES",
     fontSize: 9,
     color: "FF64748B",
   });
 
   [
-    { labelRange: "F1:H1", valueRange: "I1:J1", label: "订单号 / No. Ped.", value: data.orderNo || "-" },
-    { labelRange: "F3:H3", valueRange: "I3:J3", label: "出账日期 / F. Fact.", value: data.issueDateText || "-" },
-    { labelRange: "F5:H5", valueRange: "I5:J5", label: "合计金额 / Mto. Total", value: `$${toMoney(data.totalAmount)}`, emphasize: true },
+    { labelRange: "G1:J1", valueRange: "G2:J2", label: "订单号 / No. Ped.", value: data.orderNo || "-" },
+    { labelRange: "G3:J3", valueRange: "G4:J4", label: "出账日期 / F. Fact.", value: data.issueDateText || "-" },
+    { labelRange: "G5:J5", valueRange: "G6:J6", label: "合计金额 / Mto. Total", value: `$${toMoney(data.totalAmount)}`, emphasize: true },
   ].forEach((item) => {
     applyMergedCellStyle(item.labelRange, {
       value: item.label,
@@ -711,7 +716,7 @@ export async function buildBillingXlsx(data: BillingExportData) {
       fontSize: item.emphasize ? 18 : 11,
       bold: true,
       color: valueColor,
-      horizontal: "right",
+      horizontal: item.emphasize ? "right" : "left",
       fill: panelFill,
       border: true,
     });
@@ -741,7 +746,7 @@ export async function buildBillingXlsx(data: BillingExportData) {
     { label: "商品总数量 / Tot. Prod.", value: String(data.totalQty || 0) },
   ]);
 
-  const headerRowNumber = 19;
+  const headerRowNumber = 20;
   const headerValues = [
     "图片",
     "编号",
