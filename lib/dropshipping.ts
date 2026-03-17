@@ -642,7 +642,15 @@ export async function importLegacyOrders(
     }
 
     const orderKey = sanitizeStoragePart(
-      [row.customerName, row.platformOrderNo || row.trackingNo || product.sku].filter(Boolean).join("-"),
+      [
+        row.customerName,
+        row.platformOrderNo,
+        row.trackingNo,
+        product.sku,
+        order.id,
+      ]
+        .filter(Boolean)
+        .join("-"),
     ) || order.id;
 
     const labelAttachments = await syncOrderAttachments({
