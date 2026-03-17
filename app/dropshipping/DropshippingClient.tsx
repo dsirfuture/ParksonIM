@@ -2901,9 +2901,6 @@ export function DropshippingClient({
                         <div className="text-xs text-slate-500">
                           {lang === "zh" ? "同物流号商品" : "Productos con la misma guia"}
                         </div>
-                        <div className="mt-1 text-[11px] text-slate-400">
-                          {lang === "zh" ? "点击下方商品可快速切换编辑" : "Haz clic para cambiar rapidamente entre productos agrupados"}
-                        </div>
                       </div>
                       <button
                         type="button"
