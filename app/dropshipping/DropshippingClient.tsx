@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { PageHeader } from "@/components/page-header";
@@ -249,6 +249,7 @@ export function DropshippingClient({
   const [keyword, setKeyword] = useState("");
   const [customerFilter, setCustomerFilter] = useState("all");
   const [shippedAtSortDirection, setShippedAtSortDirection] = useState<"asc" | "desc">("asc");
+  const [expandedTrackingNos, setExpandedTrackingNos] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "shipped" | "cancelled">("all");
   const [settlementFilter, setSettlementFilter] = useState<"all" | "paid" | "unpaid">("all");
   const [modalOpen, setModalOpen] = useState(false);
@@ -578,6 +579,18 @@ export function DropshippingClient({
       lastTracking = tracking;
     }
     return meta;
+  }, [sortedOrders]);
+
+  const trackingGroupedOrders = useMemo(() => {
+    const grouped = new Map<string, DsOrderRow[]>();
+    for (const row of sortedOrders) {
+      const tracking = row.trackingNo.trim();
+      if (!tracking) continue;
+      const current = grouped.get(tracking) || [];
+      current.push(row);
+      grouped.set(tracking, current);
+    }
+    return grouped;
   }, [sortedOrders]);
 
   const sameTrackingOrders = useMemo(() => {
@@ -1143,19 +1156,41 @@ export function DropshippingClient({
                   </tr>
                 </thead>
                 <tbody className="text-[13px] text-slate-700">
-                  {sortedOrders.map((row) => (
-                    <tr key={row.id} className="border-t border-slate-100">
+                  {sortedOrders.map((row) => {
+                    const meta = trackingDisplayMeta.get(row.id);
+                    const tracking = row.trackingNo.trim();
+                    const isExpanded = tracking ? expandedTrackingNos.includes(tracking) : false;
+                    const groupedItems = tracking ? (trackingGroupedOrders.get(tracking) || []).filter((item) => item.id !== row.id) : [];
+
+                    return (
+                    <Fragment key={row.id}>
+                    <tr className="border-t border-slate-100">
                       <td className="px-3 py-2">{row.platform}</td>
                       <td className="px-3 py-2 text-slate-900">{row.platformOrderNo}</td>
                       <td className="px-3 py-2">
                         {(() => {
-                          const meta = trackingDisplayMeta.get(row.id);
                           if (!row.trackingNo) return <span>-</span>;
                           if (!meta?.showTracking) return <span className="text-slate-300">|</span>;
                           return (
                             <div className="inline-flex items-center gap-2">
                               <span>{row.trackingNo}</span>
-                              {meta.count > 1 ? <PlusBadge /> : null}
+                              {meta.count > 1 ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedTrackingNos((prev) =>
+                                      prev.includes(tracking)
+                                        ? prev.filter((item) => item !== tracking)
+                                        : [...prev, tracking],
+                                    )
+                                  }
+                                  className="inline-flex"
+                                  aria-label={lang === "zh" ? "\u5c55\u5f00\u540c\u7269\u6d41\u53f7\u5546\u54c1" : "Expand grouped tracking items"}
+                                  title={lang === "zh" ? "\u67e5\u770b\u540c\u7269\u6d41\u53f7\u5176\u4ed6\u5546\u54c1" : "Ver otros productos con la misma guia"}
+                                >
+                                  <PlusBadge />
+                                </button>
+                              ) : null}
                             </div>
                           );
                         })()}
@@ -1303,7 +1338,30 @@ export function DropshippingClient({
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    {meta?.showTracking && meta.count > 1 && isExpanded && groupedItems.length > 0 ? (
+                      <tr className="border-t border-slate-100 bg-slate-50/70">
+                        <td colSpan={15} className="px-3 py-2.5">
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                            {groupedItems.map((item) => (
+                              <div key={item.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-white px-2.5 py-1">
+                                <span>{item.sku}</span>
+                                <span>/</span>
+                                <span>{item.productNameZh || "-"}</span>
+                                <span>/</span>
+                                <span>{lang === "zh" ? "\u6570\u91cf" : "Cant."} {item.quantity}</span>
+                                <span>/</span>
+                                <span>{fmtDateOnly(item.shippedAt, lang)}</span>
+                                <span>/</span>
+                                <span>{getShippingStatusLabel(item.shippingStatus, lang)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                    </Fragment>
+                  );
+                  })}
                 </tbody>
               </table>
             </div>
