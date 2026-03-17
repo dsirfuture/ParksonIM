@@ -88,6 +88,16 @@ function baseName(filePath: string) {
   return parts[parts.length - 1] || normalized;
 }
 
+function isPathInFolder(filePath: string, folderName: string) {
+  const normalizedPath = normalizePath(filePath).toLowerCase();
+  const normalizedFolder = normalizePath(folderName).toLowerCase();
+  return (
+    normalizedPath === normalizedFolder ||
+    normalizedPath.startsWith(`${normalizedFolder}/`) ||
+    normalizedPath.includes(`/${normalizedFolder}/`)
+  );
+}
+
 function mimeTypeFromName(fileName: string) {
   const lower = fileName.toLowerCase();
   if (lower.endsWith(".pdf")) return "application/pdf";
@@ -229,7 +239,7 @@ function findAssetByPath(
     const descr = cellImageMap?.get(id);
     for (const file of assets.byPath.values()) {
       const normalizedPath = normalizePath(file.path).toLowerCase();
-      if (!normalizedPath.startsWith(normalizePath(preferredFolder).toLowerCase())) continue;
+      if (!isPathInFolder(normalizedPath, preferredFolder)) continue;
       const fileBase = baseName(normalizedPath);
       if (normalizedPath.includes(id) || (descr && fileBase.startsWith(descr.toLowerCase()))) return file;
     }
@@ -252,7 +262,7 @@ function findProofAssetsByKeys(
   const matches: AssetFile[] = [];
   for (const file of assets.byPath.values()) {
     const normalizedPath = normalizePath(file.path).toLowerCase();
-    if (!normalizedPath.startsWith("发货凭据/")) continue;
+    if (!isPathInFolder(normalizedPath, "发货凭据")) continue;
     if (
       keywords.some((keyword) => normalizedPath.includes(keyword)) ||
       dispimgIds.some((id) => {
