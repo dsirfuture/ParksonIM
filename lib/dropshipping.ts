@@ -5,6 +5,11 @@ import type {
   DsExchangeRatePayload,
   DsFinanceRow,
   DsFinanceStatus,
+  DsOverviewAnalytics,
+  DsOverviewCustomerRankItem,
+  DsOverviewDailyPoint,
+  DsOverviewPlatformRankItem,
+  DsOverviewProductRankItem,
   DsLegacyImportAsset,
   DsInventoryRow,
   DsLegacyImportRow,
@@ -105,6 +110,31 @@ function startOfMexicoDay(value: Date | null | undefined) {
 function endOfMexicoDay(value: Date | null | undefined) {
   const start = startOfMexicoDay(value);
   return new Date(start.getTime() + 24 * 60 * 60 * 1000);
+}
+
+function startOfMexicoMonth(value: Date | null | undefined) {
+  const start = startOfMexicoDay(value);
+  return new Date(`${start.getUTCFullYear()}-${String(start.getUTCMonth() + 1).padStart(2, "0")}-01T00:00:00.000-06:00`);
+}
+
+function endOfMexicoMonth(value: Date | null | undefined) {
+  const start = startOfMexicoMonth(value);
+  return new Date(start.getUTCFullYear(), start.getUTCMonth() + 1, 1, 6, 0, 0, 0);
+}
+
+function formatMexicoMonthLabel(value: Date) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "long",
+  }).format(value);
+}
+
+function formatMexicoDayLabel(value: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    day: "2-digit",
+  }).format(value);
 }
 
 async function ensureRateByDate(
@@ -1214,10 +1244,119 @@ export async function getOverview(session: Session) {
     createdAt: row.createdAt,
   }));
 
+  const monthStart = startOfMexicoMonth(new Date());
+  const monthEnd = endOfMexicoMonth(monthStart);
+  const monthOrders = orders.filter((row) => {
+    if (!row.shippedAt) return false;
+    const shippedAt = new Date(row.shippedAt);
+    return shippedAt >= monthStart && shippedAt < monthEnd;
+  });
+
+  const dailyMap = new Map<string, DsOverviewDailyPoint>();
+  for (let cursor = new Date(monthStart); cursor < monthEnd; cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000)) {
+    const key = cursor.toISOString();
+    dailyMap.set(key, {
+      date: key,
+      label: formatMexicoDayLabel(cursor),
+      orderCount: 0,
+      shippedCount: 0,
+      totalAmount: 0,
+    });
+  }
+
+  const productRankMap = new Map<string, DsOverviewProductRankItem>();
+  const customerOrderMap = new Map<string, DsOverviewCustomerRankItem>();
+  const platformMap = new Map<string, DsOverviewPlatformRankItem>();
+
+  for (const row of monthOrders) {
+    const shippedDay = startOfMexicoDay(new Date(row.shippedAt!));
+    const shippedKey = shippedDay.toISOString();
+    const dayItem = dailyMap.get(shippedKey);
+    if (dayItem) {
+      dayItem.orderCount += 1;
+      if (row.shippingStatus === "shipped") dayItem.shippedCount += 1;
+      dayItem.totalAmount += (row.snapshotStockAmount ?? 0) + row.shippingFee;
+    }
+
+    const productKey = row.sku.trim().toUpperCase();
+    const productItem = productRankMap.get(productKey) || {
+      sku: row.sku,
+      productNameZh: row.productNameZh || row.sku,
+      quantity: 0,
+      orderCount: 0,
+    };
+    productItem.quantity += row.quantity;
+    productItem.orderCount += 1;
+    productRankMap.set(productKey, productItem);
+
+    const customerItem = customerOrderMap.get(row.customerId) || {
+      customerId: row.customerId,
+      customerName: row.customerName,
+      orderCount: 0,
+      totalAmount: 0,
+      paidAmount: 0,
+      unpaidAmount: 0,
+    };
+    customerItem.orderCount += 1;
+    customerItem.totalAmount += (row.snapshotStockAmount ?? 0) + row.shippingFee;
+    if (row.settlementStatus === "paid") {
+      customerItem.paidAmount += (row.snapshotStockAmount ?? 0) + row.shippingFee;
+    } else {
+      customerItem.unpaidAmount += (row.snapshotStockAmount ?? 0) + row.shippingFee;
+    }
+    customerOrderMap.set(row.customerId, customerItem);
+
+    const platformKey = row.platform || "无";
+    const platformItem = platformMap.get(platformKey) || {
+      platform: platformKey,
+      orderCount: 0,
+      quantity: 0,
+    };
+    platformItem.orderCount += 1;
+    platformItem.quantity += row.quantity;
+    platformMap.set(platformKey, platformItem);
+  }
+
+  for (const row of financeRows) {
+    const current = customerOrderMap.get(row.customerId);
+    if (current) {
+      current.totalAmount = row.totalAmount;
+      current.paidAmount = row.paidAmount;
+      current.unpaidAmount = row.unpaidAmount;
+    } else {
+      customerOrderMap.set(row.customerId, {
+        customerId: row.customerId,
+        customerName: row.customerName,
+        orderCount: 0,
+        totalAmount: row.totalAmount,
+        paidAmount: row.paidAmount,
+        unpaidAmount: row.unpaidAmount,
+      });
+    }
+  }
+
+  const analytics: DsOverviewAnalytics = {
+    monthLabel: formatMexicoMonthLabel(monthStart),
+    dailySeries: [...dailyMap.values()],
+    topProducts: [...productRankMap.values()]
+      .sort((a, b) => b.quantity - a.quantity || b.orderCount - a.orderCount)
+      .slice(0, 6),
+    topCustomersByOrders: [...customerOrderMap.values()]
+      .sort((a, b) => b.orderCount - a.orderCount || b.totalAmount - a.totalAmount)
+      .slice(0, 6),
+    topPlatforms: [...platformMap.values()]
+      .sort((a, b) => b.orderCount - a.orderCount || b.quantity - a.quantity)
+      .slice(0, 6),
+    topCustomersByAmount: [...customerOrderMap.values()]
+      .sort((a, b) => b.totalAmount - a.totalAmount || b.orderCount - a.orderCount)
+      .slice(0, 6),
+  };
+
   return {
     stats,
     recentOrders,
     alerts,
+    analytics,
     trends: {
       orderCount: stats.todayOrders,
       shippedCount: stats.todayShippedOrders,

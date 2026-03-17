@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { PageHeader } from "@/components/page-header";
@@ -9,35 +9,21 @@ import { StatCard } from "@/components/stat-card";
 import { TableCard } from "@/components/table-card";
 import { getClientLang } from "@/lib/lang-client";
 import type {
+  DsAlertItem,
   DsExchangeRatePayload,
   DsFinanceRow,
   DsInventoryRow,
   DsOrderRow,
+  DsOverviewAnalytics,
+  DsOverviewOrder,
   DsOverviewStats,
 } from "@/lib/dropshipping-types";
 
 type OverviewPayload = {
   stats: DsOverviewStats;
-  recentOrders: Array<{
-    id: string;
-    customerName: string;
-    platform: string;
-    orderNo: string;
-    sku: string;
-    quantity: number;
-    shippingStatus: "pending" | "shipped" | "cancelled";
-    createdAt: string;
-  }>;
-  alerts: Array<{
-    type:
-      | "pending_order"
-      | "missing_shipping_proof"
-      | "low_inventory"
-      | "duplicate_order"
-      | "exchange_rate_failed"
-      | "customer_unsettled";
-    count: number;
-  }>;
+  recentOrders: DsOverviewOrder[];
+  alerts: DsAlertItem[];
+  analytics: DsOverviewAnalytics;
   trends: {
     orderCount: number;
     shippedCount: number;
@@ -235,6 +221,91 @@ function MinusBadge() {
     <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[11px] font-semibold text-white">
       -
     </span>
+  );
+}
+
+function OverviewLineChart({
+  data,
+  lineColor = "#1d4ed8",
+  fillColor = "rgba(29, 78, 216, 0.12)",
+}: {
+  data: DsOverviewAnalytics["dailySeries"];
+  lineColor?: string;
+  fillColor?: string;
+}) {
+  const width = 760;
+  const height = 240;
+  const paddingX = 18;
+  const paddingY = 18;
+  const maxValue = Math.max(...data.map((item) => Math.max(item.orderCount, item.shippedCount)), 1);
+  const innerWidth = width - paddingX * 2;
+  const innerHeight = height - paddingY * 2;
+
+  const getPoint = (index: number, value: number) => {
+    const x = paddingX + (data.length <= 1 ? innerWidth / 2 : (innerWidth * index) / (data.length - 1));
+    const y = paddingY + innerHeight - (value / maxValue) * innerHeight;
+    return `${x},${y}`;
+  };
+
+  const orderPoints = data.map((item, index) => getPoint(index, item.orderCount)).join(" ");
+  const shippedPoints = data.map((item, index) => getPoint(index, item.shippedCount)).join(" ");
+  const areaPoints = `${paddingX},${height - paddingY} ${orderPoints} ${paddingX + innerWidth},${height - paddingY}`;
+
+  return (
+    <div className="overflow-x-auto">
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-64 min-w-[720px] w-full" aria-hidden="true">
+        <defs>
+          <linearGradient id="ds-overview-area" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={fillColor} />
+            <stop offset="100%" stopColor="rgba(29, 78, 216, 0)" />
+          </linearGradient>
+        </defs>
+        {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+          const y = paddingY + innerHeight - innerHeight * ratio;
+          const label = Math.round(maxValue * ratio);
+          return (
+            <g key={ratio}>
+              <line x1={paddingX} y1={y} x2={width - paddingX} y2={y} stroke="rgba(148,163,184,0.18)" strokeDasharray="4 6" />
+              <text x={4} y={y + 4} className="fill-slate-400 text-[11px]">{label}</text>
+            </g>
+          );
+        })}
+        <polygon points={areaPoints} fill="url(#ds-overview-area)" />
+        <polyline points={orderPoints} fill="none" stroke={lineColor} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+        <polyline points={shippedPoints} fill="none" stroke="#10b981" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" strokeDasharray="5 5" />
+        {data.map((item, index) => {
+          const [x, y] = getPoint(index, item.orderCount).split(",");
+          return (
+            <g key={item.date}>
+              <circle cx={x} cy={y} r="3.5" fill={lineColor} />
+              <text x={x} y={height - 2} textAnchor="middle" className="fill-slate-400 text-[11px]">
+                {item.label}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+function OverviewRankList({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white/90 shadow-soft">
+      <div className="border-b border-slate-100 px-5 py-4">
+        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+        {subtitle ? <p className="mt-1 text-xs text-slate-500">{subtitle}</p> : null}
+      </div>
+      <div className="p-4">{children}</div>
+    </section>
   );
 }
 
@@ -1036,15 +1107,193 @@ export function DropshippingClient({
 
       {activeTab === "overview" ? (
         <>
-          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard label={text.stats.todayOrders} value={overview.stats.todayOrders} />
-            <StatCard label={text.stats.todayShipped} value={overview.stats.todayShippedOrders} valueClassName="text-emerald-600" />
-            <StatCard label={text.stats.todayPending} value={overview.stats.todayPendingOrders} valueClassName="text-amber-600" />
-            <StatCard label={text.stats.unsettled} value={overview.stats.unsettledCustomers} valueClassName="text-rose-600" />
-            <StatCard label={text.stats.receivable} value={fmtMoney(overview.stats.totalReceivable, lang)} />
-            <StatCard label={text.stats.paid} value={fmtMoney(overview.stats.totalPaid, lang)} valueClassName="text-emerald-600" />
-            <StatCard label={text.stats.unpaid} value={fmtMoney(overview.stats.totalUnpaid, lang)} valueClassName="text-rose-600" />
-            <StatCard label={text.stats.rate} value={overview.stats.currentRate?.toFixed(4) || "-"} hint={fmtDate(overview.stats.rateUpdatedAt, lang)} />
+          <section className="grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
+            <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(29,78,216,0.14),_transparent_35%),linear-gradient(135deg,#ffffff_0%,#f8fbff_48%,#eef5ff_100%)] shadow-soft">
+              <div className="grid gap-5 px-6 py-6 lg:grid-cols-[1.2fr_0.8fr]">
+                <div>
+                  <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium text-slate-600">
+                    {lang === "zh" ? `${overview.analytics.monthLabel} 总览` : `${overview.analytics.monthLabel} resumen`}
+                  </div>
+                  <h2 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900">
+                    {fmtMoney(overview.stats.totalReceivable, lang)}
+                  </h2>
+                  <p className="mt-2 text-sm text-slate-500">
+                    {lang === "zh"
+                      ? "本月订单、结款与平台分布的核心表现会集中展示在这里。"
+                      : "Aqui se concentran los indicadores clave de pedidos, cobros y plataformas del mes."}
+                  </p>
+                  <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
+                      <div className="text-xs text-slate-500">{lang === "zh" ? "客户订单总额" : "Total por cliente"}</div>
+                      <div className="mt-2 text-2xl font-semibold text-slate-900">{fmtMoney(overview.stats.totalReceivable, lang)}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
+                      <div className="text-xs text-slate-500">{lang === "zh" ? "结款总额" : "Total liquidado"}</div>
+                      <div className="mt-2 text-2xl font-semibold text-emerald-600">{fmtMoney(overview.stats.totalPaid, lang)}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
+                      <div className="text-xs text-slate-500">{lang === "zh" ? "未结总额" : "Pendiente total"}</div>
+                      <div className="mt-2 text-2xl font-semibold text-rose-600">{fmtMoney(overview.stats.totalUnpaid, lang)}</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid gap-3">
+                  <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
+                    <div className="text-xs text-slate-500">{text.stats.todayOrders}</div>
+                    <div className="mt-2 text-3xl font-semibold text-slate-900">{overview.stats.todayOrders}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
+                    <div className="text-xs text-slate-500">{text.stats.todayShipped}</div>
+                    <div className="mt-2 text-3xl font-semibold text-emerald-600">{overview.stats.todayShippedOrders}</div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
+                      <div className="text-xs text-slate-500">{text.stats.todayPending}</div>
+                      <div className="mt-2 text-2xl font-semibold text-amber-600">{overview.stats.todayPendingOrders}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
+                      <div className="text-xs text-slate-500">{text.stats.unsettled}</div>
+                      <div className="mt-2 text-2xl font-semibold text-rose-600">{overview.stats.unsettledCustomers}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4">
+              <StatCard label={text.stats.paid} value={fmtMoney(overview.stats.totalPaid, lang)} valueClassName="text-emerald-600" />
+              <StatCard label={text.stats.unpaid} value={fmtMoney(overview.stats.totalUnpaid, lang)} valueClassName="text-rose-600" />
+              <StatCard label={lang === "zh" ? "今日汇率来源" : "Fuente de tipo"} value={exchangeRate.sourceName || "-"} hint={fmtDate(exchangeRate.fetchedAt || exchangeRate.rateDate, lang)} />
+              <StatCard label={text.stats.rate} value={overview.stats.currentRate?.toFixed(4) || "-"} hint={lang === "zh" ? "MXN → RMB" : "MXN -> RMB"} />
+            </div>
+          </section>
+
+          <section className="grid gap-5 xl:grid-cols-[1.25fr_0.75fr]">
+            <OverviewRankList
+              title={lang === "zh" ? "每月每日订单曲线" : "Curva diaria mensual"}
+              subtitle={lang === "zh" ? "按墨西哥时间统计当前月份每日订单与已发单走势。" : "Tendencia diaria del mes en horario de Mexico."}
+            >
+              <div className="mb-4 flex flex-wrap items-center gap-4 text-xs text-slate-500">
+                <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-blue-700" />{lang === "zh" ? "订单数" : "Pedidos"}</span>
+                <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />{lang === "zh" ? "已发数" : "Enviados"}</span>
+              </div>
+              <OverviewLineChart data={overview.analytics.dailySeries} />
+            </OverviewRankList>
+
+            <OverviewRankList
+              title={lang === "zh" ? "平台订单排名" : "Ranking por plataforma"}
+              subtitle={lang === "zh" ? "按当前月份订单量排序。" : "Ordenado por volumen mensual."}
+            >
+              <div className="space-y-3">
+                {overview.analytics.topPlatforms.map((item, index) => {
+                  const max = Math.max(...overview.analytics.topPlatforms.map((row) => row.orderCount), 1);
+                  const width = `${(item.orderCount / max) * 100}%`;
+                  return (
+                    <div key={item.platform} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-500">{index + 1}</span>
+                          <div>
+                            <div className="text-sm font-medium text-slate-900">{item.platform || (lang === "zh" ? "无" : "Sin plataforma")}</div>
+                            <div className="text-xs text-slate-500">{lang === "zh" ? `件数 ${item.quantity}` : `Piezas ${item.quantity}`}</div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-semibold text-slate-900">{item.orderCount}</div>
+                          <div className="text-xs text-slate-500">{lang === "zh" ? "订单" : "Pedidos"}</div>
+                        </div>
+                      </div>
+                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
+                        <div className="h-full rounded-full bg-gradient-to-r from-blue-600 to-cyan-400" style={{ width }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </OverviewRankList>
+          </section>
+
+          <section className="grid gap-5 xl:grid-cols-3">
+            <OverviewRankList
+              title={lang === "zh" ? "产品销量排名" : "Ranking de productos"}
+              subtitle={lang === "zh" ? "按销量排序" : "Ordenado por volumen"}
+            >
+              <div className="space-y-3">
+                {overview.analytics.topProducts.map((item, index) => (
+                  <div key={item.sku} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-3">
+                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-500">{index + 1}</span>
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-slate-900">{item.sku}</div>
+                          <div className="truncate text-xs text-slate-500">{item.productNameZh}</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-semibold text-slate-900">{item.quantity}</div>
+                      <div className="text-xs text-slate-500">{lang === "zh" ? `${item.orderCount} 单` : `${item.orderCount} pedidos`}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </OverviewRankList>
+
+            <OverviewRankList
+              title={lang === "zh" ? "客户订单数排名" : "Ranking de clientes"}
+              subtitle={lang === "zh" ? "按订单数排序" : "Ordenado por pedidos"}
+            >
+              <div className="space-y-3">
+                {overview.analytics.topCustomersByOrders.map((item, index) => (
+                  <div key={item.customerId} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-3">
+                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-500">{index + 1}</span>
+                          <div className="truncate text-sm font-medium text-slate-900">{item.customerName}</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-semibold text-slate-900">{item.orderCount}</div>
+                        <div className="text-xs text-slate-500">{lang === "zh" ? "订单" : "Pedidos"}</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 text-xs text-slate-500">
+                      {lang === "zh" ? "总额" : "Total"}: {fmtMoney(item.totalAmount, lang)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </OverviewRankList>
+
+            <OverviewRankList
+              title={lang === "zh" ? "客户金额排名" : "Ranking por monto"}
+              subtitle={lang === "zh" ? "显示总额、已结与未结" : "Total, liquidado y pendiente"}
+            >
+              <div className="space-y-3">
+                {overview.analytics.topCustomersByAmount.map((item, index) => (
+                  <div key={item.customerId} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-500">{index + 1}</span>
+                        <div className="text-sm font-medium text-slate-900">{item.customerName}</div>
+                      </div>
+                      <div className="text-sm font-semibold text-slate-900">{fmtMoney(item.totalAmount, lang)}</div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-xl bg-emerald-50 px-3 py-2 text-emerald-700">
+                        <div>{lang === "zh" ? "已结" : "Liquidado"}</div>
+                        <div className="mt-1 font-semibold">{fmtMoney(item.paidAmount, lang)}</div>
+                      </div>
+                      <div className="rounded-xl bg-rose-50 px-3 py-2 text-rose-700">
+                        <div>{lang === "zh" ? "未结" : "Pendiente"}</div>
+                        <div className="mt-1 font-semibold">{fmtMoney(item.unpaidAmount, lang)}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </OverviewRankList>
           </section>
 
           <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
@@ -1081,24 +1330,30 @@ export function DropshippingClient({
               )}
             </TableCard>
 
-            <TableCard title={text.sections.alerts}>
-              <div className="grid gap-3 p-4">
+            <OverviewRankList
+              title={text.sections.alerts}
+              subtitle={lang === "zh" ? "需要你优先处理的代发提醒。" : "Alertas de seguimiento prioritarias."}
+            >
+              <div className="grid gap-3">
                 {overview.alerts.map((item) => (
-                  <div key={item.type} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div key={item.type} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
                     <div className="text-sm text-slate-500">{text.alerts[item.type]}</div>
-                    <div className="mt-1 text-2xl font-bold tracking-tight text-slate-900">{item.count}</div>
+                    <div className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">{item.count}</div>
                   </div>
                 ))}
-                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-                  {text.sections.rate}: {exchangeRate.rateValue.toFixed(4)} / {fmtDate(exchangeRate.fetchedAt || exchangeRate.rateDate, lang)}
+                <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-sm text-slate-600">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span>{lang === "zh" ? "汇率来源" : "Fuente"}: {exchangeRate.sourceName || "-"}</span>
+                    <span>{lang === "zh" ? "更新时间" : "Actualizado"}: {fmtDate(exchangeRate.fetchedAt || exchangeRate.rateDate, lang)}</span>
+                  </div>
                   {exchangeRate.fetchFailed ? (
-                    <div className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-rose-600">
+                    <div className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-rose-600">
                       {exchangeRate.failureReason || text.alerts.exchange_rate_failed}
                     </div>
                   ) : null}
                 </div>
               </div>
-            </TableCard>
+            </OverviewRankList>
           </div>
         </>
       ) : null}

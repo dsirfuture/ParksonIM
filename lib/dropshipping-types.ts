@@ -18,6 +18,45 @@ export type DsOverviewStats = {
   rateFailureReason: string | null;
 };
 
+export type DsOverviewDailyPoint = {
+  date: string;
+  label: string;
+  orderCount: number;
+  shippedCount: number;
+  totalAmount: number;
+};
+
+export type DsOverviewProductRankItem = {
+  sku: string;
+  productNameZh: string;
+  quantity: number;
+  orderCount: number;
+};
+
+export type DsOverviewCustomerRankItem = {
+  customerId: string;
+  customerName: string;
+  orderCount: number;
+  totalAmount: number;
+  paidAmount: number;
+  unpaidAmount: number;
+};
+
+export type DsOverviewPlatformRankItem = {
+  platform: string;
+  orderCount: number;
+  quantity: number;
+};
+
+export type DsOverviewAnalytics = {
+  monthLabel: string;
+  dailySeries: DsOverviewDailyPoint[];
+  topProducts: DsOverviewProductRankItem[];
+  topCustomersByOrders: DsOverviewCustomerRankItem[];
+  topPlatforms: DsOverviewPlatformRankItem[];
+  topCustomersByAmount: DsOverviewCustomerRankItem[];
+};
+
 export type DsOverviewOrder = {
   id: string;
   customerName: string;
