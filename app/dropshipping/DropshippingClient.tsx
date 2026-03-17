@@ -3665,7 +3665,7 @@ export function DropshippingClient({
       ) : null}
       {financePreview ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-3">
-          <div className="flex max-h-[calc(100vh-16px)] w-full max-w-[1440px] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_28px_80px_rgba(15,23,42,0.18)]">
+          <div className="flex max-h-[calc(100vh-16px)] w-full max-w-[1320px] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_28px_80px_rgba(15,23,42,0.18)]">
             <div className="border-b border-slate-200 bg-white px-5 py-2">
               <div className="flex items-center justify-between gap-3 text-sm">
                 <div className="flex min-w-0 items-center gap-3">
@@ -3694,19 +3694,19 @@ export function DropshippingClient({
               ) : (
                 <div className="overflow-hidden bg-white">
                   <div ref={financePreviewScrollRef} className="max-h-[calc(100vh-152px)] overflow-auto">
-                    <table className="min-w-[1120px] w-full border-collapse">
+                    <table className="min-w-[1040px] w-full border-collapse">
                       <thead className="sticky top-0 z-10">
                         <tr className="border-b border-slate-200 bg-slate-50 text-left text-[12px] font-semibold text-slate-600 shadow-[0_1px_0_0_rgba(226,232,240,1),0_6px_16px_rgba(15,23,42,0.04)]">
-                          <th className="w-[88px] whitespace-nowrap px-4 py-2.5">{lang === "zh" ? "\u5546\u54c1\u56fe" : "Image"}</th>
+                          <th className="w-[64px] whitespace-nowrap px-3 py-2.5">{lang === "zh" ? "\u5546\u54c1\u56fe" : "Image"}</th>
                           <th className="w-[180px] whitespace-nowrap px-4 py-2.5">{text.fields.orderNo}</th>
                           <th className="w-[120px] whitespace-nowrap px-4 py-2.5">{text.fields.sku}</th>
                           <th className="w-[180px] whitespace-nowrap px-4 py-2.5">{text.fields.productZh}</th>
                           <th className="w-[170px] whitespace-nowrap px-4 py-2.5">{text.fields.trackingNo}</th>
-                          <th className="w-[118px] whitespace-nowrap px-4 py-2.5">{text.fields.shippedAt}</th>
-                          <th className="w-[118px] whitespace-nowrap px-4 py-2.5">{lang === "zh" ? "\u7ed3\u7b97\u65e5\u671f" : "Settled"}</th>
-                          <th className="w-[92px] whitespace-nowrap px-4 py-2.5">{lang === "zh" ? "\u72b6\u6001" : "Status"}</th>
-                          <th className="w-[128px] whitespace-nowrap px-4 py-2.5 text-right">{lang === "zh" ? "\u5df2\u7ed3\u91d1\u989d (\uffe5)" : "Paid (\uffe5)"}</th>
-                          <th className="w-[128px] whitespace-nowrap px-4 py-2.5 text-right">{lang === "zh" ? "\u603b\u91d1\u989d (\uffe5)" : "Total (\uffe5)"}</th>
+                          <th className="w-[96px] whitespace-nowrap px-3 py-2.5">{text.fields.shippedAt}</th>
+                          <th className="w-[96px] whitespace-nowrap px-3 py-2.5">{lang === "zh" ? "\u7ed3\u7b97\u65e5\u671f" : "Settled"}</th>
+                          <th className="w-[72px] whitespace-nowrap px-3 py-2.5">{lang === "zh" ? "\u72b6\u6001" : "Status"}</th>
+                          <th className="w-[92px] whitespace-nowrap px-3 py-2.5 text-right">{lang === "zh" ? "\u5df2\u7ed3" : "Paid"}</th>
+                          <th className="w-[92px] whitespace-nowrap px-3 py-2.5 text-right">{lang === "zh" ? "\u603b\u91d1\u989d" : "Total"}</th>
                         </tr>
                       </thead>
                       <tbody>
