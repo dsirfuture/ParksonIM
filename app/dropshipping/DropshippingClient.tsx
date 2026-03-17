@@ -855,7 +855,7 @@ export function DropshippingClient({
                   {filteredOrders.map((row) => (
                     <tr key={row.id} className="border-t border-slate-100">
                       <td className="px-3 py-2">{row.platform}</td>
-                      <td className="px-3 py-2 font-semibold text-slate-900">{row.platformOrderNo}</td>
+                      <td className="px-3 py-2 text-slate-900">{row.platformOrderNo}</td>
                       <td className="px-3 py-2">{row.trackingNo || "-"}</td>
                       <td className="px-3 py-2">
                         {row.shippingLabelAttachments[0]?.fileUrl ? (
@@ -863,7 +863,7 @@ export function DropshippingClient({
                             href={row.shippingLabelAttachments[0].fileUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                            className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 hover:bg-slate-50"
                           >
                             PDF
                           </a>
@@ -872,7 +872,7 @@ export function DropshippingClient({
                             href={row.shippingLabelFile}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                            className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 hover:bg-slate-50"
                           >
                             PDF
                           </a>
@@ -881,7 +881,7 @@ export function DropshippingClient({
                         )}
                       </td>
                       <td className="px-3 py-2">
-                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${getShippingStatusClass(row.shippingStatus)}`}>
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs ${getShippingStatusClass(row.shippingStatus)}`}>
                           {getShippingStatusLabel(row.shippingStatus, lang)}
                         </span>
                       </td>
@@ -907,7 +907,7 @@ export function DropshippingClient({
                               className="h-10 w-10 object-cover"
                             />
                             {row.shippingProofAttachments.length > 1 ? (
-                              <span className="absolute bottom-0 right-0 rounded-tl-md bg-slate-900/75 px-1 text-[10px] font-semibold text-white">
+                              <span className="absolute bottom-0 right-0 rounded-tl-md bg-slate-900/75 px-1 text-[10px] text-white">
                                 {row.shippingProofAttachments.length}
                               </span>
                             ) : null}
@@ -946,7 +946,7 @@ export function DropshippingClient({
                               productNameZh: row.productNameZh,
                             })
                           }
-                          className="font-semibold text-slate-900 hover:text-primary"
+                          className="text-slate-900 hover:text-primary"
                         >
                           {row.sku}
                         </button>
