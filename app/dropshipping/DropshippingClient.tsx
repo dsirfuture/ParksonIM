@@ -1600,48 +1600,71 @@ export function DropshippingClient({
           hideDescription
           titleRight={
             <div className="flex items-center gap-2">
-              <select
-                value={customerFilter}
-                onChange={(event) => setCustomerFilter(event.target.value)}
-                className="h-10 rounded-xl border border-secondary-accent bg-secondary-accent px-3 text-sm text-primary"
-              >
-                <option value="all" hidden>{lang === "zh" ? "全部客户" : "Todos los clientes"}</option>
-                {customerOptions.map((customer) => (
-                  <option key={customer} value={customer}>
-                    {customer}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  value={customerFilter}
+                  onChange={(event) => setCustomerFilter(event.target.value)}
+                  className="h-11 min-w-[112px] appearance-none rounded-2xl border border-secondary-accent/80 bg-secondary-accent/40 px-4 pr-10 text-sm text-primary shadow-[0_0_0_1px_rgba(148,163,184,0.06),0_10px_24px_rgba(15,23,42,0.06)] outline-none transition focus:border-primary/50 focus:bg-white focus:ring-4 focus:ring-primary/10"
+                >
+                  <option value="all" hidden>{lang === "zh" ? "\u5168\u90e8\u5ba2\u6237" : "Todos los clientes"}</option>
+                  {customerOptions.map((customer) => (
+                    <option key={customer} value={customer}>
+                      {customer}
+                    </option>
+                  ))}
+                </select>
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-primary/70">
+                  <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m4 6 4 4 4-4" />
+                  </svg>
+                </span>
+              </div>
             </div>
           }
           right={
             <div className="flex w-full justify-end gap-2 lg:w-auto">
-              <select
-                value={settlementFilter}
-                onChange={(event) => setSettlementFilter(event.target.value as typeof settlementFilter)}
-                className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
-              >
-                <option value="all">{lang === "zh" ? "全部结算" : "Toda liquidacion"}</option>
-                <option value="paid">{lang === "zh" ? "已结" : "Liquidado"}</option>
-                <option value="unpaid">{lang === "zh" ? "未结" : "Pendiente"}</option>
-              </select>
+              <div className="relative">
+                <select
+                  value={settlementFilter}
+                  onChange={(event) => setSettlementFilter(event.target.value as typeof settlementFilter)}
+                  className="h-11 min-w-[112px] appearance-none rounded-2xl border border-secondary-accent/80 bg-secondary-accent/40 px-4 pr-10 text-sm text-primary shadow-[0_0_0_1px_rgba(148,163,184,0.06),0_10px_24px_rgba(15,23,42,0.06)] outline-none transition focus:border-primary/50 focus:bg-white focus:ring-4 focus:ring-primary/10"
+                >
+                  <option value="all">{lang === "zh" ? "\u5168\u90e8\u7ed3\u7b97" : "Toda liquidacion"}</option>
+                  <option value="paid">{lang === "zh" ? "\u5df2\u7ed3" : "Liquidado"}</option>
+                  <option value="unpaid">{lang === "zh" ? "\u672a\u7ed3" : "Pendiente"}</option>
+                </select>
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-primary/70">
+                  <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m4 6 4 4 4-4" />
+                  </svg>
+                </span>
+              </div>
               <div className="relative w-full max-w-[420px]">
                 <input
                   value={keyword}
                   onChange={(event) => setKeyword(event.target.value)}
-                  placeholder={lang === "zh" ? "搜索平台 / 订单号 / 编码" : "Buscar plataforma / pedido / codigo"}
+                  placeholder={lang === "zh" ? "\u641c\u7d22\u5e73\u53f0 / \u8ba2\u5355\u53f7 / \u7f16\u7801" : "Buscar plataforma / pedido / codigo"}
                   className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 pr-[130px] text-sm text-slate-700"
                 />
-                <select
-                  value={statusFilter}
-                  onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
-                  className="absolute right-1 top-1 h-8 rounded-lg border border-secondary-accent bg-secondary-accent px-3 text-sm text-primary"
-                >
-                  <option value="all" hidden>{lang === "zh" ? "全部状态" : "Todos"}</option>
-                  <option value="pending">{getShippingStatusLabel("pending", lang)}</option>
-                  <option value="shipped">{getShippingStatusLabel("shipped", lang)}</option>
-                  <option value="cancelled">{getShippingStatusLabel("cancelled", lang)}</option>
-                </select>
+                <div className="absolute right-1 top-1">
+                  <div className="relative">
+                    <select
+                      value={statusFilter}
+                      onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
+                      className="h-8 min-w-[116px] appearance-none rounded-xl border border-secondary-accent/80 bg-secondary-accent/40 px-3 pr-8 text-sm text-primary outline-none transition focus:border-primary/50 focus:bg-white focus:ring-4 focus:ring-primary/10"
+                    >
+                      <option value="all" hidden>{lang === "zh" ? "\u5168\u90e8\u72b6\u6001" : "Todos"}</option>
+                      <option value="pending">{getShippingStatusLabel("pending", lang)}</option>
+                      <option value="shipped">{getShippingStatusLabel("shipped", lang)}</option>
+                      <option value="cancelled">{getShippingStatusLabel("cancelled", lang)}</option>
+                    </select>
+                    <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-primary/70">
+                      <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="m4 6 4 4 4-4" />
+                      </svg>
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           }
