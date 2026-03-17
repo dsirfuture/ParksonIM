@@ -64,29 +64,6 @@ type DeleteOrderState = {
   trackingNo: string;
 } | null;
 
-type OverviewWidgetId =
-  | "hero"
-  | "financeStats"
-  | "trend"
-  | "platforms"
-  | "products"
-  | "customerOrders"
-  | "customerAmounts"
-  | "recentOrders"
-  | "alerts";
-
-type OverviewLayoutItem = {
-  i: OverviewWidgetId;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  minW?: number;
-  minH?: number;
-};
-
-type OverviewLayouts = Record<string, OverviewLayoutItem[]>;
-
 type OrderFormState = {
   id: string;
   customerName: string;
@@ -137,107 +114,6 @@ const PLATFORM_OPTIONS = [
 ] as const;
 
 const SHIPPING_FEE_OPTIONS = ["6", "8", "10", "12"] as const;
-const OVERVIEW_LAYOUT_STORAGE_KEY = "dropshipping-overview-layouts-v1";
-const OVERVIEW_BREAKPOINTS = ["lg", "md", "sm", "xs"] as const;
-const OVERVIEW_WIDGET_IDS: OverviewWidgetId[] = [
-  "hero",
-  "financeStats",
-  "trend",
-  "platforms",
-  "products",
-  "customerOrders",
-  "customerAmounts",
-  "recentOrders",
-  "alerts",
-];
-const OVERVIEW_LAYOUTS: OverviewLayouts = {
-  lg: [
-    { i: "hero", x: 0, y: 0, w: 8, h: 8, minW: 4, minH: 5 },
-    { i: "financeStats", x: 8, y: 0, w: 4, h: 8, minW: 3, minH: 5 },
-    { i: "trend", x: 0, y: 8, w: 8, h: 8, minW: 4, minH: 6 },
-    { i: "platforms", x: 8, y: 8, w: 4, h: 8, minW: 3, minH: 6 },
-    { i: "products", x: 0, y: 16, w: 4, h: 8, minW: 3, minH: 6 },
-    { i: "customerOrders", x: 4, y: 16, w: 4, h: 8, minW: 3, minH: 6 },
-    { i: "customerAmounts", x: 8, y: 16, w: 4, h: 8, minW: 3, minH: 6 },
-    { i: "recentOrders", x: 0, y: 24, w: 8, h: 8, minW: 4, minH: 6 },
-    { i: "alerts", x: 8, y: 24, w: 4, h: 8, minW: 3, minH: 6 },
-  ],
-  md: [
-    { i: "hero", x: 0, y: 0, w: 5, h: 8, minW: 4, minH: 5 },
-    { i: "financeStats", x: 5, y: 0, w: 3, h: 8, minW: 3, minH: 5 },
-    { i: "trend", x: 0, y: 8, w: 5, h: 8, minW: 4, minH: 6 },
-    { i: "platforms", x: 5, y: 8, w: 3, h: 8, minW: 3, minH: 6 },
-    { i: "products", x: 0, y: 16, w: 4, h: 8, minW: 3, minH: 6 },
-    { i: "customerOrders", x: 4, y: 16, w: 4, h: 8, minW: 3, minH: 6 },
-    { i: "customerAmounts", x: 0, y: 24, w: 4, h: 8, minW: 3, minH: 6 },
-    { i: "recentOrders", x: 4, y: 24, w: 4, h: 8, minW: 3, minH: 6 },
-    { i: "alerts", x: 0, y: 32, w: 8, h: 7, minW: 4, minH: 6 },
-  ],
-  sm: [
-    { i: "hero", x: 0, y: 0, w: 4, h: 8, minW: 3, minH: 5 },
-    { i: "financeStats", x: 0, y: 8, w: 4, h: 7, minW: 3, minH: 5 },
-    { i: "trend", x: 0, y: 15, w: 4, h: 8, minW: 3, minH: 6 },
-    { i: "platforms", x: 0, y: 23, w: 4, h: 8, minW: 3, minH: 6 },
-    { i: "products", x: 0, y: 31, w: 4, h: 8, minW: 3, minH: 6 },
-    { i: "customerOrders", x: 0, y: 39, w: 4, h: 8, minW: 3, minH: 6 },
-    { i: "customerAmounts", x: 0, y: 47, w: 4, h: 8, minW: 3, minH: 6 },
-    { i: "recentOrders", x: 0, y: 55, w: 4, h: 8, minW: 3, minH: 6 },
-    { i: "alerts", x: 0, y: 63, w: 4, h: 8, minW: 3, minH: 6 },
-  ],
-  xs: [
-    { i: "hero", x: 0, y: 0, w: 2, h: 8, minW: 2, minH: 5 },
-    { i: "financeStats", x: 0, y: 8, w: 2, h: 7, minW: 2, minH: 5 },
-    { i: "trend", x: 0, y: 15, w: 2, h: 8, minW: 2, minH: 6 },
-    { i: "platforms", x: 0, y: 23, w: 2, h: 8, minW: 2, minH: 6 },
-    { i: "products", x: 0, y: 31, w: 2, h: 8, minW: 2, minH: 6 },
-    { i: "customerOrders", x: 0, y: 39, w: 2, h: 8, minW: 2, minH: 6 },
-    { i: "customerAmounts", x: 0, y: 47, w: 2, h: 8, minW: 2, minH: 6 },
-    { i: "recentOrders", x: 0, y: 55, w: 2, h: 8, minW: 2, minH: 6 },
-    { i: "alerts", x: 0, y: 63, w: 2, h: 8, minW: 2, minH: 6 },
-  ],
-};
-
-function isValidOverviewLayoutItem(value: unknown): value is OverviewLayoutItem {
-  if (!value || typeof value !== "object") return false;
-  const item = value as Record<string, unknown>;
-  return (
-    typeof item.i === "string" &&
-    OVERVIEW_WIDGET_IDS.includes(item.i as OverviewWidgetId) &&
-    typeof item.x === "number" &&
-    typeof item.y === "number" &&
-    typeof item.w === "number" &&
-    typeof item.h === "number"
-  );
-}
-
-function sanitizeOverviewLayouts(input: unknown): OverviewLayouts {
-  const sanitized = { ...OVERVIEW_LAYOUTS } as OverviewLayouts;
-  if (!input || typeof input !== "object") return sanitized;
-
-  for (const breakpoint of OVERVIEW_BREAKPOINTS) {
-    const value = (input as Record<string, unknown>)[breakpoint];
-    if (!Array.isArray(value)) continue;
-
-    const items = value.filter(isValidOverviewLayoutItem);
-    const uniqueIds = new Set(items.map((item) => item.i));
-
-    if (items.length !== OVERVIEW_WIDGET_IDS.length || uniqueIds.size !== OVERVIEW_WIDGET_IDS.length) {
-      continue;
-    }
-
-    sanitized[breakpoint] = items.map((item) => ({
-      i: item.i,
-      x: item.x,
-      y: item.y,
-      w: item.w,
-      h: item.h,
-      minW: item.minW,
-      minH: item.minH,
-    }));
-  }
-
-  return sanitized;
-}
 
 function getShippingStatusLabel(status: OrderFormState["shippingStatus"], lang: "zh" | "es") {
   if (lang === "zh") {
@@ -440,17 +316,131 @@ function OverviewLineChart({
   );
 }
 
+function OverviewDonutChart({
+  items,
+  lang,
+}: {
+  items: DsOverviewAnalytics["topPlatforms"];
+  lang: "zh" | "es";
+}) {
+  const total = items.reduce((sum, item) => sum + item.orderCount, 0) || 1;
+  const radius = 72;
+  const strokeWidth = 20;
+  const circumference = 2 * Math.PI * radius;
+  const colors = ["#ef4f91", "#8a63d2", "#f7b500", "#3b82f6", "#10b981"];
+  let offset = 0;
+
+  return (
+    <div className="flex flex-col gap-5 lg:flex-row lg:items-center">
+      <div className="relative mx-auto h-52 w-52 shrink-0">
+        <svg viewBox="0 0 220 220" className="h-full w-full -rotate-90">
+          <circle cx="110" cy="110" r={radius} fill="none" stroke="#eef2ff" strokeWidth={strokeWidth} />
+          {items.map((item, index) => {
+            const dash = (item.orderCount / total) * circumference;
+            const segment = (
+              <circle
+                key={item.platform || index}
+                cx="110"
+                cy="110"
+                r={radius}
+                fill="none"
+                stroke={colors[index % colors.length]}
+                strokeWidth={strokeWidth}
+                strokeDasharray={`${dash} ${circumference - dash}`}
+                strokeDashoffset={-offset}
+                strokeLinecap="round"
+              />
+            );
+            offset += dash;
+            return segment;
+          })}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+          <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">
+            {lang === "zh" ? "\u5e73\u53f0\u6d41\u91cf" : "Traffic"}
+          </div>
+          <div className="mt-2 text-3xl font-semibold text-slate-900">{items.length}</div>
+          <div className="mt-1 text-xs text-slate-500">{lang === "zh" ? "\u6d3b\u8dc3\u5e73\u53f0" : "Plataformas activas"}</div>
+        </div>
+      </div>
+      <div className="min-w-0 flex-1 space-y-3">
+        {items.map((item, index) => {
+          const share = (item.orderCount / total) * 100;
+          return (
+            <div key={item.platform || index} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="h-3 w-3 rounded-full" style={{ backgroundColor: colors[index % colors.length] }} />
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-slate-900">
+                      {item.platform || (lang === "zh" ? "\u65e0" : "Sin plataforma")}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {lang === "zh" ? `\u4ef6\u6570 ${item.quantity}` : `Piezas ${item.quantity}`}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-semibold text-slate-900">{share.toFixed(0)}%</div>
+                  <div className="text-xs text-slate-500">{item.orderCount} {lang === "zh" ? "\u5355" : "ped."}</div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function OverviewHighlightCard({
+  title,
+  value,
+  subtitle,
+  className,
+}: {
+  title: string;
+  value: string;
+  subtitle?: string;
+  className: string;
+}) {
+  return (
+    <section className={`overflow-hidden rounded-[26px] p-5 text-white shadow-soft ${className}`}>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="text-xs uppercase tracking-[0.2em] text-white/80">{title}</div>
+          <div className="mt-3 text-4xl font-semibold tracking-tight">{value}</div>
+          {subtitle ? <div className="mt-2 text-xs text-white/80">{subtitle}</div> : null}
+        </div>
+        <div className="h-16 w-24 opacity-80">
+          <svg viewBox="0 0 96 64" className="h-full w-full">
+            <defs>
+              <linearGradient id={`spark-${title}`} x1="0" x2="1" y1="0" y2="1">
+                <stop offset="0%" stopColor="rgba(255,255,255,0.9)" />
+                <stop offset="100%" stopColor="rgba(255,255,255,0.2)" />
+              </linearGradient>
+            </defs>
+            <path d="M4 48c10-18 16-28 26-24 9 4 13 24 23 24 8 0 15-22 39-34" fill="none" stroke={`url(#spark-${title})`} strokeWidth="4" strokeLinecap="round" />
+          </svg>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function OverviewRankList({
   title,
   subtitle,
   children,
+  className = "",
 }: {
   title: string;
   subtitle?: string;
   children: ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white/90 shadow-soft">
+    <section className={`rounded-3xl border border-slate-200 bg-white/90 shadow-soft ${className}`}>
       <div className="border-b border-slate-100 px-5 py-4">
         <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
         {subtitle ? <p className="mt-1 text-xs text-slate-500">{subtitle}</p> : null}
@@ -472,14 +462,14 @@ function OverviewWidgetShell({
   className?: string;
 }) {
   return (
-    <section className={`ds-overview-widget rounded-3xl border border-slate-200 bg-white/90 shadow-soft ${className}`}>
-      <div className="ds-overview-handle flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+    <section className={`rounded-3xl border border-slate-200 bg-white/90 shadow-soft ${className}`}>
+      <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
         <div>
           <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
           {subtitle ? <p className="mt-1 text-xs text-slate-500">{subtitle}</p> : null}
         </div>
-        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400">
-          <span className="grid grid-cols-2 gap-0.5">
+        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-300">
+          <span className="grid grid-cols-2 gap-1">
             <span className="h-1 w-1 rounded-full bg-current" />
             <span className="h-1 w-1 rounded-full bg-current" />
             <span className="h-1 w-1 rounded-full bg-current" />
@@ -543,19 +533,6 @@ export function DropshippingClient({
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(timer);
-  }, []);
-
-  const [overviewLayouts, setOverviewLayouts] = useState<OverviewLayouts>(OVERVIEW_LAYOUTS);
-
-  useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(OVERVIEW_LAYOUT_STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      setOverviewLayouts(sanitizeOverviewLayouts(parsed));
-    } catch {
-      // keep default layout
-    }
   }, []);
 
   const financeDisplayRate = useMemo(() => exchangeRate.rateValue || null, [exchangeRate.rateValue]);
@@ -1260,16 +1237,6 @@ export function DropshippingClient({
       activeTab === tab ? "bg-primary text-white shadow-soft" : "bg-white text-slate-600 hover:bg-slate-100"
     }`;
 
-  const handleOverviewLayoutChange = (_currentLayout: unknown, allLayouts: OverviewLayouts) => {
-    const sanitizedLayouts = sanitizeOverviewLayouts(allLayouts);
-    setOverviewLayouts(sanitizedLayouts);
-    try {
-      window.localStorage.setItem(OVERVIEW_LAYOUT_STORAGE_KEY, JSON.stringify(sanitizedLayouts));
-    } catch {
-      // ignore local storage failures
-    }
-  };
-
   return (
     <section className="space-y-4">
       <input
@@ -1334,205 +1301,212 @@ export function DropshippingClient({
       </div>
 
       {activeTab === "overview" ? (
-        <div className="grid gap-5 xl:grid-cols-12">
-          <div className="h-full xl:col-span-8">
-            <section className="ds-overview-widget flex h-full flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(29,78,216,0.14),_transparent_35%),linear-gradient(135deg,#ffffff_0%,#f8fbff_48%,#eef5ff_100%)] shadow-soft">
-              <div className="ds-overview-handle flex items-start justify-between gap-3 px-6 py-5">
-                <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium text-slate-600">
-                  {lang === "zh" ? `${overview.analytics.monthLabel} 总览` : `${overview.analytics.monthLabel} resumen`}
+        <div className="space-y-5">
+          <div className="grid gap-5 xl:grid-cols-12">
+            <section className="overflow-hidden rounded-[30px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(236,72,153,0.18),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(99,102,241,0.16),_transparent_24%),linear-gradient(135deg,#ffffff_0%,#f9fbff_46%,#eef4ff_100%)] shadow-soft xl:col-span-8">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/60 px-6 py-5">
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">{lang === "zh" ? "总览仪表板" : "Dashboard"}</div>
+                  <div className="mt-2 text-xs text-slate-500">{lang === "zh" ? `${overview.analytics.monthLabel}月度总览` : `${overview.analytics.monthLabel} monthly overview`}</div>
                 </div>
-                <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/70 bg-white/80 text-slate-400">
-                  <span className="grid grid-cols-2 gap-0.5">
-                    <span className="h-1 w-1 rounded-full bg-current" />
-                    <span className="h-1 w-1 rounded-full bg-current" />
-                    <span className="h-1 w-1 rounded-full bg-current" />
-                    <span className="h-1 w-1 rounded-full bg-current" />
-                  </span>
-                </span>
+                <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white/85 p-1 text-[11px] font-medium text-slate-400">
+                  {["Daily", "Weekly", "Monthly", "Yearly"].map((item) => (
+                    <span
+                      key={item}
+                      className={`rounded-full px-3 py-1.5 ${
+                        item === "Monthly"
+                          ? "bg-gradient-to-r from-fuchsia-500 to-indigo-500 text-white shadow"
+                          : "text-slate-400"
+                      }`}
+                    >
+                      {item}
+                    </span>
+                  ))}
+                </div>
               </div>
-              <div className="flex min-h-0 flex-1 flex-col px-6 pb-6">
-                <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
-                  <div>
-                    <h2 className="text-3xl font-semibold tracking-tight text-slate-900">
-                      {fmtMoney(overview.stats.totalReceivable, lang)}
-                    </h2>
-                    <p className="mt-2 text-sm text-slate-500">
-                      {lang === "zh"
-                        ? "本月订单、结款与平台分布的核心表现会集中展示在这里。"
-                        : "Aqui se concentran los indicadores clave de pedidos, cobros y plataformas del mes."}
-                    </p>
-                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                      <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
-                        <div className="text-xs text-slate-500">{lang === "zh" ? "客户订单总额" : "Total por cliente"}</div>
-                        <div className="mt-2 text-2xl font-semibold text-slate-900">{fmtMoney(overview.stats.totalReceivable, lang)}</div>
-                      </div>
-                      <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
-                        <div className="text-xs text-slate-500">{lang === "zh" ? "结款总额" : "Total liquidado"}</div>
-                        <div className="mt-2 text-2xl font-semibold text-emerald-600">{fmtMoney(overview.stats.totalPaid, lang)}</div>
-                      </div>
-                      <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
-                        <div className="text-xs text-slate-500">{lang === "zh" ? "未结总额" : "Pendiente total"}</div>
-                        <div className="mt-2 text-2xl font-semibold text-rose-600">{fmtMoney(overview.stats.totalUnpaid, lang)}</div>
-                      </div>
+
+              <div className="grid gap-6 px-6 py-6 lg:grid-cols-[1.3fr_0.7fr]">
+                <div>
+                  <div className="text-5xl font-semibold tracking-tight text-slate-900">{fmtMoney(overview.stats.totalReceivable, lang)}</div>
+                  <p className="mt-3 max-w-xl text-sm leading-6 text-slate-500">
+                    {lang === "zh"
+                      ? "月度销售、结款、订单与平台分布在这里集中查看。"
+                      : "Consulta aqui el panorama mensual de ventas, cobros, pedidos y distribucion por plataforma."}
+                  </p>
+                  <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4 backdrop-blur">
+                      <div className="text-xs text-slate-500">{lang === "zh" ? "客户订单总额" : "Monto total"}</div>
+                      <div className="mt-2 text-2xl font-semibold text-slate-900">{fmtMoney(overview.stats.totalReceivable, lang)}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4 backdrop-blur">
+                      <div className="text-xs text-slate-500">{lang === "zh" ? "结款总额" : "Liquidado"}</div>
+                      <div className="mt-2 text-2xl font-semibold text-emerald-600">{fmtMoney(overview.stats.totalPaid, lang)}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4 backdrop-blur">
+                      <div className="text-xs text-slate-500">{lang === "zh" ? "未结总额" : "Pendiente"}</div>
+                      <div className="mt-2 text-2xl font-semibold text-rose-600">{fmtMoney(overview.stats.totalUnpaid, lang)}</div>
                     </div>
                   </div>
-                  <div className="grid gap-3">
-                    <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
-                      <div className="text-xs text-slate-500">{text.stats.todayOrders}</div>
-                      <div className="mt-2 text-3xl font-semibold text-slate-900">{overview.stats.todayOrders}</div>
+                  <div className="mt-6 rounded-[28px] border border-white/70 bg-white/75 p-4 backdrop-blur">
+                    <div className="mb-4 flex flex-wrap items-center gap-4 text-xs text-slate-500">
+                      <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-indigo-600" />{lang === "zh" ? "订单数" : "Pedidos"}</span>
+                      <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-fuchsia-500" />{lang === "zh" ? "已发货" : "Enviados"}</span>
                     </div>
-                    <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
-                      <div className="text-xs text-slate-500">{text.stats.todayShipped}</div>
-                      <div className="mt-2 text-3xl font-semibold text-emerald-600">{overview.stats.todayShippedOrders}</div>
+                    <OverviewLineChart data={overview.analytics.dailySeries} lineColor="#7c3aed" fillColor="rgba(236,72,153,0.12)" />
+                  </div>
+                </div>
+
+                <div className="grid gap-4">
+                  <div className="rounded-[26px] border border-white/70 bg-white/80 px-5 py-5 backdrop-blur">
+                    <div className="text-xs text-slate-500">{text.stats.todayOrders}</div>
+                    <div className="mt-3 text-4xl font-semibold text-slate-900">{overview.stats.todayOrders}</div>
+                  </div>
+                  <div className="rounded-[26px] border border-white/70 bg-white/80 px-5 py-5 backdrop-blur">
+                    <div className="text-xs text-slate-500">{text.stats.todayShipped}</div>
+                    <div className="mt-3 text-4xl font-semibold text-emerald-600">{overview.stats.todayShippedOrders}</div>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                    <div className="rounded-[26px] border border-white/70 bg-white/80 px-5 py-5 backdrop-blur">
+                      <div className="text-xs text-slate-500">{text.stats.todayPending}</div>
+                      <div className="mt-3 text-3xl font-semibold text-amber-500">{overview.stats.todayPendingOrders}</div>
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
-                        <div className="text-xs text-slate-500">{text.stats.todayPending}</div>
-                        <div className="mt-2 text-2xl font-semibold text-amber-600">{overview.stats.todayPendingOrders}</div>
-                      </div>
-                      <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
-                        <div className="text-xs text-slate-500">{text.stats.unsettled}</div>
-                        <div className="mt-2 text-2xl font-semibold text-rose-600">{overview.stats.unsettledCustomers}</div>
-                      </div>
+                    <div className="rounded-[26px] border border-white/70 bg-white/80 px-5 py-5 backdrop-blur">
+                      <div className="text-xs text-slate-500">{text.stats.unsettled}</div>
+                      <div className="mt-3 text-3xl font-semibold text-rose-600">{overview.stats.unsettledCustomers}</div>
                     </div>
                   </div>
                 </div>
               </div>
             </section>
+
+            <OverviewRankList
+              title={lang === "zh" ? "平台订单分布" : "Traffic"}
+              subtitle={lang === "zh" ? "按当月平台订单占比分布" : "Distribucion mensual por plataforma"}
+              className="xl:col-span-4"
+            >
+              <OverviewDonutChart items={overview.analytics.topPlatforms.slice(0, 5)} lang={lang} />
+            </OverviewRankList>
           </div>
 
-          <div className="h-full xl:col-span-4">
-            <OverviewWidgetShell title={lang === "zh" ? "财务概览" : "Resumen financiero"} subtitle={lang === "zh" ? "关键收款与汇率信息" : "Resumen de cobros y tipo de cambio"} className="h-full">
-              <div className="grid h-full gap-4">
-                <StatCard label={text.stats.paid} value={fmtMoney(overview.stats.totalPaid, lang)} valueClassName="text-emerald-600" />
-                <StatCard label={text.stats.unpaid} value={fmtMoney(overview.stats.totalUnpaid, lang)} valueClassName="text-rose-600" />
-                <StatCard label={lang === "zh" ? "汇率来源" : "Fuente de tipo"} value={exchangeRate.sourceName || "-"} hint={fmtDate(exchangeRate.fetchedAt || exchangeRate.rateDate, lang)} />
-                <StatCard label={text.stats.rate} value={overview.stats.currentRate?.toFixed(4) || "-"} hint={lang === "zh" ? "MXN -> RMB" : "MXN -> RMB"} />
-              </div>
-            </OverviewWidgetShell>
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+            <OverviewHighlightCard
+              title={lang === "zh" ? "应收" : "Receivable"}
+              value={fmtMoney(overview.stats.totalReceivable, lang)}
+              subtitle={lang === "zh" ? `${overview.analytics.monthLabel}月` : overview.analytics.monthLabel}
+              className="bg-gradient-to-br from-fuchsia-500 via-pink-500 to-rose-500"
+            />
+            <OverviewHighlightCard
+              title={lang === "zh" ? "已收" : "Paid"}
+              value={fmtMoney(overview.stats.totalPaid, lang)}
+              subtitle={lang === "zh" ? "本期结款" : "Cobrado"}
+              className="bg-gradient-to-br from-violet-500 via-indigo-500 to-blue-500"
+            />
+            <OverviewHighlightCard
+              title={lang === "zh" ? "未结" : "Pending"}
+              value={fmtMoney(overview.stats.totalUnpaid, lang)}
+              subtitle={lang === "zh" ? "待跟进回款" : "Pendiente por cobrar"}
+              className="bg-gradient-to-br from-sky-500 via-cyan-500 to-blue-400"
+            />
+            <OverviewHighlightCard
+              title={lang === "zh" ? "今日汇率" : "Rate"}
+              value={overview.stats.currentRate?.toFixed(4) || "-"}
+              subtitle={`${exchangeRate.sourceName || "-"} ? ${fmtDateOnly(exchangeRate.fetchedAt || exchangeRate.rateDate, lang)}`}
+              className="bg-gradient-to-br from-amber-400 via-orange-400 to-pink-500"
+            />
           </div>
 
-          <div className="h-full xl:col-span-8">
-            <OverviewWidgetShell title={lang === "zh" ? "每月每日订单曲线" : "Curva diaria mensual"} subtitle={lang === "zh" ? "按墨西哥时间统计本月每日订单与已发货走势。" : "Tendencia diaria del mes en horario de Mexico."} className="h-full">
-              <div className="mb-4 flex flex-wrap items-center gap-4 text-xs text-slate-500">
-                <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-blue-700" />{lang === "zh" ? "订单数" : "Pedidos"}</span>
-                <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />{lang === "zh" ? "已发数" : "Enviados"}</span>
-              </div>
-              <OverviewLineChart data={overview.analytics.dailySeries} />
-            </OverviewWidgetShell>
-          </div>
-
-          <div className="h-full xl:col-span-4">
-            <OverviewWidgetShell title={lang === "zh" ? "平台订单排名" : "Ranking por plataforma"} subtitle={lang === "zh" ? "按当前月份订单量排序。" : "Ordenado por volumen mensual."} className="h-full">
-              <div className="space-y-3">
-                {overview.analytics.topPlatforms.map((item, index) => {
-                  const max = Math.max(...overview.analytics.topPlatforms.map((row) => row.orderCount), 1);
-                  const width = `${(item.orderCount / max) * 100}%`;
-                  return (
-                    <div key={item.platform} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-500">{index + 1}</span>
-                          <div>
-                            <div className="text-sm font-medium text-slate-900">{item.platform || (lang === "zh" ? "无平台" : "Sin plataforma")}</div>
-                            <div className="text-xs text-slate-500">{lang === "zh" ? `件数 ${item.quantity}` : `Piezas ${item.quantity}`}</div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-sm font-semibold text-slate-900">{item.orderCount}</div>
-                          <div className="text-xs text-slate-500">{lang === "zh" ? "订单" : "Pedidos"}</div>
-                        </div>
-                      </div>
-                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
-                        <div className="h-full rounded-full bg-gradient-to-r from-blue-600 to-cyan-400" style={{ width }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </OverviewWidgetShell>
-          </div>
-
-          <div className="h-full xl:col-span-4">
-            <OverviewWidgetShell title={lang === "zh" ? "产品销量排名" : "Ranking de productos"} subtitle={lang === "zh" ? "按销量排序" : "Ordenado por volumen"} className="h-full">
-              <div className="space-y-3">
-                {overview.analytics.topProducts.map((item, index) => (
-                  <div key={item.sku} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-3">
-                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-500">{index + 1}</span>
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-slate-900">{item.sku}</div>
-                          <div className="truncate text-xs text-slate-500">{item.productNameZh}</div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm font-semibold text-slate-900">{item.quantity}</div>
-                      <div className="text-xs text-slate-500">{lang === "zh" ? `${item.orderCount} 单` : `${item.orderCount} pedidos`}</div>
-                    </div>
+          <div className="grid gap-5 xl:grid-cols-12">
+            <OverviewWidgetShell
+              title={lang === "zh" ? "近期提醒" : "Recent Activities"}
+              subtitle={lang === "zh" ? "优先关注的业务提示" : "Alertas y seguimientos prioritarios"}
+              className="xl:col-span-3"
+            >
+              <div className="space-y-4">
+                {overview.alerts.map((item, index) => (
+                  <div key={item.type} className="relative pl-8">
+                    {index < overview.alerts.length - 1 ? <span className="absolute left-[11px] top-6 h-[calc(100%+8px)] w-px bg-slate-200" /> : null}
+                    <span className="absolute left-0 top-0 inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-500">
+                      {index + 1}
+                    </span>
+                    <div className="text-sm font-medium text-slate-900">{text.alerts[item.type]}</div>
+                    <div className="mt-1 text-xs text-slate-500">{lang === "zh" ? "当前数量" : "Conteo actual"} ? {item.count}</div>
                   </div>
                 ))}
               </div>
             </OverviewWidgetShell>
-          </div>
 
-          <div className="h-full xl:col-span-4">
-            <OverviewWidgetShell title={lang === "zh" ? "客户订单数排名" : "Ranking de clientes"} subtitle={lang === "zh" ? "按订单数排序" : "Ordenado por pedidos"} className="h-full">
+            <OverviewRankList
+              title={lang === "zh" ? "产品销量排名" : "Product Ranking"}
+              subtitle={lang === "zh" ? "按销量与订单数排序" : "Ordenado por volumen y pedidos"}
+              className="xl:col-span-4"
+            >
               <div className="space-y-3">
-                {overview.analytics.topCustomersByOrders.map((item, index) => (
-                  <div key={item.customerId} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
-                    <div className="flex items-center justify-between gap-3">
+                {overview.analytics.topProducts.map((item, index) => (
+                  <div key={item.sku} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+                    <div className="min-w-0 flex items-center gap-3">
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-500">{index + 1}</span>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-3">
-                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-500">{index + 1}</span>
-                          <div className="truncate text-sm font-medium text-slate-900">{item.customerName}</div>
-                        </div>
+                        <div className="truncate text-sm font-medium text-slate-900">{item.sku}</div>
+                        <div className="truncate text-xs text-slate-500">{item.productNameZh}</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-semibold text-slate-900">{item.quantity}</div>
+                      <div className="text-xs text-slate-500">{item.orderCount} {lang === "zh" ? "单" : "ped."}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </OverviewRankList>
+
+            <div className="grid gap-5 xl:col-span-5">
+              <OverviewRankList
+                title={lang === "zh" ? "客户订单数排名" : "Customer Orders"}
+                subtitle={lang === "zh" ? "按订单数排序" : "Ordenado por pedidos"}
+              >
+                <div className="space-y-3">
+                  {overview.analytics.topCustomersByOrders.map((item, index) => (
+                    <div key={item.customerId} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-500">{index + 1}</span>
+                        <div className="truncate text-sm font-medium text-slate-900">{item.customerName}</div>
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-semibold text-slate-900">{item.orderCount}</div>
                         <div className="text-xs text-slate-500">{lang === "zh" ? "订单" : "Pedidos"}</div>
                       </div>
                     </div>
-                    <div className="mt-3 text-xs text-slate-500">
-                      {lang === "zh" ? "总额" : "Total"}: {fmtMoney(item.totalAmount, lang)}
-                    </div>
+                  ))}
+                </div>
+              </OverviewRankList>
+
+              <OverviewRankList
+                title={lang === "zh" ? "财务速览" : "Finance Snapshot"}
+                subtitle={lang === "zh" ? "汇率来源与结款提示" : "Tipo de cambio y resumen de cobros"}
+              >
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-4">
+                    <div className="text-xs text-slate-500">{lang === "zh" ? "汇率来源" : "Source"}</div>
+                    <div className="mt-2 text-2xl font-semibold text-slate-900">{exchangeRate.sourceName || "-"}</div>
+                    <div className="mt-2 text-xs text-slate-500">{fmtDate(exchangeRate.fetchedAt || exchangeRate.rateDate, lang)}</div>
                   </div>
-                ))}
-              </div>
-            </OverviewWidgetShell>
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-4">
+                    <div className="text-xs text-slate-500">{lang === "zh" ? "今日汇率" : "Rate"}</div>
+                    <div className="mt-2 text-2xl font-semibold text-slate-900">{overview.stats.currentRate?.toFixed(4) || "-"}</div>
+                    <div className="mt-2 text-xs text-slate-500">MXN ? RMB</div>
+                  </div>
+                </div>
+                {exchangeRate.fetchFailed ? (
+                  <div className="mt-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-600">
+                    {exchangeRate.failureReason || text.alerts.exchange_rate_failed}
+                  </div>
+                ) : null}
+              </OverviewRankList>
+            </div>
           </div>
 
-          <div className="h-full xl:col-span-4">
-            <OverviewWidgetShell title={lang === "zh" ? "客户订单总额排名" : "Ranking por monto"} subtitle={lang === "zh" ? "显示总额、已结与未结" : "Total, liquidado y pendiente"} className="h-full">
-              <div className="space-y-3">
-                {overview.analytics.topCustomersByAmount.map((item, index) => (
-                  <div key={item.customerId} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-500">{index + 1}</span>
-                        <div className="text-sm font-medium text-slate-900">{item.customerName}</div>
-                      </div>
-                      <div className="text-sm font-semibold text-slate-900">{fmtMoney(item.totalAmount, lang)}</div>
-                    </div>
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                      <div className="rounded-xl bg-emerald-50 px-3 py-2 text-emerald-700">
-                        <div>{lang === "zh" ? "已结" : "Liquidado"}</div>
-                        <div className="mt-1 font-semibold">{fmtMoney(item.paidAmount, lang)}</div>
-                      </div>
-                      <div className="rounded-xl bg-rose-50 px-3 py-2 text-rose-700">
-                        <div>{lang === "zh" ? "未结" : "Pendiente"}</div>
-                        <div className="mt-1 font-semibold">{fmtMoney(item.unpaidAmount, lang)}</div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </OverviewWidgetShell>
-          </div>
-
-          <div className="h-full xl:col-span-8">
-            <OverviewWidgetShell title={text.sections.recent} className="h-full">
+          <div className="grid gap-5 xl:grid-cols-12">
+            <OverviewWidgetShell title={text.sections.recent} className="xl:col-span-7">
               {overview.recentOrders.length === 0 ? (
                 <EmptyState title={text.empty.title} description={text.empty.desc} />
               ) : (
@@ -1564,30 +1538,36 @@ export function DropshippingClient({
                 </div>
               )}
             </OverviewWidgetShell>
-          </div>
 
-          <div className="h-full xl:col-span-4">
-            <OverviewWidgetShell title={text.sections.alerts} subtitle={lang === "zh" ? "需要优先关注的业务提醒。" : "Alertas de seguimiento prioritarias."} className="h-full">
-              <div className="grid gap-3">
-                {overview.alerts.map((item) => (
-                  <div key={item.type} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
-                    <div className="text-sm text-slate-500">{text.alerts[item.type]}</div>
-                    <div className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">{item.count}</div>
+            <OverviewRankList
+              title={lang === "zh" ? "客户订单总额排名" : "Customer Amount Ranking"}
+              subtitle={lang === "zh" ? "显示总额、已结与未结" : "Total, paid and pending"}
+              className="xl:col-span-5"
+            >
+              <div className="space-y-3">
+                {overview.analytics.topCustomersByAmount.map((item, index) => (
+                  <div key={item.customerId} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-500">{index + 1}</span>
+                        <div className="truncate text-sm font-medium text-slate-900">{item.customerName}</div>
+                      </div>
+                      <div className="text-sm font-semibold text-slate-900">{fmtMoney(item.totalAmount, lang)}</div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                      <div className="rounded-xl bg-emerald-50 px-3 py-3 text-emerald-700">
+                        <div>{lang === "zh" ? "已结" : "Liquidado"}</div>
+                        <div className="mt-1 text-sm font-semibold">{fmtMoney(item.paidAmount, lang)}</div>
+                      </div>
+                      <div className="rounded-xl bg-rose-50 px-3 py-3 text-rose-700">
+                        <div>{lang === "zh" ? "未结" : "Pendiente"}</div>
+                        <div className="mt-1 text-sm font-semibold">{fmtMoney(item.unpaidAmount, lang)}</div>
+                      </div>
+                    </div>
                   </div>
                 ))}
-                <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-sm text-slate-600">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span>{lang === "zh" ? "来源" : "Fuente"}: {exchangeRate.sourceName || "-"}</span>
-                    <span>{lang === "zh" ? "更新时间" : "Actualizado"}: {fmtDate(exchangeRate.fetchedAt || exchangeRate.rateDate, lang)}</span>
-                  </div>
-                  {exchangeRate.fetchFailed ? (
-                    <div className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-rose-600">
-                      {exchangeRate.failureReason || text.alerts.exchange_rate_failed}
-                    </div>
-                  ) : null}
-                </div>
               </div>
-            </OverviewWidgetShell>
+            </OverviewRankList>
           </div>
         </div>
       ) : null}
