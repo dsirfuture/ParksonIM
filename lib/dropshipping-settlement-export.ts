@@ -182,9 +182,9 @@ function drawTableHeader(page: PDFPage, fonts: EmbeddedFonts, y: number) {
 
   page.drawRectangle({
     x: 28,
-    y: y - 8,
+    y: y - 10,
     width: 786,
-    height: 24,
+    height: 28,
     color: rgb(0.96, 0.97, 0.99),
     borderColor: rgb(0.88, 0.91, 0.96),
     borderWidth: 1,
@@ -214,16 +214,16 @@ function drawHeader(
 
   page.drawRectangle({
     x: 28,
-    y: 516,
+    y: 506,
     width: 786,
-    height: 44,
+    height: 54,
     color: rgb(0.95, 0.97, 1),
     borderColor: rgb(0.84, 0.89, 0.97),
     borderWidth: 1,
   });
   drawText(page, "\u5ba2\u6237\u7ed3\u7b97\u5355", {
     x: 36,
-    y: 535,
+    y: 524,
     size: 20,
     fonts,
     bold: true,
@@ -231,7 +231,7 @@ function drawHeader(
   });
   drawText(page, financeRow.customerName, {
     x: 36,
-    y: 512,
+    y: 500,
     size: 11,
     fonts,
     color: rgb(0.39, 0.45, 0.56),
@@ -239,7 +239,7 @@ function drawHeader(
 
   drawText(page, metaLine, {
     x: metaX,
-    y: 530,
+    y: 522,
     size: 9.5,
     fonts,
     bold: true,
@@ -278,20 +278,20 @@ export async function buildDropshippingSettlementPdf(input: {
   drawSummaryCard(page, fonts, 428, "\u672a\u7ed3\u603b\u989d", formatMoney(input.financeRow.unpaidAmount), rgb(0.82, 0.14, 0.22));
   drawSummaryCard(page, fonts, 624, "\u5907\u8d27\u91d1\u989d", formatMoney(input.financeRow.stockAmount), rgb(0.1, 0.24, 0.53));
 
-  let y = 405;
+  let y = 402;
   drawSettledSectionHeader(page, fonts, y);
-  y -= 18;
+  y -= 24;
   drawTableHeader(page, fonts, y);
-  y -= 28;
+  y -= 32;
 
   for (const item of input.financeRow.settledOrders) {
     if (y < 54) {
       page = pdfDoc.addPage([842, 595]);
       y = 548;
       drawSettledSectionHeader(page, fonts, y);
-      y -= 18;
+      y -= 24;
       drawTableHeader(page, fonts, y);
-      y -= 28;
+      y -= 32;
     }
 
     page.drawLine({
