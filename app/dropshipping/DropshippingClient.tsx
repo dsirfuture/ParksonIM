@@ -3194,7 +3194,7 @@ export function DropshippingClient({
                             <td className="whitespace-nowrap px-4 py-2.5 align-middle">{fmtDateOnly(item.shippedAt, lang)}</td>
                             <td className="whitespace-nowrap px-4 py-2.5 align-middle">{fmtDateOnly(item.settledAt, lang)}</td>
                             <td className="px-4 py-2.5 align-middle">
-                              <span className="inline-flex h-6 items-center justify-center rounded-full bg-emerald-50 px-3 text-[11px] font-semibold text-emerald-600">
+                              <span className="inline-flex h-6 min-w-[52px] items-center justify-center whitespace-nowrap rounded-full bg-emerald-50 px-3 text-[11px] font-semibold text-emerald-600">
                                 {lang === "zh" ? "\u5df2\u7ed3" : "Paid"}
                               </span>
                             </td>
