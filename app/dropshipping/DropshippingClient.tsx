@@ -2569,7 +2569,7 @@ export function DropshippingClient({
                       <td className="px-4 py-3 text-sm text-slate-700">${fmtMoney(row.unitPrice, lang)}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">{fmtPercent(row.discountRate, lang)}%</td>
                       <td className="px-4 py-3 text-sm text-slate-700">{row.stockedQty}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.stockAmount, lang)}</td>
+                      <td className="px-4 py-3 text-sm text-slate-700">${fmtMoney(row.stockAmount, lang)}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">
                         {row.shippedQty > 0 ? (
                           <button
@@ -2997,9 +2997,9 @@ export function DropshippingClient({
                 <div className="text-xs text-slate-500">{lang === "zh" ? "导入备货金额" : "Monto importado"}</div>
                 <div className="mt-1 text-sm font-semibold text-slate-900">
                   {currentPreviewOrder?.snapshotStockAmount !== null && currentPreviewOrder?.snapshotStockAmount !== undefined
-                    ? fmtMoney(currentPreviewOrder.snapshotStockAmount, lang)
+                    ? `$${fmtMoney(currentPreviewOrder.snapshotStockAmount, lang)}`
                     : currentInventoryPreview
-                      ? fmtMoney(currentInventoryPreview.stockAmount, lang)
+                      ? `$${fmtMoney(currentInventoryPreview.stockAmount, lang)}`
                       : "-"}
                 </div>
               </div>
@@ -3022,7 +3022,7 @@ export function DropshippingClient({
               <div className="rounded-xl border border-slate-200 p-4">
                 <div className="text-xs text-slate-500">{lang === "zh" ? "备货金额" : "Monto stock"}</div>
                 <div className="mt-1 text-sm font-semibold text-slate-900">
-                  {currentInventoryPreview ? fmtMoney(currentInventoryPreview.stockAmount, lang) : "-"}
+                  {currentInventoryPreview ? `$${fmtMoney(currentInventoryPreview.stockAmount, lang)}` : "-"}
                 </div>
               </div>
               <div className="rounded-xl border border-slate-200 p-4">
