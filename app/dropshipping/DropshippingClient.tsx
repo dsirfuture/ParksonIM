@@ -2693,23 +2693,23 @@ export function DropshippingClient({
 
       {modalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-          <div className="flex max-h-[88vh] w-full max-w-[920px] flex-col rounded-xl bg-white shadow-2xl">
+          <div className="flex max-h-[88vh] w-full max-w-[980px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
             <div className="border-b border-slate-200 px-5 py-4">
               <h3 className="text-base font-semibold text-slate-900">
                 {form.id ? text.form.edit : text.form.create}
               </h3>
             </div>
             <div className="overflow-y-auto px-5 py-5">
-              <div className="grid gap-4 md:grid-cols-6 xl:grid-cols-12">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
               {([
-                ["customerName", text.form.customer, "md:col-span-3 xl:col-span-4"],
-                ["platformOrderNo", text.form.orderNo, "md:col-span-3 xl:col-span-4"],
-                ["sku", text.form.sku, "md:col-span-2 xl:col-span-4"],
-                ["productNameZh", text.form.productZh, "md:col-span-3 xl:col-span-4"],
-                ["quantity", text.form.quantity, "md:col-span-1 xl:col-span-2"],
-                ["trackingNo", text.form.trackingNo, "md:col-span-2 xl:col-span-4"],
-                ["color", text.form.color, "md:col-span-2 xl:col-span-4"],
-                ["shippedAt", text.form.shippedAt, "md:col-span-2 xl:col-span-3"],
+                ["customerName", text.form.customer, "md:col-span-1 xl:col-span-2"],
+                ["platformOrderNo", text.form.orderNo, "md:col-span-1 xl:col-span-2"],
+                ["sku", text.form.sku, "md:col-span-1 xl:col-span-2"],
+                ["productNameZh", text.form.productZh, "md:col-span-1 xl:col-span-2"],
+                ["quantity", text.form.quantity, "md:col-span-1 xl:col-span-1"],
+                ["trackingNo", text.form.trackingNo, "md:col-span-1 xl:col-span-2"],
+                ["color", text.form.color, "md:col-span-1 xl:col-span-2"],
+                ["shippedAt", text.form.shippedAt, "md:col-span-1 xl:col-span-1"],
               ] as Array<[keyof OrderFormState, string, string]>).map(([key, label, spanClass]) => (
                 <label key={key} className={`space-y-1 ${spanClass}`}>
                   <span className="text-xs text-slate-500">{label}</span>
@@ -2724,7 +2724,7 @@ export function DropshippingClient({
               ))}
 
               {sameTrackingOrders.length > 1 ? (
-                <div className="md:col-span-6 xl:col-span-12">
+                <div className="md:col-span-2 xl:col-span-6">
                   <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
@@ -2784,7 +2784,7 @@ export function DropshippingClient({
                 </div>
               ) : null}
 
-              <div className="space-y-1 md:col-span-3 xl:col-span-4">
+              <div className="order-1 space-y-1 md:col-span-1 xl:col-span-3">
                 <span className="text-xs text-slate-500">{text.fields.shippingLabel}</span>
                 <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
                   {currentEditingOrder?.shippingLabelAttachments[0]?.fileUrl ? (
@@ -2801,7 +2801,7 @@ export function DropshippingClient({
                       {lang === "zh" ? "\u7a7a" : "Vacio"}
                     </span>
                   )}
-                  <div className="flex items-center gap-3">
+                  <div className="mt-3 flex items-center gap-3">
                     <label className="inline-flex h-9 cursor-pointer items-center justify-center rounded-lg bg-primary px-3 text-xs font-semibold text-white">
                       {lang === "zh" ? "选择文件" : "Seleccionar archivo"}
                       <input
@@ -2818,7 +2818,7 @@ export function DropshippingClient({
                 </div>
               </div>
 
-              <div className="space-y-1 md:col-span-3 xl:col-span-4">
+              <div className="order-2 space-y-1 md:col-span-1 xl:col-span-3">
                 <span className="text-xs text-slate-500">{text.fields.shippingProof}</span>
                 <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
                   {currentEditingOrder?.shippingProofAttachments.length ? (
@@ -2839,7 +2839,7 @@ export function DropshippingClient({
                       {lang === "zh" ? "\u7a7a" : "Vacio"}
                     </span>
                   )}
-                  <div className="flex items-center gap-3">
+                  <div className="mt-3 flex items-center gap-3">
                     <label className="inline-flex h-9 cursor-pointer items-center justify-center rounded-lg bg-primary px-3 text-xs font-semibold text-white">
                       {lang === "zh" ? "选择文件" : "Seleccionar archivo"}
                       <input
@@ -2861,7 +2861,7 @@ export function DropshippingClient({
                 </div>
               </div>
 
-              <label className="space-y-1 md:col-span-3 xl:col-span-4">
+              <label className="order-3 space-y-1 md:col-span-1 xl:col-span-2">
                 <span className="text-xs text-slate-500">{text.form.platform}</span>
                 <select
                   value={form.platform}
@@ -2877,7 +2877,7 @@ export function DropshippingClient({
                 </select>
               </label>
 
-              <label className="space-y-1 md:col-span-2 xl:col-span-4">
+              <label className="order-4 space-y-1 md:col-span-1 xl:col-span-2">
                 <span className="text-xs text-slate-500">{text.form.status}</span>
                 <select
                   value={form.shippingStatus}
@@ -2892,7 +2892,7 @@ export function DropshippingClient({
                 </select>
               </label>
 
-              <label className="space-y-1 md:col-span-3 xl:col-span-4">
+              <label className="order-5 space-y-1 md:col-span-1 xl:col-span-2">
                 <span className="text-xs text-slate-500">{text.form.shippingFee}</span>
                 <select
                   value={form.shippingFee}
@@ -2908,13 +2908,13 @@ export function DropshippingClient({
                 </select>
               </label>
 
-              <label className="space-y-1 md:col-span-6 xl:col-span-12">
+              <label className="order-6 space-y-1 md:col-span-2 xl:col-span-6">
                 <span className="text-xs text-slate-500">{text.form.notes}</span>
-                <textarea
+                <input
+                  type="text"
                   value={form.notes}
                   onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))}
-                  rows={3}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
                 />
               </label>
               </div>
