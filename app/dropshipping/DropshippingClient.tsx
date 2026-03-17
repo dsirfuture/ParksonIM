@@ -1305,6 +1305,7 @@ export function DropshippingClient({
                   <tr className="bg-slate-50 text-left text-sm text-slate-500">
                     <th className="px-4 py-3 font-medium">{text.fields.customer}</th>
                     <th className="px-4 py-3 font-medium">{text.fields.sku}</th>
+                    <th className="px-4 py-3 font-medium">{text.fields.productImage}</th>
                     <th className="px-4 py-3 font-medium">{text.fields.productZh}</th>
                     <th className="px-4 py-3 font-medium">{text.fields.warehouse}</th>
                     <th className="px-4 py-3 font-medium">{text.fields.stocked}</th>
@@ -1319,6 +1320,31 @@ export function DropshippingClient({
                     <tr key={row.inventoryId} className="border-t border-slate-100">
                       <td className="px-4 py-3 text-sm text-slate-700">{row.customerName}</td>
                       <td className="px-4 py-3 text-sm font-semibold text-slate-900">{row.sku}</td>
+                      <td className="px-4 py-3 text-sm text-slate-700">
+                        <div className="flex min-h-10 items-center justify-center">
+                          {row.productImageUrl ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPreviewImage({
+                                  src: row.productImageUrl,
+                                  title: `${row.sku} / ${row.productNameZh || "-"}`,
+                                })
+                              }
+                              className="overflow-hidden rounded-md border border-slate-200 bg-white"
+                              title={lang === "zh" ? "预览商品图" : "Ver imagen"}
+                            >
+                              <img
+                                src={row.productImageUrl}
+                                alt={row.productNameZh || row.sku}
+                                className="h-10 w-10 object-cover"
+                              />
+                            </button>
+                          ) : (
+                            <span className="text-slate-400">{lang === "zh" ? "空" : "Vacio"}</span>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-sm text-slate-700">{row.productNameZh}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">{row.warehouse || "-"}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">{row.stockedQty}</td>
@@ -1605,6 +1631,37 @@ export function DropshippingClient({
               </p>
             </div>
             <div className="grid gap-4 px-5 py-5 md:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                    {currentInventoryPreview?.productImageUrl ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPreviewImage({
+                            src: currentInventoryPreview.productImageUrl,
+                            title: `${currentInventoryPreview.sku} / ${currentInventoryPreview.productNameZh || "-"}`,
+                          })
+                        }
+                        className="h-full w-full"
+                      >
+                        <img
+                          src={currentInventoryPreview.productImageUrl}
+                          alt={currentInventoryPreview.productNameZh || currentInventoryPreview.sku}
+                          className="h-full w-full object-cover"
+                        />
+                      </button>
+                    ) : (
+                      <span className="text-sm text-slate-400">{lang === "zh" ? "空" : "Vacio"}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs text-slate-500">{lang === "zh" ? "商品图片" : "Imagen del producto"}</div>
+                    <div className="mt-1 text-sm text-slate-900">{currentInventoryPreview?.productNameZh || "-"}</div>
+                    <div className="mt-1 text-xs text-slate-500">{currentInventoryPreview?.sku || "-"}</div>
+                  </div>
+                </div>
+              </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="text-xs text-slate-500">{lang === "zh" ? "客户" : "Cliente"}</div>
                 <div className="mt-1 text-sm font-semibold text-slate-900">{inventoryPreview.customerName}</div>
@@ -1692,34 +1749,72 @@ export function DropshippingClient({
                   description={lang === "zh" ? "当前客户还没有已结算的订单。" : "Este cliente aun no tiene pedidos liquidados."}
                 />
               ) : (
-                <table className="min-w-full border-separate border-spacing-0">
-                  <thead>
-                    <tr className="bg-slate-50 text-left text-sm text-slate-500">
-                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "后台订单号" : "Pedido"}</th>
-                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "编码" : "Codigo"}</th>
-                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "产品中文名" : "Nombre ZH"}</th>
-                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "物流号" : "Guia"}</th>
-                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "发货日期" : "Fecha envio"}</th>
-                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "结算日期" : "Fecha liquidacion"}</th>
-                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "已结金额" : "Monto liquidado"}</th>
-                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "总金额" : "Total"}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {financePreview.settledOrders.map((item) => (
-                      <tr key={item.orderId} className="border-t border-slate-100">
-                        <td className="px-4 py-3 text-sm text-slate-900">{item.platformOrderNo}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700">{item.sku}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700">{item.productNameZh || "-"}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700">{item.trackingNo || "-"}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700">{fmtDateOnly(item.shippedAt, lang)}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700">{fmtDateOnly(item.settledAt, lang)}</td>
-                        <td className="px-4 py-3 text-sm text-emerald-600">{fmtMoney(item.paidAmount, lang)}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(item.totalAmount, lang)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="space-y-3">
+                  {financePreview.settledOrders.map((item) => (
+                    <div key={item.orderId} className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <div className="flex flex-col gap-4 md:flex-row">
+                        <div className="flex items-center justify-center md:w-24 md:flex-none">
+                          <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                            {item.productImageUrl ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setPreviewImage({
+                                    src: item.productImageUrl,
+                                    title: `${item.sku} / ${item.productNameZh || "-"}`,
+                                  })
+                                }
+                                className="h-full w-full"
+                              >
+                                <img
+                                  src={item.productImageUrl}
+                                  alt={item.productNameZh || item.sku}
+                                  className="h-full w-full object-cover"
+                                />
+                              </button>
+                            ) : (
+                              <span className="text-sm text-slate-400">{lang === "zh" ? "\u7a7a" : "Vacio"}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="grid flex-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                          <div className="rounded-xl bg-slate-50 px-3 py-3">
+                            <div className="text-xs text-slate-500">{text.fields.orderNo}</div>
+                            <div className="mt-1 break-all text-sm text-slate-900">{item.platformOrderNo}</div>
+                          </div>
+                          <div className="rounded-xl bg-slate-50 px-3 py-3">
+                            <div className="text-xs text-slate-500">{text.fields.sku}</div>
+                            <div className="mt-1 break-all text-sm text-slate-900">{item.sku}</div>
+                          </div>
+                          <div className="rounded-xl bg-slate-50 px-3 py-3 md:col-span-2">
+                            <div className="text-xs text-slate-500">{text.fields.productZh}</div>
+                            <div className="mt-1 break-words text-sm text-slate-900">{item.productNameZh || "-"}</div>
+                          </div>
+                          <div className="rounded-xl bg-slate-50 px-3 py-3">
+                            <div className="text-xs text-slate-500">{text.fields.trackingNo}</div>
+                            <div className="mt-1 break-all text-sm text-slate-900">{item.trackingNo || "-"}</div>
+                          </div>
+                          <div className="rounded-xl bg-slate-50 px-3 py-3">
+                            <div className="text-xs text-slate-500">{text.fields.shippedAt}</div>
+                            <div className="mt-1 text-sm text-slate-900">{fmtDateOnly(item.shippedAt, lang)}</div>
+                          </div>
+                          <div className="rounded-xl bg-slate-50 px-3 py-3">
+                            <div className="text-xs text-slate-500">{lang === "zh" ? "\u7ed3\u7b97\u65e5\u671f" : "Fecha liquidacion"}</div>
+                            <div className="mt-1 text-sm text-slate-900">{fmtDateOnly(item.settledAt, lang)}</div>
+                          </div>
+                          <div className="rounded-xl bg-emerald-50 px-3 py-3">
+                            <div className="text-xs text-emerald-700">{lang === "zh" ? "\u5df2\u7ed3\u91d1\u989d" : "Monto liquidado"}</div>
+                            <div className="mt-1 text-sm text-emerald-700">{fmtMoney(item.paidAmount, lang)}</div>
+                          </div>
+                          <div className="rounded-xl bg-slate-50 px-3 py-3">
+                            <div className="text-xs text-slate-500">{text.fields.total}</div>
+                            <div className="mt-1 text-sm text-slate-900">{fmtMoney(item.totalAmount, lang)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
             <div className="flex justify-end border-t border-slate-200 px-5 py-4">

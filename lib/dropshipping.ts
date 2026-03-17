@@ -1070,6 +1070,7 @@ export async function getFinanceRows(session: Session) {
       platformOrderNo: row.platform_order_no,
       sku: row.product.sku,
       productNameZh: row.product.name_zh,
+      productImageUrl: row.product.image_url || buildProductImageUrl(row.product.sku, "jpg"),
       trackingNo: row.tracking_no || "",
       shippedAt: row.shipped_at?.toISOString() || null,
       settledAt: row.settled_at?.toISOString() || null,

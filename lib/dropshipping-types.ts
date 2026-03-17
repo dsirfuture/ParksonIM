@@ -121,6 +121,7 @@ export type DsFinanceOrderItem = {
   platformOrderNo: string;
   sku: string;
   productNameZh: string;
+  productImageUrl: string;
   trackingNo: string;
   shippedAt: string | null;
   settledAt: string | null;
