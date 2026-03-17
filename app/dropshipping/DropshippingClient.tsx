@@ -2601,14 +2601,14 @@ export function DropshippingClient({
       ) : null}
       {financePreview ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-          <div className="w-full max-w-[1180px] overflow-hidden rounded-2xl bg-white shadow-[0_28px_80px_rgba(15,23,42,0.18)]">
+          <div className="w-full max-w-[1280px] overflow-hidden rounded-2xl bg-white shadow-[0_28px_80px_rgba(15,23,42,0.18)]">
             <div className="border-b border-slate-200 bg-white px-6 py-5">
               <h3 className="text-xl font-semibold text-slate-900">
                 {lang === "zh" ? "\u5df2\u7ed3\u7b97\u8be6\u60c5" : "Detalle de liquidaciones"}
               </h3>
               <p className="mt-1 text-sm text-slate-500">{financePreview.customerName}</p>
             </div>
-            <div className="max-h-[72vh] overflow-auto bg-[#f8fafc] px-6 py-6">
+            <div className="max-h-[72vh] overflow-y-auto bg-[#f8fafc] px-6 py-6">
               {financePreview.settledOrders.length === 0 ? (
                 <EmptyState
                   title={lang === "zh" ? "\u6682\u65e0\u5df2\u7ed3\u7b97\u8bb0\u5f55" : "Sin registros liquidados"}
@@ -2616,20 +2616,20 @@ export function DropshippingClient({
                 />
               ) : (
                 <div className="overflow-hidden border border-slate-200 bg-white shadow-sm">
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full table-auto border-collapse">
+                  <div className="overflow-hidden">
+                    <table className="w-full table-fixed border-collapse">
                       <thead className="sticky top-0 z-10">
                         <tr className="border-b border-slate-200 bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                          <th className="whitespace-nowrap px-5 py-3">{lang === "zh" ? "\u5546\u54c1\u56fe" : "Image"}</th>
-                          <th className="whitespace-nowrap px-5 py-3">{text.fields.orderNo}</th>
-                          <th className="whitespace-nowrap px-5 py-3">{text.fields.sku}</th>
-                          <th className="whitespace-nowrap px-5 py-3">{text.fields.productZh}</th>
-                          <th className="whitespace-nowrap px-5 py-3">{text.fields.trackingNo}</th>
-                          <th className="whitespace-nowrap px-5 py-3">{text.fields.shippedAt}</th>
-                          <th className="whitespace-nowrap px-5 py-3">{lang === "zh" ? "\u7ed3\u7b97\u65e5\u671f" : "Settled"}</th>
-                          <th className="whitespace-nowrap px-5 py-3">{lang === "zh" ? "\u72b6\u6001" : "Status"}</th>
-                          <th className="whitespace-nowrap px-5 py-3 text-right">{lang === "zh" ? "\u5df2\u7ed3\u91d1\u989d" : "Paid"}</th>
-                          <th className="whitespace-nowrap px-5 py-3 text-right">{text.fields.total}</th>
+                          <th className="w-[88px] px-4 py-3">{lang === "zh" ? "\u5546\u54c1\u56fe" : "Image"}</th>
+                          <th className="w-[17%] px-4 py-3">{text.fields.orderNo}</th>
+                          <th className="w-[12%] px-4 py-3">{text.fields.sku}</th>
+                          <th className="w-[18%] px-4 py-3">{text.fields.productZh}</th>
+                          <th className="w-[16%] px-4 py-3">{text.fields.trackingNo}</th>
+                          <th className="w-[10%] px-4 py-3">{text.fields.shippedAt}</th>
+                          <th className="w-[10%] px-4 py-3">{lang === "zh" ? "\u7ed3\u7b97\u65e5\u671f" : "Settled"}</th>
+                          <th className="w-[8%] px-4 py-3">{lang === "zh" ? "\u72b6\u6001" : "Status"}</th>
+                          <th className="w-[10%] px-4 py-3 text-right">{lang === "zh" ? "\u5df2\u7ed3\u91d1\u989d (\uffe5)" : "Paid (\uffe5)"}</th>
+                          <th className="w-[10%] px-4 py-3 text-right">{lang === "zh" ? "\u603b\u91d1\u989d (\uffe5)" : "Total (\uffe5)"}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2638,7 +2638,7 @@ export function DropshippingClient({
                             key={item.orderId}
                             className={`border-b border-slate-100 text-[13px] text-slate-700 ${index % 2 === 0 ? "bg-white" : "bg-slate-50/45"}`}
                           >
-                            <td className="whitespace-nowrap px-5 py-4">
+                            <td className="px-4 py-4 align-middle">
                               <div className="flex h-12 w-12 items-center justify-center overflow-hidden border border-slate-200 bg-white">
                                 {item.productImageUrl && !failedFinanceImages.includes(item.orderId) ? (
                                   <button
@@ -2667,19 +2667,19 @@ export function DropshippingClient({
                                 )}
                               </div>
                             </td>
-                            <td className="whitespace-nowrap px-5 py-4 text-slate-900">{item.platformOrderNo}</td>
-                            <td className="whitespace-nowrap px-5 py-4">{item.sku}</td>
-                            <td className="whitespace-nowrap px-5 py-4">{item.productNameZh || "-"}</td>
-                            <td className="whitespace-nowrap px-5 py-4">{item.trackingNo || "-"}</td>
-                            <td className="whitespace-nowrap px-5 py-4">{fmtDateOnly(item.shippedAt, lang)}</td>
-                            <td className="whitespace-nowrap px-5 py-4">{fmtDateOnly(item.settledAt, lang)}</td>
-                            <td className="whitespace-nowrap px-5 py-4">
+                            <td className="break-all px-4 py-4 align-middle text-slate-900">{item.platformOrderNo}</td>
+                            <td className="break-all px-4 py-4 align-middle">{item.sku}</td>
+                            <td className="break-words px-4 py-4 align-middle">{item.productNameZh || "-"}</td>
+                            <td className="break-all px-4 py-4 align-middle">{item.trackingNo || "-"}</td>
+                            <td className="whitespace-nowrap px-4 py-4 align-middle">{fmtDateOnly(item.shippedAt, lang)}</td>
+                            <td className="whitespace-nowrap px-4 py-4 align-middle">{fmtDateOnly(item.settledAt, lang)}</td>
+                            <td className="px-4 py-4 align-middle">
                               <span className="inline-flex h-6 items-center justify-center rounded-full bg-emerald-50 px-3 text-[11px] font-semibold text-emerald-600">
                                 {lang === "zh" ? "\u5df2\u7ed3" : "Paid"}
                               </span>
                             </td>
-                            <td className="whitespace-nowrap px-5 py-4 text-right font-semibold text-emerald-600">{fmtMoney(item.paidAmount, lang)}</td>
-                            <td className="whitespace-nowrap px-5 py-4 text-right text-slate-900">{fmtMoney(item.totalAmount, lang)}</td>
+                            <td className="whitespace-nowrap px-4 py-4 text-right font-semibold text-emerald-600 align-middle">{`\uffe5${fmtMoney(item.paidAmount, lang)}`}</td>
+                            <td className="whitespace-nowrap px-4 py-4 text-right text-slate-900 align-middle">{`\uffe5${fmtMoney(item.totalAmount, lang)}`}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -2688,10 +2688,10 @@ export function DropshippingClient({
                   <div className="flex items-center justify-between border-t border-slate-200 bg-white px-5 py-3 text-xs text-slate-400">
                     <span>
                       {lang === "zh"
-                        ? `1 - ${financePreview.settledOrders.length} / ${financePreview.settledOrders.length}`
-                        : `1 - ${financePreview.settledOrders.length} / ${financePreview.settledOrders.length}`}
+                        ? `\u5171 ${financePreview.settledOrders.length} \u6761\u5df2\u7ed3\u7b97\u8bb0\u5f55`
+                        : `${financePreview.settledOrders.length} settled records`}
                     </span>
-                    <div className="flex items-center gap-2">
+                    <div className="hidden items-center gap-2">
                       <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white">‹</span>
                       <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-fuchsia-500 px-2 text-white">1</span>
                       <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white">›</span>
