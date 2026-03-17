@@ -272,7 +272,7 @@ async function ensureProduct(
       where: {
         tenant_id: session.tenantId,
         company_id: session.companyId,
-        sku: normalizedSku,
+        sku: { equals: normalizedSku, mode: "insensitive" as const },
       },
       select: {
         name_zh: true,
