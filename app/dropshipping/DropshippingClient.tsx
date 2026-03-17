@@ -102,6 +102,25 @@ const PLATFORM_OPTIONS = [
   "Temu",
 ] as const;
 
+const SHIPPING_FEE_OPTIONS = ["6", "8", "10", "12"] as const;
+
+function getShippingStatusLabel(status: OrderFormState["shippingStatus"], lang: "zh" | "es") {
+  if (lang === "zh") {
+    if (status === "shipped") return "已发";
+    if (status === "cancelled") return "已取消";
+    return "未发";
+  }
+  if (status === "shipped") return "Enviado";
+  if (status === "cancelled") return "Cancelado";
+  return "Pendiente";
+}
+
+function getShippingStatusClass(status: OrderFormState["shippingStatus"]) {
+  if (status === "shipped") return "bg-emerald-50 text-emerald-700";
+  if (status === "cancelled") return "bg-rose-50 text-rose-700";
+  return "bg-slate-100 text-slate-900";
+}
+
 function fmtDate(value: string | null | undefined, lang: "zh" | "es") {
   if (!value) return "-";
   return new Intl.DateTimeFormat(lang === "zh" ? "zh-CN" : "es-MX", {
@@ -434,6 +453,19 @@ export function DropshippingClient({
     }
     return [current, ...PLATFORM_OPTIONS];
   }, [form.platform]);
+
+  const shippingFeeOptions = useMemo(() => {
+    const current = form.shippingFee.trim();
+    if (!current || SHIPPING_FEE_OPTIONS.includes(current as (typeof SHIPPING_FEE_OPTIONS)[number])) {
+      return [...SHIPPING_FEE_OPTIONS];
+    }
+    return [current, ...SHIPPING_FEE_OPTIONS];
+  }, [form.shippingFee]);
+
+  const shippingStatusOptions: OrderFormState["shippingStatus"][] = useMemo(() => {
+    const base: OrderFormState["shippingStatus"][] = ["pending", "shipped"];
+    return form.shippingStatus === "cancelled" ? ["pending", "shipped", "cancelled"] : base;
+  }, [form.shippingStatus]);
 
   function openCreateModal() {
     setForm(EMPTY_ORDER_FORM);
@@ -822,8 +854,8 @@ export function DropshippingClient({
                         )}
                       </td>
                       <td className="px-3 py-2">
-                        <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
-                          {text.status[row.shippingStatus]}
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${getShippingStatusClass(row.shippingStatus)}`}>
+                          {getShippingStatusLabel(row.shippingStatus, lang)}
                         </span>
                       </td>
                       <td className="px-3 py-2">
@@ -1022,12 +1054,11 @@ export function DropshippingClient({
                 ["color", text.form.color],
                 ["warehouse", text.form.warehouse],
                 ["shippedAt", text.form.shippedAt],
-                ["shippingFee", text.form.shippingFee],
               ] as Array<[keyof OrderFormState, string]>).map(([key, label]) => (
                 <label key={key} className="space-y-1">
                   <span className="text-xs text-slate-500">{label}</span>
                   <input
-                    type={key === "shippedAt" ? "date" : key === "quantity" || key === "shippingFee" ? "number" : "text"}
+                    type={key === "shippedAt" ? "date" : key === "quantity" ? "number" : "text"}
                     value={form[key]}
                     onChange={(event) => setForm((prev) => ({ ...prev, [key]: event.target.value }))}
                     className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
@@ -1058,9 +1089,27 @@ export function DropshippingClient({
                   onChange={(event) => setForm((prev) => ({ ...prev, shippingStatus: event.target.value as OrderFormState["shippingStatus"] }))}
                   className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
                 >
-                  <option value="pending">{text.status.pending}</option>
-                  <option value="shipped">{text.status.shipped}</option>
-                  <option value="cancelled">{text.status.cancelled}</option>
+                  {shippingStatusOptions.map((status: OrderFormState["shippingStatus"]) => (
+                    <option key={status} value={status}>
+                      {getShippingStatusLabel(status, lang)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-1">
+                <span className="text-xs text-slate-500">{text.form.shippingFee}</span>
+                <select
+                  value={form.shippingFee}
+                  onChange={(event) => setForm((prev) => ({ ...prev, shippingFee: event.target.value }))}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                >
+                  <option value="">{lang === "zh" ? "请选择代发费" : "Selecciona cargo"}</option>
+                  {shippingFeeOptions.map((fee) => (
+                    <option key={fee} value={fee}>
+                      {fee}
+                    </option>
+                  ))}
                 </select>
               </label>
 
