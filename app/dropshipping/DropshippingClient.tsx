@@ -1144,27 +1144,29 @@ export function DropshippingClient({
                         })()}
                       </td>
                       <td className="px-3 py-2">
-                        {row.shippingLabelAttachments[0]?.fileUrl ? (
-                          <a
-                            href={row.shippingLabelAttachments[0].fileUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 hover:bg-slate-50"
-                          >
-                            PDF
-                          </a>
-                        ) : isDirectFileLink(row.shippingLabelFile) ? (
-                          <a
-                            href={row.shippingLabelFile}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 hover:bg-slate-50"
-                          >
-                            PDF
-                          </a>
-                        ) : (
-                          <span className="text-slate-400">{lang === "zh" ? "空" : "Vacio"}</span>
-                        )}
+                        <div className="flex min-h-10 items-center justify-center">
+                          {row.shippingLabelAttachments[0]?.fileUrl ? (
+                            <a
+                              href={row.shippingLabelAttachments[0].fileUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 hover:bg-slate-50"
+                            >
+                              PDF
+                            </a>
+                          ) : isDirectFileLink(row.shippingLabelFile) ? (
+                            <a
+                              href={row.shippingLabelFile}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 hover:bg-slate-50"
+                            >
+                              PDF
+                            </a>
+                          ) : (
+                            <span className="text-slate-400">{lang === "zh" ? "?" : "Vacio"}</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-2">
                         <span className={`inline-flex rounded-full px-2 py-0.5 text-xs ${getShippingStatusClass(row.shippingStatus)}`}>
