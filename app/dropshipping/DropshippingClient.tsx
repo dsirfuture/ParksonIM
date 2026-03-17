@@ -1409,21 +1409,27 @@ export function DropshippingClient({
                     </tr>
                     {meta?.showTracking && meta.count > 1 && isExpanded && groupedItems.length > 0 ? (
                       <tr className="border-t border-slate-100 bg-slate-50/70">
-                        <td colSpan={15} className="px-3 py-2.5">
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-                            {groupedItems.map((item) => (
-                              <div key={item.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-white px-2.5 py-1">
-                                <span>{item.sku}</span>
-                                <span>/</span>
-                                <span>{item.productNameZh || "-"}</span>
-                                <span>/</span>
-                                <span>{lang === "zh" ? "\u6570\u91cf" : "Cant."} {item.quantity}</span>
-                                <span>/</span>
-                                <span>{fmtDateOnly(item.shippedAt, lang)}</span>
-                                <span>/</span>
-                                <span>{getShippingStatusLabel(item.shippingStatus, lang)}</span>
-                              </div>
-                            ))}
+                        <td className="px-3 py-2.5" />
+                        <td className="px-3 py-2.5" />
+                        <td colSpan={13} className="px-3 py-2.5">
+                          <div className="relative pl-6">
+                            <span className="absolute left-0 top-[-10px] h-5 w-px bg-slate-300" />
+                            <span className="absolute left-0 top-2 h-px w-4 bg-slate-300" />
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                              {groupedItems.map((item) => (
+                                <div key={item.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-white px-2.5 py-1">
+                                  <span>{item.sku}</span>
+                                  <span>/</span>
+                                  <span>{item.productNameZh || "-"}</span>
+                                  <span>/</span>
+                                  <span>{lang === "zh" ? "\u6570\u91cf" : "Cant."} {item.quantity}</span>
+                                  <span>/</span>
+                                  <span>{fmtDateOnly(item.shippedAt, lang)}</span>
+                                  <span>/</span>
+                                  <span>{getShippingStatusLabel(item.shippingStatus, lang)}</span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         </td>
                       </tr>
