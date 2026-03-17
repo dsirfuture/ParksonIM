@@ -969,6 +969,8 @@ export async function listOrders(session: Session) {
       sku: true,
       name_zh: true,
       name_es: true,
+      price: true,
+      normal_discount: true,
     },
   });
   const attachments = await orderAttachmentStore.dropshippingOrderAttachment.findMany({
@@ -1108,6 +1110,8 @@ export async function getInventoryRows(session: Session) {
       sku: true,
       name_zh: true,
       name_es: true,
+      price: true,
+      normal_discount: true,
     },
   });
 
@@ -1157,10 +1161,10 @@ export async function getInventoryRows(session: Session) {
   return inventories.map((row): DsInventoryRow => {
     const shippedQty = shippedMap.get(`${row.customer_id}::${row.product_id}`) || 0;
     const remainingQty = row.stocked_qty - shippedQty;
-    const unitPrice = toNumber(row.locked_unit_price ?? row.product.unit_price);
-    const discountRate = toNumber(row.locked_discount_rate ?? row.product.discount_rate);
     const normalizedSku = row.product.sku.trim().toUpperCase();
     const catalog = catalogBySku.get(normalizedSku);
+    const unitPrice = toNumber(catalog?.price ?? row.locked_unit_price ?? row.product.unit_price);
+    const discountRate = toNumber(catalog?.normal_discount ?? row.locked_discount_rate ?? row.product.discount_rate);
     return {
       inventoryId: row.id,
       customerId: row.customer_id,
