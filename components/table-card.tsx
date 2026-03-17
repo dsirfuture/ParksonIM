@@ -3,7 +3,9 @@ import type { ReactNode } from "react";
 type TableCardProps = {
   title: string;
   description?: string;
+  hideDescription?: boolean;
   titleRight?: ReactNode;
+  unusedTitleRight?: ReactNode;
   right?: ReactNode;
   children: ReactNode;
   className?: string;
@@ -12,6 +14,7 @@ type TableCardProps = {
 export function TableCard({
   title,
   description,
+  hideDescription = false,
   titleRight,
   right,
   children,
@@ -32,7 +35,7 @@ export function TableCard({
                   {title}
                 </h2>
                 {titleRight ? <div className="shrink-0">{titleRight}</div> : null}
-                {description ? (
+                {!hideDescription && description ? (
                   <p className="min-w-0 text-sm leading-6 text-slate-500 lg:pb-[1px]">
                     {description}
                   </p>

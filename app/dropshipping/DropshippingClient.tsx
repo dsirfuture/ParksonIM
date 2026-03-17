@@ -186,6 +186,7 @@ export function DropshippingClient({
   const [finance, setFinance] = useState(initialFinance);
   const [exchangeRate, setExchangeRate] = useState(initialExchangeRate);
   const [keyword, setKeyword] = useState("");
+  const [customerFilter, setCustomerFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "shipped" | "cancelled">("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<OrderFormState>(EMPTY_ORDER_FORM);
@@ -434,9 +435,14 @@ export function DropshippingClient({
     }
   }
 
+  const customerOptions = useMemo(() => {
+    return [...new Set(orders.map((row) => row.customerName.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh"));
+  }, [orders]);
+
   const filteredOrders = useMemo(() => {
     const normalized = keyword.trim().toLowerCase();
     return orders.filter((row) => {
+      const customerHit = customerFilter === "all" || row.customerName === customerFilter;
       const hit =
         !normalized ||
         [
@@ -451,9 +457,9 @@ export function DropshippingClient({
           .toLowerCase()
           .includes(normalized);
       const statusHit = statusFilter === "all" || row.shippingStatus === statusFilter;
-      return hit && statusHit;
+      return customerHit && hit && statusHit;
     });
-  }, [keyword, orders, statusFilter]);
+  }, [customerFilter, keyword, orders, statusFilter]);
 
   const platformOptions = useMemo(() => {
     const current = form.platform.trim();
@@ -493,6 +499,48 @@ export function DropshippingClient({
       && row.sku.trim().toLowerCase() === inventoryPreview.sku.trim().toLowerCase(),
     ).length;
   }, [inventoryPreview, orders]);
+
+  const orderTableCardProps = {
+    description: undefined,
+    titleRight: (
+      <div className="flex items-center gap-2">
+        <select
+          value={customerFilter}
+          onChange={(event) => setCustomerFilter(event.target.value)}
+          className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+        >
+          <option value="all">{lang === "zh" ? "全部客户" : "Todos los clientes"}</option>
+          {customerOptions.map((customer) => (
+            <option key={customer} value={customer}>
+              {customer}
+            </option>
+          ))}
+        </select>
+      </div>
+    ),
+    right: (
+      <div className="flex w-full justify-end lg:w-auto">
+        <div className="relative w-full max-w-[420px]">
+          <input
+            value={keyword}
+            onChange={(event) => setKeyword(event.target.value)}
+            placeholder={lang === "zh" ? "搜索平台 / 订单号 / 编码" : "Buscar plataforma / pedido / codigo"}
+            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 pr-[130px] text-sm text-slate-700"
+          />
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
+            className="absolute right-1 top-1 h-8 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700"
+          >
+            <option value="all">{lang === "zh" ? "全部状态" : "Todos"}</option>
+            <option value="pending">{getShippingStatusLabel("pending", lang)}</option>
+            <option value="shipped">{getShippingStatusLabel("shipped", lang)}</option>
+            <option value="cancelled">{getShippingStatusLabel("cancelled", lang)}</option>
+          </select>
+        </div>
+      </div>
+    ),
+  };
 
   function openCreateModal() {
     setForm(EMPTY_ORDER_FORM);
@@ -799,7 +847,7 @@ export function DropshippingClient({
         <TableCard
           title={text.sections.orders}
           description={lang === "zh" ? "支持快速录单、状态切换和异常提示。" : "Alta rapida, estado y alertas basicas."}
-          titleRight={
+          unusedTitleRight={
             <div className="flex flex-wrap items-center gap-2">
               <input
                 value={keyword}
@@ -817,6 +865,45 @@ export function DropshippingClient({
                 <option value="shipped">{text.status.shipped}</option>
                 <option value="cancelled">{text.status.cancelled}</option>
               </select>
+            </div>
+          }
+          hideDescription
+          titleRight={
+            <div className="flex items-center gap-2">
+              <select
+                value={customerFilter}
+                onChange={(event) => setCustomerFilter(event.target.value)}
+                className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+              >
+                <option value="all">{lang === "zh" ? "全部客户" : "Todos los clientes"}</option>
+                {customerOptions.map((customer) => (
+                  <option key={customer} value={customer}>
+                    {customer}
+                  </option>
+                ))}
+              </select>
+            </div>
+          }
+          right={
+            <div className="flex w-full justify-end lg:w-auto">
+              <div className="relative w-full max-w-[420px]">
+                <input
+                  value={keyword}
+                  onChange={(event) => setKeyword(event.target.value)}
+                  placeholder={lang === "zh" ? "搜索平台 / 订单号 / 编码" : "Buscar plataforma / pedido / codigo"}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 pr-[130px] text-sm text-slate-700"
+                />
+                <select
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
+                  className="absolute right-1 top-1 h-8 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                >
+                  <option value="all">{lang === "zh" ? "全部状态" : "Todos"}</option>
+                  <option value="pending">{getShippingStatusLabel("pending", lang)}</option>
+                  <option value="shipped">{getShippingStatusLabel("shipped", lang)}</option>
+                  <option value="cancelled">{getShippingStatusLabel("cancelled", lang)}</option>
+                </select>
+              </div>
             </div>
           }
         >
