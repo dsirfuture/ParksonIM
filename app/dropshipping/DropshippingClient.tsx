@@ -2780,14 +2780,14 @@ export function DropshippingClient({
       ) : null}
 
       {modalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-          <div className="flex max-h-[88vh] w-full max-w-[980px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-3 py-3">
+          <div className="flex max-h-[calc(100vh-24px)] w-[min(940px,calc(100vw-24px))] flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
             <div className="border-b border-slate-200 px-5 py-4">
               <h3 className="text-base font-semibold text-slate-900">
                 {form.id ? text.form.edit : text.form.create}
               </h3>
             </div>
-            <div className="overflow-y-auto px-5 py-5">
+            <div className="overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-5">
               <div className="grid gap-4 md:grid-cols-6">
               {false && ([
                 ["customerName", text.form.customer, "md:col-span-1 xl:col-span-4 xl:order-1"],
@@ -2895,25 +2895,11 @@ export function DropshippingClient({
 
               {sameTrackingOrders.length > 1 ? (
                 <div className="md:col-span-6 md:order-0 xl:col-span-12 xl:order-0">
-                  <div className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <div className="text-xs text-slate-500">
-                          {lang === "zh" ? "同物流号商品" : "Productos con la misma guia"}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={openCreateModalWithTrackingSeed}
-                        className="inline-flex h-9 items-center gap-2 rounded-xl border border-primary/20 bg-white px-3 text-xs text-primary transition hover:border-primary/35 hover:bg-primary/5"
-                        title={lang === "zh" ? "新增同物流号商品" : "Agregar producto con la misma guia"}
-                        aria-label={lang === "zh" ? "新增同物流号商品" : "Agregar producto con la misma guia"}
-                      >
-                        <PlusBadge />
-                        <span>{lang === "zh" ? "新增同物流号商品" : "Agregar producto"}</span>
-                      </button>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-3">
+                    <div className="text-xs text-slate-500">
+                      {lang === "zh" ? "同物流号商品" : "Productos con la misma guia"}
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
+                    <div className="mt-2 flex flex-wrap gap-2">
                       {sameTrackingOrders.map((item) => (
                         <button
                           key={item.id}
@@ -2933,7 +2919,7 @@ export function DropshippingClient({
                                 className="h-full w-full object-cover"
                               />
                             ) : (
-                              <span className="text-[10px] text-slate-400">{lang === "zh" ? "\u7a7a" : "Vacio"}</span>
+                              <span className="text-[10px] text-slate-400">{lang === "zh" ? "空" : "Vacio"}</span>
                             )}
                           </span>
                           <span className="min-w-0">
@@ -2947,6 +2933,16 @@ export function DropshippingClient({
                         </button>
                       ))}
                     </div>
+                    <button
+                      type="button"
+                      onClick={openCreateModalWithTrackingSeed}
+                      className="mt-2 inline-flex h-9 w-fit items-center gap-2 rounded-xl border border-primary/20 bg-white px-3 text-xs text-primary transition hover:border-primary/35 hover:bg-primary/5"
+                      title={lang === "zh" ? "新增同物流号商品" : "Agregar producto con la misma guia"}
+                      aria-label={lang === "zh" ? "新增同物流号商品" : "Agregar producto con la misma guia"}
+                    >
+                      <PlusBadge />
+                      <span>{lang === "zh" ? "新增同物流号商品" : "Agregar producto"}</span>
+                    </button>
                   </div>
                 </div>
               ) : null}
