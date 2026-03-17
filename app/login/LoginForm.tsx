@@ -1,5 +1,6 @@
 "use client";
 
+import { Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -10,6 +11,7 @@ export function LoginForm({ lang }: { lang: Lang }) {
   const router = useRouter();
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -25,6 +27,10 @@ export function LoginForm({ lang }: { lang: Lang }) {
             submit: "登录",
             loading: "登录中",
             register: "注册新账号",
+            loginFailed: "登录失败",
+            loginUnavailable: "当前未能完成登录，请稍后再试",
+            showPassword: "显示密码",
+            hidePassword: "隐藏密码",
           }
         : {
             title: "Acceder a ParksonIM",
@@ -35,6 +41,10 @@ export function LoginForm({ lang }: { lang: Lang }) {
             submit: "Entrar",
             loading: "Ingresando",
             register: "Crear cuenta",
+            loginFailed: "Acceso fallido",
+            loginUnavailable: "Por ahora no fue posible iniciar sesión",
+            showPassword: "Mostrar contraseña",
+            hidePassword: "Ocultar contraseña",
           },
     [lang],
   );
@@ -55,18 +65,19 @@ export function LoginForm({ lang }: { lang: Lang }) {
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        setError(data.error || (lang === "zh" ? "登录失败" : "Acceso fallido"));
+        setError(data.error || text.loginFailed);
+
+        if (process.env.NODE_ENV !== "production" && data?.details) {
+          console.error("[login] api details:", data.details);
+        }
         return;
       }
 
       router.push("/dashboard");
       router.refresh();
-    } catch {
-      setError(
-        lang === "zh"
-          ? "当前未能完成登录 请稍后再试"
-          : "Por ahora no fue posible iniciar sesión",
-      );
+    } catch (caughtError) {
+      console.error("[login] request failed:", caughtError);
+      setError(text.loginUnavailable);
     } finally {
       setLoading(false);
     }
@@ -96,13 +107,27 @@ export function LoginForm({ lang }: { lang: Lang }) {
           <label className="mb-1.5 block text-sm font-medium text-slate-700">
             {text.password}
           </label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder={text.passwordPlaceholder}
-            className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-sm outline-none transition focus:border-primary focus:bg-white"
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={text.passwordPlaceholder}
+              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 pr-11 text-sm outline-none transition focus:border-primary focus:bg-white"
+            />
+            <button
+              type="button"
+              aria-label={showPassword ? text.hidePassword : text.showPassword}
+              onClick={() => setShowPassword((value) => !value)}
+              className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center text-slate-400 transition hover:text-slate-600"
+            >
+              {showPassword ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+            </button>
+          </div>
         </div>
 
         {error ? (

@@ -5,7 +5,26 @@ import {
   SESSION_COOKIE_NAME,
   verifyPassword,
 } from "@/lib/auth";
+import { withPrismaRetry } from "@/lib/prisma-retry";
 import { normalizePhone } from "@/lib/user-account";
+
+function getLoginErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  const lowered = message.toLowerCase();
+
+  if (
+    lowered.includes("exceeded the data transfer quota") ||
+    lowered.includes("can't reach database server") ||
+    lowered.includes("connectorerror") ||
+    lowered.includes("database") ||
+    lowered.includes("p1001") ||
+    lowered.includes("p1017")
+  ) {
+    return "登录服务暂时不可用，请稍后再试";
+  }
+
+  return "当前未能完成登录，请稍后再试";
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,26 +41,28 @@ export async function POST(req: NextRequest) {
 
     const phone = normalizePhone(account);
 
-    const user = await prisma.user.findFirst({
-      where: {
-        active: true,
-        OR: [
-          { user_id: account },
-          { name: account },
-          { phone: phone || "__invalid__" },
-        ],
-      },
-      select: {
-        id: true,
-        role: true,
-        tenant_id: true,
-        company_id: true,
-        password_hash: true,
-      },
-      orderBy: {
-        created_at: "asc",
-      },
-    });
+    const user = await withPrismaRetry(() =>
+      prisma.user.findFirst({
+        where: {
+          active: true,
+          OR: [
+            { user_id: account },
+            { name: account },
+            { phone: phone || "__invalid__" },
+          ],
+        },
+        select: {
+          id: true,
+          role: true,
+          tenant_id: true,
+          company_id: true,
+          password_hash: true,
+        },
+        orderBy: {
+          created_at: "asc",
+        },
+      }),
+    );
 
     if (!user || !verifyPassword(password, user.password_hash)) {
       return NextResponse.json(
@@ -69,10 +90,18 @@ export async function POST(req: NextRequest) {
     );
 
     return response;
-  } catch {
-    return NextResponse.json(
-      { success: false, error: "当前未能完成登录 请稍后再试" },
-      { status: 500 },
-    );
+  } catch (error) {
+    console.error("[auth/login] login failed:", error);
+
+    const payload: { success: false; error: string; details?: string } = {
+      success: false,
+      error: getLoginErrorMessage(error),
+    };
+
+    if (process.env.NODE_ENV !== "production") {
+      payload.details = error instanceof Error ? error.message : String(error);
+    }
+
+    return NextResponse.json(payload, { status: 500 });
   }
 }
