@@ -95,15 +95,17 @@ const EMPTY_ORDER_FORM: OrderFormState = {
   quantity: "1",
   trackingNo: "",
   color: "",
-  warehouse: "",
+  warehouse: "???-???",
   shippedAt: "",
   shippingFee: "",
   shippingStatus: "pending",
   notes: "",
 };
 
+const FIXED_WAREHOUSE = "???-???";
+
 const PLATFORM_OPTIONS = [
-  "无",
+  "?",
   "Mercado Libre",
   "Amazon",
   "Shopee",
@@ -619,9 +621,8 @@ export function DropshippingClient({
     () => shouldShowSaturdaySettlementReminder(now),
     [now],
   );
-
   function openCreateModal() {
-    setForm(EMPTY_ORDER_FORM);
+    setForm({ ...EMPTY_ORDER_FORM, warehouse: FIXED_WAREHOUSE });
     setProductFieldsLocked(false);
     setModalOpen(true);
   }
@@ -638,7 +639,7 @@ export function DropshippingClient({
       quantity: String(order.quantity),
       trackingNo: order.trackingNo,
       color: order.color,
-      warehouse: order.warehouse,
+      warehouse: order.warehouse || FIXED_WAREHOUSE,
       shippedAt: order.shippedAt ? order.shippedAt.slice(0, 10) : "",
       shippingFee: order.shippingFee ? String(order.shippingFee) : "",
       shippingStatus: order.shippingStatus,
@@ -667,7 +668,7 @@ export function DropshippingClient({
           quantity: Number(form.quantity || 0),
           trackingNo: form.trackingNo,
           color: form.color,
-          warehouse: form.warehouse,
+          warehouse: FIXED_WAREHOUSE,
           shippedAt: form.shippedAt || null,
           shippingFee: form.shippingFee || null,
           shippingStatus: form.shippingStatus,
@@ -1313,7 +1314,7 @@ export function DropshippingClient({
                     type={key === "shippedAt" ? "date" : key === "quantity" ? "number" : "text"}
                     value={form[key]}
                     onChange={(event) => setForm((prev) => ({ ...prev, [key]: event.target.value }))}
-                    disabled={productFieldsLocked && (key === "sku" || key === "productNameZh" || key === "productNameEs")}
+                    disabled={key === "warehouse" || (productFieldsLocked && (key === "sku" || key === "productNameZh" || key === "productNameEs"))}
                     className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                   />
                 </label>

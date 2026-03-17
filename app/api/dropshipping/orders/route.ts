@@ -3,6 +3,8 @@ import { listOrders, saveOrder } from "@/lib/dropshipping";
 import { hasPermission } from "@/lib/permissions";
 import { getSession } from "@/lib/tenant";
 
+const FIXED_WAREHOUSE = "墨西哥-百盛仓";
+
 export async function GET() {
   try {
     const session = await getSession();
@@ -51,7 +53,7 @@ export async function POST(request: Request) {
       quantity,
       trackingNo: String(body.trackingNo || "").trim() || undefined,
       color: String(body.color || "").trim() || undefined,
-      warehouse: String(body.warehouse || "").trim() || undefined,
+      warehouse: FIXED_WAREHOUSE,
       shippedAt: body.shippedAt ? String(body.shippedAt) : null,
       shippingFee: body.shippingFee === "" || body.shippingFee === null || body.shippingFee === undefined ? undefined : Number(body.shippingFee),
       shippingStatus: String(body.shippingStatus || "pending") as "pending" | "shipped" | "cancelled",
