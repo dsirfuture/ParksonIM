@@ -1010,6 +1010,7 @@ export function DropshippingClient({
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.sku}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">{text.fields.quantity}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.color}</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{lang === "zh" ? "结算" : "Liquidacion"}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">{text.fields.shippingFee}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.productImage}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.productZh}</th>
@@ -1118,6 +1119,15 @@ export function DropshippingClient({
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">{row.quantity}</td>
                       <td className="px-3 py-2">{row.color || "-"}</td>
+                      <td className={`px-3 py-2 ${row.settlementStatus === "paid" ? "text-emerald-600" : "text-rose-600"}`}>
+                        {row.settlementStatus === "paid"
+                          ? lang === "zh"
+                            ? "已结"
+                            : "Liquidado"
+                          : lang === "zh"
+                            ? "未结"
+                            : "Pendiente"}
+                      </td>
                       <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(row.shippingFee, lang)}</td>
                       <td className="px-3 py-2">
                         {row.productImageUrl ? (

@@ -851,6 +851,10 @@ export async function listOrders(session: Session) {
       customerId: row.customer_id,
       customerName: row.customer.name,
       productId: row.product_id,
+      settlementStatus:
+        row.settled_at || toNumber(row.snapshot_unpaid_amount) <= 0
+          ? "paid"
+          : "unpaid",
       catalogMatched: Boolean(catalog),
       sku: row.product.sku,
       productNameZh: catalog?.name_zh?.trim() || row.product.name_zh,
