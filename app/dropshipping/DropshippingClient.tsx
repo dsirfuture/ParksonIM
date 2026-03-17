@@ -2569,110 +2569,106 @@ export function DropshippingClient({
       ) : null}
       {financePreview ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-          <div className="w-full max-w-[920px] rounded-xl bg-white shadow-2xl">
-            <div className="border-b border-slate-200 px-5 py-4">
-              <h3 className="text-base font-semibold text-slate-900">
+          <div className="w-full max-w-[1180px] overflow-hidden rounded-2xl bg-white shadow-[0_28px_80px_rgba(15,23,42,0.18)]">
+            <div className="border-b border-slate-200 bg-white px-6 py-5">
+              <h3 className="text-xl font-semibold text-slate-900">
                 {lang === "zh" ? "\u5df2\u7ed3\u7b97\u8be6\u60c5" : "Detalle de liquidaciones"}
               </h3>
-              <p className="mt-1 text-xs text-slate-500">{financePreview.customerName}</p>
+              <p className="mt-1 text-sm text-slate-500">{financePreview.customerName}</p>
             </div>
-            <div className="max-h-[70vh] overflow-auto px-5 py-5">
+            <div className="max-h-[72vh] overflow-auto bg-[#f8fafc] px-6 py-6">
               {financePreview.settledOrders.length === 0 ? (
                 <EmptyState
                   title={lang === "zh" ? "\u6682\u65e0\u5df2\u7ed3\u7b97\u8bb0\u5f55" : "Sin registros liquidados"}
                   description={lang === "zh" ? "\u5f53\u524d\u5ba2\u6237\u8fd8\u6ca1\u6709\u5df2\u7ed3\u7b97\u7684\u8ba2\u5355\u3002" : "Este cliente aun no tiene pedidos liquidados."}
                 />
               ) : (
-                <div className="border border-slate-200 bg-white">
-                  <div>
-                    <div className="hidden items-center gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-700 lg:grid lg:grid-cols-[72px_minmax(140px,1.2fr)_minmax(110px,0.9fr)_minmax(140px,1fr)_minmax(150px,1fr)_110px_110px_120px_110px]">
-                      <div className="whitespace-nowrap">{lang === "zh" ? "\u5546\u54c1\u56fe" : "Imagen"}</div>
-                      <div className="whitespace-nowrap">{text.fields.orderNo}</div>
-                      <div className="whitespace-nowrap">{text.fields.sku}</div>
-                      <div className="whitespace-nowrap">{text.fields.productZh}</div>
-                      <div className="whitespace-nowrap">{text.fields.trackingNo}</div>
-                      <div className="whitespace-nowrap">{text.fields.shippedAt}</div>
-                      <div className="whitespace-nowrap">{lang === "zh" ? "\u7ed3\u7b97\u65e5\u671f" : "Fecha liquidacion"}</div>
-                      <div className="whitespace-nowrap">{lang === "zh" ? "\u5df2\u7ed3\u91d1\u989d" : "Monto liquidado"}</div>
-                      <div className="whitespace-nowrap">{text.fields.total}</div>
-                    </div>
-                    <div className="divide-y divide-slate-200">
-                    {financePreview.settledOrders.map((item) => (
-                      <div
-                        key={item.orderId}
-                        className="px-4 py-4 lg:grid lg:grid-cols-[72px_minmax(140px,1.2fr)_minmax(110px,0.9fr)_minmax(140px,1fr)_minmax(150px,1fr)_110px_110px_120px_110px] lg:items-center lg:gap-4"
-                      >
-                        <div className="mb-4 flex justify-center lg:mb-0">
-                          <div className="flex h-16 w-16 items-center justify-center overflow-hidden border border-slate-200 bg-slate-50">
-                            {item.productImageUrl && !failedFinanceImages.includes(item.orderId) ? (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setPreviewImage({
-                                    src: item.productImageUrl,
-                                    title: `${item.sku} / ${item.productNameZh || "-"}`,
-                                  })
-                                }
-                                className="h-full w-full"
-                              >
-                                <img
-                                  src={item.productImageUrl}
-                                  alt={item.productNameZh || item.sku}
-                                  className="h-full w-full object-cover"
-                                  onError={() =>
-                                    setFailedFinanceImages((prev) =>
-                                      prev.includes(item.orderId) ? prev : [...prev, item.orderId],
-                                    )
-                                  }
-                                />
-                              </button>
-                            ) : (
-                              <span className="text-sm text-slate-400">{lang === "zh" ? "\u7a7a" : "Vacio"}</span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="grid gap-3 text-sm lg:contents">
-                          <div>
-                            <div className="text-xs text-slate-500 lg:hidden">{text.fields.orderNo}</div>
-                            <div className="break-all text-[13px] text-slate-900">{item.platformOrderNo}</div>
-                          </div>
-                          <div>
-                            <div className="text-xs text-slate-500 lg:hidden">{text.fields.sku}</div>
-                            <div className="break-all text-[13px] text-slate-900">{item.sku}</div>
-                          </div>
-                          <div>
-                            <div className="text-xs text-slate-500 lg:hidden">{text.fields.productZh}</div>
-                            <div className="break-words text-[13px] text-slate-900">{item.productNameZh || "-"}</div>
-                          </div>
-                          <div>
-                            <div className="text-xs text-slate-500 lg:hidden">{text.fields.trackingNo}</div>
-                            <div className="break-all text-[13px] text-slate-900">{item.trackingNo || "-"}</div>
-                          </div>
-                          <div>
-                            <div className="text-xs text-slate-500 lg:hidden">{text.fields.shippedAt}</div>
-                            <div className="whitespace-nowrap text-[13px] text-slate-900">{fmtDateOnly(item.shippedAt, lang)}</div>
-                          </div>
-                          <div>
-                            <div className="text-xs text-slate-500 lg:hidden">{lang === "zh" ? "\u7ed3\u7b97\u65e5\u671f" : "Fecha liquidacion"}</div>
-                            <div className="whitespace-nowrap text-[13px] text-slate-900">{fmtDateOnly(item.settledAt, lang)}</div>
-                          </div>
-                          <div>
-                            <div className="text-xs text-slate-500 lg:hidden">{lang === "zh" ? "\u5df2\u7ed3\u91d1\u989d" : "Monto liquidado"}</div>
-                            <div className="whitespace-nowrap text-[13px] text-emerald-700">{fmtMoney(item.paidAmount, lang)}</div>
-                          </div>
-                          <div>
-                            <div className="text-xs text-slate-500 lg:hidden">{text.fields.total}</div>
-                            <div className="whitespace-nowrap text-[13px] text-slate-900">{fmtMoney(item.totalAmount, lang)}</div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                <div className="overflow-hidden border border-slate-200 bg-white shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full table-auto border-collapse">
+                      <thead className="sticky top-0 z-10">
+                        <tr className="border-b border-slate-200 bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                          <th className="whitespace-nowrap px-5 py-3">{lang === "zh" ? "\u5546\u54c1\u56fe" : "Image"}</th>
+                          <th className="whitespace-nowrap px-5 py-3">{text.fields.orderNo}</th>
+                          <th className="whitespace-nowrap px-5 py-3">{text.fields.sku}</th>
+                          <th className="whitespace-nowrap px-5 py-3">{text.fields.productZh}</th>
+                          <th className="whitespace-nowrap px-5 py-3">{text.fields.trackingNo}</th>
+                          <th className="whitespace-nowrap px-5 py-3">{text.fields.shippedAt}</th>
+                          <th className="whitespace-nowrap px-5 py-3">{lang === "zh" ? "\u7ed3\u7b97\u65e5\u671f" : "Settled"}</th>
+                          <th className="whitespace-nowrap px-5 py-3">{lang === "zh" ? "\u72b6\u6001" : "Status"}</th>
+                          <th className="whitespace-nowrap px-5 py-3 text-right">{lang === "zh" ? "\u5df2\u7ed3\u91d1\u989d" : "Paid"}</th>
+                          <th className="whitespace-nowrap px-5 py-3 text-right">{text.fields.total}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {financePreview.settledOrders.map((item, index) => (
+                          <tr
+                            key={item.orderId}
+                            className={`border-b border-slate-100 text-[13px] text-slate-700 ${index % 2 === 0 ? "bg-white" : "bg-slate-50/45"}`}
+                          >
+                            <td className="whitespace-nowrap px-5 py-4">
+                              <div className="flex h-12 w-12 items-center justify-center overflow-hidden border border-slate-200 bg-white">
+                                {item.productImageUrl && !failedFinanceImages.includes(item.orderId) ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setPreviewImage({
+                                        src: item.productImageUrl,
+                                        title: `${item.sku} / ${item.productNameZh || "-"}`,
+                                      })
+                                    }
+                                    className="h-full w-full"
+                                  >
+                                    <img
+                                      src={item.productImageUrl}
+                                      alt={item.productNameZh || item.sku}
+                                      className="h-full w-full object-cover"
+                                      onError={() =>
+                                        setFailedFinanceImages((prev) =>
+                                          prev.includes(item.orderId) ? prev : [...prev, item.orderId],
+                                        )
+                                      }
+                                    />
+                                  </button>
+                                ) : (
+                                  <span className="text-xs text-slate-400">{lang === "zh" ? "\u7a7a" : "Vacio"}</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="whitespace-nowrap px-5 py-4 text-slate-900">{item.platformOrderNo}</td>
+                            <td className="whitespace-nowrap px-5 py-4">{item.sku}</td>
+                            <td className="whitespace-nowrap px-5 py-4">{item.productNameZh || "-"}</td>
+                            <td className="whitespace-nowrap px-5 py-4">{item.trackingNo || "-"}</td>
+                            <td className="whitespace-nowrap px-5 py-4">{fmtDateOnly(item.shippedAt, lang)}</td>
+                            <td className="whitespace-nowrap px-5 py-4">{fmtDateOnly(item.settledAt, lang)}</td>
+                            <td className="whitespace-nowrap px-5 py-4">
+                              <span className="inline-flex h-6 items-center justify-center rounded-full bg-emerald-50 px-3 text-[11px] font-semibold text-emerald-600">
+                                {lang === "zh" ? "\u5df2\u7ed3" : "Paid"}
+                              </span>
+                            </td>
+                            <td className="whitespace-nowrap px-5 py-4 text-right font-semibold text-emerald-600">{fmtMoney(item.paidAmount, lang)}</td>
+                            <td className="whitespace-nowrap px-5 py-4 text-right text-slate-900">{fmtMoney(item.totalAmount, lang)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-slate-200 bg-white px-5 py-3 text-xs text-slate-400">
+                    <span>
+                      {lang === "zh"
+                        ? `1 - ${financePreview.settledOrders.length} / ${financePreview.settledOrders.length}`
+                        : `1 - ${financePreview.settledOrders.length} / ${financePreview.settledOrders.length}`}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white">‹</span>
+                      <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-fuchsia-500 px-2 text-white">1</span>
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white">›</span>
                     </div>
                   </div>
                 </div>
               )}
             </div>
-            <div className="flex justify-end border-t border-slate-200 px-5 py-4">
+            <div className="flex justify-end border-t border-slate-200 bg-white px-6 py-4">
               <button
                 type="button"
                 onClick={() => setFinancePreview(null)}
