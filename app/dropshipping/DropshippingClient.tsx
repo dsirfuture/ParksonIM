@@ -162,11 +162,6 @@ function fmtMoney(value: number, lang: "zh" | "es") {
   }).format(value);
 }
 
-function invertRate(value: number | null | undefined) {
-  if (!value || value === 0) return null;
-  return 1 / value;
-}
-
 function getMexicoDateParts(date: Date) {
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Mexico_City",
@@ -378,7 +373,7 @@ export function DropshippingClient({
     return () => window.clearInterval(timer);
   }, []);
 
-  const financeDisplayRate = useMemo(() => invertRate(exchangeRate.rateValue), [exchangeRate.rateValue]);
+  const financeDisplayRate = useMemo(() => exchangeRate.rateValue || null, [exchangeRate.rateValue]);
   const financeRateDate = exchangeRate.fetchedAt || exchangeRate.rateDate;
 
   const text = lang === "zh"
@@ -1869,7 +1864,7 @@ export function DropshippingClient({
                       <tr key={row.customerId} className="border-t border-slate-100">
                         <td className="px-4 py-3 text-sm font-semibold text-slate-900">{row.customerName}</td>
                         <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.stockAmount, lang)}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700">{invertRate(row.exchangeRate)?.toFixed(4) || "-"}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{row.exchangeRate?.toFixed(4) || "-"}</td>
                         <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.exchangedAmount, lang)}</td>
                         <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.shippingAmount, lang)}</td>
                         <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.totalAmount, lang)}</td>
