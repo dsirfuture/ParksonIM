@@ -226,14 +226,6 @@ function PlusBadge() {
   );
 }
 
-function MinusBadge() {
-  return (
-    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[11px] font-semibold text-white">
-      -
-    </span>
-  );
-}
-
 function TrashIcon() {
   return (
     <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -1945,57 +1937,60 @@ export function DropshippingClient({
 
               {sameTrackingOrders.length > 1 ? (
                 <div className="md:col-span-6 xl:col-span-12">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                    <div className="text-xs text-slate-500">
-                      {lang === "zh" ? "同物流号商品" : "Productos con la misma guia"}
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {sameTrackingOrders.map((item) => (
-                        <div key={item.id} className="inline-flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(item)}
-                            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition ${
-                              item.id === form.id
-                                ? "border-primary bg-primary/10 text-primary"
-                                : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-                            }`}
-                          >
-                            <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-slate-50">
-                              {item.productImageUrl ? (
-                                <img
-                                  src={item.productImageUrl}
-                                  alt={item.productNameZh || item.sku}
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                <span className="text-[10px] text-slate-400">{lang === "zh" ? "\u7a7a" : "Vacio"}</span>
-                              )}
-                            </span>
-                            <span>{item.sku}</span>
-                          </button>
-                          {sameTrackingOrders.length > 1 ? (
-                            <button
-                              type="button"
-                              onClick={() => void deleteSameTrackingOrder(item)}
-                              className="inline-flex"
-                              title={lang === "zh" ? "删除这个同物流号商品" : "Eliminar este producto agrupado"}
-                              aria-label={lang === "zh" ? "删除这个同物流号商品" : "Eliminar este producto agrupado"}
-                            >
-                              <MinusBadge />
-                            </button>
-                          ) : null}
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs text-slate-500">
+                          {lang === "zh" ? "同物流号商品" : "Productos con la misma guia"}
                         </div>
-                      ))}
+                        <div className="mt-1 text-[11px] text-slate-400">
+                          {lang === "zh" ? "点击下方商品可快速切换编辑" : "Haz clic para cambiar rapidamente entre productos agrupados"}
+                        </div>
+                      </div>
                       <button
                         type="button"
                         onClick={openCreateModalWithTrackingSeed}
-                        className="inline-flex"
+                        className="inline-flex h-9 items-center gap-2 rounded-xl border border-primary/20 bg-white px-3 text-xs text-primary transition hover:border-primary/35 hover:bg-primary/5"
                         title={lang === "zh" ? "新增同物流号商品" : "Agregar producto con la misma guia"}
                         aria-label={lang === "zh" ? "新增同物流号商品" : "Agregar producto con la misma guia"}
                       >
                         <PlusBadge />
+                        <span>{lang === "zh" ? "新增同物流号商品" : "Agregar producto"}</span>
                       </button>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      {sameTrackingOrders.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => openEditModal(item)}
+                          className={`inline-flex min-w-[148px] items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-xs transition ${
+                            item.id === form.id
+                              ? "border-primary bg-white text-primary shadow-[0_0_0_1px_rgba(37,99,235,0.12)]"
+                              : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                          }`}
+                        >
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                            {item.productImageUrl ? (
+                              <img
+                                src={item.productImageUrl}
+                                alt={item.productNameZh || item.sku}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <span className="text-[10px] text-slate-400">{lang === "zh" ? "\u7a7a" : "Vacio"}</span>
+                            )}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm text-inherit">{item.sku}</span>
+                            <span className="block truncate text-[11px] text-slate-400">
+                              {item.id === form.id
+                                ? (lang === "zh" ? "当前编辑" : "Actual")
+                                : (lang === "zh" ? "点击切换" : "Cambiar")}
+                            </span>
+                          </span>
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
