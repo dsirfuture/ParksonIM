@@ -1030,6 +1030,7 @@ export async function listOrders(session: Session) {
     const attachments = attachmentsByOrder.get(row.id) || [];
     const normalizedSku = row.product.sku.trim().toUpperCase();
     const catalog = catalogBySku.get(normalizedSku);
+    const matchedSku = catalog?.sku?.trim() || row.product.sku;
     return {
       id: row.id,
       customerId: row.customer_id,
@@ -1043,7 +1044,7 @@ export async function listOrders(session: Session) {
       sku: row.product.sku,
       productNameZh: catalog?.name_zh?.trim() || row.product.name_zh,
       productNameEs: catalog?.name_es?.trim() || row.product.name_es || "",
-      productImageUrl: catalog ? buildProductImageUrl(row.product.sku, "jpg") : "",
+      productImageUrl: catalog ? buildProductImageUrl(matchedSku, "jpg") : "",
       platform: row.platform,
       platformOrderNo: row.platform_order_no,
       trackingNo: row.tracking_no || "",
@@ -1189,7 +1190,7 @@ export async function getInventoryRows(session: Session) {
 }
 
 export async function getFinanceRows(session: Session) {
-  const [customers, inventoryRows, paymentRows, currentRate] = await Promise.all([
+  const [customers, inventoryRows, paymentRows, currentRate, catalogRows] = await Promise.all([
     prisma.dropshippingCustomer.findMany({
       where: {
         tenant_id: session.tenantId,
@@ -1206,6 +1207,16 @@ export async function getFinanceRows(session: Session) {
       orderBy: { paid_at: "desc" },
     }),
     ensureTodayExchangeRate(session),
+    prisma.productCatalog.findMany({
+      where: {
+        tenant_id: session.tenantId,
+        company_id: session.companyId,
+      },
+      select: {
+        sku: true,
+        name_zh: true,
+      },
+    }),
   ]);
 
   const settledOrders = await prisma.dropshippingOrder.findMany({
@@ -1252,15 +1263,22 @@ export async function getFinanceRows(session: Session) {
     });
   }
 
+  const catalogBySku = new Map(
+    catalogRows.map((row) => [row.sku.trim().toUpperCase(), row]),
+  );
+
   const settledOrdersByCustomer = new Map<string, DsFinanceRow["settledOrders"]>();
   for (const row of settledOrders) {
+    const normalizedSku = row.product.sku.trim().toUpperCase();
+    const catalog = catalogBySku.get(normalizedSku);
+    const matchedSku = catalog?.sku?.trim() || row.product.sku;
     const items = settledOrdersByCustomer.get(row.customer_id) || [];
     items.push({
       orderId: row.id,
       platformOrderNo: row.platform_order_no,
       sku: row.product.sku,
-      productNameZh: row.product.name_zh,
-      productImageUrl: row.product.image_url || buildProductImageUrl(row.product.sku, "jpg"),
+      productNameZh: catalog?.name_zh?.trim() || row.product.name_zh,
+      productImageUrl: row.product.image_url || buildProductImageUrl(matchedSku, "jpg"),
       trackingNo: row.tracking_no || "",
       shippedAt: row.shipped_at?.toISOString() || null,
       settledAt: row.settled_at?.toISOString() || null,
