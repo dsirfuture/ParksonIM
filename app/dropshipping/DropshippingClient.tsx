@@ -2181,11 +2181,11 @@ export function DropshippingClient({
           hideDescription
           titleRight={
             <div className="flex items-center gap-2">
-              <div className="relative">
+              <div className="relative rounded-xl border border-slate-200 bg-white shadow-sm shadow-slate-100/60">
                 <select
                   value={customerFilter}
                   onChange={(event) => setCustomerFilter(event.target.value)}
-                  className="h-11 min-w-[112px] appearance-none rounded-2xl border border-secondary-accent/80 bg-secondary-accent/40 px-4 pr-10 text-sm text-primary shadow-[0_0_0_1px_rgba(148,163,184,0.06),0_10px_24px_rgba(15,23,42,0.06)] outline-none transition focus:border-primary/50 focus:bg-white focus:ring-4 focus:ring-primary/10"
+                  className="h-10 min-w-[120px] appearance-none rounded-xl bg-transparent px-4 pr-10 text-sm text-slate-700 outline-none transition"
                 >
                   <option value="all" hidden>{lang === "zh" ? "\u5168\u90e8\u5ba2\u6237" : "Todos los clientes"}</option>
                   {customerOptions.map((customer) => (
@@ -2194,7 +2194,7 @@ export function DropshippingClient({
                     </option>
                   ))}
                 </select>
-                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-primary/70">
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">
                   <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <path d="m4 6 4 4 4-4" />
                   </svg>
@@ -2203,43 +2203,43 @@ export function DropshippingClient({
             </div>
           }
           right={
-            <div className="flex w-full justify-end gap-2 lg:w-auto">
-              <div className="relative">
+            <div className="flex w-full flex-wrap justify-end gap-2 lg:w-auto lg:flex-nowrap">
+              <div className="relative rounded-xl border border-slate-200 bg-white shadow-sm shadow-slate-100/60">
                 <select
                   value={settlementFilter}
                   onChange={(event) => setSettlementFilter(event.target.value as typeof settlementFilter)}
-                  className="h-11 min-w-[112px] appearance-none rounded-2xl border border-secondary-accent/80 bg-secondary-accent/40 px-4 pr-10 text-sm text-primary shadow-[0_0_0_1px_rgba(148,163,184,0.06),0_10px_24px_rgba(15,23,42,0.06)] outline-none transition focus:border-primary/50 focus:bg-white focus:ring-4 focus:ring-primary/10"
+                  className="h-10 min-w-[120px] appearance-none rounded-xl bg-transparent px-4 pr-10 text-sm text-slate-700 outline-none transition"
                 >
                   <option value="all">{lang === "zh" ? "\u5168\u90e8\u7ed3\u7b97" : "Toda liquidacion"}</option>
                   <option value="paid">{lang === "zh" ? "\u5df2\u7ed3" : "Liquidado"}</option>
                   <option value="unpaid">{lang === "zh" ? "\u672a\u7ed3" : "Pendiente"}</option>
                 </select>
-                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-primary/70">
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">
                   <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <path d="m4 6 4 4 4-4" />
                   </svg>
                 </span>
               </div>
-              <div className="relative w-full max-w-[420px]">
+              <div className="relative w-full max-w-[440px] rounded-xl border border-slate-200 bg-white shadow-sm shadow-slate-100/60">
                 <input
                   value={keyword}
                   onChange={(event) => setKeyword(event.target.value)}
                   placeholder={lang === "zh" ? "\u641c\u7d22\u5e73\u53f0 / \u8ba2\u5355\u53f7 / \u7f16\u7801" : "Buscar plataforma / pedido / codigo"}
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 pr-[130px] text-sm text-slate-700"
+                  className="h-10 w-full rounded-xl bg-transparent px-3 pr-[138px] text-sm text-slate-700 outline-none"
                 />
-                <div className="absolute right-1 top-1">
+                <div className="absolute inset-y-1 right-1 flex items-center border-l border-slate-200 pl-1.5">
                   <div className="relative">
                     <select
                       value={statusFilter}
                       onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
-                      className="h-8 min-w-[116px] appearance-none rounded-xl border border-secondary-accent/80 bg-secondary-accent/40 px-3 pr-8 text-sm text-primary outline-none transition focus:border-primary/50 focus:bg-white focus:ring-4 focus:ring-primary/10"
+                      className="h-8 min-w-[122px] appearance-none rounded-lg bg-transparent px-3 pr-8 text-sm text-slate-700 outline-none transition"
                     >
                       <option value="all" hidden>{lang === "zh" ? "\u5168\u90e8\u72b6\u6001" : "Todos"}</option>
                       <option value="pending">{getShippingStatusLabel("pending", lang)}</option>
                       <option value="shipped">{getShippingStatusLabel("shipped", lang)}</option>
                       <option value="cancelled">{getShippingStatusLabel("cancelled", lang)}</option>
                     </select>
-                    <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-primary/70">
+                    <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-slate-400">
                       <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                         <path d="m4 6 4 4 4-4" />
                       </svg>
