@@ -2004,7 +2004,7 @@ export function DropshippingClient({
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-900">{row.sku}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">{row.productNameZh}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.unitPrice, lang)}</td>
+                      <td className="px-4 py-3 text-sm text-slate-700">${fmtMoney(row.unitPrice, lang)}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">{fmtPercent(row.discountRate, lang)}%</td>
                       <td className="px-4 py-3 text-sm text-slate-700">{row.stockedQty}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.stockedQty * row.unitPrice * (1 - row.discountRate), lang)}</td>
