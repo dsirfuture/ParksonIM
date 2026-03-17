@@ -194,6 +194,14 @@ function parseCellImageMap(xml: string): CellImageMap {
   return map;
 }
 
+async function parseWorkbookCellImageMap(bytes: Uint8Array) {
+  const workbookZip = await JSZip.loadAsync(bytes);
+  const cellImageXml = workbookZip.files["xl/cellimages.xml"]
+    ? await workbookZip.files["xl/cellimages.xml"].async("string")
+    : "";
+  return cellImageXml ? parseCellImageMap(cellImageXml) : new Map<string, string>();
+}
+
 function findAssetByPath(
   rawValue: string,
   hyperlink: string,
@@ -293,6 +301,7 @@ async function parseXlsxWorkbook(bytes: Uint8Array, assetFiles: AssetFile[], cel
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(Buffer.from(bytes) as unknown as Parameters<typeof workbook.xlsx.load>[0]);
   const assets = buildAssetIndexes(assetFiles);
+  const resolvedCellImageMap = cellImageMap ?? (await parseWorkbookCellImageMap(bytes));
 
   let parsedRows: DsLegacyImportRow[] = [];
 
@@ -367,7 +376,7 @@ async function parseXlsxWorkbook(bytes: Uint8Array, assetFiles: AssetFile[], cel
         carriedLabelMeta.hyperlink,
         assets,
         "面单文件",
-        cellImageMap,
+        resolvedCellImageMap,
       );
       if (labelAsset) shippingLabelFiles.push(fileToAsset(labelAsset));
 
@@ -377,12 +386,16 @@ async function parseXlsxWorkbook(bytes: Uint8Array, assetFiles: AssetFile[], cel
         carriedProofMeta.hyperlink,
         assets,
         "发货凭据",
-        cellImageMap,
+        resolvedCellImageMap,
       );
       if (directProofAsset) {
         shippingProofFiles.push(fileToAsset(directProofAsset));
       } else {
-        for (const file of findProofAssetsByKeys(assets, { platformOrderNo, trackingNo, proofRawValue: shippingProofFile }, cellImageMap)) {
+        for (const file of findProofAssetsByKeys(
+          assets,
+          { platformOrderNo, trackingNo, proofRawValue: shippingProofFile },
+          resolvedCellImageMap,
+        )) {
           shippingProofFiles.push(fileToAsset(file));
         }
       }
@@ -511,8 +524,6 @@ async function parseZipBytes(bytes: Uint8Array) {
   }
 
   const workbookBytes = await workbookEntry.async("uint8array");
-  const cellImageXml = zip.files["xl/cellimages.xml"] ? await zip.files["xl/cellimages.xml"].async("string") : "";
-  const cellImageMap = cellImageXml ? parseCellImageMap(cellImageXml) : new Map<string, string>();
   const assetFiles: AssetFile[] = [];
   for (const entry of entries) {
     if (entry.name === workbookEntry.name) continue;
@@ -523,7 +534,7 @@ async function parseZipBytes(bytes: Uint8Array) {
     });
   }
 
-  return parseXlsxWorkbook(workbookBytes, assetFiles, cellImageMap);
+  return parseXlsxWorkbook(workbookBytes, assetFiles);
 }
 
 async function parseZipFile(file: File) {
