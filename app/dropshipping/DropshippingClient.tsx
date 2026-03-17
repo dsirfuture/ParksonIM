@@ -2703,8 +2703,8 @@ export function DropshippingClient({
               </h3>
             </div>
             <div className="overflow-y-auto px-5 py-5">
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-12">
-              {([
+              <div className="grid gap-4 md:grid-cols-6">
+              {false && ([
                 ["customerName", text.form.customer, "md:col-span-1 xl:col-span-4 xl:order-1"],
                 ["platformOrderNo", lang === "zh" ? "订单号" : text.form.orderNo, "md:col-span-1 xl:col-span-4 xl:order-2"],
                 ["trackingNo", text.form.trackingNo, "md:col-span-2 xl:col-span-4 xl:order-3"],
@@ -2726,8 +2726,90 @@ export function DropshippingClient({
                 </label>
               ))}
 
+              <label className="space-y-1 md:col-span-2 md:order-1">
+                <span className="whitespace-nowrap text-xs text-slate-500">{text.form.customer}</span>
+                <input
+                  type="text"
+                  value={form.customerName}
+                  onChange={(event) => setForm((prev) => ({ ...prev, customerName: event.target.value }))}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                />
+              </label>
+
+              <label className="space-y-1 md:col-span-2 md:order-2">
+                <span className="whitespace-nowrap text-xs text-slate-500">{lang === "zh" ? "订单号" : text.form.orderNo}</span>
+                <input
+                  type="text"
+                  value={form.platformOrderNo}
+                  onChange={(event) => setForm((prev) => ({ ...prev, platformOrderNo: event.target.value }))}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                />
+              </label>
+
+              <label className="space-y-1 md:col-span-2 md:order-3">
+                <span className="whitespace-nowrap text-xs text-slate-500">{text.form.trackingNo}</span>
+                <input
+                  type="text"
+                  value={form.trackingNo}
+                  onChange={(event) => setForm((prev) => ({ ...prev, trackingNo: event.target.value }))}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                />
+              </label>
+
+              <label className="space-y-1 md:col-span-1 md:order-4">
+                <span className="whitespace-nowrap text-xs text-slate-500">{text.form.sku}</span>
+                <input
+                  type="text"
+                  value={form.sku}
+                  onChange={(event) => setForm((prev) => ({ ...prev, sku: event.target.value }))}
+                  disabled={productFieldsLocked}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                />
+              </label>
+
+              <label className="space-y-1 md:col-span-4 md:order-5">
+                <span className="whitespace-nowrap text-xs text-slate-500">{lang === "zh" ? "中文名" : text.form.productZh}</span>
+                <input
+                  type="text"
+                  value={form.productNameZh}
+                  onChange={(event) => setForm((prev) => ({ ...prev, productNameZh: event.target.value }))}
+                  disabled={productFieldsLocked}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                />
+              </label>
+
+              <label className="space-y-1 md:col-span-1 md:order-6">
+                <span className="whitespace-nowrap text-xs text-slate-500">{text.form.quantity}</span>
+                <input
+                  type="number"
+                  value={form.quantity}
+                  onChange={(event) => setForm((prev) => ({ ...prev, quantity: event.target.value }))}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                />
+              </label>
+
+              <label className="space-y-1 md:col-span-1 md:order-7">
+                <span className="whitespace-nowrap text-xs text-slate-500">{text.form.shippedAt}</span>
+                <input
+                  type="date"
+                  value={form.shippedAt}
+                  onChange={(event) => setForm((prev) => ({ ...prev, shippedAt: event.target.value }))}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                />
+              </label>
+
+              <label className="space-y-1 md:col-span-1 md:order-8">
+                <span className="whitespace-nowrap text-xs text-slate-500">{text.form.color}</span>
+                <input
+                  type="text"
+                  value={form.color}
+                  onChange={(event) => setForm((prev) => ({ ...prev, color: event.target.value }))}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                />
+              </label>
+
               {sameTrackingOrders.length > 1 ? (
-                <div className="md:col-span-2 xl:col-span-12 xl:order-0">
+                <div className="md:col-span-6 md:order-0 xl:col-span-12 xl:order-0">
                   <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
@@ -2787,7 +2869,7 @@ export function DropshippingClient({
                 </div>
               ) : null}
 
-              <div className="space-y-1 md:col-span-2 xl:col-span-6 xl:order-12">
+              <div className="hidden space-y-1 md:col-span-2 xl:col-span-6 xl:order-12">
                 <span className="whitespace-nowrap text-xs text-slate-500">{text.fields.shippingLabel}</span>
                 <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
                   {currentEditingOrder?.shippingLabelAttachments[0]?.fileUrl ? (
@@ -2821,7 +2903,7 @@ export function DropshippingClient({
                 </div>
               </div>
 
-              <div className="space-y-1 md:col-span-2 xl:col-span-6 xl:order-13">
+              <div className="hidden space-y-1 md:col-span-2 xl:col-span-6 xl:order-13">
                 <span className="whitespace-nowrap text-xs text-slate-500">{text.fields.shippingProof}</span>
                 <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
                   {currentEditingOrder?.shippingProofAttachments.length ? (
@@ -2864,7 +2946,7 @@ export function DropshippingClient({
                 </div>
               </div>
 
-              <label className="space-y-1 md:col-span-1 xl:col-span-4 xl:order-9">
+              <label className="hidden space-y-1 md:col-span-1 xl:col-span-4 xl:order-9">
                 <span className="whitespace-nowrap text-xs text-slate-500">{text.form.platform}</span>
                 <select
                   value={form.platform}
@@ -2880,7 +2962,7 @@ export function DropshippingClient({
                 </select>
               </label>
 
-              <label className="space-y-1 md:col-span-1 xl:col-span-6 xl:order-10">
+              <label className="hidden space-y-1 md:col-span-1 xl:col-span-6 xl:order-10">
                 <span className="whitespace-nowrap text-xs text-slate-500">{text.form.status}</span>
                 <select
                   value={form.shippingStatus}
@@ -2895,7 +2977,7 @@ export function DropshippingClient({
                 </select>
               </label>
 
-              <label className="space-y-1 md:col-span-1 xl:col-span-6 xl:order-11">
+              <label className="hidden space-y-1 md:col-span-1 xl:col-span-6 xl:order-11">
                 <span className="whitespace-nowrap text-xs text-slate-500">{text.form.shippingFee}</span>
                 <select
                   value={form.shippingFee}
@@ -2911,7 +2993,141 @@ export function DropshippingClient({
                 </select>
               </label>
 
-              <label className="space-y-1 md:col-span-2 xl:col-span-12 xl:order-14">
+              <label className="hidden space-y-1 md:col-span-2 xl:col-span-12 xl:order-14">
+                <span className="whitespace-nowrap text-xs text-slate-500">{text.form.notes}</span>
+                <input
+                  type="text"
+                  value={form.notes}
+                  onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                />
+              </label>
+
+              <label className="space-y-1 md:col-span-1 md:order-9">
+                <span className="whitespace-nowrap text-xs text-slate-500">{text.form.platform}</span>
+                <select
+                  value={form.platform}
+                  onChange={(event) => setForm((prev) => ({ ...prev, platform: event.target.value }))}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                >
+                  <option value="">{lang === "zh" ? "请选择平台" : "Selecciona plataforma"}</option>
+                  {platformOptions.map((platform) => (
+                    <option key={platform} value={platform}>
+                      {platform}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-1 md:col-span-1 md:order-10">
+                <span className="whitespace-nowrap text-xs text-slate-500">{text.form.status}</span>
+                <select
+                  value={form.shippingStatus}
+                  onChange={(event) => setForm((prev) => ({ ...prev, shippingStatus: event.target.value as OrderFormState["shippingStatus"] }))}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                >
+                  {shippingStatusOptions.map((status: OrderFormState["shippingStatus"]) => (
+                    <option key={status} value={status}>
+                      {getShippingStatusLabel(status, lang)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-1 md:col-span-1 md:order-11">
+                <span className="whitespace-nowrap text-xs text-slate-500">{text.form.shippingFee}</span>
+                <select
+                  value={form.shippingFee}
+                  onChange={(event) => setForm((prev) => ({ ...prev, shippingFee: event.target.value }))}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                >
+                  <option value="">{lang === "zh" ? "请选择代发费" : "Selecciona cargo"}</option>
+                  {shippingFeeOptions.map((fee) => (
+                    <option key={fee} value={fee}>
+                      {fee}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="space-y-1 md:col-span-3 md:order-12">
+                <span className="whitespace-nowrap text-xs text-slate-500">{text.fields.shippingLabel}</span>
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                  {currentEditingOrder?.shippingLabelAttachments[0]?.fileUrl ? (
+                    <a
+                      href={currentEditingOrder.shippingLabelAttachments[0].fileUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 hover:bg-slate-50"
+                    >
+                      PDF
+                    </a>
+                  ) : (
+                    <span className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs text-slate-400">
+                      {lang === "zh" ? "\u7a7a" : "Vacio"}
+                    </span>
+                  )}
+                  <div className="mt-3 flex items-center gap-3">
+                    <label className="inline-flex h-9 cursor-pointer items-center justify-center rounded-lg bg-primary px-3 text-xs font-semibold text-white">
+                      {lang === "zh" ? "选择文件" : "Seleccionar archivo"}
+                      <input
+                        type="file"
+                        accept=".pdf,image/*"
+                        onChange={(event) => setLabelFiles(event.target.files ? [event.target.files[0]].filter(Boolean) as File[] : [])}
+                        className="sr-only"
+                      />
+                    </label>
+                    <span className="min-w-0 flex-1 truncate text-xs text-slate-500">
+                      {labelFiles[0]?.name || currentEditingOrder?.shippingLabelAttachments[0]?.fileName || ""}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1 md:col-span-3 md:order-13">
+                <span className="whitespace-nowrap text-xs text-slate-500">{text.fields.shippingProof}</span>
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                  {currentEditingOrder?.shippingProofAttachments.length ? (
+                    <div className="flex flex-wrap gap-2">
+                      {currentEditingOrder.shippingProofAttachments.slice(0, 4).map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setPreviewImage({ src: item.fileUrl, title: item.fileName })}
+                          className="overflow-hidden rounded-md border border-slate-200"
+                        >
+                          <img src={item.fileUrl} alt={item.fileName} className="h-10 w-10 object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs text-slate-400">
+                      {lang === "zh" ? "\u7a7a" : "Vacio"}
+                    </span>
+                  )}
+                  <div className="mt-3 flex items-center gap-3">
+                    <label className="inline-flex h-9 cursor-pointer items-center justify-center rounded-lg bg-primary px-3 text-xs font-semibold text-white">
+                      {lang === "zh" ? "选择文件" : "Seleccionar archivo"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={(event) => setProofFiles(event.target.files ? Array.from(event.target.files) : [])}
+                        className="sr-only"
+                      />
+                    </label>
+                    <span className="min-w-0 flex-1 truncate text-xs text-slate-500">
+                      {proofFiles.length > 0
+                        ? `${proofFiles.length} ${lang === "zh" ? "个文件" : "archivo(s)"}`
+                        : currentEditingOrder?.shippingProofAttachments.length
+                          ? `${currentEditingOrder.shippingProofAttachments.length} ${lang === "zh" ? "个文件" : "archivo(s)"}`
+                          : ""}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <label className="space-y-1 md:col-span-6 md:order-14">
                 <span className="whitespace-nowrap text-xs text-slate-500">{text.form.notes}</span>
                 <input
                   type="text"
