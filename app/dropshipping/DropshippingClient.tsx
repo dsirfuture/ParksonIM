@@ -181,11 +181,14 @@ export function DropshippingClient({
           sku: "SKU",
           quantity: "数量",
           status: "状态",
+          shippedAt: "发货日期",
           trackingNo: "物流号",
+          color: "发货颜色",
           warehouse: "发货仓",
           shippingFee: "代发费",
           shippingLabel: "面单",
           shippingProof: "发货凭据",
+          productImage: "产品图",
           productZh: "中文名",
           remaining: "剩余",
           stocked: "备货",
@@ -277,11 +280,14 @@ export function DropshippingClient({
           sku: "SKU",
           quantity: "Cant.",
           status: "Estado",
+          shippedAt: "Fecha envio",
           trackingNo: "Guia",
+          color: "Color envio",
           warehouse: "Almacen",
           shippingFee: "Cargo",
           shippingLabel: "Guia PDF",
           shippingProof: "Prueba",
+          productImage: "Imagen",
           productZh: "Nombre ZH",
           remaining: "Restante",
           stocked: "Stock",
@@ -738,14 +744,18 @@ export function DropshippingClient({
                     <th className="px-4 py-3 font-medium">{text.fields.customer}</th>
                     <th className="px-4 py-3 font-medium">{text.fields.platform}</th>
                     <th className="px-4 py-3 font-medium">{text.fields.orderNo}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.sku}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.productZh}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.quantity}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.status}</th>
                     <th className="px-4 py-3 font-medium">{text.fields.trackingNo}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.shippingFee}</th>
                     <th className="px-4 py-3 font-medium">{text.fields.shippingLabel}</th>
+                    <th className="px-4 py-3 font-medium">{text.fields.status}</th>
+                    <th className="px-4 py-3 font-medium">{text.fields.shippedAt}</th>
                     <th className="px-4 py-3 font-medium">{text.fields.shippingProof}</th>
+                    <th className="px-4 py-3 font-medium">{text.fields.sku}</th>
+                    <th className="px-4 py-3 font-medium">{text.fields.quantity}</th>
+                    <th className="px-4 py-3 font-medium">{text.fields.color}</th>
+                    <th className="px-4 py-3 font-medium">{text.fields.warehouse}</th>
+                    <th className="px-4 py-3 font-medium">{text.fields.shippingFee}</th>
+                    <th className="px-4 py-3 font-medium">{text.fields.productImage}</th>
+                    <th className="px-4 py-3 font-medium">{text.fields.productZh}</th>
                     <th className="px-4 py-3 font-medium">{text.warnings}</th>
                     <th className="px-4 py-3 text-right font-medium">Edit</th>
                   </tr>
@@ -756,16 +766,7 @@ export function DropshippingClient({
                       <td className="px-4 py-3 text-sm text-slate-700">{row.customerName}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">{row.platform}</td>
                       <td className="px-4 py-3 text-sm font-semibold text-slate-900">{row.platformOrderNo}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{row.sku}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{row.productNameZh}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{row.quantity}</td>
-                      <td className="px-4 py-3 text-sm">
-                        <span className="inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
-                          {text.status[row.shippingStatus]}
-                        </span>
-                      </td>
                       <td className="px-4 py-3 text-sm text-slate-700">{row.trackingNo || "-"}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.shippingFee, lang)}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">
                         {row.shippingLabelAttachments[0]?.fileUrl ? (
                           <a
@@ -788,6 +789,14 @@ export function DropshippingClient({
                         ) : (
                           <span className="text-slate-400">-</span>
                         )}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <span className="inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
+                          {text.status[row.shippingStatus]}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-700">
+                        {row.shippedAt ? fmtDate(row.shippedAt, lang) : "-"}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-700">
                         {row.shippingProofAttachments[0]?.fileUrl ? (
@@ -812,6 +821,26 @@ export function DropshippingClient({
                           <span className="text-slate-400">-</span>
                         )}
                       </td>
+                      <td className="px-4 py-3 text-sm text-slate-700">{row.sku}</td>
+                      <td className="px-4 py-3 text-sm text-slate-700">{row.quantity}</td>
+                      <td className="px-4 py-3 text-sm text-slate-700">{row.color || "-"}</td>
+                      <td className="px-4 py-3 text-sm text-slate-700">{row.warehouse || "-"}</td>
+                      <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.shippingFee, lang)}</td>
+                      <td className="px-4 py-3 text-sm text-slate-700">
+                        {isDirectFileLink(row.productImageUrl) ? (
+                          <a
+                            href={row.productImageUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            IMG
+                          </a>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-700">{row.productNameZh}</td>
                       <td className="px-4 py-3 text-sm text-rose-600">{row.warnings.length > 0 ? row.warnings.join(", ") : "-"}</td>
                       <td className="px-4 py-3 text-right">
                         <button type="button" onClick={() => openEditModal(row)} className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700">
