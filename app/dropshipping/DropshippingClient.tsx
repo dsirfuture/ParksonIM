@@ -313,7 +313,7 @@ function OverviewLineChart({
   fillColor?: string;
 }) {
   const width = 640;
-  const height = 190;
+  const height = 170;
   const paddingX = 18;
   const paddingY = 18;
   const maxValue = Math.max(...data.map((item) => Math.max(item.orderCount, item.shippedCount)), 1);
@@ -332,7 +332,7 @@ function OverviewLineChart({
 
   return (
     <div className="w-full">
-      <svg viewBox={`0 0 ${width} ${height}`} className="h-48 w-full" aria-hidden="true">
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-40 w-full" aria-hidden="true">
         <defs>
           <linearGradient id="ds-overview-area" x1="0" x2="0" y1="0" y2="1">
             <stop offset="0%" stopColor={fillColor} />
@@ -376,15 +376,15 @@ function OverviewDonutChart({
   lang: "zh" | "es";
 }) {
   const total = items.reduce((sum, item) => sum + item.orderCount, 0) || 1;
-  const radius = 72;
-  const strokeWidth = 20;
+  const radius = 62;
+  const strokeWidth = 16;
   const circumference = 2 * Math.PI * radius;
   const colors = ["#ef4f91", "#8a63d2", "#f7b500", "#3b82f6", "#10b981"];
   let offset = 0;
 
   return (
-    <div className="flex flex-col gap-5 lg:flex-row lg:items-center">
-      <div className="relative mx-auto h-52 w-52 shrink-0">
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+      <div className="relative mx-auto h-44 w-44 shrink-0">
         <svg viewBox="0 0 220 220" className="h-full w-full -rotate-90">
           <circle cx="110" cy="110" r={radius} fill="none" stroke="#eef2ff" strokeWidth={strokeWidth} />
           {items.map((item, index) => {
@@ -411,20 +411,20 @@ function OverviewDonutChart({
           <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">
             {lang === "zh" ? "\u5e73\u53f0\u6d41\u91cf" : "Traffic"}
           </div>
-          <div className="mt-2 text-3xl font-semibold text-slate-900">{items.length}</div>
+          <div className="mt-1.5 text-2xl font-semibold text-slate-900">{items.length}</div>
           <div className="mt-1 text-xs text-slate-500">{lang === "zh" ? "\u6d3b\u8dc3\u5e73\u53f0" : "Plataformas activas"}</div>
         </div>
       </div>
-      <div className="min-w-0 flex-1 space-y-3">
+      <div className="min-w-0 flex-1 space-y-2.5">
         {items.map((item, index) => {
           const share = (item.orderCount / total) * 100;
           return (
-            <div key={item.platform || index} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+            <div key={item.platform || index} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-3.5 py-2.5">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="h-3 w-3 rounded-full" style={{ backgroundColor: colors[index % colors.length] }} />
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-slate-900">
+                    <div className="truncate text-[13px] font-medium text-slate-900">
                       {item.platform || (lang === "zh" ? "\u65e0" : "Sin plataforma")}
                     </div>
                     <div className="text-xs text-slate-500">
@@ -433,7 +433,7 @@ function OverviewDonutChart({
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm font-semibold text-slate-900">{share.toFixed(0)}%</div>
+                  <div className="text-[13px] font-semibold text-slate-900">{share.toFixed(0)}%</div>
                   <div className="text-xs text-slate-500">{item.orderCount} {lang === "zh" ? "\u5355" : "ped."}</div>
                 </div>
               </div>
@@ -457,23 +457,12 @@ function OverviewHighlightCard({
   className: string;
 }) {
   return (
-    <section className={`overflow-hidden rounded-[26px] p-5 text-white shadow-soft ${className}`}>
+    <section className={`overflow-hidden rounded-[24px] p-4 text-white shadow-soft ${className}`}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="text-xs uppercase tracking-[0.2em] text-white/80">{title}</div>
-          <div className="mt-3 text-4xl font-semibold tracking-tight">{value}</div>
+          <div className="mt-2 text-3xl font-semibold tracking-tight">{value}</div>
           {subtitle ? <div className="mt-2 text-xs text-white/80">{subtitle}</div> : null}
-        </div>
-        <div className="h-16 w-24 opacity-80">
-          <svg viewBox="0 0 96 64" className="h-full w-full">
-            <defs>
-              <linearGradient id={`spark-${title}`} x1="0" x2="1" y1="0" y2="1">
-                <stop offset="0%" stopColor="rgba(255,255,255,0.9)" />
-                <stop offset="100%" stopColor="rgba(255,255,255,0.2)" />
-              </linearGradient>
-            </defs>
-            <path d="M4 48c10-18 16-28 26-24 9 4 13 24 23 24 8 0 15-22 39-34" fill="none" stroke={`url(#spark-${title})`} strokeWidth="4" strokeLinecap="round" />
-          </svg>
         </div>
       </div>
     </section>
@@ -492,12 +481,12 @@ function OverviewRankList({
   className?: string;
 }) {
   return (
-    <section className={`flex h-full flex-col rounded-3xl border border-slate-200 bg-white/90 shadow-soft ${className}`}>
-      <div className="border-b border-slate-100 px-5 py-4">
+    <section className={`flex h-full flex-col rounded-[26px] border border-slate-200 bg-white/90 shadow-soft ${className}`}>
+      <div className="border-b border-slate-100 px-4 py-3.5">
         <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
         {subtitle ? <p className="mt-1 text-xs text-slate-500">{subtitle}</p> : null}
       </div>
-      <div className="min-h-0 flex-1 p-4">{children}</div>
+      <div className="min-h-0 flex-1 p-3.5">{children}</div>
     </section>
   );
 }
@@ -514,22 +503,14 @@ function OverviewWidgetShell({
   className?: string;
 }) {
   return (
-    <section className={`flex h-full flex-col rounded-3xl border border-slate-200 bg-white/90 shadow-soft ${className}`}>
-      <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+    <section className={`flex h-full flex-col rounded-[26px] border border-slate-200 bg-white/90 shadow-soft ${className}`}>
+      <div className="border-b border-slate-100 px-4 py-3.5">
         <div>
           <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
           {subtitle ? <p className="mt-1 text-xs text-slate-500">{subtitle}</p> : null}
         </div>
-        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-300">
-          <span className="grid grid-cols-2 gap-1">
-            <span className="h-1 w-1 rounded-full bg-current" />
-            <span className="h-1 w-1 rounded-full bg-current" />
-            <span className="h-1 w-1 rounded-full bg-current" />
-            <span className="h-1 w-1 rounded-full bg-current" />
-          </span>
-        </span>
       </div>
-      <div className="min-h-0 flex-1 p-4">{children}</div>
+      <div className="min-h-0 flex-1 p-3.5">{children}</div>
     </section>
   );
 }
@@ -1634,9 +1615,9 @@ export function DropshippingClient({
 
       {activeTab === "overview" ? (
         <div className="space-y-4">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.82fr)]">
-            <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(236,72,153,0.16),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(99,102,241,0.14),_transparent_24%),linear-gradient(135deg,#ffffff_0%,#f8fbff_48%,#eef4ff_100%)] shadow-soft">
-              <div className="flex items-center justify-between gap-4 border-b border-white/60 px-5 py-4">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(300px,0.8fr)]">
+            <section className="overflow-hidden rounded-[24px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(236,72,153,0.16),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(99,102,241,0.14),_transparent_24%),linear-gradient(135deg,#ffffff_0%,#f8fbff_48%,#eef4ff_100%)] shadow-soft">
+              <div className="flex items-center justify-between gap-4 border-b border-white/60 px-4 py-3.5">
                 <div>
                   <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">{lang === "zh" ? "总览仪表板" : "Dashboard"}</div>
                   <div className="mt-1 text-xs text-slate-500">{`${overviewDashboard.title} · ${overviewDashboard.summaryLabel}`}</div>
@@ -1664,30 +1645,30 @@ export function DropshippingClient({
                 </div>
               </div>
 
-              <div className="grid gap-4 px-5 py-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(240px,0.7fr)]">
+              <div className="grid gap-3.5 px-4 py-3.5 lg:grid-cols-[minmax(0,1.3fr)_minmax(220px,0.7fr)]">
                 <div className="min-w-0">
-                  <div className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">{fmtMoney(overviewDashboard.receivable, lang)}</div>
-                  <p className="mt-2 text-sm text-slate-500">
+                  <div className="text-[2rem] font-semibold tracking-tight text-slate-900 sm:text-[2.2rem]">{fmtMoney(overviewDashboard.receivable, lang)}</div>
+                  <p className="mt-1.5 text-[13px] text-slate-500">
                     {lang === "zh"
                       ? "按所选时间范围查看订单、已发、平台与结算的核心数据。"
                       : "Consulta pedidos, envios, plataformas y liquidacion segun el rango seleccionado."}
                   </p>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-2xl border border-white/70 bg-white/85 px-4 py-3">
+                  <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
+                    <div className="rounded-2xl border border-white/70 bg-white/85 px-3.5 py-2.5">
                       <div className="text-xs text-slate-500">{lang === "zh" ? "客户订单总额" : "Monto total"}</div>
-                      <div className="mt-2 text-2xl font-semibold text-slate-900">{fmtMoney(overviewDashboard.receivable, lang)}</div>
+                      <div className="mt-1.5 text-xl font-semibold text-slate-900">{fmtMoney(overviewDashboard.receivable, lang)}</div>
                     </div>
-                    <div className="rounded-2xl border border-white/70 bg-white/85 px-4 py-3">
+                    <div className="rounded-2xl border border-white/70 bg-white/85 px-3.5 py-2.5">
                       <div className="text-xs text-slate-500">{lang === "zh" ? "结款总额" : "Liquidado"}</div>
-                      <div className="mt-2 text-2xl font-semibold text-emerald-600">{fmtMoney(overviewDashboard.paid, lang)}</div>
+                      <div className="mt-1.5 text-xl font-semibold text-emerald-600">{fmtMoney(overviewDashboard.paid, lang)}</div>
                     </div>
-                    <div className="rounded-2xl border border-white/70 bg-white/85 px-4 py-3">
+                    <div className="rounded-2xl border border-white/70 bg-white/85 px-3.5 py-2.5">
                       <div className="text-xs text-slate-500">{lang === "zh" ? "未结总额" : "Pendiente"}</div>
-                      <div className="mt-2 text-2xl font-semibold text-rose-600">{fmtMoney(overviewDashboard.pending, lang)}</div>
+                      <div className="mt-1.5 text-xl font-semibold text-rose-600">{fmtMoney(overviewDashboard.pending, lang)}</div>
                     </div>
                   </div>
-                  <div className="mt-4 rounded-[24px] border border-white/70 bg-white/80 p-4">
-                    <div className="mb-3 flex items-center gap-4 text-xs text-slate-500">
+                  <div className="mt-3 rounded-[20px] border border-white/70 bg-white/80 p-3.5">
+                    <div className="mb-2.5 flex items-center gap-4 text-xs text-slate-500">
                       <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-indigo-600" />{lang === "zh" ? "订单数" : "Pedidos"}</span>
                       <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />{lang === "zh" ? "已发数" : "Enviados"}</span>
                     </div>
@@ -1695,22 +1676,22 @@ export function DropshippingClient({
                   </div>
                 </div>
 
-                <div className="grid auto-rows-fr gap-3 sm:grid-cols-2 lg:grid-cols-2">
-                  <div className="rounded-[24px] border border-white/70 bg-white/85 px-4 py-4">
+                <div className="grid auto-rows-fr gap-2.5 sm:grid-cols-2 lg:grid-cols-2">
+                  <div className="rounded-[20px] border border-white/70 bg-white/85 px-3.5 py-3">
                     <div className="text-xs text-slate-500">{overviewDashboard.metricLabels.orders}</div>
-                    <div className="mt-3 text-3xl font-semibold text-slate-900">{overviewDashboard.periodOrderCount}</div>
+                    <div className="mt-2 text-[1.7rem] font-semibold text-slate-900">{overviewDashboard.periodOrderCount}</div>
                   </div>
-                  <div className="rounded-[24px] border border-white/70 bg-white/85 px-4 py-4">
+                  <div className="rounded-[20px] border border-white/70 bg-white/85 px-3.5 py-3">
                     <div className="text-xs text-slate-500">{overviewDashboard.metricLabels.shipped}</div>
-                    <div className="mt-3 text-3xl font-semibold text-emerald-600">{overviewDashboard.periodShippedCount}</div>
+                    <div className="mt-2 text-[1.7rem] font-semibold text-emerald-600">{overviewDashboard.periodShippedCount}</div>
                   </div>
-                  <div className="rounded-[24px] border border-white/70 bg-white/85 px-4 py-4">
+                  <div className="rounded-[20px] border border-white/70 bg-white/85 px-3.5 py-3">
                     <div className="text-xs text-slate-500">{overviewDashboard.metricLabels.pending}</div>
-                    <div className="mt-3 text-3xl font-semibold text-amber-500">{overviewDashboard.periodPendingCount}</div>
+                    <div className="mt-2 text-[1.7rem] font-semibold text-amber-500">{overviewDashboard.periodPendingCount}</div>
                   </div>
-                  <div className="rounded-[24px] border border-white/70 bg-white/85 px-4 py-4">
+                  <div className="rounded-[20px] border border-white/70 bg-white/85 px-3.5 py-3">
                     <div className="text-xs text-slate-500">{overviewDashboard.metricLabels.unsettled}</div>
-                    <div className="mt-3 text-3xl font-semibold text-rose-600">{overviewDashboard.unsettledCustomers}</div>
+                    <div className="mt-2 text-[1.7rem] font-semibold text-rose-600">{overviewDashboard.unsettledCustomers}</div>
                   </div>
                 </div>
               </div>
@@ -1727,15 +1708,15 @@ export function DropshippingClient({
                 title={lang === "zh" ? "汇率与来源" : "Rate & Source"}
                 subtitle={lang === "zh" ? "今日 Wise 汇率与更新时间" : "Tipo de cambio y actualizacion"}
               >
-                <div className="grid gap-3">
-                  <div className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-4">
+                <div className="grid gap-2.5">
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50/80 px-3.5 py-3.5">
                     <div className="text-xs text-slate-500">{lang === "zh" ? "今日汇率" : "Tipo de cambio"}</div>
-                    <div className="mt-2 text-3xl font-semibold text-slate-900">{exchangeRate.rateValue?.toFixed(4) || "-"}</div>
+                    <div className="mt-1.5 text-[1.7rem] font-semibold text-slate-900">{exchangeRate.rateValue?.toFixed(4) || "-"}</div>
                     <div className="mt-1 text-xs text-slate-500">MXN → RMB</div>
                   </div>
-                  <div className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-4">
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50/80 px-3.5 py-3.5">
                     <div className="text-xs text-slate-500">{lang === "zh" ? "汇率来源" : "Fuente"}</div>
-                    <div className="mt-2 text-2xl font-semibold text-slate-900">{exchangeRate.sourceName || "-"}</div>
+                    <div className="mt-1.5 text-xl font-semibold text-slate-900">{exchangeRate.sourceName || "-"}</div>
                     <div className="mt-1 text-xs text-slate-500">{fmtDate(exchangeRate.fetchedAt || exchangeRate.rateDate, lang)}</div>
                   </div>
                 </div>
@@ -1751,16 +1732,16 @@ export function DropshippingClient({
             >
               <div className="space-y-2">
                 {overviewDashboard.topProducts.map((item, index) => (
-                  <div key={item.sku} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+                  <div key={item.sku} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-3.5 py-2.5">
                     <div className="min-w-0 flex items-center gap-3">
                       <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-[11px] font-semibold text-slate-500">{index + 1}</span>
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-slate-900">{item.sku}</div>
+                        <div className="truncate text-[13px] font-medium text-slate-900">{item.sku}</div>
                         <div className="truncate text-xs text-slate-500">{item.productNameZh}</div>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm font-semibold text-slate-900">{item.quantity}</div>
+                      <div className="text-[13px] font-semibold text-slate-900">{item.quantity}</div>
                       <div className="text-xs text-slate-500">{item.orderCount} {lang === "zh" ? "单" : "ped."}</div>
                     </div>
                   </div>
@@ -1775,13 +1756,13 @@ export function DropshippingClient({
             >
               <div className="space-y-2">
                 {overviewDashboard.topCustomersByOrders.map((item, index) => (
-                  <div key={item.customerId} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+                  <div key={item.customerId} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-3.5 py-2.5">
                     <div className="flex min-w-0 items-center gap-3">
                       <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-[11px] font-semibold text-slate-500">{index + 1}</span>
-                      <div className="truncate text-sm font-medium text-slate-900">{item.customerName}</div>
+                      <div className="truncate text-[13px] font-medium text-slate-900">{item.customerName}</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm font-semibold text-slate-900">{item.orderCount}</div>
+                      <div className="text-[13px] font-semibold text-slate-900">{item.orderCount}</div>
                       <div className="text-xs text-slate-500">{lang === "zh" ? "订单" : "Pedidos"}</div>
                     </div>
                   </div>
@@ -1796,22 +1777,22 @@ export function DropshippingClient({
             >
               <div className="space-y-2">
                 {overviewDashboard.topCustomersByAmount.map((item, index) => (
-                  <div key={item.customerId} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+                  <div key={item.customerId} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-3.5 py-2.5">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-3">
                         <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-[11px] font-semibold text-slate-500">{index + 1}</span>
-                        <div className="truncate text-sm font-medium text-slate-900">{item.customerName}</div>
+                        <div className="truncate text-[13px] font-medium text-slate-900">{item.customerName}</div>
                       </div>
-                      <div className="text-sm font-semibold text-slate-900">{fmtMoney(item.totalAmount, lang)}</div>
+                      <div className="text-[13px] font-semibold text-slate-900">{fmtMoney(item.totalAmount, lang)}</div>
                     </div>
                     <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                       <div className="rounded-xl bg-emerald-50 px-3 py-2 text-emerald-700">
                         <div>{lang === "zh" ? "已结" : "Pagado"}</div>
-                        <div className="mt-1 text-sm font-semibold">{fmtMoney(item.paidAmount, lang)}</div>
+                        <div className="mt-1 text-[13px] font-semibold">{fmtMoney(item.paidAmount, lang)}</div>
                       </div>
                       <div className="rounded-xl bg-rose-50 px-3 py-2 text-rose-700">
                         <div>{lang === "zh" ? "未结" : "Pendiente"}</div>
-                        <div className="mt-1 text-sm font-semibold">{fmtMoney(item.unpaidAmount, lang)}</div>
+                        <div className="mt-1 text-[13px] font-semibold">{fmtMoney(item.unpaidAmount, lang)}</div>
                       </div>
                     </div>
                   </div>
@@ -1824,12 +1805,12 @@ export function DropshippingClient({
               subtitle={lang === "zh" ? "优先关注的业务提醒" : "Alertas prioritarias"}
               className="min-h-0"
             >
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {overviewDashboard.alerts.map((item, index) => (
-                  <div key={item.type} className="flex items-start gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+                  <div key={item.type} className="flex items-start gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-3.5 py-2.5">
                     <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-semibold text-slate-500">{index + 1}</span>
                     <div className="min-w-0">
-                      <div className="text-sm font-medium text-slate-900">{text.alerts[item.type]}</div>
+                      <div className="text-[13px] font-medium text-slate-900">{text.alerts[item.type]}</div>
                       <div className="mt-1 text-xs text-slate-500">{lang === "zh" ? "当前数量" : "Conteo actual"} · {item.count}</div>
                     </div>
                   </div>
