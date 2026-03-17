@@ -1,7 +1,6 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import ReactGridLayout from "react-grid-layout";
 import { EmptyState } from "@/components/empty-state";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { ProductImage } from "@/components/product-image";
@@ -137,10 +136,6 @@ const PLATFORM_OPTIONS = [
 ] as const;
 
 const SHIPPING_FEE_OPTIONS = ["6", "8", "10", "12"] as const;
-const ResponsiveGridLayout = (ReactGridLayout as unknown as {
-  Responsive: unknown;
-  WidthProvider: (component: unknown) => unknown;
-}).WidthProvider((ReactGridLayout as unknown as { Responsive: unknown }).Responsive) as React.ComponentType<Record<string, unknown>>;
 const OVERVIEW_LAYOUT_STORAGE_KEY = "dropshipping-overview-layouts-v1";
 const OVERVIEW_BREAKPOINTS = ["lg", "md", "sm", "xs"] as const;
 const OVERVIEW_WIDGET_IDS: OverviewWidgetId[] = [
@@ -1316,21 +1311,8 @@ export function DropshippingClient({
       </div>
 
       {activeTab === "overview" ? (
-        <ResponsiveGridLayout
-          className="ds-overview-grid"
-          layouts={overviewLayouts}
-          breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480 }}
-          cols={{ lg: 12, md: 8, sm: 4, xs: 2 }}
-          rowHeight={36}
-          margin={[20, 20]}
-          containerPadding={[0, 0]}
-          draggableHandle=".ds-overview-handle"
-          resizeHandles={["se"]}
-          compactType={null}
-          preventCollision={false}
-          onLayoutChange={handleOverviewLayoutChange}
-        >
-          <div key="hero" className="h-full">
+        <div className="grid gap-5 xl:grid-cols-12">
+          <div className="h-full xl:col-span-8">
             <section className="ds-overview-widget flex h-full flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(29,78,216,0.14),_transparent_35%),linear-gradient(135deg,#ffffff_0%,#f8fbff_48%,#eef5ff_100%)] shadow-soft">
               <div className="ds-overview-handle flex items-start justify-between gap-3 px-6 py-5">
                 <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium text-slate-600">
@@ -1396,7 +1378,7 @@ export function DropshippingClient({
             </section>
           </div>
 
-          <div key="financeStats" className="h-full">
+          <div className="h-full xl:col-span-4">
             <OverviewWidgetShell title={lang === "zh" ? "????" : "Resumen financiero"} subtitle={lang === "zh" ? "??????????" : "Arrastra y ajusta este panel"} className="h-full">
               <div className="grid h-full gap-4">
                 <StatCard label={text.stats.paid} value={fmtMoney(overview.stats.totalPaid, lang)} valueClassName="text-emerald-600" />
@@ -1407,7 +1389,7 @@ export function DropshippingClient({
             </OverviewWidgetShell>
           </div>
 
-          <div key="trend" className="h-full">
+          <div className="h-full xl:col-span-8">
             <OverviewWidgetShell title={lang === "zh" ? "????????" : "Curva diaria mensual"} subtitle={lang === "zh" ? "???????????????????????" : "Tendencia diaria del mes en horario de Mexico."} className="h-full">
               <div className="mb-4 flex flex-wrap items-center gap-4 text-xs text-slate-500">
                 <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-blue-700" />{lang === "zh" ? "???" : "Pedidos"}</span>
@@ -1417,7 +1399,7 @@ export function DropshippingClient({
             </OverviewWidgetShell>
           </div>
 
-          <div key="platforms" className="h-full">
+          <div className="h-full xl:col-span-4">
             <OverviewWidgetShell title={lang === "zh" ? "??????" : "Ranking por plataforma"} subtitle={lang === "zh" ? "???????????" : "Ordenado por volumen mensual."} className="h-full">
               <div className="space-y-3">
                 {overview.analytics.topPlatforms.map((item, index) => {
@@ -1448,7 +1430,7 @@ export function DropshippingClient({
             </OverviewWidgetShell>
           </div>
 
-          <div key="products" className="h-full">
+          <div className="h-full xl:col-span-4">
             <OverviewWidgetShell title={lang === "zh" ? "??????" : "Ranking de productos"} subtitle={lang === "zh" ? "?????" : "Ordenado por volumen"} className="h-full">
               <div className="space-y-3">
                 {overview.analytics.topProducts.map((item, index) => (
@@ -1472,7 +1454,7 @@ export function DropshippingClient({
             </OverviewWidgetShell>
           </div>
 
-          <div key="customerOrders" className="h-full">
+          <div className="h-full xl:col-span-4">
             <OverviewWidgetShell title={lang === "zh" ? "???????" : "Ranking de clientes"} subtitle={lang === "zh" ? "??????" : "Ordenado por pedidos"} className="h-full">
               <div className="space-y-3">
                 {overview.analytics.topCustomersByOrders.map((item, index) => (
@@ -1498,7 +1480,7 @@ export function DropshippingClient({
             </OverviewWidgetShell>
           </div>
 
-          <div key="customerAmounts" className="h-full">
+          <div className="h-full xl:col-span-4">
             <OverviewWidgetShell title={lang === "zh" ? "??????" : "Ranking por monto"} subtitle={lang === "zh" ? "??????????" : "Total, liquidado y pendiente"} className="h-full">
               <div className="space-y-3">
                 {overview.analytics.topCustomersByAmount.map((item, index) => (
@@ -1526,7 +1508,7 @@ export function DropshippingClient({
             </OverviewWidgetShell>
           </div>
 
-          <div key="recentOrders" className="h-full">
+          <div className="h-full xl:col-span-8">
             <OverviewWidgetShell title={text.sections.recent} className="h-full">
               {overview.recentOrders.length === 0 ? (
                 <EmptyState title={text.empty.title} description={text.empty.desc} />
@@ -1561,7 +1543,7 @@ export function DropshippingClient({
             </OverviewWidgetShell>
           </div>
 
-          <div key="alerts" className="h-full">
+          <div className="h-full xl:col-span-4">
             <OverviewWidgetShell title={text.sections.alerts} subtitle={lang === "zh" ? "?????????????" : "Alertas de seguimiento prioritarias."} className="h-full">
               <div className="grid gap-3">
                 {overview.alerts.map((item) => (
@@ -1584,7 +1566,7 @@ export function DropshippingClient({
               </div>
             </OverviewWidgetShell>
           </div>
-        </ResponsiveGridLayout>
+        </div>
       ) : null}
 
       {activeTab === "orders" ? (
