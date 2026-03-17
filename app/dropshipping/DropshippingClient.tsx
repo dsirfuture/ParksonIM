@@ -1690,21 +1690,21 @@ export function DropshippingClient({
                         type="button"
                         onClick={() => setShippedAtSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))}
                         className="inline-flex items-center gap-1 text-slate-700"
-                        title={lang === "zh" ? "按发货日期排序" : "Ordenar por fecha de envio"}
+                        title={lang === "zh" ? "\u6309\u53d1\u8d27\u65e5\u671f\u6392\u5e8f" : "Ordenar por fecha de envio"}
                       >
                         <span>{text.fields.shippedAt}</span>
                         <SortDirectionIcon direction={shippedAtSortDirection} />
                       </button>
                     </th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.shippingProof}</th>
-                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.sku}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">{text.fields.quantity}</th>
-                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.color}</th>
-                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{lang === "zh" ? "结算" : "Liquidacion"}</th>
-                    <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">{text.fields.shippingFee}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.productImage}</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.sku}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.productZh}</th>
-                    <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700" aria-label={lang === "zh" ? "编辑" : "Editar"} />
+                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.color}</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">{text.fields.shippingFee}</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{lang === "zh" ? "\u7ed3\u7b97" : "Liquidacion"}</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700" aria-label={lang === "zh" ? "\u64cd\u4f5c" : "Acciones"} />
                   </tr>
                 </thead>
                 <tbody className="text-[13px] text-slate-700">
@@ -1715,221 +1715,213 @@ export function DropshippingClient({
                     const groupedItems = tracking ? (trackingGroupedOrders.get(tracking) || []).filter((item) => item.id !== row.id) : [];
 
                     return (
-                    <Fragment key={row.id}>
-                    <tr className="border-t border-slate-100">
-                      <td className="px-3 py-2">{row.platform}</td>
-                      <td className="px-3 py-2 text-slate-900">{row.platformOrderNo}</td>
-                      <td className="px-3 py-2">
-                        {(() => {
-                          if (!row.trackingNo) return <span>-</span>;
-                          if (!meta?.showTracking) return <span className="text-slate-300">|</span>;
-                          return (
-                            <div className="inline-flex items-center gap-2">
-                              <span>{row.trackingNo}</span>
-                              {meta.count > 1 ? (
+                      <Fragment key={row.id}>
+                        <tr className="border-t border-slate-100">
+                          <td className="px-3 py-2">{row.platform}</td>
+                          <td className="px-3 py-2 text-slate-900">{row.platformOrderNo}</td>
+                          <td className="px-3 py-2">
+                            {(() => {
+                              if (!row.trackingNo) return <span className="text-slate-400">{lang === "zh" ? "\u7a7a" : "Vacio"}</span>;
+                              if (!meta?.showTracking) return <span className="text-slate-300">|</span>;
+                              return (
+                                <div className="inline-flex items-center gap-2">
+                                  <span>{row.trackingNo}</span>
+                                  {meta.count > 1 ? (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setExpandedTrackingNos((prev) =>
+                                          prev.includes(tracking)
+                                            ? prev.filter((item) => item !== tracking)
+                                            : [...prev, tracking],
+                                        )
+                                      }
+                                      className="inline-flex"
+                                      aria-label={lang === "zh" ? "\u5c55\u5f00\u540c\u7269\u6d41\u53f7\u5546\u54c1" : "Expand grouped tracking items"}
+                                      title={lang === "zh" ? "\u67e5\u770b\u540c\u7269\u6d41\u53f7\u5176\u4ed6\u5546\u54c1" : "Ver otros productos con la misma guia"}
+                                    >
+                                      <PlusBadge />
+                                    </button>
+                                  ) : null}
+                                </div>
+                              );
+                            })()}
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="flex min-h-10 items-center justify-center">
+                              {row.shippingLabelAttachments[0]?.fileUrl ? (
+                                <a
+                                  href={row.shippingLabelAttachments[0].fileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 hover:bg-slate-50"
+                                >
+                                  PDF
+                                </a>
+                              ) : isDirectFileLink(row.shippingLabelFile) ? (
+                                <a
+                                  href={row.shippingLabelFile}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 hover:bg-slate-50"
+                                >
+                                  PDF
+                                </a>
+                              ) : (
+                                <span className="text-slate-400">{lang === "zh" ? "\u7a7a" : "Vacio"}</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs ${getShippingStatusClass(row.shippingStatus)}`}>
+                              {getShippingStatusLabel(row.shippingStatus, lang)}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2">{row.shippedAt ? fmtDateOnly(row.shippedAt, lang) : "-"}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex min-h-10 items-center justify-center">
+                              {row.shippingProofAttachments[0]?.fileUrl ? (
                                 <button
                                   type="button"
                                   onClick={() =>
-                                    setExpandedTrackingNos((prev) =>
-                                      prev.includes(tracking)
-                                        ? prev.filter((item) => item !== tracking)
-                                        : [...prev, tracking],
-                                    )
+                                    setPreviewImage({
+                                      src: row.shippingProofAttachments[0].fileUrl,
+                                      title: `${row.platformOrderNo} / ${row.sku}`,
+                                    })
                                   }
-                                  className="inline-flex"
-                                  aria-label={lang === "zh" ? "\u5c55\u5f00\u540c\u7269\u6d41\u53f7\u5546\u54c1" : "Expand grouped tracking items"}
-                                  title={lang === "zh" ? "\u67e5\u770b\u540c\u7269\u6d41\u53f7\u5176\u4ed6\u5546\u54c1" : "Ver otros productos con la misma guia"}
+                                  className="relative block overflow-hidden rounded-md border border-slate-200 bg-white"
+                                  title={lang === "zh" ? "\u9884\u89c8\u53d1\u8d27\u51ed\u636e" : "Ver comprobante"}
                                 >
-                                  <PlusBadge />
+                                  <img
+                                    src={row.shippingProofAttachments[0].fileUrl}
+                                    alt={`${row.platformOrderNo} ${row.sku}`}
+                                    className="h-10 w-10 object-cover"
+                                  />
+                                  {row.shippingProofAttachments.length > 1 ? (
+                                    <span className="absolute bottom-0 right-0 rounded-tl-md bg-slate-900/75 px-1 text-[10px] text-white">
+                                      {row.shippingProofAttachments.length}
+                                    </span>
+                                  ) : null}
                                 </button>
-                              ) : null}
+                              ) : isDirectFileLink(row.shippingProofFile) ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setPreviewImage({
+                                      src: row.shippingProofFile,
+                                      title: `${row.platformOrderNo} / ${row.sku}`,
+                                    })
+                                  }
+                                  className="block overflow-hidden rounded-md border border-slate-200 bg-white"
+                                  title={lang === "zh" ? "\u9884\u89c8\u53d1\u8d27\u51ed\u636e" : "Ver comprobante"}
+                                >
+                                  <img
+                                    src={row.shippingProofFile}
+                                    alt={`${row.platformOrderNo} ${row.sku}`}
+                                    className="h-10 w-10 object-cover"
+                                  />
+                                </button>
+                              ) : (
+                                <span className="text-slate-400">{lang === "zh" ? "\u7a7a" : "Vacio"}</span>
+                              )}
                             </div>
-                          );
-                        })()}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex min-h-10 items-center justify-center">
-                          {row.shippingLabelAttachments[0]?.fileUrl ? (
-                            <a
-                              href={row.shippingLabelAttachments[0].fileUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 hover:bg-slate-50"
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums">{row.quantity}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex min-h-10 items-center justify-center">
+                              {row.productImageUrl ? (
+                                <ProductImage
+                                  sku={row.sku}
+                                  hasImage
+                                  size={40}
+                                  roundedClassName="rounded-md"
+                                  onClick={() =>
+                                    setPreviewImage({
+                                      src: row.productImageUrl,
+                                      title: `${row.sku} / ${row.productNameZh || "-"}`,
+                                    })
+                                  }
+                                />
+                              ) : (
+                                <span className="text-slate-400">{lang === "zh" ? "\u7a7a" : "Vacio"}</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setInventoryPreview({
+                                  orderId: row.id,
+                                  customerId: row.customerId,
+                                  customerName: row.customerName,
+                                  sku: row.sku,
+                                  productNameZh: row.productNameZh,
+                                })
+                              }
+                              className="text-slate-900 hover:text-primary"
                             >
-                              PDF
-                            </a>
-                          ) : isDirectFileLink(row.shippingLabelFile) ? (
-                            <a
-                              href={row.shippingLabelFile}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 hover:bg-slate-50"
-                            >
-                              PDF
-                            </a>
-                          ) : (
-                            <span className="text-slate-400">{lang === "zh" ? "\u7a7a" : "Vacio"}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs ${getShippingStatusClass(row.shippingStatus)}`}>
-                          {getShippingStatusLabel(row.shippingStatus, lang)}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2">
-                        {row.shippedAt ? fmtDateOnly(row.shippedAt, lang) : "-"}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex min-h-10 items-center justify-center">
-                        {row.shippingProofAttachments[0]?.fileUrl ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setPreviewImage({
-                                src: row.shippingProofAttachments[0].fileUrl,
-                                title: `${row.platformOrderNo} / ${row.sku}`,
-                              })
-                            }
-                            className="relative block overflow-hidden rounded-md border border-slate-200 bg-white"
-                            title={lang === "zh" ? "预览发货凭据" : "Ver comprobante"}
-                          >
-                            <img
-                              src={row.shippingProofAttachments[0].fileUrl}
-                              alt={`${row.platformOrderNo} ${row.sku}`}
-                              className="h-10 w-10 object-cover"
-                            />
-                            {row.shippingProofAttachments.length > 1 ? (
-                              <span className="absolute bottom-0 right-0 rounded-tl-md bg-slate-900/75 px-1 text-[10px] text-white">
-                                {row.shippingProofAttachments.length}
-                              </span>
-                            ) : null}
-                          </button>
-                        ) : isDirectFileLink(row.shippingProofFile) ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setPreviewImage({
-                                src: row.shippingProofFile,
-                                title: `${row.platformOrderNo} / ${row.sku}`,
-                              })
-                            }
-                            className="block overflow-hidden rounded-md border border-slate-200 bg-white"
-                            title={lang === "zh" ? "预览发货凭据" : "Ver comprobante"}
-                          >
-                            <img
-                              src={row.shippingProofFile}
-                              alt={`${row.platformOrderNo} ${row.sku}`}
-                              className="h-10 w-10 object-cover"
-                            />
-                          </button>
-                        ) : (
-                          <span className="text-slate-400">{lang === "zh" ? "空" : "Vacio"}</span>
-                        )}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setInventoryPreview({
-                              orderId: row.id,
-                              customerId: row.customerId,
-                              customerName: row.customerName,
-                              sku: row.sku,
-                              productNameZh: row.productNameZh,
-                            })
-                          }
-                          className="text-slate-900 hover:text-primary"
-                        >
-                          {row.sku}
-                        </button>
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">{row.quantity}</td>
-                      <td className="px-3 py-2">{row.color || "-"}</td>
-                      <td className={`px-3 py-2 ${row.settlementStatus === "paid" ? "text-emerald-600" : "text-rose-600"}`}>
-                        {row.settlementStatus === "paid"
-                          ? lang === "zh"
-                            ? "已结"
-                            : "Liquidado"
-                          : lang === "zh"
-                            ? "未结"
-                            : "Pendiente"}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(row.shippingFee, lang)}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex min-h-10 items-center justify-center">
-                        {row.productImageUrl ? (
-                          <ProductImage
-                            sku={row.sku}
-                            hasImage
-                            size={40}
-                            roundedClassName="rounded-md"
-                            onClick={() =>
-                              setPreviewImage({
-                                src: row.productImageUrl,
-                                title: row.sku,
-                              })
-                            }
-                          />
-                        ) : (
-                          <span className="text-slate-400">{lang === "zh" ? "空" : "Vacio"}</span>
-                        )}
-                        </div>
-                      </td>
-                      <td className="max-w-[220px] px-3 py-2 truncate text-slate-900">{row.productNameZh}</td>
-                      <td className="px-3 py-2 text-right">
-                        <div className="inline-flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void deleteSameTrackingOrder(row)}
-                            title={lang === "zh" ? "删除" : "Eliminar"}
-                            aria-label={lang === "zh" ? "删除" : "Eliminar"}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-500 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600"
-                          >
-                            <TrashIcon />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(row)}
-                            title={lang === "zh" ? "编辑" : "Editar"}
-                            aria-label={lang === "zh" ? "编辑" : "Editar"}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
-                          >
-                            <PencilIcon />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                    {meta?.showTracking && meta.count > 1 && isExpanded && groupedItems.length > 0 ? (
-                      <tr className="border-t border-slate-100 bg-slate-50/70">
-                        <td className="px-3 py-2.5" />
-                        <td className="px-3 py-2.5" />
-                        <td colSpan={13} className="px-3 py-2.5">
-                          <div className="relative pl-6">
-                            <span className="absolute left-0 top-[-10px] h-5 w-px bg-slate-300" />
-                            <span className="absolute left-0 top-2 h-px w-4 bg-slate-300" />
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-                              {groupedItems.map((item) => (
-                                <div key={item.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-white px-2.5 py-1">
-                                  <span>{item.sku}</span>
-                                  <span>/</span>
-                                  <span>{item.productNameZh || "-"}</span>
-                                  <span>/</span>
-                                  <span>{lang === "zh" ? "\u6570\u91cf" : "Cant."} {item.quantity}</span>
-                                  <span>/</span>
-                                  <span>{fmtDateOnly(item.shippedAt, lang)}</span>
-                                  <span>/</span>
-                                  <span>{getShippingStatusLabel(item.shippingStatus, lang)}</span>
+                              {row.sku}
+                            </button>
+                          </td>
+                          <td className="px-3 py-2">{row.productNameZh}</td>
+                          <td className="px-3 py-2">{row.color || "-"}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(row.shippingFee, lang)}</td>
+                          <td className={`px-3 py-2 ${row.settlementStatus === "paid" ? "text-emerald-600" : "text-rose-600"}`}>
+                            {row.settlementStatus === "paid" ? (lang === "zh" ? "\u5df2\u7ed3" : "Liquidado") : (lang === "zh" ? "\u672a\u7ed3" : "Pendiente")}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <div className="inline-flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => void deleteSameTrackingOrder(row)}
+                                title={lang === "zh" ? "\u5220\u9664" : "Eliminar"}
+                                aria-label={lang === "zh" ? "\u5220\u9664" : "Eliminar"}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-500 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600"
+                              >
+                                <TrashIcon />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(row)}
+                                title={lang === "zh" ? "\u7f16\u8f91" : "Editar"}
+                                aria-label={lang === "zh" ? "\u7f16\u8f91" : "Editar"}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+                              >
+                                <PencilIcon />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                        {meta?.showTracking && meta.count > 1 && isExpanded && groupedItems.length > 0 ? (
+                          <tr className="border-t border-slate-100 bg-slate-50/70">
+                            <td className="px-3 py-2.5" />
+                            <td className="px-3 py-2.5" />
+                            <td colSpan={13} className="px-3 py-2.5">
+                              <div className="relative pl-6">
+                                <span className="absolute left-0 top-[-10px] h-5 w-px bg-slate-300" />
+                                <span className="absolute left-0 top-2 h-px w-4 bg-slate-300" />
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                                  {groupedItems.map((item) => (
+                                    <div key={item.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-white px-2.5 py-1">
+                                      <span>{item.sku}</span>
+                                      <span>/</span>
+                                      <span>{item.productNameZh || "-"}</span>
+                                      <span>/</span>
+                                      <span>{lang === "zh" ? "\u6570\u91cf" : "Cant."} {item.quantity}</span>
+                                      <span>/</span>
+                                      <span>{fmtDateOnly(item.shippedAt, lang)}</span>
+                                      <span>/</span>
+                                      <span>{getShippingStatusLabel(item.shippingStatus, lang)}</span>
+                                    </div>
+                                  ))}
                                 </div>
-                              ))}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : null}
-                    </Fragment>
-                  );
+                              </div>
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
+                    );
                   })}
                 </tbody>
               </table>
