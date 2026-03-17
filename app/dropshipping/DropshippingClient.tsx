@@ -536,6 +536,7 @@ export function DropshippingClient({
   const [inventoryKeyword, setInventoryKeyword] = useState("");
   const [customerFilter, setCustomerFilter] = useState("all");
   const [inventoryCustomerFilter, setInventoryCustomerFilter] = useState("all");
+  const [inventoryPage, setInventoryPage] = useState(1);
   const [shippedAtSortDirection, setShippedAtSortDirection] = useState<"asc" | "desc">("asc");
   const [expandedTrackingNos, setExpandedTrackingNos] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "shipped" | "cancelled">("all");
@@ -562,6 +563,7 @@ export function DropshippingClient({
   const financePreviewScrollRef = useRef<HTMLDivElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const financePreviewPageSize = 10;
+  const inventoryPageSize = 8;
 
   useEffect(() => {
     setLang(getClientLang());
@@ -571,6 +573,10 @@ export function DropshippingClient({
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    setInventoryPage(1);
+  }, [inventoryCustomerFilter, inventoryKeyword]);
 
   useEffect(() => {
     setFinancePreviewPage(1);
@@ -876,6 +882,13 @@ export function DropshippingClient({
       return customerHit && keywordHit;
     });
   }, [inventory, inventoryCustomerFilter, inventoryKeyword]);
+
+  const inventoryTotalPages = Math.max(1, Math.ceil(filteredInventory.length / inventoryPageSize));
+  const inventoryCurrentPage = Math.min(inventoryPage, inventoryTotalPages);
+  const pagedInventory = filteredInventory.slice(
+    (inventoryCurrentPage - 1) * inventoryPageSize,
+    inventoryCurrentPage * inventoryPageSize,
+  );
 
   const trackingDisplayMeta = useMemo(() => {
     const counts = new Map<string, number>();
@@ -2222,7 +2235,7 @@ export function DropshippingClient({
               }
             />
           ) : (
-            <div className="overflow-x-auto">
+              <div className="overflow-x-auto">
               <table className="min-w-full table-auto border-separate border-spacing-0">
                 <thead className="sticky top-0 z-10 bg-slate-50 shadow-[0_1px_0_0_rgba(148,163,184,0.18)]">
                   <tr className="bg-slate-50 text-left text-xs text-slate-700">
@@ -2516,29 +2529,30 @@ export function DropshippingClient({
               description={lang === "zh" ? "请尝试修改搜索关键字。" : "Prueba con otra palabra clave."}
             />
           ) : (
+            <>
             <div className="overflow-x-auto">
               <table className="min-w-full border-separate border-spacing-0">
                 <thead>
                   <tr className="bg-slate-50 text-left text-sm text-slate-500">
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{lang === "zh" ? "备货时间" : "Fecha de stock"}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.productImage}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.sku}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.productZh}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{lang === "zh" ? "单价" : "Precio"}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{lang === "zh" ? "普通折扣" : "Dsc"}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{lang === "zh" ? "备货数量" : "Stock"}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{lang === "zh" ? "备货金额" : "Monto stock"}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.shipped}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.remaining}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.status}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">{lang === "zh" ? "备货时间" : "Fecha de stock"}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">{text.fields.productImage}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">{text.fields.sku}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">{text.fields.productZh}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">{lang === "zh" ? "单价" : "Precio"}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">{lang === "zh" ? "普通折扣" : "Dsc"}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">{lang === "zh" ? "备货数量" : "Stock"}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">{lang === "zh" ? "备货金额" : "Monto stock"}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">{text.fields.shipped}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">{text.fields.remaining}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">{text.fields.status}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredInventory.map((row) => (
+                  {pagedInventory.map((row) => (
                     <tr key={row.inventoryId} className="border-t border-slate-100">
-                      <td className="px-4 py-3 text-sm text-slate-700">{row.stockedAt ? fmtDateOnly(row.stockedAt, lang) : "-"}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">
-                        <div className="flex min-h-10 items-center justify-center">
+                      <td className="px-4 py-2 text-sm text-slate-700">{row.stockedAt ? fmtDateOnly(row.stockedAt, lang) : "-"}</td>
+                      <td className="px-4 py-2 text-sm text-slate-700">
+                        <div className="flex min-h-8 items-center justify-center">
                           {row.productImageUrl && !failedInventoryImages.includes(row.inventoryId) ? (
                             <button
                               type="button"
@@ -2554,7 +2568,7 @@ export function DropshippingClient({
                               <img
                                 src={row.productImageUrl}
                                 alt={row.productNameZh || row.sku}
-                                className="h-10 w-10 object-cover"
+                                className="h-8 w-8 object-cover"
                                 onError={() =>
                                   setFailedInventoryImages((prev) =>
                                     prev.includes(row.inventoryId) ? prev : [...prev, row.inventoryId],
@@ -2567,13 +2581,13 @@ export function DropshippingClient({
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-900">{row.sku}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{row.productNameZh}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">${fmtMoney(row.unitPrice, lang)}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{fmtPercent(row.discountRate, lang)}%</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{row.stockedQty}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">${fmtMoney(row.stockAmount, lang)}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">
+                      <td className="px-4 py-2 text-sm text-slate-900">{row.sku}</td>
+                      <td className="px-4 py-2 text-sm text-slate-700">{row.productNameZh}</td>
+                      <td className="px-4 py-2 text-sm text-slate-700">${fmtMoney(row.unitPrice, lang)}</td>
+                      <td className="px-4 py-2 text-sm text-slate-700">{fmtPercent(row.discountRate, lang)}%</td>
+                      <td className="px-4 py-2 text-sm text-slate-700">{row.stockedQty}</td>
+                      <td className="px-4 py-2 text-sm text-slate-700">${fmtMoney(row.stockAmount, lang)}</td>
+                      <td className="px-4 py-2 text-sm text-slate-700">
                         {row.shippedQty > 0 ? (
                           <button
                             type="button"
@@ -2593,13 +2607,58 @@ export function DropshippingClient({
                           row.shippedQty
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm font-semibold text-slate-900">{row.remainingQty}</td>
-                      <td className={`px-4 py-3 text-sm font-semibold ${getInventoryStatusClass(row.status)}`}>{text.status[row.status]}</td>
+                      <td className="px-4 py-2 text-sm font-semibold text-slate-900">{row.remainingQty}</td>
+                      <td className={`px-4 py-2 text-sm font-semibold ${getInventoryStatusClass(row.status)}`}>{text.status[row.status]}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+              <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-xs text-slate-500">
+              <span>
+                {lang === "zh"
+                  ? `共 ${filteredInventory.length} 条备货记录`
+                  : `${filteredInventory.length} registros de stock`}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setInventoryPage(1)}
+                  disabled={inventoryCurrentPage <= 1}
+                  className="inline-flex h-7 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {lang === "zh" ? "第一页" : "Primera"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInventoryPage((prev) => Math.max(1, prev - 1))}
+                  disabled={inventoryCurrentPage <= 1}
+                  className="inline-flex h-7 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {lang === "zh" ? "上一页" : "Anterior"}
+                </button>
+                <span className="inline-flex h-7 min-w-[72px] items-center justify-center rounded-lg bg-fuchsia-500 px-3 font-medium text-white">
+                  {inventoryCurrentPage} / {inventoryTotalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setInventoryPage((prev) => Math.min(inventoryTotalPages, prev + 1))}
+                  disabled={inventoryCurrentPage >= inventoryTotalPages}
+                  className="inline-flex h-7 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {lang === "zh" ? "下一页" : "Siguiente"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInventoryPage(inventoryTotalPages)}
+                  disabled={inventoryCurrentPage >= inventoryTotalPages}
+                  className="inline-flex h-7 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {lang === "zh" ? "最后一页" : "Ultima"}
+                </button>
+              </div>
+              </div>
+            </>
           )}
         </TableCard>
       ) : null}
