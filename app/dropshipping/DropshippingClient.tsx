@@ -3121,14 +3121,14 @@ export function DropshippingClient({
       ) : null}
       {financePreview ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-4">
-          <div className="flex h-[calc(100vh-32px)] w-full max-w-[1280px] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_28px_80px_rgba(15,23,42,0.18)]">
-            <div className="border-b border-slate-200 bg-white px-6 py-5">
+          <div className="flex h-[calc(100vh-24px)] w-full max-w-[1440px] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_28px_80px_rgba(15,23,42,0.18)]">
+            <div className="border-b border-slate-200 bg-white px-5 py-3.5">
               <h3 className="text-xl font-semibold text-slate-900">
                 {lang === "zh" ? "\u5df2\u7ed3\u7b97\u8be6\u60c5" : "Detalle de liquidaciones"}
               </h3>
               <p className="mt-1 text-sm text-slate-500">{financePreview.customerName}</p>
             </div>
-            <div className="min-h-0 flex-1 overflow-hidden bg-[#f8fafc] px-6 py-6">
+            <div className="min-h-0 flex-1 overflow-hidden bg-[#f8fafc] px-4 py-4">
               {financePreview.settledOrders.length === 0 ? (
                 <EmptyState
                   title={lang === "zh" ? "\u6682\u65e0\u5df2\u7ed3\u7b97\u8bb0\u5f55" : "Sin registros liquidados"}
@@ -3136,7 +3136,7 @@ export function DropshippingClient({
                 />
               ) : (
                 <div className="min-h-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                  <div className="h-[calc(100vh-240px)] overflow-auto">
+                  <div className="h-[calc(100vh-182px)] overflow-auto">
                     <table className="min-w-[1120px] w-full border-collapse">
                       <thead className="sticky top-0 z-10">
                         <tr className="border-b border-slate-200 bg-slate-50 text-left text-[12px] font-semibold text-slate-600 shadow-[0_1px_0_0_rgba(226,232,240,1),0_6px_16px_rgba(15,23,42,0.04)]">
@@ -3220,7 +3220,7 @@ export function DropshippingClient({
                 </div>
               )}
             </div>
-            <div className="flex justify-end border-t border-slate-200 bg-white px-6 py-4">
+            <div className="flex justify-end border-t border-slate-200 bg-white px-5 py-3">
               <button
                 type="button"
                 onClick={() => setFinancePreview(null)}
