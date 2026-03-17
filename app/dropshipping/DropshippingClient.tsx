@@ -64,6 +64,13 @@ type InventoryPreviewState = {
   productNameZh: string;
 } | null;
 
+type InventoryShippedPreviewState = {
+  customerId: string;
+  customerName: string;
+  sku: string;
+  productNameZh: string;
+} | null;
+
 type FinancePreviewState = DsFinanceRow | null;
 
 type OrderFormState = {
@@ -256,6 +263,7 @@ export function DropshippingClient({
   const [error, setError] = useState("");
   const [previewImage, setPreviewImage] = useState<{ src: string; title: string } | null>(null);
   const [inventoryPreview, setInventoryPreview] = useState<InventoryPreviewState>(null);
+  const [inventoryShippedPreview, setInventoryShippedPreview] = useState<InventoryShippedPreviewState>(null);
   const [financePreview, setFinancePreview] = useState<FinancePreviewState>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -279,7 +287,7 @@ export function DropshippingClient({
         refresh: "刷新数据",
         create: "新增订单",
         import: "历史迁移导入",
-        tabs: { overview: "总览", orders: "订单管理", inventory: "SKU备货", finance: "财务结算" },
+        tabs: { overview: "总览", orders: "订单管理", inventory: "商品备货", finance: "财务结算" },
         stats: {
           todayOrders: "今日录单",
           todayShipped: "今日已发货",
@@ -294,7 +302,7 @@ export function DropshippingClient({
           recent: "最近订单",
           alerts: "待处理提醒",
           orders: "订单列表",
-          inventory: "SKU 备货汇总",
+          inventory: "商品备货汇总",
           finance: "客户结算",
           rate: "汇率状态",
         },
@@ -626,6 +634,15 @@ export function DropshippingClient({
     if (!inventoryPreview) return null;
     return orders.find((row) => row.id === inventoryPreview.orderId) || null;
   }, [inventoryPreview, orders]);
+
+  const shippedOrdersForInventoryPreview = useMemo(() => {
+    if (!inventoryShippedPreview) return [];
+    return orders.filter((row) =>
+      row.customerId === inventoryShippedPreview.customerId
+      && row.sku.trim().toLowerCase() === inventoryShippedPreview.sku.trim().toLowerCase()
+      && row.shippingStatus === "shipped",
+    );
+  }, [inventoryShippedPreview, orders]);
 
   const orderTableCardProps = {
     description: undefined,
@@ -1348,7 +1365,26 @@ export function DropshippingClient({
                       <td className="px-4 py-3 text-sm text-slate-700">{row.productNameZh}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">{row.warehouse || "-"}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">{row.stockedQty}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{row.shippedQty}</td>
+                      <td className="px-4 py-3 text-sm text-slate-700">
+                        {row.shippedQty > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setInventoryShippedPreview({
+                                customerId: row.customerId,
+                                customerName: row.customerName,
+                                sku: row.sku,
+                                productNameZh: row.productNameZh,
+                              })
+                            }
+                            className="text-primary underline-offset-2 hover:underline"
+                          >
+                            {row.shippedQty}
+                          </button>
+                        ) : (
+                          row.shippedQty
+                        )}
+                      </td>
                       <td className={`px-4 py-3 text-sm font-semibold ${row.remainingQty <= 0 ? "text-rose-600" : row.remainingQty < 5 ? "text-amber-600" : "text-slate-900"}`}>{row.remainingQty}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.stockAmount, lang)}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">{text.status[row.status]}</td>
@@ -1716,6 +1752,100 @@ export function DropshippingClient({
               <button
                 type="button"
                 onClick={() => setInventoryPreview(null)}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
+              >
+                {lang === "zh" ? "关闭" : "Cerrar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {inventoryShippedPreview ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="w-full max-w-[920px] rounded-xl bg-white shadow-2xl">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <h3 className="text-base font-semibold text-slate-900">
+                {lang === "zh" ? "已发记录" : "Registros enviados"}
+              </h3>
+              <p className="mt-1 text-xs text-slate-500">
+                {inventoryShippedPreview.customerName} / {inventoryShippedPreview.sku} / {inventoryShippedPreview.productNameZh || "-"}
+              </p>
+            </div>
+            <div className="max-h-[70vh] overflow-auto px-5 py-5">
+              {shippedOrdersForInventoryPreview.length === 0 ? (
+                <EmptyState
+                  title={lang === "zh" ? "暂无已发记录" : "Sin registros enviados"}
+                  description={lang === "zh" ? "当前商品还没有已发出的订单记录。" : "Este producto aun no tiene pedidos enviados."}
+                />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border-separate border-spacing-0">
+                    <thead>
+                      <tr className="bg-slate-50 text-left text-sm text-slate-500">
+                        <th className="px-4 py-3 font-medium">{text.fields.orderNo}</th>
+                        <th className="px-4 py-3 font-medium">{text.fields.trackingNo}</th>
+                        <th className="px-4 py-3 font-medium">{text.fields.shippedAt}</th>
+                        <th className="px-4 py-3 font-medium">{text.fields.quantity}</th>
+                        <th className="px-4 py-3 font-medium">{text.fields.color}</th>
+                        <th className="px-4 py-3 font-medium">{text.fields.shippingLabel}</th>
+                        <th className="px-4 py-3 font-medium">{text.fields.shippingProof}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {shippedOrdersForInventoryPreview.map((row) => (
+                        <tr key={row.id} className="border-t border-slate-100">
+                          <td className="px-4 py-3 text-sm text-slate-900">{row.platformOrderNo}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{row.trackingNo || "-"}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{fmtDateOnly(row.shippedAt, lang)}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{row.quantity}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{row.color || "-"}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700">
+                            {row.shippingLabelAttachments[0]?.fileUrl ? (
+                              <a
+                                href={row.shippingLabelAttachments[0].fileUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 hover:bg-slate-50"
+                              >
+                                PDF
+                              </a>
+                            ) : (
+                              <span className="text-slate-400">{lang === "zh" ? "空" : "Vacio"}</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-700">
+                            {row.shippingProofAttachments[0]?.fileUrl ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setPreviewImage({
+                                    src: row.shippingProofAttachments[0].fileUrl,
+                                    title: `${row.platformOrderNo} / ${row.sku}`,
+                                  })
+                                }
+                                className="overflow-hidden rounded-md border border-slate-200 bg-white"
+                              >
+                                <img
+                                  src={row.shippingProofAttachments[0].fileUrl}
+                                  alt={`${row.platformOrderNo} ${row.sku}`}
+                                  className="h-10 w-10 object-cover"
+                                />
+                              </button>
+                            ) : (
+                              <span className="text-slate-400">{lang === "zh" ? "空" : "Vacio"}</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setInventoryShippedPreview(null)}
                 className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
               >
                 {lang === "zh" ? "关闭" : "Cerrar"}
