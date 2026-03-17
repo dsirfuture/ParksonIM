@@ -1002,12 +1002,12 @@ export function DropshippingClient({
   );
 
   const visibleSortedOrders = useMemo(() => {
-    const seenOrderNos = new Set<string>();
+    const seenGroupKeys = new Set<string>();
     return sortedOrders.filter((row) => {
-      const orderNo = row.platformOrderNo.trim().toLowerCase();
-      if (!orderNo) return true;
-      if (seenOrderNos.has(orderNo)) return false;
-      seenOrderNos.add(orderNo);
+      const trackingGroupKey = row.trackingGroupId?.trim().toLowerCase() || "";
+      if (!trackingGroupKey) return true;
+      if (seenGroupKeys.has(trackingGroupKey)) return false;
+      seenGroupKeys.add(trackingGroupKey);
       return true;
     });
   }, [sortedOrders]);
@@ -1015,11 +1015,11 @@ export function DropshippingClient({
   const orderGroupedOrders = useMemo(() => {
     const grouped = new Map<string, DsOrderRow[]>();
     for (const row of sortedOrders) {
-      const orderNo = row.platformOrderNo.trim().toLowerCase();
-      if (!orderNo) continue;
-      const current = grouped.get(orderNo) || [];
+      const trackingGroupKey = row.trackingGroupId?.trim().toLowerCase() || "";
+      if (!trackingGroupKey) continue;
+      const current = grouped.get(trackingGroupKey) || [];
       current.push(row);
-      grouped.set(orderNo, current);
+      grouped.set(trackingGroupKey, current);
     }
     return grouped;
   }, [sortedOrders]);
@@ -2671,7 +2671,7 @@ export function DropshippingClient({
                   {visibleSortedOrders.map((row) => {
                     const meta = visibleTrackingDisplayMeta.get(row.id);
                     const tracking = row.trackingNo.trim();
-                    const groupKey = row.platformOrderNo.trim().toLowerCase();
+                    const groupKey = row.trackingGroupId?.trim().toLowerCase() || "";
                     const isExpanded = groupKey ? expandedTrackingNos.includes(groupKey) : false;
                     const groupedItems = groupKey ? (orderGroupedOrders.get(groupKey) || []).filter((item) => item.id !== row.id) : [];
 
