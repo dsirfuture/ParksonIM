@@ -2625,12 +2625,21 @@ export function DropshippingClient({
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/45 px-4">
           <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
             <div className="px-5 pb-5 pt-6">
+              <p className="mb-3 text-sm text-slate-600">
+                {lang === "zh"
+                  ? `请输入完整物流号：${deleteTarget.trackingNo}`
+                  : `Ingresa la guia completa: ${deleteTarget.trackingNo}`}
+              </p>
               <input
                 type="text"
                 value={deleteTrackingInput}
                 onChange={(event) => setDeleteTrackingInput(event.target.value)}
                 className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
-                placeholder={deleteTarget.trackingNo}
+                placeholder={
+                  lang === "zh"
+                    ? `请输入完整物流号：${deleteTarget.trackingNo}`
+                    : `Ingresa la guia completa: ${deleteTarget.trackingNo}`
+                }
                 autoFocus
               />
             </div>
