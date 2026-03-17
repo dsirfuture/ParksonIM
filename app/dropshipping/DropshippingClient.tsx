@@ -2264,7 +2264,7 @@ export function DropshippingClient({
               <div className="max-h-[calc(100vh-250px)] overflow-auto">
               <table className="min-w-full table-auto border-separate border-spacing-0">
                 <thead className="sticky top-0 z-20 bg-slate-50 shadow-[0_1px_0_0_rgba(148,163,184,0.18)]">
-                  <tr className="bg-slate-50 text-left text-xs text-slate-700">
+                  <tr className="bg-slate-50 text-left text-sm text-slate-700">
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.platform}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.orderNo}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.trackingNo}</th>
