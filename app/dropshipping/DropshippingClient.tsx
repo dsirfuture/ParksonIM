@@ -563,7 +563,7 @@ export function DropshippingClient({
   const financePreviewScrollRef = useRef<HTMLDivElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const financePreviewPageSize = 10;
-  const inventoryPageSize = 8;
+  const inventoryPageSize = 11;
 
   useEffect(() => {
     setLang(getClientLang());
@@ -2608,7 +2608,7 @@ export function DropshippingClient({
                         )}
                       </td>
                       <td className="px-4 py-2 text-sm font-semibold text-slate-900">{row.remainingQty}</td>
-                      <td className={`px-4 py-2 text-sm font-semibold ${getInventoryStatusClass(row.status)}`}>{text.status[row.status]}</td>
+                      <td className={`px-4 py-2 text-sm ${getInventoryStatusClass(row.status)}`}>{text.status[row.status]}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2637,7 +2637,7 @@ export function DropshippingClient({
                 >
                   {lang === "zh" ? "上一页" : "Anterior"}
                 </button>
-                <span className="inline-flex h-7 min-w-[72px] items-center justify-center rounded-lg bg-fuchsia-500 px-3 font-medium text-white">
+                <span className="inline-flex h-7 min-w-[72px] items-center justify-center rounded-lg bg-primary px-3 font-medium text-white">
                   {inventoryCurrentPage} / {inventoryTotalPages}
                 </span>
                 <button
