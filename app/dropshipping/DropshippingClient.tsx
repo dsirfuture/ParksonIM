@@ -524,6 +524,11 @@ export function DropshippingClient({
     ).length;
   }, [inventoryPreview, orders]);
 
+  const currentPreviewOrder = useMemo(() => {
+    if (!inventoryPreview) return null;
+    return orders.find((row) => row.id === inventoryPreview.orderId) || null;
+  }, [inventoryPreview, orders]);
+
   const orderTableCardProps = {
     description: undefined,
     titleRight: (
@@ -1336,6 +1341,28 @@ export function DropshippingClient({
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="text-xs text-slate-500">{lang === "zh" ? "关联订单数" : "Pedidos relacionados"}</div>
                 <div className="mt-1 text-sm font-semibold text-slate-900">{relatedOrderCount}</div>
+              </div>
+              <div className="rounded-xl border border-slate-200 p-4">
+                <div className="text-xs text-slate-500">{lang === "zh" ? "导入发货日期" : "Fecha importada"}</div>
+                <div className="mt-1 text-sm font-semibold text-slate-900">
+                  {currentPreviewOrder?.shippedAt ? fmtDateOnly(currentPreviewOrder.shippedAt, lang) : "-"}
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-200 p-4">
+                <div className="text-xs text-slate-500">{lang === "zh" ? "导入备货数量" : "Stock importado"}</div>
+                <div className="mt-1 text-sm font-semibold text-slate-900">
+                  {currentPreviewOrder?.snapshotStockedQty ?? currentInventoryPreview?.stockedQty ?? "-"}
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-200 p-4">
+                <div className="text-xs text-slate-500">{lang === "zh" ? "导入备货金额" : "Monto importado"}</div>
+                <div className="mt-1 text-sm font-semibold text-slate-900">
+                  {currentPreviewOrder?.snapshotStockAmount !== null && currentPreviewOrder?.snapshotStockAmount !== undefined
+                    ? fmtMoney(currentPreviewOrder.snapshotStockAmount, lang)
+                    : currentInventoryPreview
+                      ? fmtMoney(currentInventoryPreview.stockAmount, lang)
+                      : "-"}
+                </div>
               </div>
               <div className="rounded-xl border border-slate-200 p-4">
                 <div className="text-xs text-slate-500">{lang === "zh" ? "备货数量" : "Stock"}</div>

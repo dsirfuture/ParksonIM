@@ -862,6 +862,8 @@ export async function listOrders(session: Session) {
       quantity: row.quantity,
       shippingStatus: row.shipping_status,
       shippedAt: row.shipped_at?.toISOString() || null,
+      snapshotStockedQty: row.snapshot_stocked_qty ?? null,
+      snapshotStockAmount: row.snapshot_stock_amount ? toNumber(row.snapshot_stock_amount) : null,
       warehouse: row.warehouse || row.product.default_warehouse || "",
       color: row.color || "",
       shippingFee: toNumber(row.shipping_fee),

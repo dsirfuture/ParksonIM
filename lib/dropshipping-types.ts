@@ -56,6 +56,8 @@ export type DsOrderRow = {
   quantity: number;
   shippingStatus: DsShippingStatus;
   shippedAt: string | null;
+  snapshotStockedQty: number | null;
+  snapshotStockAmount: number | null;
   warehouse: string;
   color: string;
   shippingFee: number;
