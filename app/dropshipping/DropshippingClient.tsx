@@ -163,10 +163,11 @@ function fmtMoney(value: number, lang: "zh" | "es") {
 }
 
 function fmtPercent(value: number, lang: "zh" | "es") {
+  const normalized = Math.abs(value) <= 1 ? value * 100 : value;
   return new Intl.NumberFormat(lang === "zh" ? "zh-CN" : "es-MX", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
-  }).format(value * 100);
+  }).format(normalized);
 }
 
 function getInventoryStatusClass(status: DsInventoryStatus) {
