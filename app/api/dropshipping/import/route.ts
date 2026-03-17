@@ -16,6 +16,8 @@ type AssetFile = {
   bytes: Uint8Array;
 };
 
+type CellImageMap = Map<string, string>;
+
 type CellMeta = {
   text: string;
   hyperlink: string;
@@ -182,11 +184,22 @@ function fileToAsset(file: AssetFile): DsLegacyImportAsset {
   };
 }
 
+function parseCellImageMap(xml: string): CellImageMap {
+  const map: CellImageMap = new Map();
+  const regex = /<xdr:cNvPr[^>]*name="(ID_[^"]+)"[^>]*descr="([^"]+)"/g;
+  let match: RegExpExecArray | null = null;
+  while ((match = regex.exec(xml))) {
+    map.set(match[1].toLowerCase(), match[2]);
+  }
+  return map;
+}
+
 function findAssetByPath(
   rawValue: string,
   hyperlink: string,
   assets: ReturnType<typeof buildAssetIndexes>,
   preferredFolder: "面单文件" | "发货凭据",
+  cellImageMap?: CellImageMap,
 ) {
   const candidates = [hyperlink, ...splitPossiblePaths(rawValue)];
   for (const candidate of candidates) {
@@ -205,10 +218,12 @@ function findAssetByPath(
 
   const dispimgIds = extractDispimgIds(rawValue);
   for (const id of dispimgIds) {
+    const descr = cellImageMap?.get(id);
     for (const file of assets.byPath.values()) {
       const normalizedPath = normalizePath(file.path).toLowerCase();
       if (!normalizedPath.startsWith(normalizePath(preferredFolder).toLowerCase())) continue;
-      if (normalizedPath.includes(id)) return file;
+      const fileBase = baseName(normalizedPath);
+      if (normalizedPath.includes(id) || (descr && fileBase.startsWith(descr.toLowerCase()))) return file;
     }
   }
   return null;
@@ -217,6 +232,7 @@ function findAssetByPath(
 function findProofAssetsByKeys(
   assets: ReturnType<typeof buildAssetIndexes>,
   row: { platformOrderNo: string; trackingNo: string; proofRawValue: string },
+  cellImageMap?: CellImageMap,
 ) {
   const keywords = [row.platformOrderNo, row.trackingNo]
     .map((item) => text(item).toLowerCase())
@@ -231,7 +247,10 @@ function findProofAssetsByKeys(
     if (!normalizedPath.startsWith("发货凭据/")) continue;
     if (
       keywords.some((keyword) => normalizedPath.includes(keyword)) ||
-      dispimgIds.some((id) => normalizedPath.includes(id))
+      dispimgIds.some((id) => {
+        const descr = cellImageMap?.get(id);
+        return normalizedPath.includes(id) || (descr ? baseName(normalizedPath).startsWith(descr.toLowerCase()) : false);
+      })
     ) {
       matches.push(file);
     }
@@ -270,7 +289,7 @@ function getCarriedMeta(
   };
 }
 
-async function parseXlsxWorkbook(bytes: Uint8Array, assetFiles: AssetFile[]) {
+async function parseXlsxWorkbook(bytes: Uint8Array, assetFiles: AssetFile[], cellImageMap?: CellImageMap) {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(Buffer.from(bytes) as unknown as Parameters<typeof workbook.xlsx.load>[0]);
   const assets = buildAssetIndexes(assetFiles);
@@ -348,6 +367,7 @@ async function parseXlsxWorkbook(bytes: Uint8Array, assetFiles: AssetFile[]) {
         carriedLabelMeta.hyperlink,
         assets,
         "面单文件",
+        cellImageMap,
       );
       if (labelAsset) shippingLabelFiles.push(fileToAsset(labelAsset));
 
@@ -357,11 +377,12 @@ async function parseXlsxWorkbook(bytes: Uint8Array, assetFiles: AssetFile[]) {
         carriedProofMeta.hyperlink,
         assets,
         "发货凭据",
+        cellImageMap,
       );
       if (directProofAsset) {
         shippingProofFiles.push(fileToAsset(directProofAsset));
       } else {
-        for (const file of findProofAssetsByKeys(assets, { platformOrderNo, trackingNo, proofRawValue: shippingProofFile })) {
+        for (const file of findProofAssetsByKeys(assets, { platformOrderNo, trackingNo, proofRawValue: shippingProofFile }, cellImageMap)) {
           shippingProofFiles.push(fileToAsset(file));
         }
       }
@@ -490,6 +511,8 @@ async function parseZipBytes(bytes: Uint8Array) {
   }
 
   const workbookBytes = await workbookEntry.async("uint8array");
+  const cellImageXml = zip.files["xl/cellimages.xml"] ? await zip.files["xl/cellimages.xml"].async("string") : "";
+  const cellImageMap = cellImageXml ? parseCellImageMap(cellImageXml) : new Map<string, string>();
   const assetFiles: AssetFile[] = [];
   for (const entry of entries) {
     if (entry.name === workbookEntry.name) continue;
@@ -500,7 +523,7 @@ async function parseZipBytes(bytes: Uint8Array) {
     });
   }
 
-  return parseXlsxWorkbook(workbookBytes, assetFiles);
+  return parseXlsxWorkbook(workbookBytes, assetFiles, cellImageMap);
 }
 
 async function parseZipFile(file: File) {
