@@ -101,6 +101,7 @@ const EMPTY_ORDER_FORM: OrderFormState = {
 };
 
 const PLATFORM_OPTIONS = [
+  "无",
   "Mercado Libre",
   "Amazon",
   "Shopee",
