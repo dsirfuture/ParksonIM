@@ -92,6 +92,16 @@ const EMPTY_ORDER_FORM: OrderFormState = {
   notes: "",
 };
 
+const PLATFORM_OPTIONS = [
+  "Mercado Libre",
+  "Amazon",
+  "Shopee",
+  "AliExpress",
+  "SHEIN",
+  "TikTok",
+  "Temu",
+] as const;
+
 function fmtDate(value: string | null | undefined, lang: "zh" | "es") {
   if (!value) return "-";
   return new Intl.DateTimeFormat(lang === "zh" ? "zh-CN" : "es-MX", {
@@ -416,6 +426,14 @@ export function DropshippingClient({
       return hit && statusHit;
     });
   }, [keyword, orders, statusFilter]);
+
+  const platformOptions = useMemo(() => {
+    const current = form.platform.trim();
+    if (!current || PLATFORM_OPTIONS.includes(current as (typeof PLATFORM_OPTIONS)[number])) {
+      return [...PLATFORM_OPTIONS];
+    }
+    return [current, ...PLATFORM_OPTIONS];
+  }, [form.platform]);
 
   function openCreateModal() {
     setForm(EMPTY_ORDER_FORM);
@@ -995,7 +1013,6 @@ export function DropshippingClient({
             <div className="grid gap-4 px-5 py-5 md:grid-cols-2 xl:grid-cols-3">
               {([
                 ["customerName", text.form.customer],
-                ["platform", text.form.platform],
                 ["platformOrderNo", text.form.orderNo],
                 ["sku", text.form.sku],
                 ["productNameZh", text.form.productZh],
@@ -1017,6 +1034,22 @@ export function DropshippingClient({
                   />
                 </label>
               ))}
+
+              <label className="space-y-1">
+                <span className="text-xs text-slate-500">{text.form.platform}</span>
+                <select
+                  value={form.platform}
+                  onChange={(event) => setForm((prev) => ({ ...prev, platform: event.target.value }))}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                >
+                  <option value="">{lang === "zh" ? "请选择平台" : "Selecciona plataforma"}</option>
+                  {platformOptions.map((platform) => (
+                    <option key={platform} value={platform}>
+                      {platform}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
               <label className="space-y-1">
                 <span className="text-xs text-slate-500">{text.form.status}</span>
