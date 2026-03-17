@@ -160,6 +160,24 @@ function fmtMoney(value: number, lang: "zh" | "es") {
   }).format(value);
 }
 
+function getMexicoDateParts(date: Date) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Mexico_City",
+    weekday: "short",
+    hour: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(date);
+  const weekday = parts.find((part) => part.type === "weekday")?.value || "";
+  const hour = Number(parts.find((part) => part.type === "hour")?.value || "0");
+  return { weekday, hour };
+}
+
+function shouldShowSaturdaySettlementReminder(date: Date) {
+  const { weekday, hour } = getMexicoDateParts(date);
+  return weekday === "Sat" && hour >= 12;
+}
+
 function isDirectFileLink(value: string) {
   const normalized = String(value || "").trim();
   if (!normalized) return false;
@@ -194,6 +212,7 @@ export function DropshippingClient({
   const [inventory, setInventory] = useState(initialInventory);
   const [finance, setFinance] = useState(initialFinance);
   const [exchangeRate, setExchangeRate] = useState(initialExchangeRate);
+  const [now, setNow] = useState(() => new Date());
   const [keyword, setKeyword] = useState("");
   const [customerFilter, setCustomerFilter] = useState("all");
   const [shippedAtSortDirection, setShippedAtSortDirection] = useState<"asc" | "desc">("asc");
@@ -212,6 +231,11 @@ export function DropshippingClient({
 
   useEffect(() => {
     setLang(getClientLang());
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const text = lang === "zh"
@@ -570,6 +594,11 @@ export function DropshippingClient({
       </div>
     ),
   };
+
+  const showSaturdaySettlementReminder = useMemo(
+    () => shouldShowSaturdaySettlementReminder(now),
+    [now],
+  );
 
   function openCreateModal() {
     setForm(EMPTY_ORDER_FORM);
@@ -1167,39 +1196,48 @@ export function DropshippingClient({
           {finance.length === 0 ? (
             <EmptyState title={text.empty.title} description={text.empty.desc} />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full border-separate border-spacing-0">
-                <thead>
-                  <tr className="bg-slate-50 text-left text-sm text-slate-500">
-                    <th className="px-4 py-3 font-medium">{text.fields.customer}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.stockAmount}</th>
-                    <th className="px-4 py-3 font-medium">{text.stats.rate}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.rateAmount}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.shippingFee}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.total}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.paid}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.unpaid}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.lastPaid}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.status}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {finance.map((row) => (
-                    <tr key={row.customerId} className="border-t border-slate-100">
-                      <td className="px-4 py-3 text-sm font-semibold text-slate-900">{row.customerName}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.stockAmount, lang)}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{row.exchangeRate?.toFixed(4) || "-"}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.exchangedAmount, lang)}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.shippingAmount, lang)}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.totalAmount, lang)}</td>
-                      <td className="px-4 py-3 text-sm text-emerald-600">{fmtMoney(row.paidAmount, lang)}</td>
-                      <td className="px-4 py-3 text-sm text-rose-600">{fmtMoney(row.unpaidAmount, lang)}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{fmtDate(row.lastPaidAt, lang)}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{text.status[row.status]}</td>
+            <div>
+              {showSaturdaySettlementReminder ? (
+                <div className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800">
+                  {lang === "zh"
+                    ? "墨西哥地区时间每周六中午 12:00 后进入结算提醒时间，请及时核对并结算本周账目。"
+                    : "En horario de Mexico, despues de las 12:00 del sabado ya es momento de recordar la liquidacion semanal."}
+                </div>
+              ) : null}
+              <div className="overflow-x-auto">
+                <table className="min-w-full border-separate border-spacing-0">
+                  <thead>
+                    <tr className="bg-slate-50 text-left text-sm text-slate-500">
+                      <th className="px-4 py-3 font-medium">{text.fields.customer}</th>
+                      <th className="px-4 py-3 font-medium">{text.fields.stockAmount}</th>
+                      <th className="px-4 py-3 font-medium">{text.stats.rate}</th>
+                      <th className="px-4 py-3 font-medium">{text.fields.rateAmount}</th>
+                      <th className="px-4 py-3 font-medium">{text.fields.shippingFee}</th>
+                      <th className="px-4 py-3 font-medium">{text.fields.total}</th>
+                      <th className="px-4 py-3 font-medium">{text.fields.paid}</th>
+                      <th className="px-4 py-3 font-medium">{text.fields.unpaid}</th>
+                      <th className="px-4 py-3 font-medium">{text.fields.lastPaid}</th>
+                      <th className="px-4 py-3 font-medium">{text.fields.status}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {finance.map((row) => (
+                      <tr key={row.customerId} className="border-t border-slate-100">
+                        <td className="px-4 py-3 text-sm font-semibold text-slate-900">{row.customerName}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.stockAmount, lang)}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{row.exchangeRate?.toFixed(4) || "-"}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.exchangedAmount, lang)}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.shippingAmount, lang)}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.totalAmount, lang)}</td>
+                        <td className="px-4 py-3 text-sm text-emerald-600">{fmtMoney(row.paidAmount, lang)}</td>
+                        <td className="px-4 py-3 text-sm text-rose-600">{fmtMoney(row.unpaidAmount, lang)}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{fmtDate(row.lastPaidAt, lang)}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{text.status[row.status]}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </TableCard>
