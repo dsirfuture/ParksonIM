@@ -454,6 +454,58 @@ async function syncOrderAttachments(input: {
   return created;
 }
 
+export async function replaceOrderAttachments(
+  session: Session,
+  input: {
+    orderId: string;
+    type: "label" | "proof";
+    assets: Array<{
+      displayName: string;
+      bytes: Uint8Array;
+      mimeType?: string;
+    }>;
+  },
+) {
+  const order = await prisma.dropshippingOrder.findFirst({
+    where: {
+      id: input.orderId,
+      tenant_id: session.tenantId,
+      company_id: session.companyId,
+    },
+    include: {
+      product: true,
+      customer: true,
+    },
+  });
+
+  if (!order) {
+    throw new Error("order_not_found");
+  }
+
+  const orderKey = [
+    sanitizeStoragePart(order.customer.name || ""),
+    sanitizeStoragePart(order.platform_order_no || ""),
+    sanitizeStoragePart(order.tracking_no || ""),
+    sanitizeStoragePart(order.product.sku || ""),
+    order.id,
+  ]
+    .filter(Boolean)
+    .join("/");
+
+  return syncOrderAttachments({
+    session,
+    orderId: order.id,
+    orderKey,
+    type: input.type,
+    assets: input.assets.map((asset, index) => ({
+      displayName: asset.displayName,
+      relativePath: `${input.type}/${index + 1}-${asset.displayName}`,
+      bytes: asset.bytes,
+      mimeType: asset.mimeType,
+    })),
+  });
+}
+
 export async function saveOrder(
   session: Session,
   payload: {

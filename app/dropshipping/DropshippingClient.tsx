@@ -247,6 +247,8 @@ export function DropshippingClient({
   const [form, setForm] = useState<OrderFormState>(EMPTY_ORDER_FORM);
   const [productFieldsLocked, setProductFieldsLocked] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [labelFiles, setLabelFiles] = useState<File[]>([]);
+  const [proofFiles, setProofFiles] = useState<File[]>([]);
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<number | null>(null);
   const [importSummary, setImportSummary] = useState<string>("");
@@ -574,6 +576,11 @@ export function DropshippingClient({
     return orders.filter((row) => row.trackingNo.trim().toLowerCase() === tracking);
   }, [form.trackingNo, orders]);
 
+  const currentEditingOrder = useMemo(() => {
+    if (!form.id) return null;
+    return orders.find((row) => row.id === form.id) || null;
+  }, [form.id, orders]);
+
   const platformOptions = useMemo(() => {
     const current = form.platform.trim();
     if (!current || PLATFORM_OPTIONS.includes(current as (typeof PLATFORM_OPTIONS)[number])) {
@@ -667,6 +674,8 @@ export function DropshippingClient({
   function openCreateModal() {
     setForm({ ...EMPTY_ORDER_FORM, warehouse: FIXED_WAREHOUSE });
     setProductFieldsLocked(false);
+    setLabelFiles([]);
+    setProofFiles([]);
     setModalOpen(true);
   }
 
@@ -689,7 +698,33 @@ export function DropshippingClient({
       notes: order.notes,
     });
     setProductFieldsLocked(order.catalogMatched);
+    setLabelFiles([]);
+    setProofFiles([]);
     setModalOpen(true);
+  }
+
+  async function uploadOrderAttachments(orderId: string) {
+    const uploadSets: Array<{ type: "label" | "proof"; files: File[] }> = [
+      { type: "label", files: labelFiles.slice(0, 1) },
+      { type: "proof", files: proofFiles },
+    ];
+
+    for (const item of uploadSets) {
+      if (item.files.length === 0) continue;
+      const formData = new FormData();
+      formData.append("type", item.type);
+      for (const file of item.files) {
+        formData.append("files", file);
+      }
+      const response = await fetch(`/api/dropshipping/orders/${orderId}/attachments`, {
+        method: "POST",
+        body: formData,
+      });
+      const json = await response.json();
+      if (!response.ok || !json?.ok) {
+        throw new Error(json?.error || "attachment_upload_failed");
+      }
+    }
   }
 
   async function submitOrder() {
@@ -720,8 +755,14 @@ export function DropshippingClient({
       });
       const json = await response.json();
       if (!response.ok || !json?.ok) throw new Error(json?.error || "save_failed");
+      const orderId = String(json.id || form.id || "");
+      if (orderId) {
+        await uploadOrderAttachments(orderId);
+      }
       setModalOpen(false);
       setForm(EMPTY_ORDER_FORM);
+      setLabelFiles([]);
+      setProofFiles([]);
       await refreshAll();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "save_failed");
@@ -1402,6 +1443,61 @@ export function DropshippingClient({
                   </div>
                 </div>
               ) : null}
+
+              <div className="space-y-1">
+                <span className="text-xs text-slate-500">{text.fields.shippingLabel}</span>
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                  {currentEditingOrder?.shippingLabelAttachments[0]?.fileUrl ? (
+                    <a
+                      href={currentEditingOrder.shippingLabelAttachments[0].fileUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 hover:bg-slate-50"
+                    >
+                      PDF
+                    </a>
+                  ) : null}
+                  <input
+                    type="file"
+                    accept=".pdf,image/*"
+                    onChange={(event) => setLabelFiles(event.target.files ? [event.target.files[0]].filter(Boolean) as File[] : [])}
+                    className="mt-2 block w-full text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
+                  />
+                  {labelFiles.length > 0 ? (
+                    <div className="mt-2 text-xs text-slate-500">{labelFiles[0].name}</div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <span className="text-xs text-slate-500">{text.fields.shippingProof}</span>
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                  {currentEditingOrder?.shippingProofAttachments.length ? (
+                    <div className="mb-2 flex flex-wrap gap-2">
+                      {currentEditingOrder.shippingProofAttachments.slice(0, 4).map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setPreviewImage({ src: item.fileUrl, title: item.fileName })}
+                          className="overflow-hidden rounded-md border border-slate-200"
+                        >
+                          <img src={item.fileUrl} alt={item.fileName} className="h-10 w-10 object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(event) => setProofFiles(event.target.files ? Array.from(event.target.files) : [])}
+                    className="block w-full text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
+                  />
+                  {proofFiles.length > 0 ? (
+                    <div className="mt-2 text-xs text-slate-500">{proofFiles.length} file(s)</div>
+                  ) : null}
+                </div>
+              </div>
 
               <label className="space-y-1">
                 <span className="text-xs text-slate-500">{text.form.platform}</span>
