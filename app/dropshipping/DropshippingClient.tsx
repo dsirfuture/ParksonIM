@@ -224,6 +224,18 @@ function MinusBadge() {
   );
 }
 
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4.75 5.5h10.5" />
+      <path d="M7.25 5.5V4.25h5.5V5.5" />
+      <path d="M6.25 7.25v7.5h7.5v-7.5" />
+      <path d="M8.5 9.25v3.5" />
+      <path d="M11.5 9.25v3.5" />
+    </svg>
+  );
+}
+
 function OverviewLineChart({
   data,
   lineColor = "#1d4ed8",
@@ -1645,15 +1657,26 @@ export function DropshippingClient({
                       </td>
                       <td className="max-w-[220px] px-3 py-2 truncate text-slate-900">{row.productNameZh}</td>
                       <td className="px-3 py-2 text-right">
-                        <button
-                          type="button"
-                          onClick={() => openEditModal(row)}
-                          title={lang === "zh" ? "编辑" : "Editar"}
-                          aria-label={lang === "zh" ? "编辑" : "Editar"}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
-                        >
-                          <PencilIcon />
-                        </button>
+                        <div className="inline-flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void deleteSameTrackingOrder(row)}
+                            title={lang === "zh" ? "??" : "Eliminar"}
+                            aria-label={lang === "zh" ? "??" : "Eliminar"}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-500 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600"
+                          >
+                            <TrashIcon />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(row)}
+                            title={lang === "zh" ? "??" : "Editar"}
+                            aria-label={lang === "zh" ? "??" : "Editar"}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+                          >
+                            <PencilIcon />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                     {meta?.showTracking && meta.count > 1 && isExpanded && groupedItems.length > 0 ? (
