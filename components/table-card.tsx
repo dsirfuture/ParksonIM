@@ -31,7 +31,7 @@ export function TableCard({
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <div className="flex flex-col gap-1 lg:flex-row lg:items-center lg:gap-4">
-                <h2 className="shrink-0 text-left text-[18px] font-semibold tracking-tight text-slate-900">
+                <h2 className="shrink-0 text-left text-[18px] font-semibold leading-none tracking-tight text-slate-900">
                   {title}
                 </h2>
                 {titleRight ? <div className="shrink-0">{titleRight}</div> : null}
