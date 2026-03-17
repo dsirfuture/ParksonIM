@@ -1285,7 +1285,7 @@ export function DropshippingClient({
                               PDF
                             </a>
                           ) : (
-                            <span className="text-slate-400">{lang === "zh" ? "?" : "Vacio"}</span>
+                            <span className="text-slate-400">{lang === "zh" ? "\u7a7a" : "Vacio"}</span>
                           )}
                         </div>
                       </td>
@@ -1648,7 +1648,7 @@ export function DropshippingClient({
                                   className="h-full w-full object-cover"
                                 />
                               ) : (
-                                <span className="text-[10px] text-slate-400">{lang === "zh" ? "?" : "Vacio"}</span>
+                                <span className="text-[10px] text-slate-400">{lang === "zh" ? "\u7a7a" : "Vacio"}</span>
                               )}
                             </span>
                             <span>{item.sku}</span>
