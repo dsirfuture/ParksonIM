@@ -219,7 +219,9 @@ async function ensureRateByDate(
 }
 
 export function computeStockAmount(unitPrice: number, stockedQty: number, discountRate: number) {
-  return unitPrice * stockedQty * (1 - discountRate);
+  const normalizedDiscountRate = Math.abs(discountRate) <= 1 ? discountRate : discountRate / 100;
+  const safeDiscountRate = Math.min(Math.max(normalizedDiscountRate, 0), 1);
+  return unitPrice * stockedQty * (1 - safeDiscountRate);
 }
 
 export function deriveInventoryStatus(remainingQty: number): DsInventoryStatus {
@@ -1166,7 +1168,8 @@ export async function getInventoryRows(session: Session) {
     const catalog = catalogBySku.get(normalizedSku);
     const matchedSku = catalog?.sku?.trim() || row.product.sku;
     const unitPrice = toNumber(catalog?.price ?? row.locked_unit_price ?? row.product.unit_price);
-    const discountRate = toNumber(catalog?.normal_discount ?? row.locked_discount_rate ?? row.product.discount_rate);
+    const rawDiscountRate = toNumber(catalog?.normal_discount ?? row.locked_discount_rate ?? row.product.discount_rate);
+    const discountRate = Math.abs(rawDiscountRate) <= 1 ? rawDiscountRate : rawDiscountRate / 100;
     return {
       inventoryId: row.id,
       customerId: row.customer_id,
