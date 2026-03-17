@@ -570,6 +570,7 @@ export function DropshippingClient({
   const [groupProductSearchLoading, setGroupProductSearchLoading] = useState(false);
   const [groupProductOptions, setGroupProductOptions] = useState<GroupProductOption[]>([]);
   const [activeGroupSlotKey, setActiveGroupSlotKey] = useState<string | null>(null);
+  const [groupedDeleteTarget, setGroupedDeleteTarget] = useState<GroupedOrderSlot | null>(null);
   const [productFieldsLocked, setProductFieldsLocked] = useState(false);
   const [saving, setSaving] = useState(false);
   const [labelFiles, setLabelFiles] = useState<File[]>([]);
@@ -1641,16 +1642,17 @@ export function DropshippingClient({
     }
   }
 
-  async function handleRemoveGroupedOrder(slot: GroupedOrderSlot) {
+  function requestRemoveGroupedOrder(slot: GroupedOrderSlot) {
     if (!slot.orderId || slot.isCurrent) return;
+    setGroupedDeleteTarget(slot);
+  }
+
+  async function confirmRemoveGroupedOrder() {
+    const slot = groupedDeleteTarget;
+    if (!slot?.orderId || slot.isCurrent) return;
     const targetOrder = orders.find((row) => row.id === slot.orderId);
+    setGroupedDeleteTarget(null);
     if (!targetOrder) return;
-    const confirmed = window.confirm(
-      lang === "zh"
-        ? `确认将 ${targetOrder.sku} 从同物流号商品组中移除？`
-        : `Quitar ${targetOrder.sku} del grupo?`,
-    );
-    if (!confirmed) return;
 
     try {
       setSaving(true);
@@ -3671,13 +3673,13 @@ export function DropshippingClient({
                   <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-3">
                     <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
                       {groupedOrderSlots.map((slot, index) => (
-                        <div key={slot.slotKey} className="relative min-h-[86px] rounded-xl border border-slate-200 bg-white p-2.5">
+                        <div key={slot.slotKey} className="relative min-h-[82px] rounded-xl border border-slate-200 bg-white p-2.5">
                           {slot.orderId ? (
                             <>
                               {!slot.isCurrent ? (
                                 <button
                                   type="button"
-                                  onClick={() => void handleRemoveGroupedOrder(slot)}
+                                  onClick={() => requestRemoveGroupedOrder(slot)}
                                   className="absolute right-2 top-2 inline-flex h-5 w-5 items-center justify-center rounded-full border border-rose-200 bg-white text-xs text-rose-500 transition hover:border-rose-300 hover:bg-rose-50"
                                   title={lang === "zh" ? "删除" : "Quitar"}
                                   aria-label={lang === "zh" ? "删除" : "Quitar"}
@@ -3692,7 +3694,7 @@ export function DropshippingClient({
                                   const match = groupedOrdersForModal.find((item) => item.id === slot.orderId);
                                   if (match) openEditModal(match);
                                 }}
-                                className={`flex w-full items-start gap-2 text-left ${slot.isCurrent ? "cursor-default" : "cursor-pointer"}`}
+                                className={`flex w-full items-start gap-1.5 text-left ${slot.isCurrent ? "cursor-default" : "cursor-pointer"}`}
                               >
                                 <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
                                   {slot.productImageUrl ? (
@@ -3701,10 +3703,14 @@ export function DropshippingClient({
                                     <span className="text-[10px] text-slate-400">{lang === "zh" ? "空" : "Vacio"}</span>
                                   )}
                                 </span>
-                                <span className="min-w-0 pt-0.5">
+                                <span className="flex min-w-0 flex-col justify-center pt-0.5">
                                   <span className="block truncate text-[13px] font-medium text-slate-900">{slot.sku || `SKU ${index + 1}`}</span>
                                   <span className="mt-0.5 block truncate text-[11px] text-slate-500">{slot.productNameZh || (lang === "zh" ? "未选择商品" : "Sin producto")}</span>
-                                  <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] ${slot.isCurrent ? "bg-primary/10 text-primary" : "bg-slate-100 text-slate-500"}`}>
+                                  <span
+                                    className={`mt-1 inline-flex w-fit max-w-full whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] leading-none tracking-tight ${
+                                      slot.isCurrent ? "bg-primary/10 text-primary" : "bg-slate-100 text-slate-500"
+                                    }`}
+                                  >
                                     {slot.isCurrent ? (lang === "zh" ? "当前编辑" : "Actual") : (lang === "zh" ? "点击切换" : "Cambiar")}
                                   </span>
                                 </span>
@@ -3714,10 +3720,10 @@ export function DropshippingClient({
                             <button
                               type="button"
                               onClick={() => openGroupProductSearch(slot.slotKey)}
-                              className="flex h-full min-h-[66px] w-full flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 text-slate-400 transition hover:border-primary/45 hover:text-primary"
+                              className="flex h-full min-h-[66px] w-full flex-col items-center justify-center gap-1 rounded-lg text-slate-400 transition hover:bg-slate-50 hover:text-primary"
                             >
                               <span className="text-lg leading-none">+</span>
-                              <span className="mt-1 text-[11px]">{lang === "zh" ? "添加商品" : "Agregar"}</span>
+                              <span className="text-[11px] font-medium">{lang === "zh" ? "添加商品" : "Agregar"}</span>
                             </button>
                           )}
                         </div>
@@ -3738,7 +3744,7 @@ export function DropshippingClient({
               </div>
             </div>
             </div>
-            <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
+            <div className="flex justify-end gap-2 px-5 py-4">
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
@@ -3753,6 +3759,39 @@ export function DropshippingClient({
                 className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white disabled:opacity-50"
               >
                 {saving ? text.saving : text.form.submit}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {groupedDeleteTarget ? (
+        <div className="fixed inset-0 z-[56] flex items-center justify-center bg-slate-900/45 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+            <div className="px-5 pb-3 pt-5">
+              <h3 className="text-base font-semibold text-slate-900">
+                {lang === "zh" ? "确认移除商品" : "Confirmar eliminacion"}
+              </h3>
+              <p className="mt-2 text-sm text-slate-600">
+                {lang === "zh"
+                  ? `确认将 ${groupedDeleteTarget.sku || groupedDeleteTarget.productNameZh || "该商品"} 从同物流号商品组中移除？`
+                  : `Quitar ${groupedDeleteTarget.sku || groupedDeleteTarget.productNameZh || "este producto"} del grupo?`}
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setGroupedDeleteTarget(null)}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
+              >
+                {lang === "zh" ? "取消" : "Cancelar"}
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void confirmRemoveGroupedOrder()}
+                className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {lang === "zh" ? "确定" : "Confirmar"}
               </button>
             </div>
           </div>
