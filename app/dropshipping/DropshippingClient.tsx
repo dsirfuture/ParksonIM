@@ -1319,13 +1319,6 @@ export function DropshippingClient({
                   />
                 </label>
               ))}
-              {productFieldsLocked ? (
-                <div className="md:col-span-2 xl:col-span-3">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
-                    {lang === "zh" ? "该编码已匹配“产品管理”页，产品相关信息不可在此编辑。" : "Este codigo ya coincide con Productos; los campos de producto quedan bloqueados aqui."}
-                  </div>
-                </div>
-              ) : null}
 
               <label className="space-y-1">
                 <span className="text-xs text-slate-500">{text.form.platform}</span>
