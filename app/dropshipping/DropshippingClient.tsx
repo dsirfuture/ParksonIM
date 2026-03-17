@@ -170,6 +170,14 @@ function PencilIcon() {
   return <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8"><path d="M3.5 13.75V16.5h2.75L15 7.75 12.25 5 3.5 13.75Z" /><path d="M10.75 6.5 13.5 9.25" /><path d="M11.5 3.75 16.25 8.5" /></svg>;
 }
 
+function SortDirectionIcon({ direction }: { direction: "asc" | "desc" }) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      {direction === "asc" ? <path d="M4 10 8 6l4 4" /> : <path d="m4 6 4 4 4-4" />}
+    </svg>
+  );
+}
+
 export function DropshippingClient({
   initialLang,
   initialOverview,
@@ -187,6 +195,7 @@ export function DropshippingClient({
   const [exchangeRate, setExchangeRate] = useState(initialExchangeRate);
   const [keyword, setKeyword] = useState("");
   const [customerFilter, setCustomerFilter] = useState("all");
+  const [shippedAtSortDirection, setShippedAtSortDirection] = useState<"asc" | "desc">("asc");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "shipped" | "cancelled">("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<OrderFormState>(EMPTY_ORDER_FORM);
@@ -461,6 +470,19 @@ export function DropshippingClient({
       return customerHit && hit && statusHit;
     });
   }, [customerFilter, keyword, orders, statusFilter]);
+
+  const sortedOrders = useMemo(() => {
+    return [...filteredOrders].sort((a, b) => {
+      const aTime = a.shippedAt ? new Date(a.shippedAt).getTime() : Number.POSITIVE_INFINITY;
+      const bTime = b.shippedAt ? new Date(b.shippedAt).getTime() : Number.POSITIVE_INFINITY;
+      if (aTime === bTime) {
+        return a.platformOrderNo.localeCompare(b.platformOrderNo, "en");
+      }
+      if (!Number.isFinite(aTime)) return 1;
+      if (!Number.isFinite(bTime)) return -1;
+      return shippedAtSortDirection === "asc" ? aTime - bTime : bTime - aTime;
+    });
+  }, [filteredOrders, shippedAtSortDirection]);
 
   const platformOptions = useMemo(() => {
     const current = form.platform.trim();
@@ -930,7 +952,17 @@ export function DropshippingClient({
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.trackingNo}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.shippingLabel}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.status}</th>
-                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.shippedAt}</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">
+                      <button
+                        type="button"
+                        onClick={() => setShippedAtSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))}
+                        className="inline-flex items-center gap-1 text-slate-700"
+                        title={lang === "zh" ? "按发货日期排序" : "Ordenar por fecha de envio"}
+                      >
+                        <span>{text.fields.shippedAt}</span>
+                        <SortDirectionIcon direction={shippedAtSortDirection} />
+                      </button>
+                    </th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.shippingProof}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.sku}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">{text.fields.quantity}</th>
@@ -942,7 +974,7 @@ export function DropshippingClient({
                   </tr>
                 </thead>
                 <tbody className="text-[13px] text-slate-700">
-                  {filteredOrders.map((row) => (
+                  {sortedOrders.map((row) => (
                     <tr key={row.id} className="border-t border-slate-100">
                       <td className="px-3 py-2">{row.platform}</td>
                       <td className="px-3 py-2 text-slate-900">{row.platformOrderNo}</td>
