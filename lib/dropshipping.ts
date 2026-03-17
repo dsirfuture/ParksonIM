@@ -961,6 +961,31 @@ export async function getInventoryRows(session: Session) {
     orderBy: [{ updated_at: "desc" }],
   });
 
+  const normalizedSkus = [...new Set(
+    inventories
+      .map((row) => row.product.sku.trim())
+      .filter(Boolean),
+  )];
+
+  const catalogRows = await prisma.productCatalog.findMany({
+    where: {
+      tenant_id: session.tenantId,
+      company_id: session.companyId,
+      ...(normalizedSkus.length
+        ? {
+            OR: normalizedSkus.map((sku) => ({
+              sku: { equals: sku, mode: "insensitive" as const },
+            })),
+          }
+        : {}),
+    },
+    select: {
+      sku: true,
+      name_zh: true,
+      name_es: true,
+    },
+  });
+
   const shippedOrders = await prisma.dropshippingOrder.groupBy({
     by: ["customer_id", "product_id"],
     where: {
@@ -977,20 +1002,26 @@ export async function getInventoryRows(session: Session) {
     shippedOrders.map((row) => [`${row.customer_id}::${row.product_id}`, row._sum.quantity || 0]),
   );
 
+  const catalogBySku = new Map(
+    catalogRows.map((row) => [row.sku.trim().toUpperCase(), row]),
+  );
+
   return inventories.map((row): DsInventoryRow => {
     const shippedQty = shippedMap.get(`${row.customer_id}::${row.product_id}`) || 0;
     const remainingQty = row.stocked_qty - shippedQty;
     const unitPrice = toNumber(row.locked_unit_price ?? row.product.unit_price);
     const discountRate = toNumber(row.locked_discount_rate ?? row.product.discount_rate);
+    const normalizedSku = row.product.sku.trim().toUpperCase();
+    const catalog = catalogBySku.get(normalizedSku);
     return {
       inventoryId: row.id,
       customerId: row.customer_id,
       customerName: row.customer.name,
       productId: row.product_id,
       sku: row.product.sku,
-      productNameZh: row.product.name_zh,
-      productNameEs: row.product.name_es || "",
-      productImageUrl: row.product.image_url || "",
+      productNameZh: catalog?.name_zh?.trim() || row.product.name_zh,
+      productNameEs: catalog?.name_es?.trim() || row.product.name_es || "",
+      productImageUrl: row.product.image_url || (catalog ? buildProductImageUrl(row.product.sku, "jpg") : ""),
       warehouse: row.warehouse || row.product.default_warehouse || "",
       stockedQty: row.stocked_qty,
       shippedQty,
