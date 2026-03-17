@@ -84,6 +84,7 @@ export type DsOrderRow = {
   customerId: string;
   customerName: string;
   productId: string;
+  trackingGroupId: string | null;
   settlementStatus: "unpaid" | "paid";
   catalogMatched: boolean;
   sku: string;

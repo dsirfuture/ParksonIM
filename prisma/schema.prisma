@@ -431,6 +431,7 @@ model DropshippingOrder {
 
   platform             String
   platform_order_no    String
+  tracking_group_id    String?  @db.Uuid
   tracking_no          String?
   shipping_label_file  String?
   quantity             Int
@@ -466,6 +467,7 @@ model DropshippingOrder {
   @@index([tenant_id, company_id])
   @@index([customer_id])
   @@index([product_id])
+  @@index([tracking_group_id])
   @@index([shipping_status])
   @@map("ds_orders")
 }

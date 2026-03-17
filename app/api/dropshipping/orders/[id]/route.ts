@@ -35,6 +35,7 @@ export async function PATCH(
       customerName,
       platform,
       platformOrderNo,
+      trackingGroupId: body.trackingGroupId === undefined ? undefined : String(body.trackingGroupId || "").trim() || null,
       sku,
       productNameZh,
       productNameEs: String(body.productNameEs || "").trim() || undefined,

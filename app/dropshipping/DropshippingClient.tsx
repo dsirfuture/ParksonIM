@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { EmptyState } from "@/components/empty-state";
@@ -65,8 +65,29 @@ type DeleteOrderState = {
   trackingNo: string;
 } | null;
 
+type GroupProductOption = {
+  id: string;
+  sku: string;
+  nameZh: string;
+  nameEs: string;
+  imageUrl: string;
+};
+
+type GroupedOrderSlot = {
+  slotKey: string;
+  orderId: string | null;
+  productId: string;
+  sku: string;
+  productNameZh: string;
+  productNameEs: string;
+  productImageUrl: string;
+  isCurrent: boolean;
+  isPersisted: boolean;
+};
+
 type OrderFormState = {
   id: string;
+  trackingGroupId: string;
   customerName: string;
   platform: string;
   platformOrderNo: string;
@@ -85,6 +106,7 @@ type OrderFormState = {
 
 const EMPTY_ORDER_FORM: OrderFormState = {
   id: "",
+  trackingGroupId: "",
   customerName: "",
   platform: "",
   platformOrderNo: "",
@@ -543,6 +565,11 @@ export function DropshippingClient({
   const [settlementFilter, setSettlementFilter] = useState<"all" | "paid" | "unpaid">("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<OrderFormState>(EMPTY_ORDER_FORM);
+  const [groupProductSearchOpen, setGroupProductSearchOpen] = useState(false);
+  const [groupProductSearchKeyword, setGroupProductSearchKeyword] = useState("");
+  const [groupProductSearchLoading, setGroupProductSearchLoading] = useState(false);
+  const [groupProductOptions, setGroupProductOptions] = useState<GroupProductOption[]>([]);
+  const [activeGroupSlotKey, setActiveGroupSlotKey] = useState<string | null>(null);
   const [productFieldsLocked, setProductFieldsLocked] = useState(false);
   const [saving, setSaving] = useState(false);
   const [labelFiles, setLabelFiles] = useState<File[]>([]);
@@ -585,6 +612,36 @@ export function DropshippingClient({
   useEffect(() => {
     financePreviewScrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
   }, [financePreviewPage]);
+
+  useEffect(() => {
+    if (!groupProductSearchOpen) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        setGroupProductSearchLoading(true);
+        const query = groupProductSearchKeyword.trim();
+        const response = await fetch(`/api/dropshipping/product-search?keyword=${encodeURIComponent(query)}`, {
+          signal: controller.signal,
+        });
+        const json = await response.json();
+        if (!response.ok || !json?.ok) {
+          throw new Error(json?.error || "product_search_failed");
+        }
+        setGroupProductOptions(Array.isArray(json.items) ? json.items : []);
+      } catch (searchError) {
+        if ((searchError as Error).name !== "AbortError") {
+          setError(searchError instanceof Error ? searchError.message : "product_search_failed");
+        }
+      } finally {
+        setGroupProductSearchLoading(false);
+      }
+    }, 220);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [groupProductSearchKeyword, groupProductSearchOpen]);
 
   const financeDisplayRate = useMemo(() => exchangeRate.rateValue || null, [exchangeRate.rateValue]);
   const financeRateDate = exchangeRate.fetchedAt || exchangeRate.rateDate;
@@ -930,16 +987,81 @@ export function DropshippingClient({
     return meta;
   }, [visibleSortedOrders]);
 
-  const sameTrackingOrders = useMemo(() => {
-    const tracking = form.trackingNo.trim().toLowerCase();
-    if (!tracking) return [];
-    return orders.filter((row) => row.trackingNo.trim().toLowerCase() === tracking);
-  }, [form.trackingNo, orders]);
-
   const currentEditingOrder = useMemo(() => {
     if (!form.id) return null;
     return orders.find((row) => row.id === form.id) || null;
   }, [form.id, orders]);
+
+  const groupedOrdersForModal = useMemo(() => {
+    const currentId = form.id.trim();
+    const trackingGroupId = form.trackingGroupId.trim().toLowerCase();
+    if (trackingGroupId) {
+      return orders
+        .filter((row) => row.trackingGroupId?.trim().toLowerCase() === trackingGroupId)
+        .sort((a, b) => {
+          if (a.id === currentId) return -1;
+          if (b.id === currentId) return 1;
+          return a.createdAt.localeCompare(b.createdAt, "en");
+        });
+    }
+
+    const tracking = form.trackingNo.trim().toLowerCase();
+    if (!tracking) {
+      return currentId ? orders.filter((row) => row.id === currentId) : [];
+    }
+
+    return orders
+      .filter((row) => row.trackingNo.trim().toLowerCase() === tracking)
+      .sort((a, b) => {
+        if (a.id === currentId) return -1;
+        if (b.id === currentId) return 1;
+        return a.createdAt.localeCompare(b.createdAt, "en");
+      });
+  }, [form.id, form.trackingGroupId, form.trackingNo, orders]);
+
+  const groupedOrderSlots = useMemo(() => {
+    const currentSlot: GroupedOrderSlot = {
+      slotKey: form.id || "current",
+      orderId: form.id || null,
+      productId: currentEditingOrder?.productId || "",
+      sku: form.sku,
+      productNameZh: form.productNameZh,
+      productNameEs: form.productNameEs,
+      productImageUrl: currentEditingOrder?.productImageUrl || "",
+      isCurrent: true,
+      isPersisted: Boolean(form.id),
+    };
+
+    const siblingSlots = groupedOrdersForModal
+      .filter((row) => row.id !== form.id)
+      .map<GroupedOrderSlot>((row) => ({
+        slotKey: row.id,
+        orderId: row.id,
+        productId: row.productId,
+        sku: row.sku,
+        productNameZh: row.productNameZh,
+        productNameEs: row.productNameEs,
+        productImageUrl: row.productImageUrl,
+        isCurrent: false,
+        isPersisted: true,
+      }));
+
+    const slots = [currentSlot, ...siblingSlots].slice(0, 7);
+    while (slots.length < 7) {
+      slots.push({
+        slotKey: `empty-${slots.length}`,
+        orderId: null,
+        productId: "",
+        sku: "",
+        productNameZh: "",
+        productNameEs: "",
+        productImageUrl: "",
+        isCurrent: false,
+        isPersisted: false,
+      });
+    }
+    return slots;
+  }, [currentEditingOrder, form.id, form.productNameEs, form.productNameZh, form.sku, groupedOrdersForModal]);
 
   const platformOptions = useMemo(() => {
     const current = form.platform.trim();
@@ -1335,31 +1457,17 @@ export function DropshippingClient({
     setProductFieldsLocked(false);
     setLabelFiles([]);
     setProofFiles([]);
-    setModalOpen(true);
-  }
-
-  function openCreateModalWithTrackingSeed() {
-    setForm({
-      ...EMPTY_ORDER_FORM,
-      customerName: form.customerName,
-      platform: form.platform,
-      platformOrderNo: form.platformOrderNo,
-      trackingNo: form.trackingNo,
-      color: form.color,
-      shippedAt: form.shippedAt,
-      shippingFee: form.shippingFee,
-      shippingStatus: form.shippingStatus,
-      warehouse: FIXED_WAREHOUSE,
-    });
-    setProductFieldsLocked(false);
-    setLabelFiles([]);
-    setProofFiles([]);
+    setGroupProductSearchOpen(false);
+    setGroupProductSearchKeyword("");
+    setGroupProductOptions([]);
+    setActiveGroupSlotKey(null);
     setModalOpen(true);
   }
 
   function openEditModal(order: DsOrderRow) {
     setForm({
       id: order.id,
+      trackingGroupId: order.trackingGroupId || "",
       customerName: order.customerName,
       platform: order.platform,
       platformOrderNo: order.platformOrderNo,
@@ -1378,7 +1486,213 @@ export function DropshippingClient({
     setProductFieldsLocked(order.catalogMatched);
     setLabelFiles([]);
     setProofFiles([]);
+    setGroupProductSearchOpen(false);
+    setGroupProductSearchKeyword("");
+    setGroupProductOptions([]);
+    setActiveGroupSlotKey(null);
     setModalOpen(true);
+  }
+
+  function buildOrderPayload(source: OrderFormState, trackingGroupId?: string | null) {
+    return {
+      customerName: source.customerName,
+      platform: source.platform,
+      platformOrderNo: source.platformOrderNo,
+      trackingGroupId: trackingGroupId === undefined ? source.trackingGroupId || null : trackingGroupId,
+      sku: source.sku,
+      productNameZh: source.productNameZh,
+      productNameEs: source.productNameEs,
+      quantity: Number(source.quantity || 0),
+      trackingNo: source.trackingNo,
+      color: source.color,
+      warehouse: FIXED_WAREHOUSE,
+      shippedAt: source.shippedAt || null,
+      shippingFee: source.shippingFee || null,
+      shippingStatus: source.shippingStatus,
+      notes: source.notes,
+    };
+  }
+
+  async function persistOrderRequest(source: OrderFormState, trackingGroupId?: string | null) {
+    const endpoint = source.id ? `/api/dropshipping/orders/${source.id}` : "/api/dropshipping/orders";
+    const method = source.id ? "PATCH" : "POST";
+    const response = await fetch(endpoint, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildOrderPayload(source, trackingGroupId)),
+    });
+    const json = await response.json();
+    if (!response.ok || !json?.ok) throw new Error(json?.error || "save_failed");
+    return String(json.id || source.id || "");
+  }
+
+  async function syncGroupedOrders(trackingGroupId: string, currentOrderId: string) {
+    const siblings = groupedOrdersForModal.filter((row) => row.id !== currentOrderId);
+    for (const row of siblings) {
+      await persistOrderRequest(
+        {
+          id: row.id,
+          trackingGroupId,
+          customerName: row.customerName,
+          platform: row.platform,
+          platformOrderNo: row.platformOrderNo,
+          sku: row.sku,
+          productNameZh: row.productNameZh,
+          productNameEs: row.productNameEs,
+          quantity: String(row.quantity),
+          trackingNo: row.trackingNo,
+          color: row.color,
+          warehouse: row.warehouse || FIXED_WAREHOUSE,
+          shippedAt: row.shippedAt ? row.shippedAt.slice(0, 10) : "",
+          shippingFee: row.shippingFee ? String(row.shippingFee) : "",
+          shippingStatus: row.shippingStatus,
+          notes: row.notes,
+        },
+        trackingGroupId,
+      );
+    }
+  }
+
+  async function persistCurrentOrder(forceTrackingGroupId?: string | null) {
+    const shouldPersistGroup =
+      Boolean(forceTrackingGroupId)
+      || Boolean(form.trackingGroupId)
+      || groupedOrdersForModal.length > 1;
+    const trackingGroupId = shouldPersistGroup
+      ? (forceTrackingGroupId || form.trackingGroupId || crypto.randomUUID())
+      : null;
+    const orderId = await persistOrderRequest(form, trackingGroupId);
+    if (trackingGroupId) {
+      await syncGroupedOrders(trackingGroupId, orderId);
+    }
+    return { orderId, trackingGroupId: trackingGroupId || "" };
+  }
+
+  async function fetchOrdersOnly() {
+    const response = await fetch("/api/dropshipping/orders");
+    const json = await response.json();
+    if (!response.ok || !json?.ok || !Array.isArray(json.items)) {
+      throw new Error(json?.error || "orders");
+    }
+    return json.items as DsOrderRow[];
+  }
+
+  function openGroupProductSearch(slotKey: string) {
+    setActiveGroupSlotKey(slotKey);
+    setGroupProductSearchKeyword("");
+    setGroupProductOptions([]);
+    setGroupProductSearchOpen(true);
+  }
+
+  async function handleSelectGroupedProduct(product: GroupProductOption) {
+    try {
+      setSaving(true);
+      setError("");
+      const duplicateOrder = groupedOrdersForModal.find((row) => row.productId === product.id);
+      if (duplicateOrder) {
+        throw new Error(lang === "zh" ? "该商品已在同组订单中" : "El producto ya existe en el grupo");
+      }
+      const { orderId, trackingGroupId } = await persistCurrentOrder(
+        form.trackingGroupId || crypto.randomUUID(),
+      );
+      if (orderId) {
+        await uploadOrderAttachments(orderId);
+      }
+      const response = await fetch("/api/dropshipping/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerName: form.customerName,
+          platform: form.platform,
+          platformOrderNo: form.platformOrderNo,
+          trackingGroupId,
+          sku: product.sku,
+          productNameZh: product.nameZh || product.sku,
+          productNameEs: product.nameEs || "",
+          quantity: 1,
+          trackingNo: form.trackingNo,
+          color: "",
+          warehouse: FIXED_WAREHOUSE,
+          shippedAt: form.shippedAt || null,
+          shippingFee: form.shippingFee || null,
+          shippingStatus: form.shippingStatus,
+          notes: "",
+        }),
+      });
+      const json = await response.json();
+      if (!response.ok || !json?.ok) {
+        throw new Error(json?.error || "save_failed");
+      }
+      setGroupProductSearchOpen(false);
+      setGroupProductSearchKeyword("");
+      setGroupProductOptions([]);
+      setActiveGroupSlotKey(null);
+      await refreshAll();
+      const freshOrders = await fetchOrdersOnly();
+      setOrders(freshOrders);
+      const refreshedCurrent = freshOrders.find((row) => row.id === orderId);
+      if (refreshedCurrent) {
+        openEditModal(refreshedCurrent);
+      }
+    } catch (groupError) {
+      setError(groupError instanceof Error ? groupError.message : "save_failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRemoveGroupedOrder(slot: GroupedOrderSlot) {
+    if (!slot.orderId || slot.isCurrent) return;
+    const targetOrder = orders.find((row) => row.id === slot.orderId);
+    if (!targetOrder) return;
+    const confirmed = window.confirm(
+      lang === "zh"
+        ? `确认将 ${targetOrder.sku} 从同物流号商品组中移除？`
+        : `Quitar ${targetOrder.sku} del grupo?`,
+    );
+    if (!confirmed) return;
+
+    try {
+      setSaving(true);
+      setError("");
+      const trackingGroupId = form.trackingGroupId || crypto.randomUUID();
+      const { orderId } = await persistCurrentOrder(trackingGroupId);
+      if (orderId) {
+        await uploadOrderAttachments(orderId);
+      }
+      await persistOrderRequest(
+        {
+          id: targetOrder.id,
+          trackingGroupId: "",
+          customerName: targetOrder.customerName,
+          platform: targetOrder.platform,
+          platformOrderNo: targetOrder.platformOrderNo,
+          sku: targetOrder.sku,
+          productNameZh: targetOrder.productNameZh,
+          productNameEs: targetOrder.productNameEs,
+          quantity: String(targetOrder.quantity),
+          trackingNo: targetOrder.trackingNo,
+          color: targetOrder.color,
+          warehouse: targetOrder.warehouse || FIXED_WAREHOUSE,
+          shippedAt: targetOrder.shippedAt ? targetOrder.shippedAt.slice(0, 10) : "",
+          shippingFee: targetOrder.shippingFee ? String(targetOrder.shippingFee) : "",
+          shippingStatus: targetOrder.shippingStatus,
+          notes: targetOrder.notes,
+        },
+        null,
+      );
+      await refreshAll();
+      const freshOrders = await fetchOrdersOnly();
+      setOrders(freshOrders);
+      const refreshed = freshOrders.find((row) => row.id === orderId);
+      if (refreshed) {
+        openEditModal(refreshed);
+      }
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : "save_failed");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function uploadOrderAttachments(orderId: string) {
@@ -1409,31 +1723,7 @@ export function DropshippingClient({
     try {
       setSaving(true);
       setError("");
-      const endpoint = form.id ? `/api/dropshipping/orders/${form.id}` : "/api/dropshipping/orders";
-      const method = form.id ? "PATCH" : "POST";
-      const response = await fetch(endpoint, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customerName: form.customerName,
-          platform: form.platform,
-          platformOrderNo: form.platformOrderNo,
-          sku: form.sku,
-          productNameZh: form.productNameZh,
-          productNameEs: form.productNameEs,
-          quantity: Number(form.quantity || 0),
-          trackingNo: form.trackingNo,
-          color: form.color,
-          warehouse: FIXED_WAREHOUSE,
-          shippedAt: form.shippedAt || null,
-          shippingFee: form.shippingFee || null,
-          shippingStatus: form.shippingStatus,
-          notes: form.notes,
-        }),
-      });
-      const json = await response.json();
-      if (!response.ok || !json?.ok) throw new Error(json?.error || "save_failed");
-      const orderId = String(json.id || form.id || "");
+      const { orderId } = await persistCurrentOrder();
       if (orderId) {
         await uploadOrderAttachments(orderId);
       }
@@ -1441,6 +1731,10 @@ export function DropshippingClient({
       setForm(EMPTY_ORDER_FORM);
       setLabelFiles([]);
       setProofFiles([]);
+      setGroupProductSearchOpen(false);
+      setGroupProductSearchKeyword("");
+      setGroupProductOptions([]);
+      setActiveGroupSlotKey(null);
       await refreshAll();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "save_failed");
@@ -2897,60 +3191,6 @@ export function DropshippingClient({
                 />
               </label>
 
-              {sameTrackingOrders.length > 1 ? (
-                <div className="md:col-span-6 md:order-0 xl:col-span-12 xl:order-0">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-3">
-                    <div className="text-xs text-slate-500">
-                      {lang === "zh" ? "同物流号商品" : "Productos con la misma guia"}
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {sameTrackingOrders.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => openEditModal(item)}
-                          className={`inline-flex min-w-[136px] items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs transition ${
-                            item.id === form.id
-                              ? "border-primary bg-white text-primary shadow-[0_0_0_1px_rgba(37,99,235,0.12)]"
-                              : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-                          }`}
-                        >
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-                            {item.productImageUrl ? (
-                              <img
-                                src={item.productImageUrl}
-                                alt={item.productNameZh || item.sku}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <span className="text-[10px] text-slate-400">{lang === "zh" ? "空" : "Vacio"}</span>
-                            )}
-                          </span>
-                          <span className="min-w-0">
-                            <span className="block truncate text-[13px] text-inherit">{item.sku}</span>
-                            <span className="block truncate text-[11px] text-slate-400">
-                              {item.id === form.id
-                                ? (lang === "zh" ? "当前编辑" : "Actual")
-                                : (lang === "zh" ? "点击切换" : "Cambiar")}
-                            </span>
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={openCreateModalWithTrackingSeed}
-                      className="mt-2 inline-flex h-9 w-fit items-center gap-2 rounded-xl border border-primary/20 bg-white px-3 text-xs text-primary transition hover:border-primary/35 hover:bg-primary/5"
-                      title={lang === "zh" ? "新增同物流号商品" : "Agregar producto con la misma guia"}
-                      aria-label={lang === "zh" ? "新增同物流号商品" : "Agregar producto con la misma guia"}
-                    >
-                      <PlusBadge />
-                      <span>{lang === "zh" ? "新增同物流号商品" : "Agregar producto"}</span>
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-
               <div className="hidden space-y-1 md:col-span-2 xl:col-span-6 xl:order-12">
                 <span className="whitespace-nowrap text-xs text-slate-500">{text.fields.shippingLabel}</span>
                 <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
@@ -3220,7 +3460,7 @@ export function DropshippingClient({
               </label>
 
               <div className="md:col-span-6 space-y-4">
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-[minmax(120px,0.55fr)_minmax(0,1.15fr)_minmax(0,1.15fr)_minmax(92px,0.32fr)]">
                   <label className="space-y-1">
                     <span className="whitespace-nowrap text-xs text-slate-500">{text.form.customer}</span>
                     <input
@@ -3248,9 +3488,18 @@ export function DropshippingClient({
                       className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
                     />
                   </label>
+                  <label className="space-y-1">
+                    <span className="whitespace-nowrap text-xs text-slate-500">{text.form.quantity}</span>
+                    <input
+                      type="number"
+                      value={form.quantity}
+                      onChange={(event) => setForm((prev) => ({ ...prev, quantity: event.target.value }))}
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                    />
+                  </label>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2.6fr)_minmax(140px,1fr)]">
+                <div className="grid gap-4 md:grid-cols-[minmax(0,0.7fr)_minmax(0,2fr)_minmax(120px,0.45fr)]">
                   <label className="space-y-1">
                     <span className="whitespace-nowrap text-xs text-slate-500">{text.form.sku}</span>
                     <input
@@ -3272,32 +3521,23 @@ export function DropshippingClient({
                     />
                   </label>
                   <label className="space-y-1">
-                    <span className="whitespace-nowrap text-xs text-slate-500">{text.form.quantity}</span>
+                    <span className="whitespace-nowrap text-xs text-slate-500">{text.form.color}</span>
                     <input
-                      type="number"
-                      value={form.quantity}
-                      onChange={(event) => setForm((prev) => ({ ...prev, quantity: event.target.value }))}
+                      type="text"
+                      value={form.color}
+                      onChange={(event) => setForm((prev) => ({ ...prev, color: event.target.value }))}
                       className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
                     />
                   </label>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-[168px_140px_140px_140px] md:justify-start">
                   <label className="space-y-1">
                     <span className="whitespace-nowrap text-xs text-slate-500">{text.form.shippedAt}</span>
                     <input
                       type="date"
                       value={form.shippedAt}
                       onChange={(event) => setForm((prev) => ({ ...prev, shippedAt: event.target.value }))}
-                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
-                    />
-                  </label>
-                  <label className="space-y-1">
-                    <span className="whitespace-nowrap text-xs text-slate-500">{text.form.color}</span>
-                    <input
-                      type="text"
-                      value={form.color}
-                      onChange={(event) => setForm((prev) => ({ ...prev, color: event.target.value }))}
                       className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
                     />
                   </label>
@@ -3316,9 +3556,6 @@ export function DropshippingClient({
                       ))}
                     </select>
                   </label>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
                   <label className="space-y-1">
                     <span className="whitespace-nowrap text-xs text-slate-500">{text.form.status}</span>
                     <select
@@ -3365,7 +3602,7 @@ export function DropshippingClient({
                         </a>
                       ) : (
                         <span className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs text-slate-400">
-                          {lang === "zh" ? "\u7a7a" : "Vacio"}
+                          {lang === "zh" ? "空" : "Vacio"}
                         </span>
                       )}
                       <div className="mt-3 flex items-center gap-3">
@@ -3403,7 +3640,7 @@ export function DropshippingClient({
                         </div>
                       ) : (
                         <span className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs text-slate-400">
-                          {lang === "zh" ? "\u7a7a" : "Vacio"}
+                          {lang === "zh" ? "空" : "Vacio"}
                         </span>
                       )}
                       <div className="mt-3 flex items-center gap-3">
@@ -3429,6 +3666,66 @@ export function DropshippingClient({
                   </div>
                 </div>
 
+                <div className="space-y-1">
+                  <span className="whitespace-nowrap text-xs text-slate-500">{lang === "zh" ? "同物流号商品" : "Productos con la misma guia"}</span>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-3">
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+                      {groupedOrderSlots.map((slot, index) => (
+                        <div key={slot.slotKey} className="relative min-h-[86px] rounded-xl border border-slate-200 bg-white p-2.5">
+                          {slot.orderId ? (
+                            <>
+                              {!slot.isCurrent ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void handleRemoveGroupedOrder(slot)}
+                                  className="absolute right-2 top-2 inline-flex h-5 w-5 items-center justify-center rounded-full border border-rose-200 bg-white text-xs text-rose-500 transition hover:border-rose-300 hover:bg-rose-50"
+                                  title={lang === "zh" ? "删除" : "Quitar"}
+                                  aria-label={lang === "zh" ? "删除" : "Quitar"}
+                                >
+                                  -
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (!slot.orderId || slot.isCurrent) return;
+                                  const match = groupedOrdersForModal.find((item) => item.id === slot.orderId);
+                                  if (match) openEditModal(match);
+                                }}
+                                className={`flex w-full items-start gap-2 text-left ${slot.isCurrent ? "cursor-default" : "cursor-pointer"}`}
+                              >
+                                <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                                  {slot.productImageUrl ? (
+                                    <img src={slot.productImageUrl} alt={slot.productNameZh || slot.sku} className="h-full w-full object-cover" />
+                                  ) : (
+                                    <span className="text-[10px] text-slate-400">{lang === "zh" ? "空" : "Vacio"}</span>
+                                  )}
+                                </span>
+                                <span className="min-w-0 pt-0.5">
+                                  <span className="block truncate text-[13px] font-medium text-slate-900">{slot.sku || `SKU ${index + 1}`}</span>
+                                  <span className="mt-0.5 block truncate text-[11px] text-slate-500">{slot.productNameZh || (lang === "zh" ? "未选择商品" : "Sin producto")}</span>
+                                  <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] ${slot.isCurrent ? "bg-primary/10 text-primary" : "bg-slate-100 text-slate-500"}`}>
+                                    {slot.isCurrent ? (lang === "zh" ? "当前编辑" : "Actual") : (lang === "zh" ? "点击切换" : "Cambiar")}
+                                  </span>
+                                </span>
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => openGroupProductSearch(slot.slotKey)}
+                              className="flex h-full min-h-[66px] w-full flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 text-slate-400 transition hover:border-primary/45 hover:text-primary"
+                            >
+                              <span className="text-lg leading-none">+</span>
+                              <span className="mt-1 text-[11px]">{lang === "zh" ? "添加商品" : "Agregar"}</span>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
                 <label className="space-y-1">
                   <span className="whitespace-nowrap text-xs text-slate-500">{text.form.notes}</span>
                   <input
@@ -3439,7 +3736,7 @@ export function DropshippingClient({
                   />
                 </label>
               </div>
-              </div>
+            </div>
             </div>
             <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
               <button
@@ -3457,6 +3754,77 @@ export function DropshippingClient({
               >
                 {saving ? text.saving : text.form.submit}
               </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {groupProductSearchOpen ? (
+        <div className="fixed inset-0 z-[55] flex items-center justify-center bg-slate-900/45 px-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">
+                  {lang === "zh" ? "选择商品" : "Seleccionar producto"}
+                </h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  {lang === "zh" ? "支持按编码、中文名等关键词搜索" : "Busca por SKU o nombre"}
+                  {activeGroupSlotKey ? ` · Slot ${activeGroupSlotKey.replace("empty-", "")}` : ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setGroupProductSearchOpen(false);
+                  setGroupProductSearchKeyword("");
+                  setGroupProductOptions([]);
+                  setActiveGroupSlotKey(null);
+                }}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+              >
+                X
+              </button>
+            </div>
+            <div className="space-y-4 px-5 py-4">
+              <input
+                value={groupProductSearchKeyword}
+                onChange={(event) => setGroupProductSearchKeyword(event.target.value)}
+                placeholder={lang === "zh" ? "搜索编码 / 中文名" : "Buscar SKU / nombre"}
+                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+              />
+              <div className="max-h-[360px] overflow-y-auto rounded-xl border border-slate-200">
+                {groupProductSearchLoading ? (
+                  <div className="px-4 py-8 text-center text-sm text-slate-500">
+                    {lang === "zh" ? "搜索中..." : "Buscando..."}
+                  </div>
+                ) : groupProductOptions.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-sm text-slate-500">
+                    {lang === "zh" ? "没有可选商品" : "Sin productos"}
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {groupProductOptions.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => void handleSelectGroupedProduct(item)}
+                        className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50"
+                      >
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                          {item.imageUrl ? (
+                            <img src={item.imageUrl} alt={item.nameZh || item.sku} className="h-full w-full object-cover" />
+                          ) : (
+                            <span className="text-[10px] text-slate-400">{lang === "zh" ? "空" : "Vacio"}</span>
+                          )}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium text-slate-900">{item.sku}</span>
+                          <span className="mt-0.5 block truncate text-xs text-slate-500">{item.nameZh || item.nameEs || "-"}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -3867,3 +4235,5 @@ export function DropshippingClient({
     </section>
   );
 }
+
+

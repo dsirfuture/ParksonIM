@@ -645,6 +645,7 @@ export async function saveOrder(
     customerName: string;
     platform: string;
     platformOrderNo: string;
+    trackingGroupId?: string | null;
     sku: string;
     productNameZh: string;
     productNameEs?: string;
@@ -678,6 +679,10 @@ export async function saveOrder(
     product_id: product.id,
     platform: payload.platform.trim(),
     platform_order_no: payload.platformOrderNo.trim(),
+    tracking_group_id:
+      payload.trackingGroupId === undefined
+        ? undefined
+        : payload.trackingGroupId?.trim() || null,
     tracking_no: payload.trackingNo?.trim() || null,
     quantity: payload.quantity,
     color: payload.color?.trim() || null,
@@ -1038,6 +1043,7 @@ export async function listOrders(session: Session) {
       customerId: row.customer_id,
       customerName: row.customer.name,
       productId: row.product_id,
+      trackingGroupId: row.tracking_group_id || null,
       settlementStatus:
         row.settled_at || toNumber(row.snapshot_unpaid_amount) <= 0
           ? "paid"
