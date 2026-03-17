@@ -34,12 +34,14 @@ export function ImageLightbox({
           </div>
         </div>
 
-        <div className="flex max-h-[78vh] items-center justify-center bg-slate-100 p-4">
+        <div
+          className="flex max-h-[78vh] cursor-zoom-out items-center justify-center bg-slate-100 p-4"
+          onClick={onClose}
+        >
           <img
             src={src}
             alt={alt || title || "preview"}
             className="max-h-[72vh] w-auto max-w-full cursor-zoom-out object-contain"
-            onClick={onClose}
           />
         </div>
       </div>
