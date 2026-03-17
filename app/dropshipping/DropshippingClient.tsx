@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import * as ReactGridLayout from "react-grid-layout";
+import ReactGridLayout from "react-grid-layout";
 import { EmptyState } from "@/components/empty-state";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { ProductImage } from "@/components/product-image";
@@ -138,8 +138,8 @@ const PLATFORM_OPTIONS = [
 
 const SHIPPING_FEE_OPTIONS = ["6", "8", "10", "12"] as const;
 const ResponsiveGridLayout = (ReactGridLayout as unknown as {
-  WidthProvider: (component: unknown) => unknown;
   Responsive: unknown;
+  WidthProvider: (component: unknown) => unknown;
 }).WidthProvider((ReactGridLayout as unknown as { Responsive: unknown }).Responsive) as React.ComponentType<Record<string, unknown>>;
 const OVERVIEW_LAYOUT_STORAGE_KEY = "dropshipping-overview-layouts-v1";
 const OVERVIEW_LAYOUTS: OverviewLayouts = {
