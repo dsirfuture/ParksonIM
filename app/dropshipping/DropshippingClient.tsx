@@ -1316,7 +1316,7 @@ export function DropshippingClient({
             <section className="ds-overview-widget flex h-full flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(29,78,216,0.14),_transparent_35%),linear-gradient(135deg,#ffffff_0%,#f8fbff_48%,#eef5ff_100%)] shadow-soft">
               <div className="ds-overview-handle flex items-start justify-between gap-3 px-6 py-5">
                 <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium text-slate-600">
-                  {lang === "zh" ? `${overview.analytics.monthLabel} ??` : `${overview.analytics.monthLabel} resumen`}
+                  {lang === "zh" ? `${overview.analytics.monthLabel} 总览` : `${overview.analytics.monthLabel} resumen`}
                 </div>
                 <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/70 bg-white/80 text-slate-400">
                   <span className="grid grid-cols-2 gap-0.5">
@@ -1335,20 +1335,20 @@ export function DropshippingClient({
                     </h2>
                     <p className="mt-2 text-sm text-slate-500">
                       {lang === "zh"
-                        ? "??????????????????????????"
+                        ? "本月订单、结款与平台分布的核心表现会集中展示在这里。"
                         : "Aqui se concentran los indicadores clave de pedidos, cobros y plataformas del mes."}
                     </p>
                     <div className="mt-5 grid gap-3 sm:grid-cols-3">
                       <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
-                        <div className="text-xs text-slate-500">{lang === "zh" ? "??????" : "Total por cliente"}</div>
+                        <div className="text-xs text-slate-500">{lang === "zh" ? "客户订单总额" : "Total por cliente"}</div>
                         <div className="mt-2 text-2xl font-semibold text-slate-900">{fmtMoney(overview.stats.totalReceivable, lang)}</div>
                       </div>
                       <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
-                        <div className="text-xs text-slate-500">{lang === "zh" ? "????" : "Total liquidado"}</div>
+                        <div className="text-xs text-slate-500">{lang === "zh" ? "结款总额" : "Total liquidado"}</div>
                         <div className="mt-2 text-2xl font-semibold text-emerald-600">{fmtMoney(overview.stats.totalPaid, lang)}</div>
                       </div>
                       <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
-                        <div className="text-xs text-slate-500">{lang === "zh" ? "????" : "Pendiente total"}</div>
+                        <div className="text-xs text-slate-500">{lang === "zh" ? "未结总额" : "Pendiente total"}</div>
                         <div className="mt-2 text-2xl font-semibold text-rose-600">{fmtMoney(overview.stats.totalUnpaid, lang)}</div>
                       </div>
                     </div>
@@ -1379,28 +1379,28 @@ export function DropshippingClient({
           </div>
 
           <div className="h-full xl:col-span-4">
-            <OverviewWidgetShell title={lang === "zh" ? "????" : "Resumen financiero"} subtitle={lang === "zh" ? "??????????" : "Arrastra y ajusta este panel"} className="h-full">
+            <OverviewWidgetShell title={lang === "zh" ? "财务概览" : "Resumen financiero"} subtitle={lang === "zh" ? "关键收款与汇率信息" : "Resumen de cobros y tipo de cambio"} className="h-full">
               <div className="grid h-full gap-4">
                 <StatCard label={text.stats.paid} value={fmtMoney(overview.stats.totalPaid, lang)} valueClassName="text-emerald-600" />
                 <StatCard label={text.stats.unpaid} value={fmtMoney(overview.stats.totalUnpaid, lang)} valueClassName="text-rose-600" />
-                <StatCard label={lang === "zh" ? "??????" : "Fuente de tipo"} value={exchangeRate.sourceName || "-"} hint={fmtDate(exchangeRate.fetchedAt || exchangeRate.rateDate, lang)} />
-                <StatCard label={text.stats.rate} value={overview.stats.currentRate?.toFixed(4) || "-"} hint={lang === "zh" ? "MXN ? RMB" : "MXN -> RMB"} />
+                <StatCard label={lang === "zh" ? "汇率来源" : "Fuente de tipo"} value={exchangeRate.sourceName || "-"} hint={fmtDate(exchangeRate.fetchedAt || exchangeRate.rateDate, lang)} />
+                <StatCard label={text.stats.rate} value={overview.stats.currentRate?.toFixed(4) || "-"} hint={lang === "zh" ? "MXN -> RMB" : "MXN -> RMB"} />
               </div>
             </OverviewWidgetShell>
           </div>
 
           <div className="h-full xl:col-span-8">
-            <OverviewWidgetShell title={lang === "zh" ? "????????" : "Curva diaria mensual"} subtitle={lang === "zh" ? "???????????????????????" : "Tendencia diaria del mes en horario de Mexico."} className="h-full">
+            <OverviewWidgetShell title={lang === "zh" ? "每月每日订单曲线" : "Curva diaria mensual"} subtitle={lang === "zh" ? "按墨西哥时间统计本月每日订单与已发货走势。" : "Tendencia diaria del mes en horario de Mexico."} className="h-full">
               <div className="mb-4 flex flex-wrap items-center gap-4 text-xs text-slate-500">
-                <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-blue-700" />{lang === "zh" ? "???" : "Pedidos"}</span>
-                <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />{lang === "zh" ? "???" : "Enviados"}</span>
+                <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-blue-700" />{lang === "zh" ? "订单数" : "Pedidos"}</span>
+                <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />{lang === "zh" ? "已发数" : "Enviados"}</span>
               </div>
               <OverviewLineChart data={overview.analytics.dailySeries} />
             </OverviewWidgetShell>
           </div>
 
           <div className="h-full xl:col-span-4">
-            <OverviewWidgetShell title={lang === "zh" ? "??????" : "Ranking por plataforma"} subtitle={lang === "zh" ? "???????????" : "Ordenado por volumen mensual."} className="h-full">
+            <OverviewWidgetShell title={lang === "zh" ? "平台订单排名" : "Ranking por plataforma"} subtitle={lang === "zh" ? "按当前月份订单量排序。" : "Ordenado por volumen mensual."} className="h-full">
               <div className="space-y-3">
                 {overview.analytics.topPlatforms.map((item, index) => {
                   const max = Math.max(...overview.analytics.topPlatforms.map((row) => row.orderCount), 1);
@@ -1411,13 +1411,13 @@ export function DropshippingClient({
                         <div className="flex items-center gap-3">
                           <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-500">{index + 1}</span>
                           <div>
-                            <div className="text-sm font-medium text-slate-900">{item.platform || (lang === "zh" ? "?" : "Sin plataforma")}</div>
-                            <div className="text-xs text-slate-500">{lang === "zh" ? `?? ${item.quantity}` : `Piezas ${item.quantity}`}</div>
+                            <div className="text-sm font-medium text-slate-900">{item.platform || (lang === "zh" ? "无平台" : "Sin plataforma")}</div>
+                            <div className="text-xs text-slate-500">{lang === "zh" ? `件数 ${item.quantity}` : `Piezas ${item.quantity}`}</div>
                           </div>
                         </div>
                         <div className="text-right">
                           <div className="text-sm font-semibold text-slate-900">{item.orderCount}</div>
-                          <div className="text-xs text-slate-500">{lang === "zh" ? "??" : "Pedidos"}</div>
+                          <div className="text-xs text-slate-500">{lang === "zh" ? "订单" : "Pedidos"}</div>
                         </div>
                       </div>
                       <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
@@ -1431,7 +1431,7 @@ export function DropshippingClient({
           </div>
 
           <div className="h-full xl:col-span-4">
-            <OverviewWidgetShell title={lang === "zh" ? "??????" : "Ranking de productos"} subtitle={lang === "zh" ? "?????" : "Ordenado por volumen"} className="h-full">
+            <OverviewWidgetShell title={lang === "zh" ? "产品销量排名" : "Ranking de productos"} subtitle={lang === "zh" ? "按销量排序" : "Ordenado por volumen"} className="h-full">
               <div className="space-y-3">
                 {overview.analytics.topProducts.map((item, index) => (
                   <div key={item.sku} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
@@ -1446,7 +1446,7 @@ export function DropshippingClient({
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-semibold text-slate-900">{item.quantity}</div>
-                      <div className="text-xs text-slate-500">{lang === "zh" ? `${item.orderCount} ?` : `${item.orderCount} pedidos`}</div>
+                      <div className="text-xs text-slate-500">{lang === "zh" ? `${item.orderCount} 单` : `${item.orderCount} pedidos`}</div>
                     </div>
                   </div>
                 ))}
@@ -1455,7 +1455,7 @@ export function DropshippingClient({
           </div>
 
           <div className="h-full xl:col-span-4">
-            <OverviewWidgetShell title={lang === "zh" ? "???????" : "Ranking de clientes"} subtitle={lang === "zh" ? "??????" : "Ordenado por pedidos"} className="h-full">
+            <OverviewWidgetShell title={lang === "zh" ? "客户订单数排名" : "Ranking de clientes"} subtitle={lang === "zh" ? "按订单数排序" : "Ordenado por pedidos"} className="h-full">
               <div className="space-y-3">
                 {overview.analytics.topCustomersByOrders.map((item, index) => (
                   <div key={item.customerId} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
@@ -1468,11 +1468,11 @@ export function DropshippingClient({
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-semibold text-slate-900">{item.orderCount}</div>
-                        <div className="text-xs text-slate-500">{lang === "zh" ? "??" : "Pedidos"}</div>
+                        <div className="text-xs text-slate-500">{lang === "zh" ? "订单" : "Pedidos"}</div>
                       </div>
                     </div>
                     <div className="mt-3 text-xs text-slate-500">
-                      {lang === "zh" ? "??" : "Total"}: {fmtMoney(item.totalAmount, lang)}
+                      {lang === "zh" ? "总额" : "Total"}: {fmtMoney(item.totalAmount, lang)}
                     </div>
                   </div>
                 ))}
@@ -1481,7 +1481,7 @@ export function DropshippingClient({
           </div>
 
           <div className="h-full xl:col-span-4">
-            <OverviewWidgetShell title={lang === "zh" ? "??????" : "Ranking por monto"} subtitle={lang === "zh" ? "??????????" : "Total, liquidado y pendiente"} className="h-full">
+            <OverviewWidgetShell title={lang === "zh" ? "客户订单总额排名" : "Ranking por monto"} subtitle={lang === "zh" ? "显示总额、已结与未结" : "Total, liquidado y pendiente"} className="h-full">
               <div className="space-y-3">
                 {overview.analytics.topCustomersByAmount.map((item, index) => (
                   <div key={item.customerId} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
@@ -1494,11 +1494,11 @@ export function DropshippingClient({
                     </div>
                     <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                       <div className="rounded-xl bg-emerald-50 px-3 py-2 text-emerald-700">
-                        <div>{lang === "zh" ? "??" : "Liquidado"}</div>
+                        <div>{lang === "zh" ? "已结" : "Liquidado"}</div>
                         <div className="mt-1 font-semibold">{fmtMoney(item.paidAmount, lang)}</div>
                       </div>
                       <div className="rounded-xl bg-rose-50 px-3 py-2 text-rose-700">
-                        <div>{lang === "zh" ? "??" : "Pendiente"}</div>
+                        <div>{lang === "zh" ? "未结" : "Pendiente"}</div>
                         <div className="mt-1 font-semibold">{fmtMoney(item.unpaidAmount, lang)}</div>
                       </div>
                     </div>
@@ -1544,7 +1544,7 @@ export function DropshippingClient({
           </div>
 
           <div className="h-full xl:col-span-4">
-            <OverviewWidgetShell title={text.sections.alerts} subtitle={lang === "zh" ? "?????????????" : "Alertas de seguimiento prioritarias."} className="h-full">
+            <OverviewWidgetShell title={text.sections.alerts} subtitle={lang === "zh" ? "需要优先关注的业务提醒。" : "Alertas de seguimiento prioritarias."} className="h-full">
               <div className="grid gap-3">
                 {overview.alerts.map((item) => (
                   <div key={item.type} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
@@ -1554,8 +1554,8 @@ export function DropshippingClient({
                 ))}
                 <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-sm text-slate-600">
                   <div className="flex flex-wrap items-center gap-3">
-                    <span>{lang === "zh" ? "????" : "Fuente"}: {exchangeRate.sourceName || "-"}</span>
-                    <span>{lang === "zh" ? "????" : "Actualizado"}: {fmtDate(exchangeRate.fetchedAt || exchangeRate.rateDate, lang)}</span>
+                    <span>{lang === "zh" ? "来源" : "Fuente"}: {exchangeRate.sourceName || "-"}</span>
+                    <span>{lang === "zh" ? "更新时间" : "Actualizado"}: {fmtDate(exchangeRate.fetchedAt || exchangeRate.rateDate, lang)}</span>
                   </div>
                   {exchangeRate.fetchFailed ? (
                     <div className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-rose-600">
@@ -1860,8 +1860,8 @@ export function DropshippingClient({
                           <button
                             type="button"
                             onClick={() => void deleteSameTrackingOrder(row)}
-                            title={lang === "zh" ? "??" : "Eliminar"}
-                            aria-label={lang === "zh" ? "??" : "Eliminar"}
+                            title={lang === "zh" ? "删除" : "Eliminar"}
+                            aria-label={lang === "zh" ? "删除" : "Eliminar"}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-500 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600"
                           >
                             <TrashIcon />
@@ -1869,8 +1869,8 @@ export function DropshippingClient({
                           <button
                             type="button"
                             onClick={() => openEditModal(row)}
-                            title={lang === "zh" ? "??" : "Editar"}
-                            aria-label={lang === "zh" ? "??" : "Editar"}
+                            title={lang === "zh" ? "编辑" : "Editar"}
+                            aria-label={lang === "zh" ? "编辑" : "Editar"}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
                           >
                             <PencilIcon />
