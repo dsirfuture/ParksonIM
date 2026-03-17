@@ -58,6 +58,7 @@ type InventoryShippedPreviewState = {
 } | null;
 
 type FinancePreviewState = DsFinanceRow | null;
+type OverviewRange = "day" | "week" | "month" | "year";
 
 type DeleteOrderState = {
   id: string;
@@ -194,6 +195,56 @@ function shouldShowSaturdaySettlementReminder(date: Date) {
   return weekday === "Sat" && hour >= 12;
 }
 
+function getMexicoDatePartsMap(date: Date) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = formatter.formatToParts(date);
+  return Object.fromEntries(parts.map((part) => [part.type, part.value]));
+}
+
+function startOfMexicoDayClient(value: Date) {
+  const parts = getMexicoDatePartsMap(value);
+  return new Date(`${parts.year}-${parts.month}-${parts.day}T00:00:00.000-06:00`);
+}
+
+function endOfMexicoDayClient(value: Date) {
+  const start = startOfMexicoDayClient(value);
+  return new Date(start.getTime() + 24 * 60 * 60 * 1000);
+}
+
+function startOfMexicoWeekClient(value: Date) {
+  const start = startOfMexicoDayClient(value);
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Mexico_City",
+    weekday: "short",
+  }).format(start);
+  const weekdayMap: Record<string, number> = {
+    Mon: 0,
+    Tue: 1,
+    Wed: 2,
+    Thu: 3,
+    Fri: 4,
+    Sat: 5,
+    Sun: 6,
+  };
+  const offset = weekdayMap[weekday] ?? 0;
+  return new Date(start.getTime() - offset * 24 * 60 * 60 * 1000);
+}
+
+function startOfMexicoMonthClient(value: Date) {
+  const parts = getMexicoDatePartsMap(value);
+  return new Date(`${parts.year}-${parts.month}-01T00:00:00.000-06:00`);
+}
+
+function startOfMexicoYearClient(value: Date) {
+  const parts = getMexicoDatePartsMap(value);
+  return new Date(`${parts.year}-01-01T00:00:00.000-06:00`);
+}
+
 function isDirectFileLink(value: string) {
   const normalized = String(value || "").trim();
   if (!normalized) return false;
@@ -261,8 +312,8 @@ function OverviewLineChart({
   lineColor?: string;
   fillColor?: string;
 }) {
-  const width = 760;
-  const height = 240;
+  const width = 640;
+  const height = 190;
   const paddingX = 18;
   const paddingY = 18;
   const maxValue = Math.max(...data.map((item) => Math.max(item.orderCount, item.shippedCount)), 1);
@@ -280,8 +331,8 @@ function OverviewLineChart({
   const areaPoints = `${paddingX},${height - paddingY} ${orderPoints} ${paddingX + innerWidth},${height - paddingY}`;
 
   return (
-    <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${width} ${height}`} className="h-64 min-w-[720px] w-full" aria-hidden="true">
+    <div className="w-full">
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-48 w-full" aria-hidden="true">
         <defs>
           <linearGradient id="ds-overview-area" x1="0" x2="0" y1="0" y2="1">
             <stop offset="0%" stopColor={fillColor} />
@@ -499,6 +550,7 @@ export function DropshippingClient({
   const [finance, setFinance] = useState(initialFinance);
   const [exchangeRate, setExchangeRate] = useState(initialExchangeRate);
   const [now, setNow] = useState(() => new Date());
+  const [overviewRange, setOverviewRange] = useState<OverviewRange>("month");
   const [keyword, setKeyword] = useState("");
   const [inventoryKeyword, setInventoryKeyword] = useState("");
   const [customerFilter, setCustomerFilter] = useState("all");
@@ -980,6 +1032,285 @@ export function DropshippingClient({
     () => shouldShowSaturdaySettlementReminder(now),
     [now],
   );
+  const overviewDashboard = useMemo(() => {
+    const safePlatformLabel = (platform: string) => platform.trim() || (lang === "zh" ? "无" : "Sin plataforma");
+    const rangeStart =
+      overviewRange === "day"
+        ? startOfMexicoDayClient(now)
+        : overviewRange === "week"
+          ? startOfMexicoWeekClient(now)
+          : overviewRange === "year"
+            ? startOfMexicoYearClient(now)
+            : startOfMexicoMonthClient(now);
+    const rangeEnd =
+      overviewRange === "day"
+        ? endOfMexicoDayClient(rangeStart)
+        : overviewRange === "week"
+          ? new Date(rangeStart.getTime() + 7 * 24 * 60 * 60 * 1000)
+          : overviewRange === "year"
+            ? new Date(rangeStart.getUTCFullYear() + 1, 0, 1, 6, 0, 0, 0)
+            : new Date(rangeStart.getUTCFullYear(), rangeStart.getUTCMonth() + 1, 1, 6, 0, 0, 0);
+
+    const formatRangeTitle = () => {
+      if (overviewRange === "day") {
+        return new Intl.DateTimeFormat(lang === "zh" ? "zh-CN" : "es-MX", {
+          timeZone: "America/Mexico_City",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(rangeStart);
+      }
+      if (overviewRange === "week") {
+        const weekEnd = new Date(rangeEnd.getTime() - 24 * 60 * 60 * 1000);
+        return `${fmtDateOnly(rangeStart.toISOString(), lang)} - ${fmtDateOnly(weekEnd.toISOString(), lang)}`;
+      }
+      if (overviewRange === "year") {
+        return new Intl.DateTimeFormat(lang === "zh" ? "zh-CN" : "es-MX", {
+          timeZone: "America/Mexico_City",
+          year: "numeric",
+        }).format(rangeStart);
+      }
+      return new Intl.DateTimeFormat(lang === "zh" ? "zh-CN" : "es-MX", {
+        timeZone: "America/Mexico_City",
+        year: "numeric",
+        month: "long",
+      }).format(rangeStart);
+    };
+
+    const createSeries = () => {
+      if (overviewRange === "day") {
+        return Array.from({ length: 24 }, (_, hour) => ({
+          date: `${rangeStart.toISOString()}#${hour}`,
+          label: String(hour).padStart(2, "0"),
+          orderCount: 0,
+          shippedCount: 0,
+          totalAmount: 0,
+        }));
+      }
+      if (overviewRange === "week") {
+        return Array.from({ length: 7 }, (_, index) => {
+          const date = new Date(rangeStart.getTime() + index * 24 * 60 * 60 * 1000);
+          return {
+            date: date.toISOString(),
+            label: new Intl.DateTimeFormat(lang === "zh" ? "zh-CN" : "es-MX", {
+              timeZone: "America/Mexico_City",
+              weekday: "short",
+            }).format(date),
+            orderCount: 0,
+            shippedCount: 0,
+            totalAmount: 0,
+          };
+        });
+      }
+      if (overviewRange === "year") {
+        return Array.from({ length: 12 }, (_, index) => {
+          const date = new Date(rangeStart.getUTCFullYear(), index, 1, 6, 0, 0, 0);
+          return {
+            date: date.toISOString(),
+            label: new Intl.DateTimeFormat(lang === "zh" ? "zh-CN" : "es-MX", {
+              timeZone: "America/Mexico_City",
+              month: "short",
+            }).format(date),
+            orderCount: 0,
+            shippedCount: 0,
+            totalAmount: 0,
+          };
+        });
+      }
+      const nextMonthStart = new Date(rangeStart.getUTCFullYear(), rangeStart.getUTCMonth() + 1, 1, 6, 0, 0, 0);
+      const days = Math.round((nextMonthStart.getTime() - rangeStart.getTime()) / (24 * 60 * 60 * 1000));
+      return Array.from({ length: days }, (_, index) => {
+        const date = new Date(rangeStart.getTime() + index * 24 * 60 * 60 * 1000);
+        return {
+          date: date.toISOString(),
+          label: new Intl.DateTimeFormat("en-CA", {
+            timeZone: "America/Mexico_City",
+            day: "2-digit",
+          }).format(date),
+          orderCount: 0,
+          shippedCount: 0,
+          totalAmount: 0,
+        };
+      });
+    };
+
+    const series = createSeries();
+    const seriesMap = new Map(series.map((item) => [item.date, item]));
+    const rangedOrders = orders.filter((row) => {
+      if (!row.shippedAt) return false;
+      const shippedAt = new Date(row.shippedAt);
+      return shippedAt >= rangeStart && shippedAt < rangeEnd;
+    });
+
+    const productMap = new Map<string, { sku: string; productNameZh: string; quantity: number; orderCount: number }>();
+    const customerMap = new Map<string, { customerId: string; customerName: string; orderCount: number; totalAmount: number; paidAmount: number; unpaidAmount: number }>();
+    const platformMap = new Map<string, { platform: string; orderCount: number; quantity: number }>();
+
+    let receivable = 0;
+    let paid = 0;
+    let pending = 0;
+
+    for (const row of rangedOrders) {
+      const shippedAt = new Date(row.shippedAt!);
+      const orderAmount = (row.snapshotStockAmount ?? 0) + row.shippingFee;
+      receivable += orderAmount;
+      if (row.settlementStatus === "paid") {
+        paid += orderAmount;
+      } else {
+        pending += orderAmount;
+      }
+
+      const seriesKey =
+        overviewRange === "day"
+          ? `${rangeStart.toISOString()}#${new Intl.DateTimeFormat("en-US", {
+              timeZone: "America/Mexico_City",
+              hour: "2-digit",
+              hour12: false,
+            }).format(shippedAt)}`
+          : overviewRange === "week"
+            ? startOfMexicoDayClient(shippedAt).toISOString()
+            : overviewRange === "year"
+              ? new Date(shippedAt.getUTCFullYear(), shippedAt.getUTCMonth(), 1, 6, 0, 0, 0).toISOString()
+              : startOfMexicoDayClient(shippedAt).toISOString();
+      const point = seriesMap.get(seriesKey);
+      if (point) {
+        point.orderCount += 1;
+        if (row.shippingStatus === "shipped") point.shippedCount += 1;
+        point.totalAmount += orderAmount;
+      }
+
+      const skuKey = row.sku.trim().toUpperCase();
+      const product = productMap.get(skuKey) || {
+        sku: row.sku,
+        productNameZh: row.productNameZh || row.sku,
+        quantity: 0,
+        orderCount: 0,
+      };
+      product.quantity += row.quantity;
+      product.orderCount += 1;
+      productMap.set(skuKey, product);
+
+      const customer = customerMap.get(row.customerId) || {
+        customerId: row.customerId,
+        customerName: row.customerName,
+        orderCount: 0,
+        totalAmount: 0,
+        paidAmount: 0,
+        unpaidAmount: 0,
+      };
+      customer.orderCount += 1;
+      customer.totalAmount += orderAmount;
+      if (row.settlementStatus === "paid") customer.paidAmount += orderAmount;
+      else customer.unpaidAmount += orderAmount;
+      customerMap.set(row.customerId, customer);
+
+      const platformKey = safePlatformLabel(row.platform);
+      const platform = platformMap.get(platformKey) || {
+        platform: platformKey,
+        orderCount: 0,
+        quantity: 0,
+      };
+      platform.orderCount += 1;
+      platform.quantity += row.quantity;
+      platformMap.set(platformKey, platform);
+    }
+
+    const periodOrderCount = rangedOrders.length;
+    const periodShippedCount = rangedOrders.filter((row) => row.shippingStatus === "shipped").length;
+    const periodPendingCount = rangedOrders.filter((row) => row.shippingStatus !== "shipped").length;
+    const unsettledCustomers = new Set(
+      rangedOrders.filter((row) => row.settlementStatus !== "paid").map((row) => row.customerId),
+    ).size;
+
+    return {
+      title: formatRangeTitle(),
+      summaryLabel:
+        overviewRange === "day"
+          ? lang === "zh"
+            ? "日度总览"
+            : "Resumen diario"
+          : overviewRange === "week"
+            ? lang === "zh"
+              ? "周度总览"
+              : "Resumen semanal"
+            : overviewRange === "year"
+              ? lang === "zh"
+                ? "年度总览"
+                : "Resumen anual"
+              : lang === "zh"
+                ? "月度总览"
+                : "Resumen mensual",
+      metricLabels: {
+        orders:
+          overviewRange === "day"
+            ? lang === "zh"
+              ? "今日录单"
+              : "Pedidos hoy"
+            : overviewRange === "week"
+              ? lang === "zh"
+                ? "本周录单"
+                : "Pedidos semana"
+              : overviewRange === "year"
+                ? lang === "zh"
+                  ? "本年录单"
+                  : "Pedidos año"
+                : lang === "zh"
+                  ? "本月录单"
+                  : "Pedidos mes",
+        shipped:
+          overviewRange === "day"
+            ? lang === "zh"
+              ? "今日已发货"
+              : "Enviados hoy"
+            : overviewRange === "week"
+              ? lang === "zh"
+                ? "本周已发货"
+                : "Enviados semana"
+              : overviewRange === "year"
+                ? lang === "zh"
+                  ? "本年已发货"
+                  : "Enviados año"
+                : lang === "zh"
+                  ? "本月已发货"
+                  : "Enviados mes",
+        pending:
+          overviewRange === "day"
+            ? lang === "zh"
+              ? "今日待处理"
+              : "Pendientes hoy"
+            : overviewRange === "week"
+              ? lang === "zh"
+                ? "本周待处理"
+                : "Pendientes semana"
+              : overviewRange === "year"
+                ? lang === "zh"
+                  ? "本年待处理"
+                  : "Pendientes año"
+                : lang === "zh"
+                  ? "本月待处理"
+                  : "Pendientes mes",
+        unsettled: lang === "zh" ? "待结算客户" : "Clientes pendientes",
+      },
+      receivable,
+      paid,
+      pending,
+      periodOrderCount,
+      periodShippedCount,
+      periodPendingCount,
+      unsettledCustomers,
+      dailySeries: series,
+      topProducts: [...productMap.values()].sort((a, b) => b.quantity - a.quantity || b.orderCount - a.orderCount).slice(0, 4),
+      topCustomersByOrders: [...customerMap.values()].sort((a, b) => b.orderCount - a.orderCount || b.totalAmount - a.totalAmount).slice(0, 4),
+      topPlatforms: [...platformMap.values()].sort((a, b) => b.orderCount - a.orderCount || b.quantity - a.quantity).slice(0, 4),
+      topCustomersByAmount: [...customerMap.values()].sort((a, b) => b.totalAmount - a.totalAmount || b.orderCount - a.orderCount).slice(0, 4),
+      alerts: [
+        { type: "pending_order" as const, count: orders.filter((row) => row.shippingStatus === "pending").length },
+        { type: "missing_shipping_proof" as const, count: orders.filter((row) => row.warnings.includes("missing_shipping_proof")).length },
+        { type: "low_inventory" as const, count: inventory.filter((row) => row.status !== "healthy").length },
+        { type: "customer_unsettled" as const, count: unsettledCustomers },
+      ],
+    };
+  }, [exchangeRate.rateValue, inventory, lang, now, orders, overviewRange]);
   function openCreateModal() {
     setForm({ ...EMPTY_ORDER_FORM, warehouse: FIXED_WAREHOUSE });
     setProductFieldsLocked(false);
@@ -1302,6 +1633,214 @@ export function DropshippingClient({
       </div>
 
       {activeTab === "overview" ? (
+        <div className="grid gap-4 xl:h-[calc(100vh-188px)] xl:grid-rows-[minmax(0,1.18fr)_minmax(0,0.82fr)] xl:overflow-hidden">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.72fr)_360px]">
+            <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(236,72,153,0.16),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(99,102,241,0.14),_transparent_24%),linear-gradient(135deg,#ffffff_0%,#f8fbff_48%,#eef4ff_100%)] shadow-soft">
+              <div className="flex items-center justify-between gap-4 border-b border-white/60 px-5 py-4">
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">{lang === "zh" ? "总览仪表板" : "Dashboard"}</div>
+                  <div className="mt-1 text-xs text-slate-500">{`${overviewDashboard.title} · ${overviewDashboard.summaryLabel}`}</div>
+                </div>
+                <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white/90 p-1 text-[11px] font-medium">
+                  {([
+                    { key: "day", zh: "天", es: "Dia" },
+                    { key: "week", zh: "周", es: "Semana" },
+                    { key: "month", zh: "月", es: "Mes" },
+                    { key: "year", zh: "年", es: "Año" },
+                  ] as const).map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setOverviewRange(item.key)}
+                      className={`rounded-full px-3 py-1.5 transition ${
+                        overviewRange === item.key
+                          ? "bg-gradient-to-r from-fuchsia-500 to-indigo-500 text-white shadow"
+                          : "text-slate-500 hover:bg-slate-100"
+                      }`}
+                    >
+                      {lang === "zh" ? item.zh : item.es}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid gap-4 px-5 py-4 lg:grid-cols-[minmax(0,1.45fr)_240px]">
+                <div className="min-w-0">
+                  <div className="text-4xl font-semibold tracking-tight text-slate-900">{fmtMoney(overviewDashboard.receivable, lang)}</div>
+                  <p className="mt-2 text-sm text-slate-500">
+                    {lang === "zh"
+                      ? "按所选时间范围查看订单、已发、平台与结算的核心数据。"
+                      : "Consulta pedidos, envios, plataformas y liquidacion segun el rango seleccionado."}
+                  </p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl border border-white/70 bg-white/85 px-4 py-3">
+                      <div className="text-xs text-slate-500">{lang === "zh" ? "客户订单总额" : "Monto total"}</div>
+                      <div className="mt-2 text-2xl font-semibold text-slate-900">{fmtMoney(overviewDashboard.receivable, lang)}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/70 bg-white/85 px-4 py-3">
+                      <div className="text-xs text-slate-500">{lang === "zh" ? "结款总额" : "Liquidado"}</div>
+                      <div className="mt-2 text-2xl font-semibold text-emerald-600">{fmtMoney(overviewDashboard.paid, lang)}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/70 bg-white/85 px-4 py-3">
+                      <div className="text-xs text-slate-500">{lang === "zh" ? "未结总额" : "Pendiente"}</div>
+                      <div className="mt-2 text-2xl font-semibold text-rose-600">{fmtMoney(overviewDashboard.pending, lang)}</div>
+                    </div>
+                  </div>
+                  <div className="mt-4 rounded-[24px] border border-white/70 bg-white/80 p-4">
+                    <div className="mb-3 flex items-center gap-4 text-xs text-slate-500">
+                      <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-indigo-600" />{lang === "zh" ? "订单数" : "Pedidos"}</span>
+                      <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />{lang === "zh" ? "已发数" : "Enviados"}</span>
+                    </div>
+                    <OverviewLineChart data={overviewDashboard.dailySeries} lineColor="#6366f1" fillColor="rgba(99,102,241,0.14)" />
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
+                  <div className="rounded-[24px] border border-white/70 bg-white/85 px-4 py-4">
+                    <div className="text-xs text-slate-500">{overviewDashboard.metricLabels.orders}</div>
+                    <div className="mt-3 text-3xl font-semibold text-slate-900">{overviewDashboard.periodOrderCount}</div>
+                  </div>
+                  <div className="rounded-[24px] border border-white/70 bg-white/85 px-4 py-4">
+                    <div className="text-xs text-slate-500">{overviewDashboard.metricLabels.shipped}</div>
+                    <div className="mt-3 text-3xl font-semibold text-emerald-600">{overviewDashboard.periodShippedCount}</div>
+                  </div>
+                  <div className="rounded-[24px] border border-white/70 bg-white/85 px-4 py-4">
+                    <div className="text-xs text-slate-500">{overviewDashboard.metricLabels.pending}</div>
+                    <div className="mt-3 text-3xl font-semibold text-amber-500">{overviewDashboard.periodPendingCount}</div>
+                  </div>
+                  <div className="rounded-[24px] border border-white/70 bg-white/85 px-4 py-4">
+                    <div className="text-xs text-slate-500">{overviewDashboard.metricLabels.unsettled}</div>
+                    <div className="mt-3 text-3xl font-semibold text-rose-600">{overviewDashboard.unsettledCustomers}</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <div className="grid gap-4">
+              <OverviewRankList
+                title={lang === "zh" ? "平台订单分布" : "Platform Share"}
+                subtitle={lang === "zh" ? "按所选时间范围统计" : "Distribucion del periodo"}
+              >
+                <OverviewDonutChart items={overviewDashboard.topPlatforms} lang={lang} />
+              </OverviewRankList>
+              <OverviewWidgetShell
+                title={lang === "zh" ? "汇率与来源" : "Rate & Source"}
+                subtitle={lang === "zh" ? "今日 Wise 汇率与更新时间" : "Tipo de cambio y actualizacion"}
+              >
+                <div className="grid gap-3">
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-4">
+                    <div className="text-xs text-slate-500">{lang === "zh" ? "今日汇率" : "Tipo de cambio"}</div>
+                    <div className="mt-2 text-3xl font-semibold text-slate-900">{exchangeRate.rateValue?.toFixed(4) || "-"}</div>
+                    <div className="mt-1 text-xs text-slate-500">MXN → RMB</div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-4">
+                    <div className="text-xs text-slate-500">{lang === "zh" ? "汇率来源" : "Fuente"}</div>
+                    <div className="mt-2 text-2xl font-semibold text-slate-900">{exchangeRate.sourceName || "-"}</div>
+                    <div className="mt-1 text-xs text-slate-500">{fmtDate(exchangeRate.fetchedAt || exchangeRate.rateDate, lang)}</div>
+                  </div>
+                </div>
+              </OverviewWidgetShell>
+            </div>
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-4">
+            <OverviewRankList
+              title={lang === "zh" ? "产品销量排名" : "Product Ranking"}
+              subtitle={lang === "zh" ? "按数量与订单数排序" : "Por cantidad y pedidos"}
+              className="min-h-0"
+            >
+              <div className="space-y-2">
+                {overviewDashboard.topProducts.map((item, index) => (
+                  <div key={item.sku} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+                    <div className="min-w-0 flex items-center gap-3">
+                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-[11px] font-semibold text-slate-500">{index + 1}</span>
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium text-slate-900">{item.sku}</div>
+                        <div className="truncate text-xs text-slate-500">{item.productNameZh}</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-semibold text-slate-900">{item.quantity}</div>
+                      <div className="text-xs text-slate-500">{item.orderCount} {lang === "zh" ? "单" : "ped."}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </OverviewRankList>
+
+            <OverviewRankList
+              title={lang === "zh" ? "客户订单数排名" : "Customer Orders"}
+              subtitle={lang === "zh" ? "按订单数排序" : "Por cantidad de pedidos"}
+              className="min-h-0"
+            >
+              <div className="space-y-2">
+                {overviewDashboard.topCustomersByOrders.map((item, index) => (
+                  <div key={item.customerId} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-[11px] font-semibold text-slate-500">{index + 1}</span>
+                      <div className="truncate text-sm font-medium text-slate-900">{item.customerName}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-semibold text-slate-900">{item.orderCount}</div>
+                      <div className="text-xs text-slate-500">{lang === "zh" ? "订单" : "Pedidos"}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </OverviewRankList>
+
+            <OverviewRankList
+              title={lang === "zh" ? "客户订单总额" : "Customer Amount"}
+              subtitle={lang === "zh" ? "显示总额、已结与未结" : "Total, pagado y pendiente"}
+              className="min-h-0"
+            >
+              <div className="space-y-2">
+                {overviewDashboard.topCustomersByAmount.map((item, index) => (
+                  <div key={item.customerId} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-[11px] font-semibold text-slate-500">{index + 1}</span>
+                        <div className="truncate text-sm font-medium text-slate-900">{item.customerName}</div>
+                      </div>
+                      <div className="text-sm font-semibold text-slate-900">{fmtMoney(item.totalAmount, lang)}</div>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-xl bg-emerald-50 px-3 py-2 text-emerald-700">
+                        <div>{lang === "zh" ? "已结" : "Pagado"}</div>
+                        <div className="mt-1 text-sm font-semibold">{fmtMoney(item.paidAmount, lang)}</div>
+                      </div>
+                      <div className="rounded-xl bg-rose-50 px-3 py-2 text-rose-700">
+                        <div>{lang === "zh" ? "未结" : "Pendiente"}</div>
+                        <div className="mt-1 text-sm font-semibold">{fmtMoney(item.unpaidAmount, lang)}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </OverviewRankList>
+
+            <OverviewWidgetShell
+              title={lang === "zh" ? "待处理提醒" : "Alerts"}
+              subtitle={lang === "zh" ? "优先关注的业务提醒" : "Alertas prioritarias"}
+              className="min-h-0"
+            >
+              <div className="space-y-3">
+                {overviewDashboard.alerts.map((item, index) => (
+                  <div key={item.type} className="flex items-start gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+                    <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-semibold text-slate-500">{index + 1}</span>
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-slate-900">{text.alerts[item.type]}</div>
+                      <div className="mt-1 text-xs text-slate-500">{lang === "zh" ? "当前数量" : "Conteo actual"} · {item.count}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </OverviewWidgetShell>
+          </div>
+        </div>
+      ) : null}
+
+      {false ? (
         <div className="space-y-5">
           <div className="grid gap-5 xl:grid-cols-12">
             <section className="overflow-hidden rounded-[30px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(236,72,153,0.18),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(99,102,241,0.16),_transparent_24%),linear-gradient(135deg,#ffffff_0%,#f9fbff_46%,#eef4ff_100%)] shadow-soft xl:col-span-8">
