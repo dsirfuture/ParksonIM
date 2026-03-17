@@ -758,7 +758,6 @@ export function DropshippingClient({
               <table className="min-w-full border-separate border-spacing-0">
                 <thead>
                   <tr className="bg-slate-50 text-left text-sm text-slate-500">
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.customer}</th>
                     <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.platform}</th>
                     <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.orderNo}</th>
                     <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.trackingNo}</th>
@@ -778,7 +777,6 @@ export function DropshippingClient({
                 <tbody>
                   {filteredOrders.map((row) => (
                     <tr key={row.id} className="border-t border-slate-100">
-                      <td className="px-4 py-3 text-sm text-slate-700">{row.customerName}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">{row.platform}</td>
                       <td className="px-4 py-3 text-sm font-semibold text-slate-900">{row.platformOrderNo}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">{row.trackingNo || "-"}</td>
