@@ -492,12 +492,12 @@ function OverviewRankList({
   className?: string;
 }) {
   return (
-    <section className={`rounded-3xl border border-slate-200 bg-white/90 shadow-soft ${className}`}>
+    <section className={`flex h-full flex-col rounded-3xl border border-slate-200 bg-white/90 shadow-soft ${className}`}>
       <div className="border-b border-slate-100 px-5 py-4">
         <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
         {subtitle ? <p className="mt-1 text-xs text-slate-500">{subtitle}</p> : null}
       </div>
-      <div className="p-4">{children}</div>
+      <div className="min-h-0 flex-1 p-4">{children}</div>
     </section>
   );
 }
@@ -514,7 +514,7 @@ function OverviewWidgetShell({
   className?: string;
 }) {
   return (
-    <section className={`rounded-3xl border border-slate-200 bg-white/90 shadow-soft ${className}`}>
+    <section className={`flex h-full flex-col rounded-3xl border border-slate-200 bg-white/90 shadow-soft ${className}`}>
       <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
         <div>
           <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
@@ -1633,8 +1633,8 @@ export function DropshippingClient({
       </div>
 
       {activeTab === "overview" ? (
-        <div className="grid gap-4 xl:h-[calc(100vh-188px)] xl:grid-rows-[minmax(0,1.18fr)_minmax(0,0.82fr)] xl:overflow-hidden">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.72fr)_360px]">
+        <div className="space-y-4">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.82fr)]">
             <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(236,72,153,0.16),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(99,102,241,0.14),_transparent_24%),linear-gradient(135deg,#ffffff_0%,#f8fbff_48%,#eef4ff_100%)] shadow-soft">
               <div className="flex items-center justify-between gap-4 border-b border-white/60 px-5 py-4">
                 <div>
@@ -1664,9 +1664,9 @@ export function DropshippingClient({
                 </div>
               </div>
 
-              <div className="grid gap-4 px-5 py-4 lg:grid-cols-[minmax(0,1.45fr)_240px]">
+              <div className="grid gap-4 px-5 py-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(240px,0.7fr)]">
                 <div className="min-w-0">
-                  <div className="text-4xl font-semibold tracking-tight text-slate-900">{fmtMoney(overviewDashboard.receivable, lang)}</div>
+                  <div className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">{fmtMoney(overviewDashboard.receivable, lang)}</div>
                   <p className="mt-2 text-sm text-slate-500">
                     {lang === "zh"
                       ? "按所选时间范围查看订单、已发、平台与结算的核心数据。"
@@ -1695,7 +1695,7 @@ export function DropshippingClient({
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
+                <div className="grid auto-rows-fr gap-3 sm:grid-cols-2 lg:grid-cols-2">
                   <div className="rounded-[24px] border border-white/70 bg-white/85 px-4 py-4">
                     <div className="text-xs text-slate-500">{overviewDashboard.metricLabels.orders}</div>
                     <div className="mt-3 text-3xl font-semibold text-slate-900">{overviewDashboard.periodOrderCount}</div>
@@ -1716,7 +1716,7 @@ export function DropshippingClient({
               </div>
             </section>
 
-            <div className="grid gap-4">
+            <div className="grid auto-rows-fr gap-4">
               <OverviewRankList
                 title={lang === "zh" ? "平台订单分布" : "Platform Share"}
                 subtitle={lang === "zh" ? "按所选时间范围统计" : "Distribucion del periodo"}
@@ -1743,7 +1743,7 @@ export function DropshippingClient({
             </div>
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
             <OverviewRankList
               title={lang === "zh" ? "产品销量排名" : "Product Ranking"}
               subtitle={lang === "zh" ? "按数量与订单数排序" : "Por cantidad y pedidos"}
