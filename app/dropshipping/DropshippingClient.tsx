@@ -215,6 +215,14 @@ function EyeIcon() {
   );
 }
 
+function PlusBadge() {
+  return (
+    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-white">
+      +
+    </span>
+  );
+}
+
 export function DropshippingClient({
   initialLang,
   initialOverview,
@@ -523,13 +531,48 @@ export function DropshippingClient({
       const aTime = a.shippedAt ? new Date(a.shippedAt).getTime() : Number.POSITIVE_INFINITY;
       const bTime = b.shippedAt ? new Date(b.shippedAt).getTime() : Number.POSITIVE_INFINITY;
       if (aTime === bTime) {
-        return a.platformOrderNo.localeCompare(b.platformOrderNo, "en");
+        const trackingCompare = (a.trackingNo || "").localeCompare(b.trackingNo || "", "en");
+        if (trackingCompare !== 0) return trackingCompare;
+        const orderCompare = a.platformOrderNo.localeCompare(b.platformOrderNo, "en");
+        if (orderCompare !== 0) return orderCompare;
+        return a.sku.localeCompare(b.sku, "en");
       }
       if (!Number.isFinite(aTime)) return 1;
       if (!Number.isFinite(bTime)) return -1;
       return shippedAtSortDirection === "asc" ? aTime - bTime : bTime - aTime;
     });
   }, [filteredOrders, shippedAtSortDirection]);
+
+  const trackingDisplayMeta = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of sortedOrders) {
+      const tracking = row.trackingNo.trim();
+      if (!tracking) continue;
+      counts.set(tracking, (counts.get(tracking) || 0) + 1);
+    }
+
+    const meta = new Map<string, { showTracking: boolean; count: number }>();
+    let lastTracking = "";
+    for (const row of sortedOrders) {
+      const tracking = row.trackingNo.trim();
+      if (!tracking) {
+        meta.set(row.id, { showTracking: true, count: 0 });
+        continue;
+      }
+      meta.set(row.id, {
+        showTracking: tracking !== lastTracking,
+        count: counts.get(tracking) || 0,
+      });
+      lastTracking = tracking;
+    }
+    return meta;
+  }, [sortedOrders]);
+
+  const sameTrackingOrders = useMemo(() => {
+    const tracking = form.trackingNo.trim().toLowerCase();
+    if (!tracking) return [];
+    return orders.filter((row) => row.trackingNo.trim().toLowerCase() === tracking);
+  }, [form.trackingNo, orders]);
 
   const platformOptions = useMemo(() => {
     const current = form.platform.trim();
@@ -1035,7 +1078,19 @@ export function DropshippingClient({
                     <tr key={row.id} className="border-t border-slate-100">
                       <td className="px-3 py-2">{row.platform}</td>
                       <td className="px-3 py-2 text-slate-900">{row.platformOrderNo}</td>
-                      <td className="px-3 py-2">{row.trackingNo || "-"}</td>
+                      <td className="px-3 py-2">
+                        {(() => {
+                          const meta = trackingDisplayMeta.get(row.id);
+                          if (!row.trackingNo) return <span>-</span>;
+                          if (!meta?.showTracking) return <span className="text-slate-300">|</span>;
+                          return (
+                            <div className="inline-flex items-center gap-2">
+                              <span>{row.trackingNo}</span>
+                              {meta.count > 1 ? <PlusBadge /> : null}
+                            </div>
+                          );
+                        })()}
+                      </td>
                       <td className="px-3 py-2">
                         {row.shippingLabelAttachments[0]?.fileUrl ? (
                           <a
@@ -1319,6 +1374,34 @@ export function DropshippingClient({
                   />
                 </label>
               ))}
+
+              {sameTrackingOrders.length > 1 ? (
+                <div className="md:col-span-2 xl:col-span-3">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="text-xs text-slate-500">
+                      {lang === "zh" ? "同物流号商品" : "Productos con la misma guia"}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {sameTrackingOrders.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => openEditModal(item)}
+                          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition ${
+                            item.id === form.id
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                          }`}
+                        >
+                          <span>{item.sku}</span>
+                          <span className="text-slate-400">/</span>
+                          <span className="max-w-[180px] truncate">{item.productNameZh || "-"}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
               <label className="space-y-1">
                 <span className="text-xs text-slate-500">{text.form.platform}</span>
