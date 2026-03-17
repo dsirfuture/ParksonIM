@@ -1650,8 +1650,8 @@ export function DropshippingClient({
 
       {activeTab === "overview" ? (
         <div className="space-y-3.5">
-          <div className="grid gap-3.5 xl:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.75fr)]">
-            <section className="overflow-hidden rounded-[20px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(236,72,153,0.16),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(99,102,241,0.14),_transparent_24%),linear-gradient(135deg,#ffffff_0%,#f8fbff_48%,#eef4ff_100%)] shadow-soft">
+          <div className="grid items-start gap-3.5 xl:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.75fr)]">
+            <section className="self-start overflow-hidden rounded-[20px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(236,72,153,0.16),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(99,102,241,0.14),_transparent_24%),linear-gradient(135deg,#ffffff_0%,#f8fbff_48%,#eef4ff_100%)] shadow-soft">
               <div className="flex items-center justify-between gap-3 border-b border-white/60 px-3.5 py-2.5">
                 <div>
                   <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">{lang === "zh" ? "总览仪表板" : "Dashboard"}</div>
@@ -1732,7 +1732,7 @@ export function DropshippingClient({
               </div>
             </section>
 
-            <div className="grid auto-rows-fr gap-3.5">
+            <div className="grid auto-rows-fr gap-3.5 self-start">
               <OverviewRankList
                 title={lang === "zh" ? "平台订单分布" : "Platform Share"}
                 subtitle={lang === "zh" ? "按所选时间范围统计" : "Distribucion del periodo"}
@@ -1743,7 +1743,7 @@ export function DropshippingClient({
                 title={lang === "zh" ? "汇率与来源" : "Rate & Source"}
                 subtitle={lang === "zh" ? "今日 Wise 汇率与更新时间" : "Tipo de cambio y actualizacion"}
               >
-                <div className="grid gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <div className="rounded-[18px] border border-slate-100 bg-slate-50/80 px-3 py-3">
                     <div className="text-xs text-slate-500">{lang === "zh" ? "今日汇率" : "Tipo de cambio"}</div>
                     <div className="mt-1 text-[1.45rem] font-semibold text-slate-900">{exchangeRate.rateValue?.toFixed(4) || "-"}</div>
