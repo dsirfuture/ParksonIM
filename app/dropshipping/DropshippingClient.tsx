@@ -755,7 +755,7 @@ export function DropshippingClient({
             />
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full border-separate border-spacing-0">
+              <table className="w-max border-separate border-spacing-0">
                 <thead>
                   <tr className="bg-slate-50 text-left text-sm text-slate-500">
                     <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.platform}</th>
