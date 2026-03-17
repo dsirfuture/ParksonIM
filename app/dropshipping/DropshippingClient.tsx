@@ -2443,23 +2443,13 @@ export function DropshippingClient({
       {deleteTarget ? (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/45 px-4">
           <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
-            <div className="border-b border-slate-200 px-5 py-4">
-              <h3 className="text-base font-semibold text-slate-900">
-                {lang === "zh" ? "\u5220\u9664\u8ba2\u5355" : "Eliminar pedido"}
-              </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                {lang === "zh"
-                  ? `\u8bf7\u8f93\u5165\u5b8c\u6574\u7269\u6d41\u53f7\u540e\u5220\u9664\uff1a${deleteTarget.trackingNo}`
-                  : `Escribe la guia completa para eliminar: ${deleteTarget.trackingNo}`}
-              </p>
-            </div>
-            <div className="px-5 py-5">
+            <div className="px-5 pb-5 pt-6">
               <input
                 type="text"
                 value={deleteTrackingInput}
                 onChange={(event) => setDeleteTrackingInput(event.target.value)}
                 className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
-                placeholder={lang === "zh" ? "\u8f93\u5165\u5b8c\u6574\u7269\u6d41\u53f7" : "Escribe la guia completa"}
+                placeholder={deleteTarget.trackingNo}
                 autoFocus
               />
             </div>
