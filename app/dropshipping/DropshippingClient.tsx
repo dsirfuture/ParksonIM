@@ -2895,7 +2895,7 @@ export function DropshippingClient({
 
               {sameTrackingOrders.length > 1 ? (
                 <div className="md:col-span-6 md:order-0 xl:col-span-12 xl:order-0">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                  <div className="max-w-[930px] rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <div className="text-xs text-slate-500">
