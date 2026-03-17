@@ -953,9 +953,9 @@ export function DropshippingClient({
               <select
                 value={customerFilter}
                 onChange={(event) => setCustomerFilter(event.target.value)}
-                className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                className="h-10 rounded-xl border border-primary bg-primary px-3 text-sm text-white"
               >
-                <option value="all">{lang === "zh" ? "全部客户" : "Todos los clientes"}</option>
+                <option value="all" hidden>{lang === "zh" ? "????" : "Todos los clientes"}</option>
                 {customerOptions.map((customer) => (
                   <option key={customer} value={customer}>
                     {customer}
