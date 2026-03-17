@@ -5,8 +5,10 @@ import fontkit from "@pdf-lib/fontkit";
 import type { DsExchangeRatePayload, DsFinanceRow } from "@/lib/dropshipping-types";
 
 type EmbeddedFonts = {
-  regular: PDFFont;
-  bold: PDFFont;
+  zhRegular: PDFFont;
+  zhBold: PDFFont;
+  latinRegular: PDFFont;
+  latinBold: PDFFont;
 };
 
 function sanitizeFileName(value: string) {
@@ -55,23 +57,34 @@ async function embedFonts(pdfDoc: PDFDocument): Promise<EmbeddedFonts> {
     path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Regular.otf"),
     "C:\\Windows\\Fonts\\msyh.ttf",
   ]);
-  const boldBytes = await loadFontCandidates([
-    path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Bold.otf"),
-    "C:\\Windows\\Fonts\\msyhbd.ttf",
-    "C:\\Windows\\Fonts\\simhei.ttf",
-  ]);
+  const latinRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const latinBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  if (regularBytes && boldBytes) {
+  if (regularBytes) {
+    const zhRegular = await pdfDoc.embedFont(regularBytes, { subset: false });
     return {
-      regular: await pdfDoc.embedFont(regularBytes, { subset: false }),
-      bold: await pdfDoc.embedFont(boldBytes, { subset: false }),
+      zhRegular,
+      zhBold: zhRegular,
+      latinRegular,
+      latinBold,
     };
   }
 
   return {
-    regular: await pdfDoc.embedFont(StandardFonts.Helvetica),
-    bold: await pdfDoc.embedFont(StandardFonts.HelveticaBold),
+    zhRegular: latinRegular,
+    zhBold: latinBold,
+    latinRegular,
+    latinBold,
   };
+}
+
+function hasChineseGlyph(value: string) {
+  return /[\u3400-\u9FFF\uF900-\uFAFF]/.test(String(value || ""));
+}
+
+function getFontForText(fonts: EmbeddedFonts, value: string, bold = false) {
+  if (hasChineseGlyph(value)) return bold ? fonts.zhBold : fonts.zhRegular;
+  return bold ? fonts.latinBold : fonts.latinRegular;
 }
 
 function drawText(
@@ -81,17 +94,24 @@ function drawText(
     x: number;
     y: number;
     size?: number;
-    font: PDFFont;
+    fonts: EmbeddedFonts;
+    bold?: boolean;
     color?: ReturnType<typeof rgb>;
   },
 ) {
-  page.drawText(value, {
-    x: options.x,
-    y: options.y,
-    size: options.size || 10,
-    font: options.font,
-    color: options.color || rgb(0.15, 0.18, 0.25),
-  });
+  const chunks = String(value || "").match(/([\u3400-\u9FFF\uF900-\uFAFF]+|[^\u3400-\u9FFF\uF900-\uFAFF]+)/g) || [];
+  let cursorX = options.x;
+  for (const chunk of chunks) {
+    const font = getFontForText(options.fonts, chunk, options.bold);
+    page.drawText(chunk, {
+      x: cursorX,
+      y: options.y,
+      size: options.size || 10,
+      font,
+      color: options.color || rgb(0.15, 0.18, 0.25),
+    });
+    cursorX += font.widthOfTextAtSize(chunk, options.size || 10);
+  }
 }
 
 function drawSummaryCard(
@@ -115,14 +135,15 @@ function drawSummaryCard(
     x: x + 12,
     y: 474,
     size: 9,
-    font: fonts.regular,
+    fonts,
     color: rgb(0.39, 0.45, 0.56),
   });
   drawText(page, value, {
     x: x + 12,
     y: 450,
     size: 16,
-    font: fonts.bold,
+    fonts,
+    bold: true,
     color: accent,
   });
 }
@@ -153,7 +174,8 @@ function drawTableHeader(page: PDFPage, fonts: EmbeddedFonts, y: number) {
       x: column.x,
       y,
       size: 8.5,
-      font: fonts.bold,
+      fonts,
+      bold: true,
       color: rgb(0.32, 0.39, 0.49),
     });
   }
@@ -178,28 +200,30 @@ function drawHeader(
     x: 36,
     y: 535,
     size: 20,
-    font: fonts.bold,
+    fonts,
+    bold: true,
     color: rgb(0.07, 0.12, 0.24),
   });
   drawText(page, financeRow.customerName, {
     x: 36,
     y: 515,
     size: 11,
-    font: fonts.regular,
+    fonts,
     color: rgb(0.39, 0.45, 0.56),
   });
   drawText(page, `\u6c47\u7387 MXN -> RMB: ${safeRateLabel(exchangeRate)}`, {
     x: 520,
     y: 536,
     size: 10,
-    font: fonts.bold,
+    fonts,
+    bold: true,
     color: rgb(0.1, 0.24, 0.53),
   });
   drawText(page, `\u6765\u6e90: ${exchangeRate.sourceName || "-"}`, {
     x: 520,
     y: 520,
     size: 9,
-    font: fonts.regular,
+    fonts,
     color: rgb(0.39, 0.45, 0.56),
   });
 }
@@ -229,7 +253,8 @@ export async function buildDropshippingSettlementPdf(input: {
     x: 36,
     y,
     size: 12,
-    font: fonts.bold,
+    fonts,
+    bold: true,
     color: rgb(0.07, 0.12, 0.24),
   });
   y -= 18;
@@ -256,43 +281,44 @@ export async function buildDropshippingSettlementPdf(input: {
       x: 36,
       y,
       size: 8.5,
-      font: fonts.regular,
+      fonts,
     });
     drawText(page, sanitizeFileName(item.sku).slice(0, 12) || "-", {
       x: 182,
       y,
       size: 8.5,
-      font: fonts.regular,
+      fonts,
     });
     drawText(page, sanitizeFileName(item.productNameZh).slice(0, 20) || "-", {
       x: 278,
       y,
       size: 8.5,
-      font: fonts.regular,
+      fonts,
     });
     drawText(page, sanitizeFileName(item.trackingNo).slice(0, 18) || "-", {
       x: 454,
       y,
       size: 8.5,
-      font: fonts.regular,
+      fonts,
     });
     drawText(page, formatDateOnly(item.shippedAt), {
       x: 588,
       y,
       size: 8.5,
-      font: fonts.regular,
+      fonts,
     });
     drawText(page, formatDateOnly(item.settledAt), {
       x: 670,
       y,
       size: 8.5,
-      font: fonts.regular,
+      fonts,
     });
     drawText(page, formatMoney(item.paidAmount), {
       x: 752,
       y,
       size: 8.5,
-      font: fonts.bold,
+      fonts,
+      bold: true,
       color: rgb(0.02, 0.55, 0.35),
     });
 
@@ -304,7 +330,7 @@ export async function buildDropshippingSettlementPdf(input: {
       x: 36,
       y: y - 6,
       size: 10,
-      font: fonts.regular,
+      fonts,
       color: rgb(0.39, 0.45, 0.56),
     });
   }
