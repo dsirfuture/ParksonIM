@@ -306,6 +306,13 @@ function attachmentLooksLikePdf(mimeType?: string | null, fileName?: string | nu
   return String(fileName || "").toLowerCase().endsWith(".pdf");
 }
 
+function attachmentDisplayName(fileName?: string | null, lang?: "zh" | "es") {
+  const normalized = String(fileName || "").trim();
+  if (!normalized) return lang === "zh" ? "附件" : "Archivo";
+  const dotIndex = normalized.lastIndexOf(".");
+  return dotIndex > 0 ? normalized.slice(dotIndex + 1).toUpperCase() : normalized;
+}
+
 function buildAttachmentSlotsFromExisting(attachments: DsOrderAttachment[]) {
   const slots = attachments
     .slice(0, ATTACHMENT_SLOT_COUNT)
@@ -1148,7 +1155,7 @@ export function DropshippingClient({
         next[slotIndex] = {
           kind: "new",
           file,
-          previewUrl: attachmentLooksLikeImage(file.type, file.name) ? URL.createObjectURL(file) : null,
+          previewUrl: URL.createObjectURL(file),
         };
         return next;
       });
@@ -1165,11 +1172,33 @@ export function DropshippingClient({
       next[slotIndex] = {
         kind: "new",
         file,
-        previewUrl: attachmentLooksLikeImage(file.type, file.name) ? URL.createObjectURL(file) : null,
+        previewUrl: URL.createObjectURL(file),
       };
       return next;
     });
     setProofSlotsDirty(true);
+  }
+
+  function previewAttachmentSlot(slot: AttachmentSlotState, type: "label" | "proof", slotIndex: number) {
+    if (slot.kind === "empty") {
+      triggerAttachmentPicker(type, slotIndex);
+      return;
+    }
+
+    const previewUrl = slot.kind === "existing" ? slot.attachment.fileUrl : slot.previewUrl;
+    const mimeType = slot.kind === "existing" ? slot.attachment.mimeType : slot.file.type;
+    const fileName = slot.kind === "existing" ? slot.attachment.fileName : slot.file.name;
+    if (!previewUrl) return;
+
+    if (attachmentLooksLikeImage(mimeType, fileName)) {
+      setPreviewImage({
+        src: previewUrl,
+        title: fileName || (lang === "zh" ? "附件预览" : "Vista previa"),
+      });
+      return;
+    }
+
+    window.open(previewUrl, "_blank", "noopener,noreferrer");
   }
 
   async function materializeAttachmentSlotFiles(slots: AttachmentSlotState[]) {
@@ -1952,7 +1981,6 @@ export function DropshippingClient({
   }
 
   function renderAttachmentSlot(slot: AttachmentSlotState, type: "label" | "proof", slotIndex: number) {
-    const isLabel = type === "label";
     const isEmpty = slot.kind === "empty";
     const previewUrl = slot.kind === "existing"
       ? slot.attachment.fileUrl
@@ -1968,18 +1996,25 @@ export function DropshippingClient({
       ? slot.attachment.fileName
       : slot.kind === "new"
         ? slot.file.name
-        : "";
+      : "";
     const isImage = !isEmpty && attachmentLooksLikeImage(mimeType, fileName) && Boolean(previewUrl);
     const isPdf = !isEmpty && attachmentLooksLikePdf(mimeType, fileName);
+    const actionLabel = isEmpty
+      ? (lang === "zh" ? "添加附件" : "Agregar")
+      : isImage
+        ? (lang === "zh" ? "点击查看" : "Ver")
+        : isPdf
+          ? (lang === "zh" ? "点击查看 PDF" : "Ver PDF")
+          : (lang === "zh" ? "点击查看" : "Ver");
 
     return (
       <div
         key={`${type}-${slotIndex}`}
-        className={`rounded-xl border border-slate-200 bg-white ${isEmpty ? "p-0" : "p-2.5"}`}
+        className={`relative rounded-xl border border-slate-200 bg-white ${isEmpty ? "p-0" : "p-2.5"}`}
       >
         <button
           type="button"
-          onClick={() => triggerAttachmentPicker(type, slotIndex)}
+          onClick={() => previewAttachmentSlot(slot, type, slotIndex)}
           className={`flex h-[88px] w-full flex-col items-center justify-center gap-1 text-slate-400 transition ${
             isEmpty ? "rounded-xl hover:bg-slate-50 hover:text-primary" : "rounded-lg hover:bg-slate-50"
           }`}
@@ -1993,19 +2028,34 @@ export function DropshippingClient({
             <span className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-lg">
               <img src={previewUrl || ""} alt={fileName || `${type}-${slotIndex + 1}`} className="h-full w-full object-cover" />
             </span>
+          ) : isPdf ? (
+            <span className="flex flex-col items-center justify-center gap-1 text-slate-700">
+              <span className="inline-flex h-9 min-w-[48px] items-center justify-center rounded-lg bg-rose-50 px-3 text-xs font-semibold text-rose-600">
+                PDF
+              </span>
+              <span className="text-[11px] font-medium text-slate-700">{lang === "zh" ? "已上传" : "Subido"}</span>
+            </span>
           ) : (
-            <span className="inline-flex h-14 w-14 items-center justify-center text-sm font-semibold text-slate-600">
-              {isPdf ? "PDF" : "FILE"}
+            <span className="flex flex-col items-center justify-center gap-1 text-slate-700">
+              <span className="inline-flex h-9 min-w-[48px] items-center justify-center rounded-lg bg-slate-100 px-3 text-xs font-semibold text-slate-600">
+                {attachmentDisplayName(fileName, lang)}
+              </span>
+              <span className="text-[11px] font-medium text-slate-700">{lang === "zh" ? "已上传" : "Subido"}</span>
             </span>
           )}
           {!isEmpty ? (
-            <span className="text-[11px] font-medium text-slate-500">
-              {isLabel
-                ? (lang === "zh" ? "点击替换" : "Reemplazar")
-                : (lang === "zh" ? "点击替换" : "Reemplazar")}
-            </span>
+            <span className="text-[11px] font-medium text-slate-500">{actionLabel}</span>
           ) : null}
         </button>
+        {!isEmpty ? (
+          <button
+            type="button"
+            onClick={() => triggerAttachmentPicker(type, slotIndex)}
+            className="absolute right-3 top-3 inline-flex h-6 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-medium text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
+          >
+            {lang === "zh" ? "替换" : "Cambiar"}
+          </button>
+        ) : null}
         <input
           ref={(node) => {
             if (type === "label") {
