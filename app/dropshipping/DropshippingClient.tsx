@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import * as ReactGridLayout from "react-grid-layout";
 import { EmptyState } from "@/components/empty-state";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { ProductImage } from "@/components/product-image";
@@ -63,6 +64,29 @@ type DeleteOrderState = {
   trackingNo: string;
 } | null;
 
+type OverviewWidgetId =
+  | "hero"
+  | "financeStats"
+  | "trend"
+  | "platforms"
+  | "products"
+  | "customerOrders"
+  | "customerAmounts"
+  | "recentOrders"
+  | "alerts";
+
+type OverviewLayoutItem = {
+  i: OverviewWidgetId;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  minW?: number;
+  minH?: number;
+};
+
+type OverviewLayouts = Record<string, OverviewLayoutItem[]>;
+
 type OrderFormState = {
   id: string;
   customerName: string;
@@ -113,6 +137,57 @@ const PLATFORM_OPTIONS = [
 ] as const;
 
 const SHIPPING_FEE_OPTIONS = ["6", "8", "10", "12"] as const;
+const ResponsiveGridLayout = (ReactGridLayout as unknown as {
+  WidthProvider: (component: unknown) => unknown;
+  Responsive: unknown;
+}).WidthProvider((ReactGridLayout as unknown as { Responsive: unknown }).Responsive) as React.ComponentType<Record<string, unknown>>;
+const OVERVIEW_LAYOUT_STORAGE_KEY = "dropshipping-overview-layouts-v1";
+const OVERVIEW_LAYOUTS: OverviewLayouts = {
+  lg: [
+    { i: "hero", x: 0, y: 0, w: 8, h: 8, minW: 4, minH: 5 },
+    { i: "financeStats", x: 8, y: 0, w: 4, h: 8, minW: 3, minH: 5 },
+    { i: "trend", x: 0, y: 8, w: 8, h: 8, minW: 4, minH: 6 },
+    { i: "platforms", x: 8, y: 8, w: 4, h: 8, minW: 3, minH: 6 },
+    { i: "products", x: 0, y: 16, w: 4, h: 8, minW: 3, minH: 6 },
+    { i: "customerOrders", x: 4, y: 16, w: 4, h: 8, minW: 3, minH: 6 },
+    { i: "customerAmounts", x: 8, y: 16, w: 4, h: 8, minW: 3, minH: 6 },
+    { i: "recentOrders", x: 0, y: 24, w: 8, h: 8, minW: 4, minH: 6 },
+    { i: "alerts", x: 8, y: 24, w: 4, h: 8, minW: 3, minH: 6 },
+  ],
+  md: [
+    { i: "hero", x: 0, y: 0, w: 5, h: 8, minW: 4, minH: 5 },
+    { i: "financeStats", x: 5, y: 0, w: 3, h: 8, minW: 3, minH: 5 },
+    { i: "trend", x: 0, y: 8, w: 5, h: 8, minW: 4, minH: 6 },
+    { i: "platforms", x: 5, y: 8, w: 3, h: 8, minW: 3, minH: 6 },
+    { i: "products", x: 0, y: 16, w: 4, h: 8, minW: 3, minH: 6 },
+    { i: "customerOrders", x: 4, y: 16, w: 4, h: 8, minW: 3, minH: 6 },
+    { i: "customerAmounts", x: 0, y: 24, w: 4, h: 8, minW: 3, minH: 6 },
+    { i: "recentOrders", x: 4, y: 24, w: 4, h: 8, minW: 3, minH: 6 },
+    { i: "alerts", x: 0, y: 32, w: 8, h: 7, minW: 4, minH: 6 },
+  ],
+  sm: [
+    { i: "hero", x: 0, y: 0, w: 4, h: 8, minW: 3, minH: 5 },
+    { i: "financeStats", x: 0, y: 8, w: 4, h: 7, minW: 3, minH: 5 },
+    { i: "trend", x: 0, y: 15, w: 4, h: 8, minW: 3, minH: 6 },
+    { i: "platforms", x: 0, y: 23, w: 4, h: 8, minW: 3, minH: 6 },
+    { i: "products", x: 0, y: 31, w: 4, h: 8, minW: 3, minH: 6 },
+    { i: "customerOrders", x: 0, y: 39, w: 4, h: 8, minW: 3, minH: 6 },
+    { i: "customerAmounts", x: 0, y: 47, w: 4, h: 8, minW: 3, minH: 6 },
+    { i: "recentOrders", x: 0, y: 55, w: 4, h: 8, minW: 3, minH: 6 },
+    { i: "alerts", x: 0, y: 63, w: 4, h: 8, minW: 3, minH: 6 },
+  ],
+  xs: [
+    { i: "hero", x: 0, y: 0, w: 2, h: 8, minW: 2, minH: 5 },
+    { i: "financeStats", x: 0, y: 8, w: 2, h: 7, minW: 2, minH: 5 },
+    { i: "trend", x: 0, y: 15, w: 2, h: 8, minW: 2, minH: 6 },
+    { i: "platforms", x: 0, y: 23, w: 2, h: 8, minW: 2, minH: 6 },
+    { i: "products", x: 0, y: 31, w: 2, h: 8, minW: 2, minH: 6 },
+    { i: "customerOrders", x: 0, y: 39, w: 2, h: 8, minW: 2, minH: 6 },
+    { i: "customerAmounts", x: 0, y: 47, w: 2, h: 8, minW: 2, minH: 6 },
+    { i: "recentOrders", x: 0, y: 55, w: 2, h: 8, minW: 2, minH: 6 },
+    { i: "alerts", x: 0, y: 63, w: 2, h: 8, minW: 2, minH: 6 },
+  ],
+};
 
 function getShippingStatusLabel(status: OrderFormState["shippingStatus"], lang: "zh" | "es") {
   if (lang === "zh") {
@@ -322,6 +397,38 @@ function OverviewRankList({
   );
 }
 
+function OverviewWidgetShell({
+  title,
+  subtitle,
+  children,
+  className = "",
+}: {
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`ds-overview-widget rounded-3xl border border-slate-200 bg-white/90 shadow-soft ${className}`}>
+      <div className="ds-overview-handle flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+          {subtitle ? <p className="mt-1 text-xs text-slate-500">{subtitle}</p> : null}
+        </div>
+        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400">
+          <span className="grid grid-cols-2 gap-0.5">
+            <span className="h-1 w-1 rounded-full bg-current" />
+            <span className="h-1 w-1 rounded-full bg-current" />
+            <span className="h-1 w-1 rounded-full bg-current" />
+            <span className="h-1 w-1 rounded-full bg-current" />
+          </span>
+        </span>
+      </div>
+      <div className="min-h-0 flex-1 p-4">{children}</div>
+    </section>
+  );
+}
+
 export function DropshippingClient({
   initialLang,
   initialOverview,
@@ -370,6 +477,21 @@ export function DropshippingClient({
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  const [overviewLayouts, setOverviewLayouts] = useState<OverviewLayouts>(OVERVIEW_LAYOUTS);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(OVERVIEW_LAYOUT_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as OverviewLayouts;
+      if (parsed && typeof parsed === "object") {
+        setOverviewLayouts((prev: OverviewLayouts) => ({ ...prev, ...parsed }));
+      }
+    } catch {
+      // keep default layout
+    }
   }, []);
 
   const financeDisplayRate = useMemo(() => exchangeRate.rateValue || null, [exchangeRate.rateValue]);
@@ -1056,6 +1178,15 @@ export function DropshippingClient({
       activeTab === tab ? "bg-primary text-white shadow-soft" : "bg-white text-slate-600 hover:bg-slate-100"
     }`;
 
+  const handleOverviewLayoutChange = (_currentLayout: unknown, allLayouts: OverviewLayouts) => {
+    setOverviewLayouts(allLayouts);
+    try {
+      window.localStorage.setItem(OVERVIEW_LAYOUT_STORAGE_KEY, JSON.stringify(allLayouts));
+    } catch {
+      // ignore local storage failures
+    }
+  };
+
   return (
     <section className="space-y-4">
       <input
@@ -1120,84 +1251,109 @@ export function DropshippingClient({
       </div>
 
       {activeTab === "overview" ? (
-        <>
-          <section className="grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
-            <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(29,78,216,0.14),_transparent_35%),linear-gradient(135deg,#ffffff_0%,#f8fbff_48%,#eef5ff_100%)] shadow-soft">
-              <div className="grid gap-5 px-6 py-6 lg:grid-cols-[1.2fr_0.8fr]">
-                <div>
-                  <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium text-slate-600">
-                    {lang === "zh" ? `${overview.analytics.monthLabel} 总览` : `${overview.analytics.monthLabel} resumen`}
-                  </div>
-                  <h2 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900">
-                    {fmtMoney(overview.stats.totalReceivable, lang)}
-                  </h2>
-                  <p className="mt-2 text-sm text-slate-500">
-                    {lang === "zh"
-                      ? "本月订单、结款与平台分布的核心表现会集中展示在这里。"
-                      : "Aqui se concentran los indicadores clave de pedidos, cobros y plataformas del mes."}
-                  </p>
-                  <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
-                      <div className="text-xs text-slate-500">{lang === "zh" ? "客户订单总额" : "Total por cliente"}</div>
-                      <div className="mt-2 text-2xl font-semibold text-slate-900">{fmtMoney(overview.stats.totalReceivable, lang)}</div>
-                    </div>
-                    <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
-                      <div className="text-xs text-slate-500">{lang === "zh" ? "结款总额" : "Total liquidado"}</div>
-                      <div className="mt-2 text-2xl font-semibold text-emerald-600">{fmtMoney(overview.stats.totalPaid, lang)}</div>
-                    </div>
-                    <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
-                      <div className="text-xs text-slate-500">{lang === "zh" ? "未结总额" : "Pendiente total"}</div>
-                      <div className="mt-2 text-2xl font-semibold text-rose-600">{fmtMoney(overview.stats.totalUnpaid, lang)}</div>
-                    </div>
-                  </div>
+        <ResponsiveGridLayout
+          className="ds-overview-grid"
+          layouts={overviewLayouts}
+          breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480 }}
+          cols={{ lg: 12, md: 8, sm: 4, xs: 2 }}
+          rowHeight={36}
+          margin={[20, 20]}
+          containerPadding={[0, 0]}
+          draggableHandle=".ds-overview-handle"
+          resizeHandles={["se"]}
+          compactType={null}
+          preventCollision={false}
+          onLayoutChange={handleOverviewLayoutChange}
+        >
+          <div key="hero" className="h-full">
+            <section className="ds-overview-widget flex h-full flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(29,78,216,0.14),_transparent_35%),linear-gradient(135deg,#ffffff_0%,#f8fbff_48%,#eef5ff_100%)] shadow-soft">
+              <div className="ds-overview-handle flex items-start justify-between gap-3 px-6 py-5">
+                <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium text-slate-600">
+                  {lang === "zh" ? `${overview.analytics.monthLabel} ??` : `${overview.analytics.monthLabel} resumen`}
                 </div>
-                <div className="grid gap-3">
-                  <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
-                    <div className="text-xs text-slate-500">{text.stats.todayOrders}</div>
-                    <div className="mt-2 text-3xl font-semibold text-slate-900">{overview.stats.todayOrders}</div>
+                <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/70 bg-white/80 text-slate-400">
+                  <span className="grid grid-cols-2 gap-0.5">
+                    <span className="h-1 w-1 rounded-full bg-current" />
+                    <span className="h-1 w-1 rounded-full bg-current" />
+                    <span className="h-1 w-1 rounded-full bg-current" />
+                    <span className="h-1 w-1 rounded-full bg-current" />
+                  </span>
+                </span>
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col px-6 pb-6">
+                <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+                  <div>
+                    <h2 className="text-3xl font-semibold tracking-tight text-slate-900">
+                      {fmtMoney(overview.stats.totalReceivable, lang)}
+                    </h2>
+                    <p className="mt-2 text-sm text-slate-500">
+                      {lang === "zh"
+                        ? "??????????????????????????"
+                        : "Aqui se concentran los indicadores clave de pedidos, cobros y plataformas del mes."}
+                    </p>
+                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
+                        <div className="text-xs text-slate-500">{lang === "zh" ? "??????" : "Total por cliente"}</div>
+                        <div className="mt-2 text-2xl font-semibold text-slate-900">{fmtMoney(overview.stats.totalReceivable, lang)}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
+                        <div className="text-xs text-slate-500">{lang === "zh" ? "????" : "Total liquidado"}</div>
+                        <div className="mt-2 text-2xl font-semibold text-emerald-600">{fmtMoney(overview.stats.totalPaid, lang)}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
+                        <div className="text-xs text-slate-500">{lang === "zh" ? "????" : "Pendiente total"}</div>
+                        <div className="mt-2 text-2xl font-semibold text-rose-600">{fmtMoney(overview.stats.totalUnpaid, lang)}</div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
-                    <div className="text-xs text-slate-500">{text.stats.todayShipped}</div>
-                    <div className="mt-2 text-3xl font-semibold text-emerald-600">{overview.stats.todayShippedOrders}</div>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-3">
                     <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
-                      <div className="text-xs text-slate-500">{text.stats.todayPending}</div>
-                      <div className="mt-2 text-2xl font-semibold text-amber-600">{overview.stats.todayPendingOrders}</div>
+                      <div className="text-xs text-slate-500">{text.stats.todayOrders}</div>
+                      <div className="mt-2 text-3xl font-semibold text-slate-900">{overview.stats.todayOrders}</div>
                     </div>
                     <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
-                      <div className="text-xs text-slate-500">{text.stats.unsettled}</div>
-                      <div className="mt-2 text-2xl font-semibold text-rose-600">{overview.stats.unsettledCustomers}</div>
+                      <div className="text-xs text-slate-500">{text.stats.todayShipped}</div>
+                      <div className="mt-2 text-3xl font-semibold text-emerald-600">{overview.stats.todayShippedOrders}</div>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
+                        <div className="text-xs text-slate-500">{text.stats.todayPending}</div>
+                        <div className="mt-2 text-2xl font-semibold text-amber-600">{overview.stats.todayPendingOrders}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4">
+                        <div className="text-xs text-slate-500">{text.stats.unsettled}</div>
+                        <div className="mt-2 text-2xl font-semibold text-rose-600">{overview.stats.unsettledCustomers}</div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
+            </section>
+          </div>
 
-            <div className="grid gap-4">
-              <StatCard label={text.stats.paid} value={fmtMoney(overview.stats.totalPaid, lang)} valueClassName="text-emerald-600" />
-              <StatCard label={text.stats.unpaid} value={fmtMoney(overview.stats.totalUnpaid, lang)} valueClassName="text-rose-600" />
-              <StatCard label={lang === "zh" ? "今日汇率来源" : "Fuente de tipo"} value={exchangeRate.sourceName || "-"} hint={fmtDate(exchangeRate.fetchedAt || exchangeRate.rateDate, lang)} />
-              <StatCard label={text.stats.rate} value={overview.stats.currentRate?.toFixed(4) || "-"} hint={lang === "zh" ? "MXN → RMB" : "MXN -> RMB"} />
-            </div>
-          </section>
+          <div key="financeStats" className="h-full">
+            <OverviewWidgetShell title={lang === "zh" ? "????" : "Resumen financiero"} subtitle={lang === "zh" ? "??????????" : "Arrastra y ajusta este panel"} className="h-full">
+              <div className="grid h-full gap-4">
+                <StatCard label={text.stats.paid} value={fmtMoney(overview.stats.totalPaid, lang)} valueClassName="text-emerald-600" />
+                <StatCard label={text.stats.unpaid} value={fmtMoney(overview.stats.totalUnpaid, lang)} valueClassName="text-rose-600" />
+                <StatCard label={lang === "zh" ? "??????" : "Fuente de tipo"} value={exchangeRate.sourceName || "-"} hint={fmtDate(exchangeRate.fetchedAt || exchangeRate.rateDate, lang)} />
+                <StatCard label={text.stats.rate} value={overview.stats.currentRate?.toFixed(4) || "-"} hint={lang === "zh" ? "MXN ? RMB" : "MXN -> RMB"} />
+              </div>
+            </OverviewWidgetShell>
+          </div>
 
-          <section className="grid gap-5 xl:grid-cols-[1.25fr_0.75fr]">
-            <OverviewRankList
-              title={lang === "zh" ? "每月每日订单曲线" : "Curva diaria mensual"}
-              subtitle={lang === "zh" ? "按墨西哥时间统计当前月份每日订单与已发单走势。" : "Tendencia diaria del mes en horario de Mexico."}
-            >
+          <div key="trend" className="h-full">
+            <OverviewWidgetShell title={lang === "zh" ? "????????" : "Curva diaria mensual"} subtitle={lang === "zh" ? "???????????????????????" : "Tendencia diaria del mes en horario de Mexico."} className="h-full">
               <div className="mb-4 flex flex-wrap items-center gap-4 text-xs text-slate-500">
-                <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-blue-700" />{lang === "zh" ? "订单数" : "Pedidos"}</span>
-                <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />{lang === "zh" ? "已发数" : "Enviados"}</span>
+                <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-blue-700" />{lang === "zh" ? "???" : "Pedidos"}</span>
+                <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />{lang === "zh" ? "???" : "Enviados"}</span>
               </div>
               <OverviewLineChart data={overview.analytics.dailySeries} />
-            </OverviewRankList>
+            </OverviewWidgetShell>
+          </div>
 
-            <OverviewRankList
-              title={lang === "zh" ? "平台订单排名" : "Ranking por plataforma"}
-              subtitle={lang === "zh" ? "按当前月份订单量排序。" : "Ordenado por volumen mensual."}
-            >
+          <div key="platforms" className="h-full">
+            <OverviewWidgetShell title={lang === "zh" ? "??????" : "Ranking por plataforma"} subtitle={lang === "zh" ? "???????????" : "Ordenado por volumen mensual."} className="h-full">
               <div className="space-y-3">
                 {overview.analytics.topPlatforms.map((item, index) => {
                   const max = Math.max(...overview.analytics.topPlatforms.map((row) => row.orderCount), 1);
@@ -1208,13 +1364,13 @@ export function DropshippingClient({
                         <div className="flex items-center gap-3">
                           <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-500">{index + 1}</span>
                           <div>
-                            <div className="text-sm font-medium text-slate-900">{item.platform || (lang === "zh" ? "无" : "Sin plataforma")}</div>
-                            <div className="text-xs text-slate-500">{lang === "zh" ? `件数 ${item.quantity}` : `Piezas ${item.quantity}`}</div>
+                            <div className="text-sm font-medium text-slate-900">{item.platform || (lang === "zh" ? "?" : "Sin plataforma")}</div>
+                            <div className="text-xs text-slate-500">{lang === "zh" ? `?? ${item.quantity}` : `Piezas ${item.quantity}`}</div>
                           </div>
                         </div>
                         <div className="text-right">
                           <div className="text-sm font-semibold text-slate-900">{item.orderCount}</div>
-                          <div className="text-xs text-slate-500">{lang === "zh" ? "订单" : "Pedidos"}</div>
+                          <div className="text-xs text-slate-500">{lang === "zh" ? "??" : "Pedidos"}</div>
                         </div>
                       </div>
                       <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
@@ -1224,14 +1380,11 @@ export function DropshippingClient({
                   );
                 })}
               </div>
-            </OverviewRankList>
-          </section>
+            </OverviewWidgetShell>
+          </div>
 
-          <section className="grid gap-5 xl:grid-cols-3">
-            <OverviewRankList
-              title={lang === "zh" ? "产品销量排名" : "Ranking de productos"}
-              subtitle={lang === "zh" ? "按销量排序" : "Ordenado por volumen"}
-            >
+          <div key="products" className="h-full">
+            <OverviewWidgetShell title={lang === "zh" ? "??????" : "Ranking de productos"} subtitle={lang === "zh" ? "?????" : "Ordenado por volumen"} className="h-full">
               <div className="space-y-3">
                 {overview.analytics.topProducts.map((item, index) => (
                   <div key={item.sku} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
@@ -1246,17 +1399,16 @@ export function DropshippingClient({
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-semibold text-slate-900">{item.quantity}</div>
-                      <div className="text-xs text-slate-500">{lang === "zh" ? `${item.orderCount} 单` : `${item.orderCount} pedidos`}</div>
+                      <div className="text-xs text-slate-500">{lang === "zh" ? `${item.orderCount} ?` : `${item.orderCount} pedidos`}</div>
                     </div>
                   </div>
                 ))}
               </div>
-            </OverviewRankList>
+            </OverviewWidgetShell>
+          </div>
 
-            <OverviewRankList
-              title={lang === "zh" ? "客户订单数排名" : "Ranking de clientes"}
-              subtitle={lang === "zh" ? "按订单数排序" : "Ordenado por pedidos"}
-            >
+          <div key="customerOrders" className="h-full">
+            <OverviewWidgetShell title={lang === "zh" ? "???????" : "Ranking de clientes"} subtitle={lang === "zh" ? "??????" : "Ordenado por pedidos"} className="h-full">
               <div className="space-y-3">
                 {overview.analytics.topCustomersByOrders.map((item, index) => (
                   <div key={item.customerId} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
@@ -1269,21 +1421,20 @@ export function DropshippingClient({
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-semibold text-slate-900">{item.orderCount}</div>
-                        <div className="text-xs text-slate-500">{lang === "zh" ? "订单" : "Pedidos"}</div>
+                        <div className="text-xs text-slate-500">{lang === "zh" ? "??" : "Pedidos"}</div>
                       </div>
                     </div>
                     <div className="mt-3 text-xs text-slate-500">
-                      {lang === "zh" ? "总额" : "Total"}: {fmtMoney(item.totalAmount, lang)}
+                      {lang === "zh" ? "??" : "Total"}: {fmtMoney(item.totalAmount, lang)}
                     </div>
                   </div>
                 ))}
               </div>
-            </OverviewRankList>
+            </OverviewWidgetShell>
+          </div>
 
-            <OverviewRankList
-              title={lang === "zh" ? "客户金额排名" : "Ranking por monto"}
-              subtitle={lang === "zh" ? "显示总额、已结与未结" : "Total, liquidado y pendiente"}
-            >
+          <div key="customerAmounts" className="h-full">
+            <OverviewWidgetShell title={lang === "zh" ? "??????" : "Ranking por monto"} subtitle={lang === "zh" ? "??????????" : "Total, liquidado y pendiente"} className="h-full">
               <div className="space-y-3">
                 {overview.analytics.topCustomersByAmount.map((item, index) => (
                   <div key={item.customerId} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
@@ -1296,22 +1447,22 @@ export function DropshippingClient({
                     </div>
                     <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                       <div className="rounded-xl bg-emerald-50 px-3 py-2 text-emerald-700">
-                        <div>{lang === "zh" ? "已结" : "Liquidado"}</div>
+                        <div>{lang === "zh" ? "??" : "Liquidado"}</div>
                         <div className="mt-1 font-semibold">{fmtMoney(item.paidAmount, lang)}</div>
                       </div>
                       <div className="rounded-xl bg-rose-50 px-3 py-2 text-rose-700">
-                        <div>{lang === "zh" ? "未结" : "Pendiente"}</div>
+                        <div>{lang === "zh" ? "??" : "Pendiente"}</div>
                         <div className="mt-1 font-semibold">{fmtMoney(item.unpaidAmount, lang)}</div>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
-            </OverviewRankList>
-          </section>
+            </OverviewWidgetShell>
+          </div>
 
-          <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
-            <TableCard title={text.sections.recent}>
+          <div key="recentOrders" className="h-full">
+            <OverviewWidgetShell title={text.sections.recent} className="h-full">
               {overview.recentOrders.length === 0 ? (
                 <EmptyState title={text.empty.title} description={text.empty.desc} />
               ) : (
@@ -1342,12 +1493,11 @@ export function DropshippingClient({
                   </table>
                 </div>
               )}
-            </TableCard>
+            </OverviewWidgetShell>
+          </div>
 
-            <OverviewRankList
-              title={text.sections.alerts}
-              subtitle={lang === "zh" ? "需要你优先处理的代发提醒。" : "Alertas de seguimiento prioritarias."}
-            >
+          <div key="alerts" className="h-full">
+            <OverviewWidgetShell title={text.sections.alerts} subtitle={lang === "zh" ? "?????????????" : "Alertas de seguimiento prioritarias."} className="h-full">
               <div className="grid gap-3">
                 {overview.alerts.map((item) => (
                   <div key={item.type} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
@@ -1357,8 +1507,8 @@ export function DropshippingClient({
                 ))}
                 <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-sm text-slate-600">
                   <div className="flex flex-wrap items-center gap-3">
-                    <span>{lang === "zh" ? "汇率来源" : "Fuente"}: {exchangeRate.sourceName || "-"}</span>
-                    <span>{lang === "zh" ? "更新时间" : "Actualizado"}: {fmtDate(exchangeRate.fetchedAt || exchangeRate.rateDate, lang)}</span>
+                    <span>{lang === "zh" ? "????" : "Fuente"}: {exchangeRate.sourceName || "-"}</span>
+                    <span>{lang === "zh" ? "????" : "Actualizado"}: {fmtDate(exchangeRate.fetchedAt || exchangeRate.rateDate, lang)}</span>
                   </div>
                   {exchangeRate.fetchFailed ? (
                     <div className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-rose-600">
@@ -1367,9 +1517,9 @@ export function DropshippingClient({
                   ) : null}
                 </div>
               </div>
-            </OverviewRankList>
+            </OverviewWidgetShell>
           </div>
-        </>
+        </ResponsiveGridLayout>
       ) : null}
 
       {activeTab === "orders" ? (
