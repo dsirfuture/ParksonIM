@@ -446,6 +446,7 @@ export function DropshippingClient({
   const [exchangeRate, setExchangeRate] = useState(initialExchangeRate);
   const [now, setNow] = useState(() => new Date());
   const [keyword, setKeyword] = useState("");
+  const [inventoryKeyword, setInventoryKeyword] = useState("");
   const [customerFilter, setCustomerFilter] = useState("all");
   const [shippedAtSortDirection, setShippedAtSortDirection] = useState<"asc" | "desc">("asc");
   const [expandedTrackingNos, setExpandedTrackingNos] = useState<string[]>([]);
@@ -772,6 +773,17 @@ export function DropshippingClient({
       return shippedAtSortDirection === "asc" ? aTime - bTime : bTime - aTime;
     });
   }, [filteredOrders, shippedAtSortDirection]);
+
+  const filteredInventory = useMemo(() => {
+    const normalized = inventoryKeyword.trim().toLowerCase();
+    if (!normalized) return inventory;
+    return inventory.filter((row) =>
+      [row.customerName, row.sku, row.productNameZh, row.productNameEs, row.warehouse]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalized),
+    );
+  }, [inventory, inventoryKeyword]);
 
   const trackingDisplayMeta = useMemo(() => {
     const counts = new Map<string, number>();
@@ -1869,9 +1881,28 @@ export function DropshippingClient({
       ) : null}
 
       {activeTab === "inventory" ? (
-        <TableCard title={text.sections.inventory}>
+        <TableCard
+          title={text.sections.inventory}
+          right={
+            <div className="flex w-full justify-end lg:w-auto">
+              <div className="relative w-full max-w-[340px]">
+                <input
+                  value={inventoryKeyword}
+                  onChange={(event) => setInventoryKeyword(event.target.value)}
+                  placeholder={lang === "zh" ? "\u641c\u7d22\u5ba2\u6237 / \u7f16\u7801 / \u4e2d\u6587\u540d" : "Buscar cliente / codigo / nombre"}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
+                />
+              </div>
+            </div>
+          }
+        >
           {inventory.length === 0 ? (
             <EmptyState title={text.empty.title} description={lang === "zh" ? "录入订单后系统会自动建立客户+SKU 库存记录，后续可继续扩展基础资料维护。" : "Al guardar pedidos se crean registros base de cliente+SKU para seguimiento."} />
+          ) : filteredInventory.length === 0 ? (
+            <EmptyState
+              title={lang === "zh" ? "\u672a\u627e\u5230\u5339\u914d\u8bb0\u5f55" : "Sin resultados"}
+              description={lang === "zh" ? "\u8bf7\u5c1d\u8bd5\u4fee\u6539\u641c\u7d22\u5173\u952e\u5b57\u3002" : "Prueba con otra palabra clave."}
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full border-separate border-spacing-0">
@@ -1891,7 +1922,7 @@ export function DropshippingClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {inventory.map((row) => (
+                  {filteredInventory.map((row) => (
                     <tr key={row.inventoryId} className="border-t border-slate-100">
                       <td className="px-4 py-3 text-sm text-slate-700">{row.customerName}</td>
                       <td className="px-4 py-3 text-sm text-slate-900">{row.sku}</td>
