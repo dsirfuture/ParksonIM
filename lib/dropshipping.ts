@@ -1163,6 +1163,7 @@ export async function getInventoryRows(session: Session) {
     const remainingQty = row.stocked_qty - shippedQty;
     const normalizedSku = row.product.sku.trim().toUpperCase();
     const catalog = catalogBySku.get(normalizedSku);
+    const matchedSku = catalog?.sku?.trim() || row.product.sku;
     const unitPrice = toNumber(catalog?.price ?? row.locked_unit_price ?? row.product.unit_price);
     const discountRate = toNumber(catalog?.normal_discount ?? row.locked_discount_rate ?? row.product.discount_rate);
     return {
@@ -1173,7 +1174,7 @@ export async function getInventoryRows(session: Session) {
       sku: row.product.sku,
       productNameZh: catalog?.name_zh?.trim() || row.product.name_zh,
       productNameEs: catalog?.name_es?.trim() || row.product.name_es || "",
-      productImageUrl: row.product.image_url || (catalog ? buildProductImageUrl(row.product.sku, "jpg") : ""),
+      productImageUrl: row.product.image_url || (catalog ? buildProductImageUrl(matchedSku, "jpg") : ""),
       stockedAt: stockedAtMap.get(`${row.customer_id}::${row.product_id}`) || null,
       warehouse: row.warehouse || row.product.default_warehouse || "",
       stockedQty: row.stocked_qty,
