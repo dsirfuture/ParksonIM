@@ -756,37 +756,37 @@ export function DropshippingClient({
           ) : (
             <div className="overflow-x-auto">
               <table className="w-max border-separate border-spacing-0">
-                <thead>
-                  <tr className="bg-slate-50 text-left text-sm text-slate-500">
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.platform}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.orderNo}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.trackingNo}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.shippingLabel}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.status}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.shippedAt}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.shippingProof}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.sku}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.quantity}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.color}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.shippingFee}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.productImage}</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.productZh}</th>
-                    <th className="whitespace-nowrap px-4 py-3 text-right font-medium" aria-label={lang === "zh" ? "编辑" : "Editar"} />
+                <thead className="bg-slate-50">
+                  <tr className="bg-slate-50 text-left text-xs text-slate-500">
+                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.platform}</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.orderNo}</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold">{text.fields.trackingNo}</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.shippingLabel}</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.status}</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.shippedAt}</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.shippingProof}</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.sku}</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold">{text.fields.quantity}</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.color}</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold">{text.fields.shippingFee}</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.productImage}</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.productZh}</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold" aria-label={lang === "zh" ? "编辑" : "Editar"} />
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="text-[13px] text-slate-700">
                   {filteredOrders.map((row) => (
                     <tr key={row.id} className="border-t border-slate-100">
-                      <td className="px-4 py-3 text-sm text-slate-700">{row.platform}</td>
-                      <td className="px-4 py-3 text-sm font-semibold text-slate-900">{row.platformOrderNo}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{row.trackingNo || "-"}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">
+                      <td className="px-3 py-2">{row.platform}</td>
+                      <td className="px-3 py-2 font-semibold text-slate-900">{row.platformOrderNo}</td>
+                      <td className="px-3 py-2">{row.trackingNo || "-"}</td>
+                      <td className="px-3 py-2">
                         {row.shippingLabelAttachments[0]?.fileUrl ? (
                           <a
                             href={row.shippingLabelAttachments[0].fileUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                            className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                           >
                             PDF
                           </a>
@@ -795,7 +795,7 @@ export function DropshippingClient({
                             href={row.shippingLabelFile}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                            className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                           >
                             PDF
                           </a>
@@ -803,15 +803,15 @@ export function DropshippingClient({
                           <span className="text-slate-400">-</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm">
-                        <span className="inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
+                      <td className="px-3 py-2">
+                        <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
                           {text.status[row.shippingStatus]}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-700">
+                      <td className="px-3 py-2">
                         {row.shippedAt ? fmtDateOnly(row.shippedAt, lang) : "-"}
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-700">
+                      <td className="px-3 py-2">
                         {row.shippingProofAttachments[0]?.fileUrl ? (
                           <button
                             type="button"
@@ -821,7 +821,7 @@ export function DropshippingClient({
                                 title: `${row.platformOrderNo} / ${row.sku}`,
                               })
                             }
-                            className="relative block overflow-hidden rounded-lg border border-slate-200 bg-white"
+                            className="relative block overflow-hidden rounded-md border border-slate-200 bg-white"
                             title={lang === "zh" ? "预览发货凭据" : "Ver comprobante"}
                           >
                             <img
@@ -844,7 +844,7 @@ export function DropshippingClient({
                                 title: `${row.platformOrderNo} / ${row.sku}`,
                               })
                             }
-                            className="block overflow-hidden rounded-lg border border-slate-200 bg-white"
+                            className="block overflow-hidden rounded-md border border-slate-200 bg-white"
                             title={lang === "zh" ? "预览发货凭据" : "Ver comprobante"}
                           >
                             <img
@@ -857,17 +857,17 @@ export function DropshippingClient({
                           <span className="text-slate-400">-</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{row.sku}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{row.quantity}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{row.color || "-"}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.shippingFee, lang)}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">
+                      <td className="px-3 py-2 font-semibold text-slate-900">{row.sku}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{row.quantity}</td>
+                      <td className="px-3 py-2">{row.color || "-"}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(row.shippingFee, lang)}</td>
+                      <td className="px-3 py-2">
                         {row.productImageUrl ? (
                           <ProductImage
                             sku={row.sku}
                             hasImage
                             size={40}
-                            roundedClassName="rounded-lg"
+                            roundedClassName="rounded-md"
                             onClick={() =>
                               setPreviewImage({
                                 src: row.productImageUrl,
@@ -879,14 +879,14 @@ export function DropshippingClient({
                           <span className="text-slate-400">-</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{row.productNameZh}</td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="max-w-[220px] px-3 py-2 truncate text-slate-900">{row.productNameZh}</td>
+                      <td className="px-3 py-2 text-right">
                         <button
                           type="button"
                           onClick={() => openEditModal(row)}
                           title={lang === "zh" ? "编辑" : "Editar"}
                           aria-label={lang === "zh" ? "编辑" : "Editar"}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
                         >
                           <PencilIcon />
                         </button>
