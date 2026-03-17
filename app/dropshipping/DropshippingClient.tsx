@@ -1177,6 +1177,7 @@ export function DropshippingClient({
                         {row.shippedAt ? fmtDateOnly(row.shippedAt, lang) : "-"}
                       </td>
                       <td className="px-3 py-2">
+                        <div className="flex min-h-10 items-center justify-center">
                         {row.shippingProofAttachments[0]?.fileUrl ? (
                           <button
                             type="button"
@@ -1219,8 +1220,9 @@ export function DropshippingClient({
                             />
                           </button>
                         ) : (
-                          <span className="text-slate-400">-</span>
+                          <span className="text-slate-400">{lang === "zh" ? "空" : "Vacio"}</span>
                         )}
+                        </div>
                       </td>
                       <td className="px-3 py-2">
                         <button
@@ -1252,6 +1254,7 @@ export function DropshippingClient({
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(row.shippingFee, lang)}</td>
                       <td className="px-3 py-2">
+                        <div className="flex min-h-10 items-center justify-center">
                         {row.productImageUrl ? (
                           <ProductImage
                             sku={row.sku}
@@ -1266,8 +1269,9 @@ export function DropshippingClient({
                             }
                           />
                         ) : (
-                          <span className="text-slate-400">-</span>
+                          <span className="text-slate-400">{lang === "zh" ? "空" : "Vacio"}</span>
                         )}
+                        </div>
                       </td>
                       <td className="max-w-[220px] px-3 py-2 truncate text-slate-900">{row.productNameZh}</td>
                       <td className="px-3 py-2 text-right">
