@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { saveOrder } from "@/lib/dropshipping";
 import { hasPermission } from "@/lib/permissions";
+import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
 
 const FIXED_WAREHOUSE = "墨西哥-百盛仓";
@@ -51,6 +52,48 @@ export async function PATCH(
   } catch (error) {
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : "更新订单失败" },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  try {
+    const session = await getSession();
+    if (!session) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+    if (!(await hasPermission(session, "viewReports"))) {
+      return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
+    }
+
+    const { id } = await context.params;
+    if (!id) {
+      return NextResponse.json({ ok: false, error: "invalid_request" }, { status: 400 });
+    }
+
+    const order = await prisma.dropshippingOrder.findFirst({
+      where: {
+        id,
+        tenant_id: session.tenantId,
+        company_id: session.companyId,
+      },
+      select: { id: true },
+    });
+
+    if (!order) {
+      return NextResponse.json({ ok: false, error: "order_not_found" }, { status: 404 });
+    }
+
+    await prisma.dropshippingOrder.delete({
+      where: { id: order.id },
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return NextResponse.json(
+      { ok: false, error: error instanceof Error ? error.message : "delete_failed" },
       { status: 500 },
     );
   }

@@ -230,6 +230,14 @@ function PlusBadge() {
   );
 }
 
+function MinusBadge() {
+  return (
+    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[11px] font-semibold text-white">
+      -
+    </span>
+  );
+}
+
 export function DropshippingClient({
   initialLang,
   initialOverview,
@@ -711,6 +719,25 @@ export function DropshippingClient({
     setModalOpen(true);
   }
 
+  function openCreateModalWithTrackingSeed() {
+    setForm({
+      ...EMPTY_ORDER_FORM,
+      customerName: form.customerName,
+      platform: form.platform,
+      platformOrderNo: form.platformOrderNo,
+      trackingNo: form.trackingNo,
+      color: form.color,
+      shippedAt: form.shippedAt,
+      shippingFee: form.shippingFee,
+      shippingStatus: form.shippingStatus,
+      warehouse: FIXED_WAREHOUSE,
+    });
+    setProductFieldsLocked(false);
+    setLabelFiles([]);
+    setProofFiles([]);
+    setModalOpen(true);
+  }
+
   function openEditModal(order: DsOrderRow) {
     setForm({
       id: order.id,
@@ -798,6 +825,48 @@ export function DropshippingClient({
       await refreshAll();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "save_failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteSameTrackingOrder(order: DsOrderRow) {
+    const tracking = order.trackingNo.trim();
+    if (!tracking) {
+      setError("tracking_required_for_delete");
+      return;
+    }
+
+    const confirmValue = window.prompt(
+      lang === "zh"
+        ? `请输入完整物流号后删除：${tracking}`
+        : `Escribe la guia completa para eliminar: ${tracking}`,
+      "",
+    );
+
+    if (confirmValue === null) return;
+    if (confirmValue.trim() !== tracking) {
+      setError(lang === "zh" ? "物流号校验失败" : "La guia no coincide");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError("");
+      const response = await fetch(`/api/dropshipping/orders/${order.id}`, {
+        method: "DELETE",
+      });
+      const json = await response.json();
+      if (!response.ok || !json?.ok) {
+        throw new Error(json?.error || "delete_failed");
+      }
+      if (form.id === order.id) {
+        setModalOpen(false);
+        setForm(EMPTY_ORDER_FORM);
+      }
+      await refreshAll();
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "delete_failed");
     } finally {
       setSaving(false);
     }
@@ -1561,30 +1630,51 @@ export function DropshippingClient({
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {sameTrackingOrders.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => openEditModal(item)}
-                          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition ${
-                            item.id === form.id
-                              ? "border-primary bg-primary/10 text-primary"
-                              : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-                          }`}
-                        >
-                          <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-slate-50">
-                            {item.productImageUrl ? (
-                              <img
-                                src={item.productImageUrl}
-                                alt={item.productNameZh || item.sku}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <span className="text-[10px] text-slate-400">{lang === "zh" ? "空" : "Vacio"}</span>
-                            )}
-                          </span>
-                          <span>{item.sku}</span>
-                        </button>
+                        <div key={item.id} className="inline-flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(item)}
+                            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition ${
+                              item.id === form.id
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                            }`}
+                          >
+                            <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+                              {item.productImageUrl ? (
+                                <img
+                                  src={item.productImageUrl}
+                                  alt={item.productNameZh || item.sku}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <span className="text-[10px] text-slate-400">{lang === "zh" ? "?" : "Vacio"}</span>
+                              )}
+                            </span>
+                            <span>{item.sku}</span>
+                          </button>
+                          {sameTrackingOrders.length > 1 ? (
+                            <button
+                              type="button"
+                              onClick={() => void deleteSameTrackingOrder(item)}
+                              className="inline-flex"
+                              title={lang === "zh" ? "?????????" : "Eliminar este producto agrupado"}
+                              aria-label={lang === "zh" ? "?????????" : "Eliminar este producto agrupado"}
+                            >
+                              <MinusBadge />
+                            </button>
+                          ) : null}
+                        </div>
                       ))}
+                      <button
+                        type="button"
+                        onClick={openCreateModalWithTrackingSeed}
+                        className="inline-flex"
+                        title={lang === "zh" ? "????????" : "Agregar producto con la misma guia"}
+                        aria-label={lang === "zh" ? "????????" : "Agregar producto con la misma guia"}
+                      >
+                        <PlusBadge />
+                      </button>
                     </div>
                   </div>
                 </div>
