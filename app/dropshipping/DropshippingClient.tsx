@@ -972,7 +972,6 @@ export function DropshippingClient({
       <PageHeader
         badge={text.badge}
         title={text.title}
-        description={text.desc}
         actions={
           <>
             <input
