@@ -3122,11 +3122,13 @@ export function DropshippingClient({
       {financePreview ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-4">
           <div className="flex h-[calc(100vh-24px)] w-full max-w-[1440px] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_28px_80px_rgba(15,23,42,0.18)]">
-            <div className="border-b border-slate-200 bg-white px-5 py-3.5">
-              <h3 className="text-xl font-semibold text-slate-900">
-                {lang === "zh" ? "\u5df2\u7ed3\u7b97\u8be6\u60c5" : "Detalle de liquidaciones"}
-              </h3>
-              <p className="mt-1 text-sm text-slate-500">{financePreview.customerName}</p>
+            <div className="border-b border-slate-200 bg-white px-5 py-2.5">
+              <div className="flex items-center gap-3 text-sm">
+                <h3 className="whitespace-nowrap text-xl font-semibold text-slate-900">
+                  {lang === "zh" ? "\u5df2\u7ed3\u7b97\u8be6\u60c5" : "Detalle de liquidaciones"}
+                </h3>
+                <p className="truncate text-sm text-slate-500">{financePreview.customerName}</p>
+              </div>
             </div>
             <div className="min-h-0 flex-1 overflow-hidden bg-[#f8fafc] px-4 py-4">
               {financePreview.settledOrders.length === 0 ? (
@@ -3220,7 +3222,7 @@ export function DropshippingClient({
                 </div>
               )}
             </div>
-            <div className="flex justify-end border-t border-slate-200 bg-white px-5 py-3">
+            <div className="flex justify-end border-t border-slate-200 bg-white px-5 py-2">
               <button
                 type="button"
                 onClick={() => setFinancePreview(null)}
