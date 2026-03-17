@@ -120,6 +120,21 @@ function drawText(
   }
 }
 
+function measureTextWidth(
+  value: string,
+  options: {
+    size?: number;
+    fonts: EmbeddedFonts;
+    bold?: boolean;
+  },
+) {
+  const chunks = String(value || "").match(/([^\u0000-\u00FF]+|[\u0000-\u00FF]+)/g) || [];
+  return chunks.reduce((total, chunk) => {
+    const font = getFontForText(options.fonts, chunk, options.bold);
+    return total + font.widthOfTextAtSize(chunk, options.size || 10);
+  }, 0);
+}
+
 function drawSummaryCard(
   page: PDFPage,
   fonts: EmbeddedFonts,
@@ -193,11 +208,15 @@ function drawHeader(
   financeRow: DsFinanceRow,
   exchangeRate: DsExchangeRatePayload,
 ) {
+  const metaLine = `\u6c47\u7387 MXN -> RMB: ${safeRateLabel(exchangeRate)}    \u6765\u6e90: ${exchangeRate.sourceName || "-"}`;
+  const metaWidth = measureTextWidth(metaLine, { fonts, size: 9.5, bold: true });
+  const metaX = Math.max(430, 806 - metaWidth);
+
   page.drawRectangle({
     x: 28,
-    y: 520,
+    y: 516,
     width: 786,
-    height: 40,
+    height: 44,
     color: rgb(0.95, 0.97, 1),
     borderColor: rgb(0.84, 0.89, 0.97),
     borderWidth: 1,
@@ -212,25 +231,30 @@ function drawHeader(
   });
   drawText(page, financeRow.customerName, {
     x: 36,
-    y: 515,
+    y: 512,
     size: 11,
     fonts,
     color: rgb(0.39, 0.45, 0.56),
   });
-  drawText(page, `\u6c47\u7387 MXN -> RMB: ${safeRateLabel(exchangeRate)}`, {
-    x: 520,
-    y: 536,
-    size: 10,
+
+  drawText(page, metaLine, {
+    x: metaX,
+    y: 530,
+    size: 9.5,
     fonts,
     bold: true,
     color: rgb(0.1, 0.24, 0.53),
   });
-  drawText(page, `\u6765\u6e90: ${exchangeRate.sourceName || "-"}`, {
-    x: 520,
-    y: 520,
-    size: 9,
+}
+
+function drawSettledSectionHeader(page: PDFPage, fonts: EmbeddedFonts, y: number) {
+  drawText(page, "\u5df2\u7ed3\u7b97\u660e\u7ec6", {
+    x: 36,
+    y,
+    size: 12,
     fonts,
-    color: rgb(0.39, 0.45, 0.56),
+    bold: true,
+    color: rgb(0.07, 0.12, 0.24),
   });
 }
 
@@ -255,14 +279,7 @@ export async function buildDropshippingSettlementPdf(input: {
   drawSummaryCard(page, fonts, 624, "\u5907\u8d27\u91d1\u989d", formatMoney(input.financeRow.stockAmount), rgb(0.1, 0.24, 0.53));
 
   let y = 405;
-  drawText(page, "\u5df2\u7ed3\u7b97\u660e\u7ec6", {
-    x: 36,
-    y,
-    size: 12,
-    fonts,
-    bold: true,
-    color: rgb(0.07, 0.12, 0.24),
-  });
+  drawSettledSectionHeader(page, fonts, y);
   y -= 18;
   drawTableHeader(page, fonts, y);
   y -= 28;
@@ -270,8 +287,9 @@ export async function buildDropshippingSettlementPdf(input: {
   for (const item of input.financeRow.settledOrders) {
     if (y < 54) {
       page = pdfDoc.addPage([842, 595]);
-      drawHeader(page, fonts, input.financeRow, input.exchangeRate);
-      y = 505;
+      y = 548;
+      drawSettledSectionHeader(page, fonts, y);
+      y -= 18;
       drawTableHeader(page, fonts, y);
       y -= 28;
     }
