@@ -2043,23 +2043,24 @@ export function DropshippingClient({
                   description={lang === "zh" ? "当前客户还没有已结算的订单。" : "Este cliente aun no tiene pedidos liquidados."}
                 />
               ) : (
-                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                  <div className="hidden items-center gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-700 lg:grid lg:grid-cols-[72px_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1.5fr)_minmax(0,1.2fr)_110px_110px_110px_110px]">
-                    <div>{lang === "zh" ? "商品图" : "Imagen"}</div>
-                    <div>{text.fields.orderNo}</div>
-                    <div>{text.fields.sku}</div>
-                    <div>{text.fields.productZh}</div>
-                    <div>{text.fields.trackingNo}</div>
-                    <div>{text.fields.shippedAt}</div>
-                    <div>{lang === "zh" ? "结算日期" : "Fecha liquidacion"}</div>
-                    <div>{lang === "zh" ? "已结金额" : "Monto liquidado"}</div>
-                    <div>{text.fields.total}</div>
-                  </div>
-                  <div className="divide-y divide-slate-200">
+                <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+                  <div className="min-w-[1120px]">
+                    <div className="hidden items-center gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-700 lg:grid lg:grid-cols-[72px_180px_120px_180px_170px_110px_110px_120px_110px]">
+                      <div className="whitespace-nowrap">{lang === "zh" ? "商品图" : "Imagen"}</div>
+                      <div className="whitespace-nowrap">{text.fields.orderNo}</div>
+                      <div className="whitespace-nowrap">{text.fields.sku}</div>
+                      <div className="whitespace-nowrap">{text.fields.productZh}</div>
+                      <div className="whitespace-nowrap">{text.fields.trackingNo}</div>
+                      <div className="whitespace-nowrap">{text.fields.shippedAt}</div>
+                      <div className="whitespace-nowrap">{lang === "zh" ? "结算日期" : "Fecha liquidacion"}</div>
+                      <div className="whitespace-nowrap">{lang === "zh" ? "已结金额" : "Monto liquidado"}</div>
+                      <div className="whitespace-nowrap">{text.fields.total}</div>
+                    </div>
+                    <div className="divide-y divide-slate-200">
                     {financePreview.settledOrders.map((item) => (
                       <div
                         key={item.orderId}
-                        className="px-4 py-4 lg:grid lg:grid-cols-[72px_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1.5fr)_minmax(0,1.2fr)_110px_110px_110px_110px] lg:items-center lg:gap-4"
+                        className="px-4 py-4 lg:grid lg:grid-cols-[72px_180px_120px_180px_170px_110px_110px_120px_110px] lg:items-center lg:gap-4"
                       >
                         <div className="mb-4 flex justify-center lg:mb-0">
                           <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
@@ -2088,39 +2089,40 @@ export function DropshippingClient({
                         <div className="grid gap-3 text-sm lg:contents">
                           <div>
                             <div className="text-xs text-slate-500 lg:hidden">{text.fields.orderNo}</div>
-                            <div className="break-all text-[13px] text-slate-900">{item.platformOrderNo}</div>
+                            <div className="truncate whitespace-nowrap text-[13px] text-slate-900">{item.platformOrderNo}</div>
                           </div>
                           <div>
                             <div className="text-xs text-slate-500 lg:hidden">{text.fields.sku}</div>
-                            <div className="break-all text-[13px] text-slate-900">{item.sku}</div>
+                            <div className="truncate whitespace-nowrap text-[13px] text-slate-900">{item.sku}</div>
                           </div>
                           <div>
                             <div className="text-xs text-slate-500 lg:hidden">{text.fields.productZh}</div>
-                            <div className="break-words text-[13px] text-slate-900">{item.productNameZh || "-"}</div>
+                            <div className="truncate whitespace-nowrap text-[13px] text-slate-900">{item.productNameZh || "-"}</div>
                           </div>
                           <div>
                             <div className="text-xs text-slate-500 lg:hidden">{text.fields.trackingNo}</div>
-                            <div className="break-all text-[13px] text-slate-900">{item.trackingNo || "-"}</div>
+                            <div className="truncate whitespace-nowrap text-[13px] text-slate-900">{item.trackingNo || "-"}</div>
                           </div>
                           <div>
                             <div className="text-xs text-slate-500 lg:hidden">{text.fields.shippedAt}</div>
-                            <div className="text-[13px] text-slate-900">{fmtDateOnly(item.shippedAt, lang)}</div>
+                            <div className="whitespace-nowrap text-[13px] text-slate-900">{fmtDateOnly(item.shippedAt, lang)}</div>
                           </div>
                           <div>
                             <div className="text-xs text-slate-500 lg:hidden">{lang === "zh" ? "结算日期" : "Fecha liquidacion"}</div>
-                            <div className="text-[13px] text-slate-900">{fmtDateOnly(item.settledAt, lang)}</div>
+                            <div className="whitespace-nowrap text-[13px] text-slate-900">{fmtDateOnly(item.settledAt, lang)}</div>
                           </div>
                           <div>
                             <div className="text-xs text-slate-500 lg:hidden">{lang === "zh" ? "已结金额" : "Monto liquidado"}</div>
-                            <div className="text-[13px] text-emerald-700">{fmtMoney(item.paidAmount, lang)}</div>
+                            <div className="whitespace-nowrap text-[13px] text-emerald-700">{fmtMoney(item.paidAmount, lang)}</div>
                           </div>
                           <div>
                             <div className="text-xs text-slate-500 lg:hidden">{text.fields.total}</div>
-                            <div className="text-[13px] text-slate-900">{fmtMoney(item.totalAmount, lang)}</div>
+                            <div className="whitespace-nowrap text-[13px] text-slate-900">{fmtMoney(item.totalAmount, lang)}</div>
                           </div>
                         </div>
                       </div>
                     ))}
+                    </div>
                   </div>
                 </div>
               )}
