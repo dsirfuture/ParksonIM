@@ -940,7 +940,7 @@ export function DropshippingClient({
                 onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
                 className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
               >
-                <option value="all">{lang === "zh" ? "全部状态" : "Todos"}</option>
+                <option value="all" hidden>{lang === "zh" ? "????" : "Todos"}</option>
                 <option value="pending">{text.status.pending}</option>
                 <option value="shipped">{text.status.shipped}</option>
                 <option value="cancelled">{text.status.cancelled}</option>
@@ -976,9 +976,9 @@ export function DropshippingClient({
                 <select
                   value={statusFilter}
                   onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
-                  className="absolute right-1 top-1 h-8 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                  className="absolute right-1 top-1 h-8 rounded-lg border border-primary bg-primary px-3 text-sm text-white"
                 >
-                  <option value="all">{lang === "zh" ? "全部状态" : "Todos"}</option>
+                  <option value="all" hidden>{lang === "zh" ? "????" : "Todos"}</option>
                   <option value="pending">{getShippingStatusLabel("pending", lang)}</option>
                   <option value="shipped">{getShippingStatusLabel("shipped", lang)}</option>
                   <option value="cancelled">{getShippingStatusLabel("cancelled", lang)}</option>
