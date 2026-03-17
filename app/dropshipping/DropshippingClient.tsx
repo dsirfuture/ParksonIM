@@ -2095,13 +2095,13 @@ export function DropshippingClient({
                 <div className="overflow-x-auto">
                   <table className="min-w-full border-separate border-spacing-0">
                     <thead>
-                      <tr className="bg-slate-50 text-left text-sm text-slate-500">
-                        <th className="px-4 py-3 font-medium">{text.fields.customer}</th>
-                        <th className="px-4 py-3 font-medium">{text.fields.platform}</th>
-                        <th className="px-4 py-3 font-medium">{text.fields.orderNo}</th>
-                        <th className="px-4 py-3 font-medium">{text.fields.sku}</th>
-                        <th className="px-4 py-3 font-medium">{text.fields.quantity}</th>
-                        <th className="px-4 py-3 font-medium">{text.fields.status}</th>
+                      <tr className="bg-slate-50 text-left text-sm text-slate-700">
+                        <th className="px-4 py-3 font-semibold">{text.fields.customer}</th>
+                        <th className="px-4 py-3 font-semibold">{text.fields.platform}</th>
+                        <th className="px-4 py-3 font-semibold">{text.fields.orderNo}</th>
+                        <th className="px-4 py-3 font-semibold">{text.fields.sku}</th>
+                        <th className="px-4 py-3 font-semibold">{text.fields.quantity}</th>
+                        <th className="px-4 py-3 font-semibold">{text.fields.status}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2559,18 +2559,18 @@ export function DropshippingClient({
             <div className="overflow-x-auto">
               <table className="min-w-full border-separate border-spacing-0">
                 <thead>
-                  <tr className="bg-slate-50 text-left text-sm text-slate-500">
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">{lang === "zh" ? "备货时间" : "Fecha de stock"}</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">{text.fields.productImage}</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">{text.fields.sku}</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">{text.fields.productZh}</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">{lang === "zh" ? "单价" : "Precio"}</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">{lang === "zh" ? "普通折扣" : "Dsc"}</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">{lang === "zh" ? "备货数量" : "Stock"}</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">{lang === "zh" ? "备货金额" : "Monto stock"}</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">{text.fields.shipped}</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">{text.fields.remaining}</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">{text.fields.status}</th>
+                  <tr className="bg-slate-50 text-left text-sm text-slate-700">
+                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "备货时间" : "Fecha de stock"}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{text.fields.productImage}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{text.fields.sku}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{text.fields.productZh}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "单价" : "Precio"}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "普通折扣" : "Dsc"}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "备货数量" : "Stock"}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "备货金额" : "Monto stock"}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{text.fields.shipped}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{text.fields.remaining}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{text.fields.status}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2717,19 +2717,19 @@ export function DropshippingClient({
               <div className="overflow-x-auto">
                 <table className="min-w-full border-separate border-spacing-0">
                   <thead>
-                    <tr className="bg-slate-50 text-left text-sm text-slate-500">
-                      <th className="px-4 py-3 font-medium">{text.fields.customer}</th>
-                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "备货金额 (MXN)" : "Monto stock (MXN)"}</th>
-                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "今日汇率 (MXN → RMB)" : "Tipo de cambio hoy (MXN -> RMB)"}</th>
-                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "汇率后金额 (RMB)" : "Monto convertido (RMB)"}</th>
-                      <th className="px-4 py-3 font-medium">{text.fields.shippingFee}</th>
-                      <th className="px-4 py-3 font-medium">{text.fields.total}</th>
-                      <th className="px-4 py-3 font-medium">{text.fields.paid}</th>
-                      <th className="px-4 py-3 font-medium">{text.fields.unpaid}</th>
-                      <th className="px-4 py-3 font-medium">{text.fields.lastPaid}</th>
-                      <th className="px-4 py-3 font-medium">{text.fields.status}</th>
-                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "\u8be6\u60c5" : "Detalle"}</th>
-                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "\u5bfc\u51fa" : "Exportar"}</th>
+                    <tr className="bg-slate-50 text-left text-sm text-slate-700">
+                      <th className="px-4 py-3 font-semibold">{text.fields.customer}</th>
+                      <th className="px-4 py-3 font-semibold">{lang === "zh" ? "备货金额 (MXN)" : "Monto stock (MXN)"}</th>
+                      <th className="px-4 py-3 font-semibold">{lang === "zh" ? "今日汇率 (MXN → RMB)" : "Tipo de cambio hoy (MXN -> RMB)"}</th>
+                      <th className="px-4 py-3 font-semibold">{lang === "zh" ? "汇率后金额 (RMB)" : "Monto convertido (RMB)"}</th>
+                      <th className="px-4 py-3 font-semibold">{text.fields.shippingFee}</th>
+                      <th className="px-4 py-3 font-semibold">{text.fields.total}</th>
+                      <th className="px-4 py-3 font-semibold">{text.fields.paid}</th>
+                      <th className="px-4 py-3 font-semibold">{text.fields.unpaid}</th>
+                      <th className="px-4 py-3 font-semibold">{text.fields.lastPaid}</th>
+                      <th className="px-4 py-3 font-semibold">{text.fields.status}</th>
+                      <th className="px-4 py-3 font-semibold">{lang === "zh" ? "\u8be6\u60c5" : "Detalle"}</th>
+                      <th className="px-4 py-3 font-semibold">{lang === "zh" ? "\u5bfc\u51fa" : "Exportar"}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -3587,14 +3587,14 @@ export function DropshippingClient({
                 <div className="overflow-x-auto">
                   <table className="min-w-full border-separate border-spacing-0">
                     <thead>
-                      <tr className="bg-slate-50 text-left text-sm text-slate-500">
-                        <th className="px-4 py-3 font-medium">{text.fields.orderNo}</th>
-                        <th className="px-4 py-3 font-medium">{text.fields.trackingNo}</th>
-                        <th className="px-4 py-3 font-medium">{text.fields.shippedAt}</th>
-                        <th className="px-4 py-3 font-medium">{text.fields.quantity}</th>
-                        <th className="px-4 py-3 font-medium">{text.fields.color}</th>
-                        <th className="px-4 py-3 font-medium">{text.fields.shippingLabel}</th>
-                        <th className="px-4 py-3 font-medium">{text.fields.shippingProof}</th>
+                      <tr className="bg-slate-50 text-left text-sm text-slate-700">
+                        <th className="px-4 py-3 font-semibold">{text.fields.orderNo}</th>
+                        <th className="px-4 py-3 font-semibold">{text.fields.trackingNo}</th>
+                        <th className="px-4 py-3 font-semibold">{text.fields.shippedAt}</th>
+                        <th className="px-4 py-3 font-semibold">{text.fields.quantity}</th>
+                        <th className="px-4 py-3 font-semibold">{text.fields.color}</th>
+                        <th className="px-4 py-3 font-semibold">{text.fields.shippingLabel}</th>
+                        <th className="px-4 py-3 font-semibold">{text.fields.shippingProof}</th>
                       </tr>
                     </thead>
                     <tbody>
