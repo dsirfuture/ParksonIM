@@ -761,11 +761,22 @@ export async function listOrders(session: Session) {
     if (orderNoCompare !== 0) return orderNoCompare;
     return a.created_at.getTime() - b.created_at.getTime();
   });
+  const normalizedSkus = [...new Set(
+    rows
+      .map((row) => row.product.sku.trim())
+      .filter(Boolean),
+  )];
   const catalogRows = await prisma.productCatalog.findMany({
     where: {
       tenant_id: session.tenantId,
       company_id: session.companyId,
-      sku: { in: rows.map((row) => row.product.sku) },
+      ...(normalizedSkus.length
+        ? {
+            OR: normalizedSkus.map((sku) => ({
+              sku: { equals: sku, mode: "insensitive" as const },
+            })),
+          }
+        : {}),
     },
     select: {
       sku: true,
