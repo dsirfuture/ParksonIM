@@ -66,7 +66,9 @@ type DeleteOrderState = {
 } | null;
 
 type GroupProductOption = {
-  id: string;
+  source: "inventory" | "catalog";
+  sourceId: string;
+  productId: string | null;
   sku: string;
   nameZh: string;
   nameEs: string;
@@ -537,6 +539,17 @@ function OverviewWidgetShell({
   );
 }
 
+function normalizeGroupProductOptions(items: GroupProductOption[]) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const normalizedSku = item.sku.trim().toUpperCase();
+    const key = item.productId?.trim() || normalizedSku;
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function DropshippingClient({
   initialLang,
   initialOverview,
@@ -621,7 +634,35 @@ export function DropshippingClient({
     const timer = window.setTimeout(async () => {
       try {
         setGroupProductSearchLoading(true);
+        setError("");
         const query = groupProductSearchKeyword.trim();
+
+        const normalizedQuery = query.toLowerCase();
+        const inventoryMatches = normalizeGroupProductOptions(
+          inventory
+            .filter((row) => {
+              if (!normalizedQuery) return true;
+              return [row.sku, row.productNameZh, row.productNameEs]
+                .join(" ")
+                .toLowerCase()
+                .includes(normalizedQuery);
+            })
+            .map<GroupProductOption>((row) => ({
+              source: "inventory",
+              sourceId: row.inventoryId,
+              productId: row.productId,
+              sku: row.sku,
+              nameZh: row.productNameZh || row.sku,
+              nameEs: row.productNameEs || "",
+              imageUrl: row.productImageUrl || "",
+            })),
+        ).slice(0, query ? 24 : 12);
+
+        if (inventoryMatches.length > 0) {
+          setGroupProductOptions(inventoryMatches);
+          return;
+        }
+
         const response = await fetch(`/api/dropshipping/product-search?keyword=${encodeURIComponent(query)}`, {
           signal: controller.signal,
         });
@@ -629,7 +670,18 @@ export function DropshippingClient({
         if (!response.ok || !json?.ok) {
           throw new Error(json?.error || "product_search_failed");
         }
-        setGroupProductOptions(Array.isArray(json.items) ? json.items : []);
+        const catalogMatches = normalizeGroupProductOptions(
+          (Array.isArray(json.items) ? json.items : []).map((item: Record<string, unknown>): GroupProductOption => ({
+            source: "catalog" as const,
+            sourceId: String(item.id || item.sku || ""),
+            productId: null,
+            sku: String(item.sku || ""),
+            nameZh: String(item.nameZh || item.sku || ""),
+            nameEs: String(item.nameEs || ""),
+            imageUrl: String(item.imageUrl || ""),
+          })),
+        );
+        setGroupProductOptions(catalogMatches);
       } catch (searchError) {
         if ((searchError as Error).name !== "AbortError") {
           setError(searchError instanceof Error ? searchError.message : "product_search_failed");
@@ -643,7 +695,7 @@ export function DropshippingClient({
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [groupProductSearchKeyword, groupProductSearchOpen]);
+  }, [groupProductSearchKeyword, groupProductSearchOpen, inventory]);
 
   const financeDisplayRate = useMemo(() => exchangeRate.rateValue || null, [exchangeRate.rateValue]);
   const financeRateDate = exchangeRate.fetchedAt || exchangeRate.rateDate;
@@ -1609,7 +1661,11 @@ export function DropshippingClient({
     try {
       setSaving(true);
       setError("");
-      const duplicateOrder = groupedOrdersForModal.find((row) => row.productId === product.id);
+      const normalizedSku = product.sku.trim().toUpperCase();
+      const duplicateOrder = groupedOrdersForModal.find((row) =>
+        (product.productId && row.productId === product.productId)
+        || row.sku.trim().toUpperCase() === normalizedSku,
+      );
       if (duplicateOrder) {
         throw new Error(lang === "zh" ? "该商品已在同组订单中" : "El producto ya existe en el grupo");
       }
@@ -3820,17 +3876,13 @@ export function DropshippingClient({
       {groupProductSearchOpen ? (
         <div className="fixed inset-0 z-[55] flex items-center justify-center bg-slate-900/45 px-4">
           <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-              <div>
-                <h3 className="text-base font-semibold text-slate-900">
-                  {lang === "zh" ? "选择商品" : "Seleccionar producto"}
-                </h3>
-                <p className="mt-1 text-xs text-slate-500">
-                  {lang === "zh" ? "支持按编码、中文名等关键词搜索" : "Busca por SKU o nombre"}
-                  {activeGroupSlotKey ? ` · Slot ${activeGroupSlotKey.replace("empty-", "")}` : ""}
-                </p>
-              </div>
-              <button
+                <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-900">
+                      {lang === "zh" ? "选择商品" : "Seleccionar producto"}
+                    </h3>
+                  </div>
+                  <button
                 type="button"
                 onClick={() => {
                   setGroupProductSearchOpen(false);
@@ -3863,7 +3915,7 @@ export function DropshippingClient({
                   <div className="divide-y divide-slate-100">
                     {groupProductOptions.map((item) => (
                       <button
-                        key={item.id}
+                        key={`${item.source}-${item.sourceId}`}
                         type="button"
                         onClick={() => void handleSelectGroupedProduct(item)}
                         className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50"
