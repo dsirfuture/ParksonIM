@@ -850,7 +850,7 @@ export function DropshippingClient({
                             PDF
                           </a>
                         ) : (
-                          <span className="text-slate-400">-</span>
+                          <span className="text-slate-400">{lang === "zh" ? "空" : "Vacio"}</span>
                         )}
                       </td>
                       <td className="px-3 py-2">
