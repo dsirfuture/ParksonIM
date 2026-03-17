@@ -26,6 +26,9 @@ import { uploadR2Object } from "@/lib/r2-upload";
 
 const DEFAULT_RATE_VALUE = 0.08;
 const LOW_STOCK_THRESHOLD = 5;
+const WISE_MXN_TO_CNY_URL = "https://wise.com/zh-cn/currency-converter/mxn-to-cny-rate";
+const WISE_RATE_SOURCE_NAME = "wise.com";
+const WISE_RATE_TTL_MS = 1000 * 60 * 60;
 const orderAttachmentStore = prisma as typeof prisma & {
   dropshippingOrderAttachment: {
     deleteMany(args: unknown): Promise<unknown>;
@@ -87,6 +90,38 @@ function toNumber(value: unknown) {
     }
   }
   return 0;
+}
+
+async function fetchWiseMxnToCnyRate() {
+  const response = await fetch(WISE_MXN_TO_CNY_URL, {
+    headers: {
+      "user-agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+      accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "accept-language": "zh-CN,zh;q=0.9,en;q=0.8",
+      "cache-control": "no-cache",
+      pragma: "no-cache",
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`wise_fetch_failed_${response.status}`);
+  }
+
+  const html = await response.text();
+  const match = html.match(/(?:Mex\$|MX\$)?1\s*MXN\s*=\s*([0-9]+(?:\.[0-9]+)?)\s*CNY/i);
+  const rateValue = match ? Number(match[1]) : 0;
+
+  if (!Number.isFinite(rateValue) || rateValue <= 0) {
+    throw new Error("wise_rate_parse_failed");
+  }
+
+  return {
+    rateValue,
+    sourceName: WISE_RATE_SOURCE_NAME,
+    fetchedAt: new Date(),
+  };
 }
 
 function toOptionalNumber(value: unknown) {
@@ -242,22 +277,82 @@ export async function ensureTodayExchangeRate(session: Session) {
     orderBy: { created_at: "desc" },
   });
 
-  if (existing) return existing;
+  const now = new Date();
+  const isFreshWiseRate =
+    !!existing &&
+    existing.source_name === WISE_RATE_SOURCE_NAME &&
+    !existing.fetch_failed &&
+    !!existing.fetched_at &&
+    now.getTime() - existing.fetched_at.getTime() < WISE_RATE_TTL_MS;
 
-  return prisma.dropshippingExchangeRate.create({
-    data: {
-      tenant_id: session.tenantId,
-      company_id: session.companyId,
-      rate_date: today,
-      base_currency: "RMB",
-      target_currency: "MXN",
-      rate_value: DEFAULT_RATE_VALUE,
-      source_name: "system-default",
-      fetched_at: new Date(),
-      is_manual: false,
-      fetch_failed: false,
-    },
-  });
+  if (isFreshWiseRate) return existing;
+
+  if (existing?.is_manual && existing.source_name && existing.source_name !== "system-default") {
+    return existing;
+  }
+
+  try {
+    const wiseRate = await fetchWiseMxnToCnyRate();
+
+    if (existing) {
+      return prisma.dropshippingExchangeRate.update({
+        where: { id: existing.id },
+        data: {
+          rate_value: wiseRate.rateValue,
+          source_name: wiseRate.sourceName,
+          fetched_at: wiseRate.fetchedAt,
+          is_manual: false,
+          fetch_failed: false,
+          failure_reason: null,
+        },
+      });
+    }
+
+    return prisma.dropshippingExchangeRate.create({
+      data: {
+        tenant_id: session.tenantId,
+        company_id: session.companyId,
+        rate_date: today,
+        base_currency: "RMB",
+        target_currency: "MXN",
+        rate_value: wiseRate.rateValue,
+        source_name: wiseRate.sourceName,
+        fetched_at: wiseRate.fetchedAt,
+        is_manual: false,
+        fetch_failed: false,
+      },
+    });
+  } catch (error) {
+    const failureReason = error instanceof Error ? error.message : "wise_rate_fetch_failed";
+
+    if (existing) {
+      return prisma.dropshippingExchangeRate.update({
+        where: { id: existing.id },
+        data: {
+          source_name: existing.source_name || "system-default",
+          fetched_at: existing.fetched_at || now,
+          fetch_failed: true,
+          failure_reason: failureReason,
+        },
+      });
+    }
+
+    return prisma.dropshippingExchangeRate.create({
+      data: {
+        tenant_id: session.tenantId,
+        company_id: session.companyId,
+        rate_date: today,
+        base_currency: "RMB",
+        target_currency: "MXN",
+        rate_value: DEFAULT_RATE_VALUE,
+        source_name: "system-default",
+        fetched_at: now,
+        is_manual: false,
+        fetch_failed: true,
+        failure_reason: failureReason,
+      },
+    });
+  }
 }
 
 async function ensureCustomer(session: Session, customerName: string) {
@@ -1370,8 +1465,8 @@ export async function getExchangeRatePayload(session: Session): Promise<DsExchan
   return {
     id: rate.id,
     rateDate: rate.rate_date.toISOString(),
-    baseCurrency: rate.base_currency,
-    targetCurrency: rate.target_currency,
+    baseCurrency: "MXN",
+    targetCurrency: "RMB",
     rateValue: toNumber(rate.rate_value),
     sourceName: rate.source_name || "",
     fetchedAt: rate.fetched_at?.toISOString() || null,

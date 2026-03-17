@@ -35,8 +35,7 @@ function formatDateOnly(value: string | null | undefined) {
 }
 
 function safeRateLabel(rate: DsExchangeRatePayload) {
-  const mxnToRmb = rate.rateValue ? 1 / rate.rateValue : 0;
-  return mxnToRmb ? mxnToRmb.toFixed(4) : "-";
+  return rate.rateValue ? rate.rateValue.toFixed(4) : "-";
 }
 
 async function loadFontCandidates(candidates: string[]) {
