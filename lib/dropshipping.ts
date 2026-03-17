@@ -22,6 +22,7 @@ import type {
   DsShippingStatus,
 } from "@/lib/dropshipping-types";
 import { buildProductImageUrl } from "@/lib/product-image-url";
+import { normalizeProductCode } from "@/lib/product-code";
 import { uploadR2Object } from "@/lib/r2-upload";
 
 const DEFAULT_RATE_VALUE = 0.08;
@@ -390,7 +391,7 @@ async function ensureProduct(
     warehouse?: string;
   },
 ) {
-  const normalizedSku = input.sku.trim().toUpperCase();
+  const normalizedSku = normalizeProductCode(input.sku);
   let product = await prisma.dropshippingProduct.findFirst({
     where: {
       tenant_id: session.tenantId,
@@ -1028,14 +1029,14 @@ export async function listOrders(session: Session) {
     inventoryRows.map((row) => [`${row.customer_id}::${row.product_id}`, row.stocked_qty]),
   );
   const catalogBySku = new Map(
-    catalogRows.map((row) => [row.sku.trim().toUpperCase(), row]),
+    catalogRows.map((row) => [normalizeProductCode(row.sku), row]),
   );
 
   return rows.map((row): DsOrderRow => {
     const key = `${row.customer_id}::${row.platform}::${row.platform_order_no}`;
     const inventoryQty = inventoryMap.get(`${row.customer_id}::${row.product_id}`) ?? null;
     const attachments = attachmentsByOrder.get(row.id) || [];
-    const normalizedSku = row.product.sku.trim().toUpperCase();
+    const normalizedSku = normalizeProductCode(row.product.sku);
     const catalog = catalogBySku.get(normalizedSku);
     const matchedSku = catalog?.sku?.trim() || row.product.sku;
     return {
@@ -1052,7 +1053,7 @@ export async function listOrders(session: Session) {
       sku: row.product.sku,
       productNameZh: catalog?.name_zh?.trim() || row.product.name_zh,
       productNameEs: catalog?.name_es?.trim() || row.product.name_es || "",
-      productImageUrl: catalog ? buildProductImageUrl(matchedSku, "jpg") : "",
+      productImageUrl: row.product.image_url || buildProductImageUrl(matchedSku, "jpg"),
       platform: row.platform,
       platformOrderNo: row.platform_order_no,
       trackingNo: row.tracking_no || "",
@@ -1164,13 +1165,13 @@ export async function getInventoryRows(session: Session) {
   }
 
   const catalogBySku = new Map(
-    catalogRows.map((row) => [row.sku.trim().toUpperCase(), row]),
+    catalogRows.map((row) => [normalizeProductCode(row.sku), row]),
   );
 
   return inventories.map((row): DsInventoryRow => {
     const shippedQty = shippedMap.get(`${row.customer_id}::${row.product_id}`) || 0;
     const remainingQty = row.stocked_qty - shippedQty;
-    const normalizedSku = row.product.sku.trim().toUpperCase();
+    const normalizedSku = normalizeProductCode(row.product.sku);
     const catalog = catalogBySku.get(normalizedSku);
     const matchedSku = catalog?.sku?.trim() || row.product.sku;
     const unitPrice = toNumber(catalog?.price ?? row.locked_unit_price ?? row.product.unit_price);
@@ -1184,7 +1185,7 @@ export async function getInventoryRows(session: Session) {
       sku: row.product.sku,
       productNameZh: catalog?.name_zh?.trim() || row.product.name_zh,
       productNameEs: catalog?.name_es?.trim() || row.product.name_es || "",
-      productImageUrl: row.product.image_url || (catalog ? buildProductImageUrl(matchedSku, "jpg") : ""),
+      productImageUrl: row.product.image_url || buildProductImageUrl(matchedSku, "jpg"),
       stockedAt: stockedAtMap.get(`${row.customer_id}::${row.product_id}`) || null,
       warehouse: row.warehouse || row.product.default_warehouse || "",
       stockedQty: row.stocked_qty,
@@ -1273,12 +1274,12 @@ export async function getFinanceRows(session: Session) {
   }
 
   const catalogBySku = new Map(
-    catalogRows.map((row) => [row.sku.trim().toUpperCase(), row]),
+    catalogRows.map((row) => [normalizeProductCode(row.sku), row]),
   );
 
   const settledOrdersByCustomer = new Map<string, DsFinanceRow["settledOrders"]>();
   for (const row of settledOrders) {
-    const normalizedSku = row.product.sku.trim().toUpperCase();
+    const normalizedSku = normalizeProductCode(row.product.sku);
     const catalog = catalogBySku.get(normalizedSku);
     const matchedSku = catalog?.sku?.trim() || row.product.sku;
     const items = settledOrdersByCustomer.get(row.customer_id) || [];
@@ -1405,7 +1406,7 @@ export async function getOverview(session: Session) {
       dayItem.totalAmount += (row.snapshotStockAmount ?? 0) + row.shippingFee;
     }
 
-    const productKey = row.sku.trim().toUpperCase();
+    const productKey = normalizeProductCode(row.sku);
     const productItem = productRankMap.get(productKey) || {
       sku: row.sku,
       productNameZh: row.productNameZh || row.sku,

@@ -7,6 +7,7 @@ import { ProductImage } from "@/components/product-image";
 import { StatCard } from "@/components/stat-card";
 import { TableCard } from "@/components/table-card";
 import { getClientLang } from "@/lib/lang-client";
+import { normalizeProductCode } from "@/lib/product-code";
 import type {
   DsAlertItem,
   DsOrderAttachment,
@@ -193,6 +194,10 @@ function fmtMoney(value: number, lang: "zh" | "es") {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);
+}
+
+function fmtYuanMoney(value: number, lang: "zh" | "es") {
+  return `￥${fmtMoney(value, lang)}`;
 }
 
 function fmtPercent(value: number, lang: "zh" | "es") {
@@ -577,7 +582,7 @@ function OverviewWidgetShell({
 function normalizeGroupProductOptions(items: GroupProductOption[]) {
   const seen = new Set<string>();
   return items.filter((item) => {
-    const normalizedSku = item.sku.trim().toUpperCase();
+    const normalizedSku = normalizeProductCode(item.sku);
     const key = item.productId?.trim() || normalizedSku;
     if (!key || seen.has(key)) return false;
     seen.add(key);
@@ -1534,7 +1539,7 @@ export function DropshippingClient({
         point.totalAmount += orderAmount;
       }
 
-      const skuKey = row.sku.trim().toUpperCase();
+      const skuKey = normalizeProductCode(row.sku);
       const product = productMap.get(skuKey) || {
         sku: row.sku,
         productNameZh: row.productNameZh || row.sku,
@@ -1806,10 +1811,10 @@ export function DropshippingClient({
     try {
       setSaving(true);
       setError("");
-      const normalizedSku = product.sku.trim().toUpperCase();
+      const normalizedSku = normalizeProductCode(product.sku);
       const duplicateOrder = groupedOrdersForModal.find((row) =>
         (product.productId && row.productId === product.productId)
-        || row.sku.trim().toUpperCase() === normalizedSku,
+        || normalizeProductCode(row.sku) === normalizedSku,
       );
       if (duplicateOrder) {
         throw new Error(lang === "zh" ? "该商品已在同组订单中" : "El producto ya existe en el grupo");
@@ -1985,11 +1990,11 @@ export function DropshippingClient({
               <span className="text-[11px] font-medium">{lang === "zh" ? "添加附件" : "Agregar"}</span>
             </>
           ) : isImage ? (
-            <span className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+            <span className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-lg">
               <img src={previewUrl || ""} alt={fileName || `${type}-${slotIndex + 1}`} className="h-full w-full object-cover" />
             </span>
           ) : (
-            <span className="inline-flex h-14 w-14 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-600">
+            <span className="inline-flex h-14 w-14 items-center justify-center text-sm font-semibold text-slate-600">
               {isPdf ? "PDF" : "FILE"}
             </span>
           )}
@@ -3015,7 +3020,7 @@ export function DropshippingClient({
                           <td className="px-3 py-2 text-right tabular-nums">{row.quantity}</td>
                           <td className="px-3 py-2">
                             <div className="flex min-h-10 items-center justify-center">
-                              {row.productImageUrl ? (
+                              {row.sku ? (
                                 <ProductImage
                                   sku={row.sku}
                                   hasImage
@@ -3023,7 +3028,7 @@ export function DropshippingClient({
                                   roundedClassName="rounded-md"
                                   onClick={() =>
                                     setPreviewImage({
-                                      src: row.productImageUrl,
+                                      src: row.productImageUrl || "",
                                       title: `${row.sku} / ${row.productNameZh || "-"}`,
                                     })
                                   }
@@ -3052,7 +3057,7 @@ export function DropshippingClient({
                           </td>
                           <td className="px-3 py-2">{row.productNameZh}</td>
                           <td className="px-3 py-2">{row.color || "-"}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(row.shippingFee, lang)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{fmtYuanMoney(row.shippingFee, lang)}</td>
                           <td className={`px-3 py-2 ${row.settlementStatus === "paid" ? "text-emerald-600" : "text-rose-600"}`}>
                             {row.settlementStatus === "paid" ? (lang === "zh" ? "\u5df2\u7ed3" : "Liquidado") : (lang === "zh" ? "\u672a\u7ed3" : "Pendiente")}
                           </td>
@@ -3943,7 +3948,7 @@ export function DropshippingClient({
                                 }}
                                 className={`flex w-full items-start gap-1.5 text-left ${slot.isCurrent ? "cursor-default" : "cursor-pointer"}`}
                               >
-                                <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                                <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg">
                                   {slot.productImageUrl ? (
                                     <img src={slot.productImageUrl} alt={slot.productNameZh || slot.sku} className="h-full w-full object-cover" />
                                   ) : (

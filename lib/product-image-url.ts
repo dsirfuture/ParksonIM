@@ -1,3 +1,5 @@
+import { normalizeProductCode } from "@/lib/product-code";
+
 const PRODUCT_IMAGE_BASE_URL = (process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL || "")
   .trim()
   .replace(/\/+$/, "");
@@ -5,7 +7,7 @@ const PRODUCT_IMAGE_BASE_URL = (process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL |
 export const HAS_REMOTE_PRODUCT_IMAGE_BASE = Boolean(PRODUCT_IMAGE_BASE_URL);
 
 function normalizeKey(value: string) {
-  return String(value || "").trim();
+  return normalizeProductCode(value);
 }
 
 export function buildProductImageUrl(key: string, ext = "jpg") {

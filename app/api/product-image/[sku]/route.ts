@@ -1,9 +1,9 @@
-import fs from "node:fs/promises";
-import path from "node:path";
 import { NextRequest, NextResponse } from "next/server";
+import { findLocalProductImageFileName } from "@/lib/local-product-image";
+import { normalizeProductCode } from "@/lib/product-code";
 
 function normalizeSku(value: string) {
-  return String(value || "").trim();
+  return normalizeProductCode(value);
 }
 
 export async function GET(
@@ -21,17 +21,8 @@ export async function GET(
     .replace(/^\.+/, "")
     .toLowerCase();
 
-  const productsDir = path.join(process.cwd(), "public", "products");
-
   try {
-    const fileNames = await fs.readdir(productsDir);
-    const targetBase = normalizedSku.toLowerCase();
-    const targetExt = `.${ext}`;
-    const matched = fileNames.find((fileName) => {
-      const parsed = path.parse(fileName);
-      return parsed.name.toLowerCase() === targetBase && parsed.ext.toLowerCase() === targetExt;
-    });
-
+    const matched = findLocalProductImageFileName(normalizedSku, ext);
     if (!matched) {
       return new NextResponse(null, { status: 404 });
     }

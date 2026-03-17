@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import fs from "node:fs";
-import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import { hasPermission } from "@/lib/permissions";
+import { hasLocalProductImage } from "@/lib/local-product-image";
 import { getSession } from "@/lib/tenant";
 
 function normalizeString(value: unknown) {
@@ -39,10 +38,7 @@ function percentText(value: unknown) {
 }
 
 function hasProductImage(sku: string) {
-  const normalized = String(sku || "").trim();
-  if (!normalized) return false;
-  const imagePath = path.join(process.cwd(), "public", "products", `${normalized}.jpg`);
-  return fs.existsSync(imagePath);
+  return hasLocalProductImage(sku, "jpg");
 }
 
 export async function PATCH(

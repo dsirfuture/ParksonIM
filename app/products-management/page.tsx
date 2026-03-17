@@ -1,6 +1,6 @@
 ﻿import { redirect } from "next/navigation";
-import fs from "node:fs";
-import path from "node:path";
+import { hasLocalProductImage } from "@/lib/local-product-image";
+import { normalizeProductCode } from "@/lib/product-code";
 import { AppShell } from "@/components/app-shell";
 import { prisma } from "@/lib/prisma";
 import { withPrismaRetry } from "@/lib/prisma-retry";
@@ -36,7 +36,7 @@ function toNumber(value: unknown) {
 }
 
 function normalizeSku(value: string | null | undefined) {
-  return String(value || "").trim().toUpperCase();
+  return normalizeProductCode(value);
 }
 
 function trailing3Digits(value: string | null | undefined) {
@@ -46,10 +46,7 @@ function trailing3Digits(value: string | null | undefined) {
 }
 
 function hasProductImage(sku: string) {
-  const normalized = String(sku || "").trim();
-  if (!normalized) return false;
-  const imagePath = path.join(process.cwd(), "public", "products", `${normalized}.jpg`);
-  return fs.existsSync(imagePath);
+  return hasLocalProductImage(sku, "jpg");
 }
 
 function formatZhDateTime(date: Date) {

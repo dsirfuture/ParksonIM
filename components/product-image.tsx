@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { normalizeProductCode } from "@/lib/product-code";
 import { buildProductImageUrl, HAS_REMOTE_PRODUCT_IMAGE_BASE } from "@/lib/product-image-url";
 
 type ProductImageProps = {
@@ -14,7 +15,7 @@ type ProductImageProps = {
 };
 
 function normalizeSku(sku?: string | null) {
-  return String(sku || "").trim();
+  return normalizeProductCode(sku);
 }
 
 export function ProductImage({

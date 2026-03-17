@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import fs from "node:fs";
-import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import { withPrismaRetry } from "@/lib/prisma-retry";
 import { hasPermission } from "@/lib/permissions";
+import { hasLocalProductImage } from "@/lib/local-product-image";
 import { getSession } from "@/lib/tenant";
 
 function toNumber(value: unknown) {
@@ -41,10 +40,7 @@ function categoryText(value: string | null) {
 }
 
 function hasProductImage(sku: string) {
-  const normalized = String(sku || "").trim();
-  if (!normalized) return false;
-  const imagePath = path.join(process.cwd(), "public", "products", `${normalized}.jpg`);
-  return fs.existsSync(imagePath);
+  return hasLocalProductImage(sku, "jpg");
 }
 
 function normalizeString(value: unknown) {
