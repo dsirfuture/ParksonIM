@@ -2131,7 +2131,7 @@ export function DropshippingClient({
 
       {modalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-          <div className="flex max-h-[88vh] w-full max-w-[860px] flex-col rounded-xl bg-white shadow-2xl">
+          <div className="flex max-h-[88vh] w-full max-w-[920px] flex-col rounded-xl bg-white shadow-2xl">
             <div className="border-b border-slate-200 px-5 py-4">
               <h3 className="text-base font-semibold text-slate-900">
                 {form.id ? text.form.edit : text.form.create}
@@ -2144,9 +2144,9 @@ export function DropshippingClient({
                 ["platformOrderNo", text.form.orderNo, "md:col-span-3 xl:col-span-4"],
                 ["sku", text.form.sku, "md:col-span-2 xl:col-span-4"],
                 ["productNameZh", text.form.productZh, "md:col-span-3 xl:col-span-4"],
-                ["quantity", text.form.quantity, "md:col-span-2 xl:col-span-2"],
-                ["trackingNo", text.form.trackingNo, "md:col-span-3 xl:col-span-4"],
-                ["color", text.form.color, "md:col-span-3 xl:col-span-4"],
+                ["quantity", text.form.quantity, "md:col-span-1 xl:col-span-2"],
+                ["trackingNo", text.form.trackingNo, "md:col-span-2 xl:col-span-4"],
+                ["color", text.form.color, "md:col-span-2 xl:col-span-4"],
                 ["shippedAt", text.form.shippedAt, "md:col-span-2 xl:col-span-3"],
               ] as Array<[keyof OrderFormState, string, string]>).map(([key, label, spanClass]) => (
                 <label key={key} className={`space-y-1 ${spanClass}`}>
@@ -2163,7 +2163,7 @@ export function DropshippingClient({
 
               {sameTrackingOrders.length > 1 ? (
                 <div className="md:col-span-6 xl:col-span-12">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-4">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <div className="text-xs text-slate-500">
@@ -2184,13 +2184,13 @@ export function DropshippingClient({
                         <span>{lang === "zh" ? "新增同物流号商品" : "Agregar producto"}</span>
                       </button>
                     </div>
-                    <div className="mt-4 flex flex-wrap gap-3">
+                    <div className="mt-3 flex flex-wrap gap-2">
                       {sameTrackingOrders.map((item) => (
                         <button
                           key={item.id}
                           type="button"
                           onClick={() => openEditModal(item)}
-                          className={`inline-flex min-w-[148px] items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-xs transition ${
+                          className={`inline-flex min-w-[136px] items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs transition ${
                             item.id === form.id
                               ? "border-primary bg-white text-primary shadow-[0_0_0_1px_rgba(37,99,235,0.12)]"
                               : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
@@ -2208,7 +2208,7 @@ export function DropshippingClient({
                             )}
                           </span>
                           <span className="min-w-0">
-                            <span className="block truncate text-sm text-inherit">{item.sku}</span>
+                            <span className="block truncate text-[13px] text-inherit">{item.sku}</span>
                             <span className="block truncate text-[11px] text-slate-400">
                               {item.id === form.id
                                 ? (lang === "zh" ? "当前编辑" : "Actual")
@@ -2234,8 +2234,12 @@ export function DropshippingClient({
                     >
                       PDF
                     </a>
-                  ) : null}
-                  <div className="mt-2 flex items-center gap-3">
+                  ) : (
+                    <span className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs text-slate-400">
+                      {lang === "zh" ? "\u7a7a" : "Vacio"}
+                    </span>
+                  )}
+                  <div className="flex items-center gap-3">
                     <label className="inline-flex h-9 cursor-pointer items-center justify-center rounded-lg bg-primary px-3 text-xs font-semibold text-white">
                       {lang === "zh" ? "选择文件" : "Seleccionar archivo"}
                       <input
@@ -2245,7 +2249,7 @@ export function DropshippingClient({
                         className="sr-only"
                       />
                     </label>
-                    <span className="min-w-0 truncate text-xs text-slate-500">
+                    <span className="min-w-0 flex-1 truncate text-xs text-slate-500">
                       {labelFiles[0]?.name || currentEditingOrder?.shippingLabelAttachments[0]?.fileName || ""}
                     </span>
                   </div>
@@ -2256,7 +2260,7 @@ export function DropshippingClient({
                 <span className="text-xs text-slate-500">{text.fields.shippingProof}</span>
                 <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
                   {currentEditingOrder?.shippingProofAttachments.length ? (
-                    <div className="mb-2 flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2">
                       {currentEditingOrder.shippingProofAttachments.slice(0, 4).map((item) => (
                         <button
                           key={item.id}
@@ -2268,7 +2272,11 @@ export function DropshippingClient({
                         </button>
                       ))}
                     </div>
-                  ) : null}
+                  ) : (
+                    <span className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs text-slate-400">
+                      {lang === "zh" ? "\u7a7a" : "Vacio"}
+                    </span>
+                  )}
                   <div className="flex items-center gap-3">
                     <label className="inline-flex h-9 cursor-pointer items-center justify-center rounded-lg bg-primary px-3 text-xs font-semibold text-white">
                       {lang === "zh" ? "选择文件" : "Seleccionar archivo"}
@@ -2280,7 +2288,7 @@ export function DropshippingClient({
                         className="sr-only"
                       />
                     </label>
-                    <span className="min-w-0 truncate text-xs text-slate-500">
+                    <span className="min-w-0 flex-1 truncate text-xs text-slate-500">
                       {proofFiles.length > 0
                         ? `${proofFiles.length} ${lang === "zh" ? "个文件" : "archivo(s)"}`
                         : currentEditingOrder?.shippingProofAttachments.length
@@ -2291,7 +2299,7 @@ export function DropshippingClient({
                 </div>
               </div>
 
-              <label className="space-y-1 md:col-span-6 xl:col-span-4">
+              <label className="space-y-1 md:col-span-3 xl:col-span-4">
                 <span className="text-xs text-slate-500">{text.form.platform}</span>
                 <select
                   value={form.platform}
@@ -2307,7 +2315,7 @@ export function DropshippingClient({
                 </select>
               </label>
 
-              <label className="space-y-1 md:col-span-3 xl:col-span-4">
+              <label className="space-y-1 md:col-span-2 xl:col-span-4">
                 <span className="text-xs text-slate-500">{text.form.status}</span>
                 <select
                   value={form.shippingStatus}
