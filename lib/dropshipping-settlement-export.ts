@@ -63,8 +63,8 @@ async function embedFonts(pdfDoc: PDFDocument): Promise<EmbeddedFonts> {
 
   if (regularBytes && boldBytes) {
     return {
-      regular: await pdfDoc.embedFont(regularBytes, { subset: true }),
-      bold: await pdfDoc.embedFont(boldBytes, { subset: true }),
+      regular: await pdfDoc.embedFont(regularBytes, { subset: false }),
+      bold: await pdfDoc.embedFont(boldBytes, { subset: false }),
     };
   }
 
