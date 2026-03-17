@@ -82,8 +82,14 @@ function hasChineseGlyph(value: string) {
   return /[\u3400-\u9FFF\uF900-\uFAFF]/.test(String(value || ""));
 }
 
+function requiresUnicodeFont(value: string) {
+  return /[^\u0000-\u00FF]/.test(String(value || ""));
+}
+
 function getFontForText(fonts: EmbeddedFonts, value: string, bold = false) {
-  if (hasChineseGlyph(value)) return bold ? fonts.zhBold : fonts.zhRegular;
+  if (hasChineseGlyph(value) || requiresUnicodeFont(value)) {
+    return bold ? fonts.zhBold : fonts.zhRegular;
+  }
   return bold ? fonts.latinBold : fonts.latinRegular;
 }
 
@@ -99,7 +105,7 @@ function drawText(
     color?: ReturnType<typeof rgb>;
   },
 ) {
-  const chunks = String(value || "").match(/([\u3400-\u9FFF\uF900-\uFAFF]+|[^\u3400-\u9FFF\uF900-\uFAFF]+)/g) || [];
+  const chunks = String(value || "").match(/([^\u0000-\u00FF]+|[\u0000-\u00FF]+)/g) || [];
   let cursorX = options.x;
   for (const chunk of chunks) {
     const font = getFontForText(options.fonts, chunk, options.bold);
