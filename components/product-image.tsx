@@ -36,7 +36,7 @@ export function ProductImage({
       className={`flex items-center justify-center border border-slate-200 bg-slate-50 text-[11px] font-medium text-slate-400 ${roundedClassName} ${className}`}
       style={{ width: size, height: size }}
     >
-      N/A
+      空
     </div>
   );
 
