@@ -1539,7 +1539,19 @@ export function DropshippingClient({
       ) : null}
 
       {activeTab === "finance" ? (
-        <TableCard title={text.sections.finance}>
+        <TableCard
+          title={text.sections.finance}
+          titleRight={
+            <div className="flex items-center gap-3 text-sm text-slate-500">
+              <span className="whitespace-nowrap">
+                {lang === "zh" ? "当天汇率" : "Tipo de cambio"}: {financeDisplayRate?.toFixed(4) || "-"}
+              </span>
+              <span className="whitespace-nowrap">
+                {lang === "zh" ? "来源" : "Fuente"}: {exchangeRate.sourceName || "-"}
+              </span>
+            </div>
+          }
+        >
           {finance.length === 0 ? (
             <EmptyState title={text.empty.title} description={text.empty.desc} />
           ) : (
@@ -1579,7 +1591,7 @@ export function DropshippingClient({
                         <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.totalAmount, lang)}</td>
                         <td className="px-4 py-3 text-sm text-emerald-600">{fmtMoney(row.paidAmount, lang)}</td>
                         <td className="px-4 py-3 text-sm text-rose-600">{fmtMoney(row.unpaidAmount, lang)}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700">{fmtDate(row.lastPaidAt, lang)}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{fmtDateOnly(row.lastPaidAt, lang)}</td>
                         <td className="px-4 py-3 text-sm text-slate-700">{text.status[row.status]}</td>
                         <td className="px-4 py-3 text-sm text-slate-700">
                           <button
