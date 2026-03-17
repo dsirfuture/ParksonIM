@@ -271,6 +271,7 @@ export function DropshippingClient({
   const [importSummary, setImportSummary] = useState<string>("");
   const [error, setError] = useState("");
   const [previewImage, setPreviewImage] = useState<{ src: string; title: string } | null>(null);
+  const [failedInventoryImages, setFailedInventoryImages] = useState<string[]>([]);
   const [inventoryPreview, setInventoryPreview] = useState<InventoryPreviewState>(null);
   const [inventoryShippedPreview, setInventoryShippedPreview] = useState<InventoryShippedPreviewState>(null);
   const [financePreview, setFinancePreview] = useState<FinancePreviewState>(null);
@@ -1455,6 +1456,7 @@ export function DropshippingClient({
                   <tr className="bg-slate-50 text-left text-sm text-slate-500">
                     <th className="px-4 py-3 font-medium">{text.fields.customer}</th>
                     <th className="px-4 py-3 font-medium">{text.fields.sku}</th>
+                    <th className="px-4 py-3 font-medium">{lang === "zh" ? "备货时间" : "Fecha de stock"}</th>
                     <th className="px-4 py-3 font-medium">{text.fields.productImage}</th>
                     <th className="px-4 py-3 font-medium">{text.fields.productZh}</th>
                     <th className="px-4 py-3 font-medium">{text.fields.warehouse}</th>
@@ -1469,10 +1471,11 @@ export function DropshippingClient({
                   {inventory.map((row) => (
                     <tr key={row.inventoryId} className="border-t border-slate-100">
                       <td className="px-4 py-3 text-sm text-slate-700">{row.customerName}</td>
-                      <td className="px-4 py-3 text-sm font-semibold text-slate-900">{row.sku}</td>
+                      <td className="px-4 py-3 text-sm text-slate-900">{row.sku}</td>
+                      <td className="px-4 py-3 text-sm text-slate-700">{row.stockedAt ? fmtDateOnly(row.stockedAt, lang) : "-"}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">
                         <div className="flex min-h-10 items-center justify-center">
-                          {row.productImageUrl ? (
+                          {row.productImageUrl && !failedInventoryImages.includes(row.inventoryId) ? (
                             <button
                               type="button"
                               onClick={() =>
@@ -1488,6 +1491,11 @@ export function DropshippingClient({
                                 src={row.productImageUrl}
                                 alt={row.productNameZh || row.sku}
                                 className="h-10 w-10 object-cover"
+                                onError={() =>
+                                  setFailedInventoryImages((prev) =>
+                                    prev.includes(row.inventoryId) ? prev : [...prev, row.inventoryId],
+                                  )
+                                }
                               />
                             </button>
                           ) : (

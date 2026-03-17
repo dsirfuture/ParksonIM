@@ -1002,6 +1002,29 @@ export async function getInventoryRows(session: Session) {
     shippedOrders.map((row) => [`${row.customer_id}::${row.product_id}`, row._sum.quantity || 0]),
   );
 
+  const stockedAtRows = await prisma.dropshippingOrder.findMany({
+    where: {
+      tenant_id: session.tenantId,
+      company_id: session.companyId,
+      snapshot_stocked_qty: { not: null },
+      shipped_at: { not: null },
+    },
+    select: {
+      customer_id: true,
+      product_id: true,
+      shipped_at: true,
+    },
+    orderBy: [{ shipped_at: "asc" }, { created_at: "asc" }],
+  });
+
+  const stockedAtMap = new Map<string, string>();
+  for (const row of stockedAtRows) {
+    const key = `${row.customer_id}::${row.product_id}`;
+    if (!stockedAtMap.has(key) && row.shipped_at) {
+      stockedAtMap.set(key, row.shipped_at.toISOString());
+    }
+  }
+
   const catalogBySku = new Map(
     catalogRows.map((row) => [row.sku.trim().toUpperCase(), row]),
   );
@@ -1022,6 +1045,7 @@ export async function getInventoryRows(session: Session) {
       productNameZh: catalog?.name_zh?.trim() || row.product.name_zh,
       productNameEs: catalog?.name_es?.trim() || row.product.name_es || "",
       productImageUrl: row.product.image_url || (catalog ? buildProductImageUrl(row.product.sku, "jpg") : ""),
+      stockedAt: stockedAtMap.get(`${row.customer_id}::${row.product_id}`) || null,
       warehouse: row.warehouse || row.product.default_warehouse || "",
       stockedQty: row.stocked_qty,
       shippedQty,
