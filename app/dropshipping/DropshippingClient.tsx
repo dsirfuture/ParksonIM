@@ -142,6 +142,18 @@ const ResponsiveGridLayout = (ReactGridLayout as unknown as {
   WidthProvider: (component: unknown) => unknown;
 }).WidthProvider((ReactGridLayout as unknown as { Responsive: unknown }).Responsive) as React.ComponentType<Record<string, unknown>>;
 const OVERVIEW_LAYOUT_STORAGE_KEY = "dropshipping-overview-layouts-v1";
+const OVERVIEW_BREAKPOINTS = ["lg", "md", "sm", "xs"] as const;
+const OVERVIEW_WIDGET_IDS: OverviewWidgetId[] = [
+  "hero",
+  "financeStats",
+  "trend",
+  "platforms",
+  "products",
+  "customerOrders",
+  "customerAmounts",
+  "recentOrders",
+  "alerts",
+];
 const OVERVIEW_LAYOUTS: OverviewLayouts = {
   lg: [
     { i: "hero", x: 0, y: 0, w: 8, h: 8, minW: 4, minH: 5 },
@@ -188,6 +200,48 @@ const OVERVIEW_LAYOUTS: OverviewLayouts = {
     { i: "alerts", x: 0, y: 63, w: 2, h: 8, minW: 2, minH: 6 },
   ],
 };
+
+function isValidOverviewLayoutItem(value: unknown): value is OverviewLayoutItem {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Record<string, unknown>;
+  return (
+    typeof item.i === "string" &&
+    OVERVIEW_WIDGET_IDS.includes(item.i as OverviewWidgetId) &&
+    typeof item.x === "number" &&
+    typeof item.y === "number" &&
+    typeof item.w === "number" &&
+    typeof item.h === "number"
+  );
+}
+
+function sanitizeOverviewLayouts(input: unknown): OverviewLayouts {
+  const sanitized = { ...OVERVIEW_LAYOUTS } as OverviewLayouts;
+  if (!input || typeof input !== "object") return sanitized;
+
+  for (const breakpoint of OVERVIEW_BREAKPOINTS) {
+    const value = (input as Record<string, unknown>)[breakpoint];
+    if (!Array.isArray(value)) continue;
+
+    const items = value.filter(isValidOverviewLayoutItem);
+    const uniqueIds = new Set(items.map((item) => item.i));
+
+    if (items.length !== OVERVIEW_WIDGET_IDS.length || uniqueIds.size !== OVERVIEW_WIDGET_IDS.length) {
+      continue;
+    }
+
+    sanitized[breakpoint] = items.map((item) => ({
+      i: item.i,
+      x: item.x,
+      y: item.y,
+      w: item.w,
+      h: item.h,
+      minW: item.minW,
+      minH: item.minH,
+    }));
+  }
+
+  return sanitized;
+}
 
 function getShippingStatusLabel(status: OrderFormState["shippingStatus"], lang: "zh" | "es") {
   if (lang === "zh") {
@@ -486,10 +540,8 @@ export function DropshippingClient({
     try {
       const raw = window.localStorage.getItem(OVERVIEW_LAYOUT_STORAGE_KEY);
       if (!raw) return;
-      const parsed = JSON.parse(raw) as OverviewLayouts;
-      if (parsed && typeof parsed === "object") {
-        setOverviewLayouts((prev: OverviewLayouts) => ({ ...prev, ...parsed }));
-      }
+      const parsed = JSON.parse(raw);
+      setOverviewLayouts(sanitizeOverviewLayouts(parsed));
     } catch {
       // keep default layout
     }
@@ -1191,9 +1243,10 @@ export function DropshippingClient({
     }`;
 
   const handleOverviewLayoutChange = (_currentLayout: unknown, allLayouts: OverviewLayouts) => {
-    setOverviewLayouts(allLayouts);
+    const sanitizedLayouts = sanitizeOverviewLayouts(allLayouts);
+    setOverviewLayouts(sanitizedLayouts);
     try {
-      window.localStorage.setItem(OVERVIEW_LAYOUT_STORAGE_KEY, JSON.stringify(allLayouts));
+      window.localStorage.setItem(OVERVIEW_LAYOUT_STORAGE_KEY, JSON.stringify(sanitizedLayouts));
     } catch {
       // ignore local storage failures
     }
