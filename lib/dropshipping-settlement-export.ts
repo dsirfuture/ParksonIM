@@ -211,19 +211,22 @@ function drawHeader(
   const metaLine = `\u6c47\u7387 MXN -> RMB: ${safeRateLabel(exchangeRate)}    \u6765\u6e90: ${exchangeRate.sourceName || "-"}`;
   const metaWidth = measureTextWidth(metaLine, { fonts, size: 9.5, bold: true });
   const metaX = Math.max(430, 806 - metaWidth);
+  const headerBottom = 506;
+  const headerHeight = 54;
+  const headerTop = headerBottom + headerHeight;
 
   page.drawRectangle({
     x: 28,
-    y: 506,
+    y: headerBottom,
     width: 786,
-    height: 54,
+    height: headerHeight,
     color: rgb(0.95, 0.97, 1),
     borderColor: rgb(0.84, 0.89, 0.97),
     borderWidth: 1,
   });
   drawText(page, "\u5ba2\u6237\u7ed3\u7b97\u5355", {
     x: 36,
-    y: 524,
+    y: headerTop - 24,
     size: 20,
     fonts,
     bold: true,
@@ -231,7 +234,7 @@ function drawHeader(
   });
   drawText(page, financeRow.customerName, {
     x: 36,
-    y: 500,
+    y: headerBottom + 10,
     size: 11,
     fonts,
     color: rgb(0.39, 0.45, 0.56),
@@ -239,7 +242,7 @@ function drawHeader(
 
   drawText(page, metaLine, {
     x: metaX,
-    y: 522,
+    y: headerBottom + 21,
     size: 9.5,
     fonts,
     bold: true,
