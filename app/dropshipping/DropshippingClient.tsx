@@ -243,6 +243,7 @@ export function DropshippingClient({
   const [customerFilter, setCustomerFilter] = useState("all");
   const [shippedAtSortDirection, setShippedAtSortDirection] = useState<"asc" | "desc">("asc");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "shipped" | "cancelled">("all");
+  const [settlementFilter, setSettlementFilter] = useState<"all" | "paid" | "unpaid">("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<OrderFormState>(EMPTY_ORDER_FORM);
   const [productFieldsLocked, setProductFieldsLocked] = useState(false);
@@ -524,9 +525,10 @@ export function DropshippingClient({
           .toLowerCase()
           .includes(normalized);
       const statusHit = statusFilter === "all" || row.shippingStatus === statusFilter;
-      return customerHit && hit && statusHit;
+      const settlementHit = settlementFilter === "all" || row.settlementStatus === settlementFilter;
+      return customerHit && hit && statusHit && settlementHit;
     });
-  }, [customerFilter, keyword, orders, statusFilter]);
+  }, [customerFilter, keyword, orders, settlementFilter, statusFilter]);
 
   const sortedOrders = useMemo(() => {
     return [...filteredOrders].sort((a, b) => {
@@ -1050,12 +1052,21 @@ export function DropshippingClient({
             </div>
           }
           right={
-            <div className="flex w-full justify-end lg:w-auto">
+            <div className="flex w-full justify-end gap-2 lg:w-auto">
+              <select
+                value={settlementFilter}
+                onChange={(event) => setSettlementFilter(event.target.value as typeof settlementFilter)}
+                className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+              >
+                <option value="all">{lang === "zh" ? "????" : "Toda liquidacion"}</option>
+                <option value="paid">{lang === "zh" ? "??" : "Liquidado"}</option>
+                <option value="unpaid">{lang === "zh" ? "??" : "Pendiente"}</option>
+              </select>
               <div className="relative w-full max-w-[420px]">
                 <input
                   value={keyword}
                   onChange={(event) => setKeyword(event.target.value)}
-                  placeholder={lang === "zh" ? "搜索平台 / 订单号 / 编码" : "Buscar plataforma / pedido / codigo"}
+                  placeholder={lang === "zh" ? "???? / ??? / ??" : "Buscar plataforma / pedido / codigo"}
                   className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 pr-[130px] text-sm text-slate-700"
                 />
                 <select
