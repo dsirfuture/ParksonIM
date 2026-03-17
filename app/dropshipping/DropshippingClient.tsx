@@ -3667,11 +3667,22 @@ export function DropshippingClient({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-3">
           <div className="flex max-h-[calc(100vh-16px)] w-full max-w-[1440px] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_28px_80px_rgba(15,23,42,0.18)]">
             <div className="border-b border-slate-200 bg-white px-5 py-2">
-              <div className="flex items-center gap-3 text-sm">
-                <h3 className="whitespace-nowrap text-xl font-semibold text-slate-900">
-                  {lang === "zh" ? "\u5df2\u7ed3\u7b97\u8be6\u60c5" : "Detalle de liquidaciones"}
-                </h3>
-                <p className="truncate text-sm text-slate-500">{financePreview.customerName}</p>
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <div className="flex min-w-0 items-center gap-3">
+                  <h3 className="whitespace-nowrap text-xl font-semibold text-slate-900">
+                    {lang === "zh" ? "\u5df2\u7ed3\u7b97\u8be6\u60c5" : "Detalle de liquidaciones"}
+                  </h3>
+                  <p className="truncate text-sm text-slate-500">{financePreview.customerName}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFinancePreview(null)}
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                  aria-label={lang === "zh" ? "关闭" : "Cerrar"}
+                  title={lang === "zh" ? "关闭" : "Cerrar"}
+                >
+                  ×
+                </button>
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-hidden bg-white">
@@ -3774,7 +3785,7 @@ export function DropshippingClient({
                       >
                         {lang === "zh" ? "\u4e0a\u4e00\u9875" : "Anterior"}
                       </button>
-                      <span className="inline-flex h-7 min-w-[78px] items-center justify-center rounded-lg bg-fuchsia-500 px-3 font-medium text-white">
+                      <span className="inline-flex h-7 min-w-[78px] items-center justify-center rounded-lg bg-primary px-3 font-medium text-white">
                         {financePreviewCurrentPage} / {financePreviewTotalPages}
                       </span>
                       <button
@@ -3796,21 +3807,12 @@ export function DropshippingClient({
                     </div>
                     <div className="hidden items-center gap-2">
                       <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white">‹</span>
-                      <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-fuchsia-500 px-2 text-white">1</span>
+                      <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-2 text-white">1</span>
                       <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white">›</span>
                     </div>
                   </div>
                 </div>
               )}
-            </div>
-            <div className="flex justify-end border-t border-slate-200 bg-white px-5 py-1.5">
-              <button
-                type="button"
-                onClick={() => setFinancePreview(null)}
-                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
-              >
-                {lang === "zh" ? "\u5173\u95ed" : "Cerrar"}
-              </button>
             </div>
           </div>
         </div>
