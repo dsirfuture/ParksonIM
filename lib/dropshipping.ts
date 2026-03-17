@@ -16,6 +16,7 @@ import type {
   DsOverviewStats,
   DsShippingStatus,
 } from "@/lib/dropshipping-types";
+import { buildProductImageUrl } from "@/lib/product-image-url";
 import { uploadR2Object } from "@/lib/r2-upload";
 
 const DEFAULT_RATE_VALUE = 0.08;
@@ -741,7 +742,7 @@ export async function importLegacyOrders(
 }
 
 export async function listOrders(session: Session) {
-  const rows = await prisma.dropshippingOrder.findMany({
+  const rawRows = await prisma.dropshippingOrder.findMany({
     where: {
       tenant_id: session.tenantId,
       company_id: session.companyId,
@@ -750,7 +751,27 @@ export async function listOrders(session: Session) {
       customer: true,
       product: true,
     },
-    orderBy: [{ created_at: "desc" }, { platform_order_no: "desc" }],
+    orderBy: [{ platform_order_no: "asc" }, { created_at: "asc" }],
+  });
+  const rows = [...rawRows].sort((a, b) => {
+    const aTime = a.shipped_at ? a.shipped_at.getTime() : Number.POSITIVE_INFINITY;
+    const bTime = b.shipped_at ? b.shipped_at.getTime() : Number.POSITIVE_INFINITY;
+    if (aTime !== bTime) return aTime - bTime;
+    const orderNoCompare = a.platform_order_no.localeCompare(b.platform_order_no, "en");
+    if (orderNoCompare !== 0) return orderNoCompare;
+    return a.created_at.getTime() - b.created_at.getTime();
+  });
+  const catalogRows = await prisma.productCatalog.findMany({
+    where: {
+      tenant_id: session.tenantId,
+      company_id: session.companyId,
+      sku: { in: rows.map((row) => row.product.sku) },
+    },
+    select: {
+      sku: true,
+      name_zh: true,
+      name_es: true,
+    },
   });
   const attachments = await orderAttachmentStore.dropshippingOrderAttachment.findMany({
     where: {
@@ -799,20 +820,25 @@ export async function listOrders(session: Session) {
   const inventoryMap = new Map<string, number>(
     inventoryRows.map((row) => [`${row.customer_id}::${row.product_id}`, row.stocked_qty]),
   );
+  const catalogBySku = new Map(
+    catalogRows.map((row) => [row.sku.trim().toUpperCase(), row]),
+  );
 
   return rows.map((row): DsOrderRow => {
     const key = `${row.customer_id}::${row.platform}::${row.platform_order_no}`;
     const inventoryQty = inventoryMap.get(`${row.customer_id}::${row.product_id}`) ?? null;
     const attachments = attachmentsByOrder.get(row.id) || [];
+    const normalizedSku = row.product.sku.trim().toUpperCase();
+    const catalog = catalogBySku.get(normalizedSku);
     return {
       id: row.id,
       customerId: row.customer_id,
       customerName: row.customer.name,
       productId: row.product_id,
       sku: row.product.sku,
-      productNameZh: row.product.name_zh,
-      productNameEs: row.product.name_es || "",
-      productImageUrl: row.product.image_url || "",
+      productNameZh: catalog?.name_zh?.trim() || row.product.name_zh,
+      productNameEs: catalog?.name_es?.trim() || row.product.name_es || "",
+      productImageUrl: catalog ? buildProductImageUrl(row.product.sku, "jpg") : "",
       platform: row.platform,
       platformOrderNo: row.platform_order_no,
       trackingNo: row.tracking_no || "",

@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
+import { ImageLightbox } from "@/components/image-lightbox";
 import { PageHeader } from "@/components/page-header";
+import { ProductImage } from "@/components/product-image";
 import { StatCard } from "@/components/stat-card";
 import { TableCard } from "@/components/table-card";
 import { getClientLang } from "@/lib/lang-client";
@@ -103,6 +105,16 @@ function fmtDate(value: string | null | undefined, lang: "zh" | "es") {
   }).format(new Date(value));
 }
 
+function fmtDateOnly(value: string | null | undefined, lang: "zh" | "es") {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat(lang === "zh" ? "zh-CN" : "es-MX", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "America/Mexico_City",
+  }).format(new Date(value));
+}
+
 function fmtMoney(value: number, lang: "zh" | "es") {
   return new Intl.NumberFormat(lang === "zh" ? "zh-CN" : "es-MX", {
     minimumFractionDigits: 2,
@@ -115,6 +127,10 @@ function isDirectFileLink(value: string) {
   if (!normalized) return false;
   if (normalized.startsWith("=")) return false;
   return /^https?:\/\//i.test(normalized) || normalized.startsWith("/");
+}
+
+function PencilIcon() {
+  return <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8"><path d="M3.5 13.75V16.5h2.75L15 7.75 12.25 5 3.5 13.75Z" /><path d="M10.75 6.5 13.5 9.25" /><path d="M11.5 3.75 16.25 8.5" /></svg>;
 }
 
 export function DropshippingClient({
@@ -141,6 +157,7 @@ export function DropshippingClient({
   const [importProgress, setImportProgress] = useState<number | null>(null);
   const [importSummary, setImportSummary] = useState<string>("");
   const [error, setError] = useState("");
+  const [previewImage, setPreviewImage] = useState<{ src: string; title: string } | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -741,23 +758,21 @@ export function DropshippingClient({
               <table className="min-w-full border-separate border-spacing-0">
                 <thead>
                   <tr className="bg-slate-50 text-left text-sm text-slate-500">
-                    <th className="px-4 py-3 font-medium">{text.fields.customer}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.platform}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.orderNo}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.trackingNo}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.shippingLabel}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.status}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.shippedAt}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.shippingProof}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.sku}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.quantity}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.color}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.warehouse}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.shippingFee}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.productImage}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.productZh}</th>
-                    <th className="px-4 py-3 font-medium">{text.warnings}</th>
-                    <th className="px-4 py-3 text-right font-medium">Edit</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.customer}</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.platform}</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.orderNo}</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.trackingNo}</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.shippingLabel}</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.status}</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.shippedAt}</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.shippingProof}</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.sku}</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.quantity}</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.color}</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.shippingFee}</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.productImage}</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-medium">{text.fields.productZh}</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-right font-medium" aria-label={lang === "zh" ? "编辑" : "Editar"} />
                   </tr>
                 </thead>
                 <tbody>
@@ -796,27 +811,50 @@ export function DropshippingClient({
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-700">
-                        {row.shippedAt ? fmtDate(row.shippedAt, lang) : "-"}
+                        {row.shippedAt ? fmtDateOnly(row.shippedAt, lang) : "-"}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-700">
                         {row.shippingProofAttachments[0]?.fileUrl ? (
-                          <a
-                            href={row.shippingProofAttachments[0].fileUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPreviewImage({
+                                src: row.shippingProofAttachments[0].fileUrl,
+                                title: `${row.platformOrderNo} / ${row.sku}`,
+                              })
+                            }
+                            className="relative block overflow-hidden rounded-lg border border-slate-200 bg-white"
+                            title={lang === "zh" ? "预览发货凭据" : "Ver comprobante"}
                           >
-                            IMG{row.shippingProofAttachments.length > 1 ? ` x${row.shippingProofAttachments.length}` : ""}
-                          </a>
+                            <img
+                              src={row.shippingProofAttachments[0].fileUrl}
+                              alt={`${row.platformOrderNo} ${row.sku}`}
+                              className="h-10 w-10 object-cover"
+                            />
+                            {row.shippingProofAttachments.length > 1 ? (
+                              <span className="absolute bottom-0 right-0 rounded-tl-md bg-slate-900/75 px-1 text-[10px] font-semibold text-white">
+                                {row.shippingProofAttachments.length}
+                              </span>
+                            ) : null}
+                          </button>
                         ) : isDirectFileLink(row.shippingProofFile) ? (
-                          <a
-                            href={row.shippingProofFile}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPreviewImage({
+                                src: row.shippingProofFile,
+                                title: `${row.platformOrderNo} / ${row.sku}`,
+                              })
+                            }
+                            className="block overflow-hidden rounded-lg border border-slate-200 bg-white"
+                            title={lang === "zh" ? "预览发货凭据" : "Ver comprobante"}
                           >
-                            IMG
-                          </a>
+                            <img
+                              src={row.shippingProofFile}
+                              alt={`${row.platformOrderNo} ${row.sku}`}
+                              className="h-10 w-10 object-cover"
+                            />
+                          </button>
                         ) : (
                           <span className="text-slate-400">-</span>
                         )}
@@ -824,27 +862,35 @@ export function DropshippingClient({
                       <td className="px-4 py-3 text-sm text-slate-700">{row.sku}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">{row.quantity}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">{row.color || "-"}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{row.warehouse || "-"}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.shippingFee, lang)}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">
-                        {isDirectFileLink(row.productImageUrl) ? (
-                          <a
-                            href={row.productImageUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                          >
-                            IMG
-                          </a>
+                        {row.productImageUrl ? (
+                          <ProductImage
+                            sku={row.sku}
+                            hasImage
+                            size={40}
+                            roundedClassName="rounded-lg"
+                            onClick={() =>
+                              setPreviewImage({
+                                src: row.productImageUrl,
+                                title: row.sku,
+                              })
+                            }
+                          />
                         ) : (
                           <span className="text-slate-400">-</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-700">{row.productNameZh}</td>
-                      <td className="px-4 py-3 text-sm text-rose-600">{row.warnings.length > 0 ? row.warnings.join(", ") : "-"}</td>
                       <td className="px-4 py-3 text-right">
-                        <button type="button" onClick={() => openEditModal(row)} className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700">
-                          {lang === "zh" ? "编辑" : "Editar"}
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(row)}
+                          title={lang === "zh" ? "编辑" : "Editar"}
+                          aria-label={lang === "zh" ? "编辑" : "Editar"}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+                        >
+                          <PencilIcon />
                         </button>
                       </td>
                     </tr>
@@ -1017,6 +1063,12 @@ export function DropshippingClient({
           </div>
         </div>
       ) : null}
+      <ImageLightbox
+        open={Boolean(previewImage)}
+        src={previewImage?.src || ""}
+        title={previewImage?.title || ""}
+        onClose={() => setPreviewImage(null)}
+      />
     </section>
   );
 }
