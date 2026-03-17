@@ -190,6 +190,7 @@ export function DropshippingClient({
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "shipped" | "cancelled">("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<OrderFormState>(EMPTY_ORDER_FORM);
+  const [productFieldsLocked, setProductFieldsLocked] = useState(false);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<number | null>(null);
@@ -544,6 +545,7 @@ export function DropshippingClient({
 
   function openCreateModal() {
     setForm(EMPTY_ORDER_FORM);
+    setProductFieldsLocked(false);
     setModalOpen(true);
   }
 
@@ -565,6 +567,7 @@ export function DropshippingClient({
       shippingStatus: order.shippingStatus,
       notes: order.notes,
     });
+    setProductFieldsLocked(order.catalogMatched);
     setModalOpen(true);
   }
 
@@ -1191,10 +1194,18 @@ export function DropshippingClient({
                     type={key === "shippedAt" ? "date" : key === "quantity" ? "number" : "text"}
                     value={form[key]}
                     onChange={(event) => setForm((prev) => ({ ...prev, [key]: event.target.value }))}
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                    disabled={productFieldsLocked && (key === "sku" || key === "productNameZh" || key === "productNameEs")}
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                   />
                 </label>
               ))}
+              {productFieldsLocked ? (
+                <div className="md:col-span-2 xl:col-span-3">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+                    {lang === "zh" ? "该编码已匹配“产品管理”页，产品相关信息不可在此编辑。" : "Este codigo ya coincide con Productos; los campos de producto quedan bloqueados aqui."}
+                  </div>
+                </div>
+              ) : null}
 
               <label className="space-y-1">
                 <span className="text-xs text-slate-500">{text.form.platform}</span>

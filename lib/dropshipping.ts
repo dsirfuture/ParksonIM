@@ -184,6 +184,16 @@ export function getOrderWarnings(input: {
   return warnings;
 }
 
+function sanitizeOrderNotes(notes: string | null | undefined) {
+  const normalized = String(notes || "").trim();
+  if (!normalized) return "";
+  return normalized
+    .split("|")
+    .map((item) => item.trim())
+    .filter((item) => item && !/^label:/i.test(item) && !/^proof:/i.test(item))
+    .join(" | ");
+}
+
 export async function ensureTodayExchangeRate(session: Session) {
   const today = startOfTodayInMexico();
   const existing = await prisma.dropshippingExchangeRate.findFirst({
@@ -616,12 +626,7 @@ export async function importLegacyOrders(
       snapshot_paid_amount: row.paidAmount,
       snapshot_unpaid_amount: row.unpaidAmount,
       settled_at: settledAtDate,
-      notes: [
-        row.shippingLabelFile && !isAttachmentFormula(row.shippingLabelFile) ? `label:${row.shippingLabelFile}` : "",
-        row.shippingProofFile && !isAttachmentFormula(row.shippingProofFile) ? `proof:${row.shippingProofFile}` : "",
-      ]
-        .filter(Boolean)
-        .join(" | ") || null,
+      notes: null,
     };
 
     let order;
@@ -846,6 +851,7 @@ export async function listOrders(session: Session) {
       customerId: row.customer_id,
       customerName: row.customer.name,
       productId: row.product_id,
+      catalogMatched: Boolean(catalog),
       sku: row.product.sku,
       productNameZh: catalog?.name_zh?.trim() || row.product.name_zh,
       productNameEs: catalog?.name_es?.trim() || row.product.name_es || "",
@@ -864,7 +870,7 @@ export async function listOrders(session: Session) {
       shippingLabelAttachments: attachments.filter((item) => item.type === "label"),
       shippingProofAttachments: attachments.filter((item) => item.type === "proof"),
       createdAt: row.created_at.toISOString(),
-      notes: row.notes || "",
+      notes: sanitizeOrderNotes(row.notes),
       currentInventoryQty: inventoryQty,
       warnings: getOrderWarnings({
         duplicate: duplicateKeys.has(key),
