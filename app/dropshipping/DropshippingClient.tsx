@@ -565,6 +565,7 @@ export function DropshippingClient({
   const [settlementFilter, setSettlementFilter] = useState<"all" | "paid" | "unpaid">("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<OrderFormState>(EMPTY_ORDER_FORM);
+  const [modalPrimaryOrderId, setModalPrimaryOrderId] = useState("");
   const [groupProductSearchOpen, setGroupProductSearchOpen] = useState(false);
   const [groupProductSearchKeyword, setGroupProductSearchKeyword] = useState("");
   const [groupProductSearchLoading, setGroupProductSearchLoading] = useState(false);
@@ -993,48 +994,56 @@ export function DropshippingClient({
     return orders.find((row) => row.id === form.id) || null;
   }, [form.id, orders]);
 
+  const modalPrimaryOrder = useMemo(() => {
+    const primaryId = modalPrimaryOrderId.trim();
+    if (!primaryId) return null;
+    return orders.find((row) => row.id === primaryId) || null;
+  }, [modalPrimaryOrderId, orders]);
+
   const groupedOrdersForModal = useMemo(() => {
-    const currentId = form.id.trim();
+    const primaryId = modalPrimaryOrderId.trim() || form.id.trim();
     const trackingGroupId = form.trackingGroupId.trim().toLowerCase();
     if (trackingGroupId) {
       return orders
         .filter((row) => row.trackingGroupId?.trim().toLowerCase() === trackingGroupId)
         .sort((a, b) => {
-          if (a.id === currentId) return -1;
-          if (b.id === currentId) return 1;
+          if (a.id === primaryId) return -1;
+          if (b.id === primaryId) return 1;
           return a.createdAt.localeCompare(b.createdAt, "en");
         });
     }
 
     const tracking = form.trackingNo.trim().toLowerCase();
     if (!tracking) {
-      return currentId ? orders.filter((row) => row.id === currentId) : [];
+      return primaryId ? orders.filter((row) => row.id === primaryId) : [];
     }
 
     return orders
       .filter((row) => row.trackingNo.trim().toLowerCase() === tracking)
       .sort((a, b) => {
-        if (a.id === currentId) return -1;
-        if (b.id === currentId) return 1;
+        if (a.id === primaryId) return -1;
+        if (b.id === primaryId) return 1;
         return a.createdAt.localeCompare(b.createdAt, "en");
       });
-  }, [form.id, form.trackingGroupId, form.trackingNo, orders]);
+  }, [form.id, form.trackingGroupId, form.trackingNo, modalPrimaryOrderId, orders]);
 
   const groupedOrderSlots = useMemo(() => {
+    const primaryId = modalPrimaryOrderId.trim() || form.id.trim();
+    const primaryOrder = primaryId && primaryId === form.id ? currentEditingOrder : modalPrimaryOrder;
     const currentSlot: GroupedOrderSlot = {
-      slotKey: form.id || "current",
-      orderId: form.id || null,
-      productId: currentEditingOrder?.productId || "",
-      sku: form.sku,
-      productNameZh: form.productNameZh,
-      productNameEs: form.productNameEs,
-      productImageUrl: currentEditingOrder?.productImageUrl || "",
+      slotKey: primaryId || form.id || "current",
+      orderId: primaryId || form.id || null,
+      productId: primaryOrder?.productId || "",
+      sku: primaryId === form.id ? form.sku : primaryOrder?.sku || form.sku,
+      productNameZh: primaryId === form.id ? form.productNameZh : primaryOrder?.productNameZh || form.productNameZh,
+      productNameEs: primaryId === form.id ? form.productNameEs : primaryOrder?.productNameEs || form.productNameEs,
+      productImageUrl: primaryOrder?.productImageUrl || "",
       isCurrent: true,
-      isPersisted: Boolean(form.id),
+      isPersisted: Boolean(primaryId || form.id),
     };
 
     const siblingSlots = groupedOrdersForModal
-      .filter((row) => row.id !== form.id)
+      .filter((row) => row.id !== primaryId)
       .map<GroupedOrderSlot>((row) => ({
         slotKey: row.id,
         orderId: row.id,
@@ -1062,7 +1071,16 @@ export function DropshippingClient({
       });
     }
     return slots;
-  }, [currentEditingOrder, form.id, form.productNameEs, form.productNameZh, form.sku, groupedOrdersForModal]);
+  }, [
+    currentEditingOrder,
+    form.id,
+    form.productNameEs,
+    form.productNameZh,
+    form.sku,
+    groupedOrdersForModal,
+    modalPrimaryOrder,
+    modalPrimaryOrderId,
+  ]);
 
   const platformOptions = useMemo(() => {
     const current = form.platform.trim();
@@ -1458,6 +1476,7 @@ export function DropshippingClient({
     setProductFieldsLocked(false);
     setLabelFiles([]);
     setProofFiles([]);
+    setModalPrimaryOrderId("");
     setGroupProductSearchOpen(false);
     setGroupProductSearchKeyword("");
     setGroupProductOptions([]);
@@ -1465,7 +1484,7 @@ export function DropshippingClient({
     setModalOpen(true);
   }
 
-  function openEditModal(order: DsOrderRow) {
+  function openEditModal(order: DsOrderRow, primaryOrderId?: string) {
     setForm({
       id: order.id,
       trackingGroupId: order.trackingGroupId || "",
@@ -1491,6 +1510,7 @@ export function DropshippingClient({
     setGroupProductSearchKeyword("");
     setGroupProductOptions([]);
     setActiveGroupSlotKey(null);
+    setModalPrimaryOrderId(primaryOrderId || order.id);
     setModalOpen(true);
   }
 
@@ -1633,7 +1653,7 @@ export function DropshippingClient({
       setOrders(freshOrders);
       const refreshedCurrent = freshOrders.find((row) => row.id === orderId);
       if (refreshedCurrent) {
-        openEditModal(refreshedCurrent);
+        openEditModal(refreshedCurrent, modalPrimaryOrderId || form.id || refreshedCurrent.id);
       }
     } catch (groupError) {
       setError(groupError instanceof Error ? groupError.message : "save_failed");
@@ -1688,7 +1708,7 @@ export function DropshippingClient({
       setOrders(freshOrders);
       const refreshed = freshOrders.find((row) => row.id === orderId);
       if (refreshed) {
-        openEditModal(refreshed);
+        openEditModal(refreshed, modalPrimaryOrderId || form.id || refreshed.id);
       }
     } catch (removeError) {
       setError(removeError instanceof Error ? removeError.message : "save_failed");
@@ -3692,7 +3712,7 @@ export function DropshippingClient({
                                 onClick={() => {
                                   if (!slot.orderId || slot.isCurrent) return;
                                   const match = groupedOrdersForModal.find((item) => item.id === slot.orderId);
-                                  if (match) openEditModal(match);
+                                  if (match) openEditModal(match, modalPrimaryOrderId || form.id || match.id);
                                 }}
                                 className={`flex w-full items-start gap-1.5 text-left ${slot.isCurrent ? "cursor-default" : "cursor-pointer"}`}
                               >
