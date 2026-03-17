@@ -1571,9 +1571,18 @@ export function DropshippingClient({
                               : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
                           }`}
                         >
+                          <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+                            {item.productImageUrl ? (
+                              <img
+                                src={item.productImageUrl}
+                                alt={item.productNameZh || item.sku}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <span className="text-[10px] text-slate-400">{lang === "zh" ? "空" : "Vacio"}</span>
+                            )}
+                          </span>
                           <span>{item.sku}</span>
-                          <span className="text-slate-400">/</span>
-                          <span className="max-w-[180px] truncate">{item.productNameZh || "-"}</span>
                         </button>
                       ))}
                     </div>
