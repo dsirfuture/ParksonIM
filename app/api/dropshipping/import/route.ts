@@ -292,6 +292,10 @@ async function parseXlsxWorkbook(bytes: Uint8Array, assetFiles: AssetFile[]) {
           const linkCell = cellValue as { text?: string; hyperlink?: string };
           displayText = text(linkCell.text || cell.text);
           hyperlink = text(linkCell.hyperlink);
+        } else if (typeof cellValue === "object" && cellValue && "formula" in cellValue) {
+          const formulaCell = cellValue as { formula?: string; result?: unknown };
+          const formulaText = text(formulaCell.formula);
+          displayText = formulaText || text(formulaCell.result || cell.text);
         } else {
           displayText = text(cell.text || cellValue);
           hyperlink = typeof cell.hyperlink === "string" ? cell.hyperlink : "";
