@@ -208,6 +208,16 @@ function EyeIcon() {
   );
 }
 
+function DownloadIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 3.25v8.5" />
+      <path d="m6.75 8.5 3.25 3.25 3.25-3.25" />
+      <path d="M4 14.75h12" />
+    </svg>
+  );
+}
+
 function PlusBadge() {
   return (
     <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-white">
@@ -1848,7 +1858,8 @@ export function DropshippingClient({
                       <th className="px-4 py-3 font-medium">{text.fields.unpaid}</th>
                       <th className="px-4 py-3 font-medium">{text.fields.lastPaid}</th>
                       <th className="px-4 py-3 font-medium">{text.fields.status}</th>
-                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "详情" : "Detalle"}</th>
+                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "\u8be6\u60c5" : "Detalle"}</th>
+                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "\u5bfc\u51fa" : "Exportar"}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1869,12 +1880,24 @@ export function DropshippingClient({
                             type="button"
                             onClick={() => setFinancePreview(row)}
                             disabled={row.settledOrders.length === 0}
-                            title={lang === "zh" ? "查看已结算详情" : "Ver liquidaciones"}
-                            aria-label={lang === "zh" ? "查看已结算详情" : "Ver liquidaciones"}
+                            title={lang === "zh" ? "\u67e5\u770b\u5df2\u7ed3\u7b97\u8be6\u60c5" : "Ver liquidaciones"}
+                            aria-label={lang === "zh" ? "\u67e5\u770b\u5df2\u7ed3\u7b97\u8be6\u60c5" : "Ver liquidaciones"}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300"
                           >
                             <EyeIcon />
                           </button>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-700">
+                          <a
+                            href={`/api/dropshipping/finance/${row.customerId}/export/pdf`}
+                            target="_blank"
+                            rel="noreferrer"
+                            title={lang === "zh" ? "\u5bfc\u51fa\u7ed3\u7b97 PDF" : "Exportar PDF"}
+                            aria-label={lang === "zh" ? "\u5bfc\u51fa\u7ed3\u7b97 PDF" : "Exportar PDF"}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+                          >
+                            <DownloadIcon />
+                          </a>
                         </td>
                       </tr>
                     ))}
