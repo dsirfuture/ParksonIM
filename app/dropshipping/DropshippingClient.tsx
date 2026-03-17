@@ -56,6 +56,14 @@ type Props = {
 
 type TabKey = "overview" | "orders" | "inventory" | "finance";
 
+type InventoryPreviewState = {
+  orderId: string;
+  customerId: string;
+  customerName: string;
+  sku: string;
+  productNameZh: string;
+} | null;
+
 type OrderFormState = {
   id: string;
   customerName: string;
@@ -187,6 +195,7 @@ export function DropshippingClient({
   const [importSummary, setImportSummary] = useState<string>("");
   const [error, setError] = useState("");
   const [previewImage, setPreviewImage] = useState<{ src: string; title: string } | null>(null);
+  const [inventoryPreview, setInventoryPreview] = useState<InventoryPreviewState>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -224,7 +233,7 @@ export function DropshippingClient({
           customer: "客户",
           platform: "平台",
           orderNo: "订单号",
-          sku: "SKU",
+          sku: "编码",
           quantity: "数量",
           status: "状态",
           shippedAt: "发货日期",
@@ -252,7 +261,7 @@ export function DropshippingClient({
           customer: "客户名称",
           platform: "平台",
           orderNo: "后台订单号",
-          sku: "SKU",
+          sku: "编码",
           productZh: "产品中文名",
           productEs: "产品西文名",
           quantity: "数量",
@@ -323,7 +332,7 @@ export function DropshippingClient({
           customer: "Cliente",
           platform: "Plataforma",
           orderNo: "Pedido",
-          sku: "SKU",
+          sku: "Codigo",
           quantity: "Cant.",
           status: "Estado",
           shippedAt: "Fecha envio",
@@ -351,7 +360,7 @@ export function DropshippingClient({
           customer: "Cliente",
           platform: "Plataforma",
           orderNo: "Numero de pedido",
-          sku: "SKU",
+          sku: "Codigo",
           productZh: "Nombre ZH",
           productEs: "Nombre ES",
           quantity: "Cantidad",
@@ -466,6 +475,24 @@ export function DropshippingClient({
     const base: OrderFormState["shippingStatus"][] = ["pending", "shipped"];
     return form.shippingStatus === "cancelled" ? ["pending", "shipped", "cancelled"] : base;
   }, [form.shippingStatus]);
+
+  const currentInventoryPreview = useMemo(() => {
+    if (!inventoryPreview) return null;
+    return (
+      inventory.find((row) =>
+        row.customerId === inventoryPreview.customerId
+        && row.sku.trim().toLowerCase() === inventoryPreview.sku.trim().toLowerCase(),
+      ) || null
+    );
+  }, [inventory, inventoryPreview]);
+
+  const relatedOrderCount = useMemo(() => {
+    if (!inventoryPreview) return 0;
+    return orders.filter((row) =>
+      row.customerId === inventoryPreview.customerId
+      && row.sku.trim().toLowerCase() === inventoryPreview.sku.trim().toLowerCase(),
+    ).length;
+  }, [inventoryPreview, orders]);
 
   function openCreateModal() {
     setForm(EMPTY_ORDER_FORM);
@@ -907,7 +934,23 @@ export function DropshippingClient({
                           <span className="text-slate-400">-</span>
                         )}
                       </td>
-                      <td className="px-3 py-2 font-semibold text-slate-900">{row.sku}</td>
+                      <td className="px-3 py-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setInventoryPreview({
+                              orderId: row.id,
+                              customerId: row.customerId,
+                              customerName: row.customerName,
+                              sku: row.sku,
+                              productNameZh: row.productNameZh,
+                            })
+                          }
+                          className="font-semibold text-slate-900 hover:text-primary"
+                        >
+                          {row.sku}
+                        </button>
+                      </td>
                       <td className="px-3 py-2 text-right tabular-nums">{row.quantity}</td>
                       <td className="px-3 py-2">{row.color || "-"}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(row.shippingFee, lang)}</td>
@@ -1138,6 +1181,67 @@ export function DropshippingClient({
                 className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white disabled:opacity-50"
               >
                 {saving ? text.saving : text.form.submit}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {inventoryPreview ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="w-full max-w-[640px] rounded-xl bg-white shadow-2xl">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <h3 className="text-base font-semibold text-slate-900">
+                {lang === "zh" ? "备货详情" : "Detalle de inventario"}
+              </h3>
+              <p className="mt-1 text-xs text-slate-500">
+                {inventoryPreview.sku} · {inventoryPreview.productNameZh || "-"}
+              </p>
+            </div>
+            <div className="grid gap-4 px-5 py-5 md:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-xs text-slate-500">{lang === "zh" ? "客户" : "Cliente"}</div>
+                <div className="mt-1 text-sm font-semibold text-slate-900">{inventoryPreview.customerName}</div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-xs text-slate-500">{lang === "zh" ? "关联订单数" : "Pedidos relacionados"}</div>
+                <div className="mt-1 text-sm font-semibold text-slate-900">{relatedOrderCount}</div>
+              </div>
+              <div className="rounded-xl border border-slate-200 p-4">
+                <div className="text-xs text-slate-500">{lang === "zh" ? "备货数量" : "Stock"}</div>
+                <div className="mt-1 text-sm font-semibold text-slate-900">{currentInventoryPreview?.stockedQty ?? "-"}</div>
+              </div>
+              <div className="rounded-xl border border-slate-200 p-4">
+                <div className="text-xs text-slate-500">{lang === "zh" ? "已发数量" : "Enviado"}</div>
+                <div className="mt-1 text-sm font-semibold text-slate-900">{currentInventoryPreview?.shippedQty ?? "-"}</div>
+              </div>
+              <div className="rounded-xl border border-slate-200 p-4">
+                <div className="text-xs text-slate-500">{lang === "zh" ? "剩余数量" : "Restante"}</div>
+                <div className="mt-1 text-sm font-semibold text-slate-900">{currentInventoryPreview?.remainingQty ?? "-"}</div>
+              </div>
+              <div className="rounded-xl border border-slate-200 p-4">
+                <div className="text-xs text-slate-500">{lang === "zh" ? "发货仓" : "Almacen"}</div>
+                <div className="mt-1 text-sm font-semibold text-slate-900">{currentInventoryPreview?.warehouse || "-"}</div>
+              </div>
+              <div className="rounded-xl border border-slate-200 p-4">
+                <div className="text-xs text-slate-500">{lang === "zh" ? "备货金额" : "Monto stock"}</div>
+                <div className="mt-1 text-sm font-semibold text-slate-900">
+                  {currentInventoryPreview ? fmtMoney(currentInventoryPreview.stockAmount, lang) : "-"}
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-200 p-4">
+                <div className="text-xs text-slate-500">{lang === "zh" ? "状态" : "Estado"}</div>
+                <div className="mt-1 text-sm font-semibold text-slate-900">
+                  {currentInventoryPreview ? text.status[currentInventoryPreview.status] : (lang === "zh" ? "暂无备货记录" : "Sin stock")}
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setInventoryPreview(null)}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
+              >
+                {lang === "zh" ? "关闭" : "Cerrar"}
               </button>
             </div>
           </div>
