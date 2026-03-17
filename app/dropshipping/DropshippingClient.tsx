@@ -3,7 +3,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { ImageLightbox } from "@/components/image-lightbox";
-import { PageHeader } from "@/components/page-header";
 import { ProductImage } from "@/components/product-image";
 import { StatCard } from "@/components/stat-card";
 import { TableCard } from "@/components/table-card";
@@ -1058,46 +1057,17 @@ export function DropshippingClient({
     }`;
 
   return (
-    <section className="space-y-5">
-      <PageHeader
-        badge={text.badge}
-        title={text.title}
-        actions={
-          <>
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".zip,.xlsx,.xls,.csv"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void handleImport(file);
-                event.currentTarget.value = "";
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => void refreshAll()}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            >
-              {text.refresh}
-            </button>
-            <button
-              type="button"
-              onClick={() => importInputRef.current?.click()}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            >
-              {importing ? text.importing : text.import}
-            </button>
-            <button
-              type="button"
-              onClick={openCreateModal}
-              className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-soft transition hover:opacity-95"
-            >
-              {text.create}
-            </button>
-          </>
-        }
+    <section className="space-y-4">
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".zip,.xlsx,.xls,.csv"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) void handleImport(file);
+          event.currentTarget.value = "";
+        }}
       />
 
       {error ? (
@@ -1116,12 +1086,37 @@ export function DropshippingClient({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap gap-2">
-        {(["overview", "orders", "inventory", "finance"] as TabKey[]).map((tab) => (
-          <button key={tab} type="button" className={tabButtonClass(tab)} onClick={() => setActiveTab(tab)}>
-            {text.tabs[tab]}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          {(["overview", "orders", "inventory", "finance"] as TabKey[]).map((tab) => (
+            <button key={tab} type="button" className={tabButtonClass(tab)} onClick={() => setActiveTab(tab)}>
+              {text.tabs[tab]}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void refreshAll()}
+            className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+          >
+            {text.refresh}
           </button>
-        ))}
+          <button
+            type="button"
+            onClick={() => importInputRef.current?.click()}
+            className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+          >
+            {importing ? text.importing : text.import}
+          </button>
+          <button
+            type="button"
+            onClick={openCreateModal}
+            className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-soft transition hover:opacity-95"
+          >
+            {text.create}
+          </button>
+        </div>
       </div>
 
       {activeTab === "overview" ? (
