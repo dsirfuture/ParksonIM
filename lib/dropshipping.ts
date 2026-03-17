@@ -966,6 +966,21 @@ export async function getFinanceRows(session: Session) {
     ensureTodayExchangeRate(session),
   ]);
 
+  const settledOrders = await prisma.dropshippingOrder.findMany({
+    where: {
+      tenant_id: session.tenantId,
+      company_id: session.companyId,
+      OR: [
+        { settled_at: { not: null } },
+        { snapshot_unpaid_amount: { lte: 0 } },
+      ],
+    },
+    include: {
+      product: true,
+    },
+    orderBy: [{ settled_at: "desc" }, { updated_at: "desc" }],
+  });
+
   const shippingAgg = await prisma.dropshippingOrder.groupBy({
     by: ["customer_id"],
     where: {
@@ -995,6 +1010,23 @@ export async function getFinanceRows(session: Session) {
     });
   }
 
+  const settledOrdersByCustomer = new Map<string, DsFinanceRow["settledOrders"]>();
+  for (const row of settledOrders) {
+    const items = settledOrdersByCustomer.get(row.customer_id) || [];
+    items.push({
+      orderId: row.id,
+      platformOrderNo: row.platform_order_no,
+      sku: row.product.sku,
+      productNameZh: row.product.name_zh,
+      trackingNo: row.tracking_no || "",
+      shippedAt: row.shipped_at?.toISOString() || null,
+      settledAt: row.settled_at?.toISOString() || null,
+      paidAmount: toNumber(row.snapshot_paid_amount),
+      totalAmount: toNumber(row.snapshot_total_amount),
+    });
+    settledOrdersByCustomer.set(row.customer_id, items);
+  }
+
   return customers.map((customer): DsFinanceRow => {
     const stockAmount = stockByCustomer.get(customer.id) || 0;
     const exchangeRate = toNumber(currentRate.rate_value);
@@ -1015,6 +1047,7 @@ export async function getFinanceRows(session: Session) {
       unpaidAmount,
       status: deriveFinanceStatus(totalAmount, paidItem.amount),
       lastPaidAt: paidItem.lastPaidAt,
+      settledOrders: settledOrdersByCustomer.get(customer.id) || [],
     };
   });
 }

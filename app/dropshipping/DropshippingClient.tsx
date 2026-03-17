@@ -64,6 +64,8 @@ type InventoryPreviewState = {
   productNameZh: string;
 } | null;
 
+type FinancePreviewState = DsFinanceRow | null;
+
 type OrderFormState = {
   id: string;
   customerName: string;
@@ -202,6 +204,15 @@ function SortDirectionIcon({ direction }: { direction: "asc" | "desc" }) {
   );
 }
 
+function EyeIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1.75 10s3-5 8.25-5 8.25 5 8.25 5-3 5-8.25 5S1.75 10 1.75 10Z" />
+      <circle cx="10" cy="10" r="2.5" />
+    </svg>
+  );
+}
+
 export function DropshippingClient({
   initialLang,
   initialOverview,
@@ -232,6 +243,7 @@ export function DropshippingClient({
   const [error, setError] = useState("");
   const [previewImage, setPreviewImage] = useState<{ src: string; title: string } | null>(null);
   const [inventoryPreview, setInventoryPreview] = useState<InventoryPreviewState>(null);
+  const [financePreview, setFinancePreview] = useState<FinancePreviewState>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -1236,6 +1248,7 @@ export function DropshippingClient({
                       <th className="px-4 py-3 font-medium">{text.fields.unpaid}</th>
                       <th className="px-4 py-3 font-medium">{text.fields.lastPaid}</th>
                       <th className="px-4 py-3 font-medium">{text.fields.status}</th>
+                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "详情" : "Detalle"}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1251,6 +1264,18 @@ export function DropshippingClient({
                         <td className="px-4 py-3 text-sm text-rose-600">{fmtMoney(row.unpaidAmount, lang)}</td>
                         <td className="px-4 py-3 text-sm text-slate-700">{fmtDate(row.lastPaidAt, lang)}</td>
                         <td className="px-4 py-3 text-sm text-slate-700">{text.status[row.status]}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">
+                          <button
+                            type="button"
+                            onClick={() => setFinancePreview(row)}
+                            disabled={row.settledOrders.length === 0}
+                            title={lang === "zh" ? "查看已结算详情" : "Ver liquidaciones"}
+                            aria-label={lang === "zh" ? "查看已结算详情" : "Ver liquidaciones"}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300"
+                          >
+                            <EyeIcon />
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1453,6 +1478,64 @@ export function DropshippingClient({
               <button
                 type="button"
                 onClick={() => setInventoryPreview(null)}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
+              >
+                {lang === "zh" ? "关闭" : "Cerrar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {financePreview ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="w-full max-w-[920px] rounded-xl bg-white shadow-2xl">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <h3 className="text-base font-semibold text-slate-900">
+                {lang === "zh" ? "已结算详情" : "Detalle de liquidaciones"}
+              </h3>
+              <p className="mt-1 text-xs text-slate-500">{financePreview.customerName}</p>
+            </div>
+            <div className="max-h-[70vh] overflow-auto px-5 py-5">
+              {financePreview.settledOrders.length === 0 ? (
+                <EmptyState
+                  title={lang === "zh" ? "暂无已结算记录" : "Sin registros liquidados"}
+                  description={lang === "zh" ? "当前客户还没有已结算的订单。" : "Este cliente aun no tiene pedidos liquidados."}
+                />
+              ) : (
+                <table className="min-w-full border-separate border-spacing-0">
+                  <thead>
+                    <tr className="bg-slate-50 text-left text-sm text-slate-500">
+                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "后台订单号" : "Pedido"}</th>
+                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "编码" : "Codigo"}</th>
+                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "产品中文名" : "Nombre ZH"}</th>
+                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "物流号" : "Guia"}</th>
+                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "发货日期" : "Fecha envio"}</th>
+                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "结算日期" : "Fecha liquidacion"}</th>
+                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "已结金额" : "Monto liquidado"}</th>
+                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "总金额" : "Total"}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {financePreview.settledOrders.map((item) => (
+                      <tr key={item.orderId} className="border-t border-slate-100">
+                        <td className="px-4 py-3 text-sm text-slate-900">{item.platformOrderNo}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{item.sku}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{item.productNameZh || "-"}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{item.trackingNo || "-"}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{fmtDateOnly(item.shippedAt, lang)}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{fmtDateOnly(item.settledAt, lang)}</td>
+                        <td className="px-4 py-3 text-sm text-emerald-600">{fmtMoney(item.paidAmount, lang)}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(item.totalAmount, lang)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <div className="flex justify-end border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setFinancePreview(null)}
                 className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
               >
                 {lang === "zh" ? "关闭" : "Cerrar"}

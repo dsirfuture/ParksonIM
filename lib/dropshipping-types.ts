@@ -113,6 +113,19 @@ export type DsFinanceRow = {
   unpaidAmount: number;
   status: DsFinanceStatus;
   lastPaidAt: string | null;
+  settledOrders: DsFinanceOrderItem[];
+};
+
+export type DsFinanceOrderItem = {
+  orderId: string;
+  platformOrderNo: string;
+  sku: string;
+  productNameZh: string;
+  trackingNo: string;
+  shippedAt: string | null;
+  settledAt: string | null;
+  paidAmount: number;
+  totalAmount: number;
 };
 
 export type DsExchangeRatePayload = {
