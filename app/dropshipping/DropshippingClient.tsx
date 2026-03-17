@@ -2158,16 +2158,14 @@ export function DropshippingClient({
             </div>
             <div className="overflow-y-auto px-5 py-5">
               <div className="grid gap-4 md:grid-cols-6 xl:grid-cols-12">
-                {([
+              {([
                 ["customerName", text.form.customer, "md:col-span-3 xl:col-span-4"],
                 ["platformOrderNo", text.form.orderNo, "md:col-span-3 xl:col-span-4"],
                 ["sku", text.form.sku, "md:col-span-2 xl:col-span-4"],
                 ["productNameZh", text.form.productZh, "md:col-span-3 xl:col-span-4"],
-                ["productNameEs", text.form.productEs, "md:col-span-3 xl:col-span-4"],
                 ["quantity", text.form.quantity, "md:col-span-2 xl:col-span-2"],
                 ["trackingNo", text.form.trackingNo, "md:col-span-3 xl:col-span-4"],
                 ["color", text.form.color, "md:col-span-3 xl:col-span-4"],
-                ["warehouse", text.form.warehouse, "md:col-span-3 xl:col-span-4"],
                 ["shippedAt", text.form.shippedAt, "md:col-span-2 xl:col-span-3"],
               ] as Array<[keyof OrderFormState, string, string]>).map(([key, label, spanClass]) => (
                 <label key={key} className={`space-y-1 ${spanClass}`}>
@@ -2176,7 +2174,7 @@ export function DropshippingClient({
                     type={key === "shippedAt" ? "date" : key === "quantity" ? "number" : "text"}
                     value={form[key]}
                     onChange={(event) => setForm((prev) => ({ ...prev, [key]: event.target.value }))}
-                    disabled={key === "warehouse" || (productFieldsLocked && (key === "sku" || key === "productNameZh" || key === "productNameEs"))}
+                    disabled={productFieldsLocked && (key === "sku" || key === "productNameZh")}
                     className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                   />
                 </label>
@@ -2256,15 +2254,20 @@ export function DropshippingClient({
                       PDF
                     </a>
                   ) : null}
-                  <input
-                    type="file"
-                    accept=".pdf,image/*"
-                    onChange={(event) => setLabelFiles(event.target.files ? [event.target.files[0]].filter(Boolean) as File[] : [])}
-                    className="mt-2 block w-full text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
-                  />
-                  {labelFiles.length > 0 ? (
-                    <div className="mt-2 text-xs text-slate-500">{labelFiles[0].name}</div>
-                  ) : null}
+                  <div className="mt-2 flex items-center gap-3">
+                    <label className="inline-flex h-9 cursor-pointer items-center justify-center rounded-lg bg-primary px-3 text-xs font-semibold text-white">
+                      {lang === "zh" ? "选择文件" : "Seleccionar archivo"}
+                      <input
+                        type="file"
+                        accept=".pdf,image/*"
+                        onChange={(event) => setLabelFiles(event.target.files ? [event.target.files[0]].filter(Boolean) as File[] : [])}
+                        className="sr-only"
+                      />
+                    </label>
+                    <span className="min-w-0 truncate text-xs text-slate-500">
+                      {labelFiles[0]?.name || currentEditingOrder?.shippingLabelAttachments[0]?.fileName || ""}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -2285,16 +2288,25 @@ export function DropshippingClient({
                       ))}
                     </div>
                   ) : null}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={(event) => setProofFiles(event.target.files ? Array.from(event.target.files) : [])}
-                    className="block w-full text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
-                  />
-                  {proofFiles.length > 0 ? (
-                    <div className="mt-2 text-xs text-slate-500">{proofFiles.length} file(s)</div>
-                  ) : null}
+                  <div className="flex items-center gap-3">
+                    <label className="inline-flex h-9 cursor-pointer items-center justify-center rounded-lg bg-primary px-3 text-xs font-semibold text-white">
+                      {lang === "zh" ? "选择文件" : "Seleccionar archivo"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={(event) => setProofFiles(event.target.files ? Array.from(event.target.files) : [])}
+                        className="sr-only"
+                      />
+                    </label>
+                    <span className="min-w-0 truncate text-xs text-slate-500">
+                      {proofFiles.length > 0
+                        ? `${proofFiles.length} ${lang === "zh" ? "个文件" : "archivo(s)"}`
+                        : currentEditingOrder?.shippingProofAttachments.length
+                          ? `${currentEditingOrder.shippingProofAttachments.length} ${lang === "zh" ? "个文件" : "archivo(s)"}`
+                          : ""}
+                    </span>
+                  </div>
                 </div>
               </div>
 
