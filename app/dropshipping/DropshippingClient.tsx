@@ -834,21 +834,21 @@ export function DropshippingClient({
             <div className="overflow-x-auto">
               <table className="w-max border-separate border-spacing-0">
                 <thead className="bg-slate-50">
-                  <tr className="bg-slate-50 text-left text-xs text-slate-500">
+                  <tr className="bg-slate-50 text-left text-xs text-slate-700">
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.platform}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.orderNo}</th>
-                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold">{text.fields.trackingNo}</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.trackingNo}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.shippingLabel}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.status}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.shippedAt}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.shippingProof}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.sku}</th>
-                    <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold">{text.fields.quantity}</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">{text.fields.quantity}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.color}</th>
-                    <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold">{text.fields.shippingFee}</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700">{text.fields.shippingFee}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.productImage}</th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">{text.fields.productZh}</th>
-                    <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold" aria-label={lang === "zh" ? "编辑" : "Editar"} />
+                    <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-slate-700" aria-label={lang === "zh" ? "编辑" : "Editar"} />
                   </tr>
                 </thead>
                 <tbody className="text-[13px] text-slate-700">
