@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { ProductImage } from "@/components/product-image";
@@ -9,6 +9,7 @@ import { TableCard } from "@/components/table-card";
 import { getClientLang } from "@/lib/lang-client";
 import type {
   DsAlertItem,
+  DsOrderAttachment,
   DsExchangeRatePayload,
   DsFinanceRow,
   DsInventoryStatus,
@@ -87,6 +88,11 @@ type GroupedOrderSlot = {
   isPersisted: boolean;
 };
 
+type AttachmentSlotState =
+  | { kind: "empty" }
+  | { kind: "existing"; attachment: DsOrderAttachment }
+  | { kind: "new"; file: File; previewUrl: string | null };
+
 type OrderFormState = {
   id: string;
   trackingGroupId: string;
@@ -124,6 +130,8 @@ const EMPTY_ORDER_FORM: OrderFormState = {
   shippingStatus: "pending",
   notes: "",
 };
+
+const ATTACHMENT_SLOT_COUNT = 3;
 
 const FIXED_WAREHOUSE = "墨西哥-百盛仓";
 
@@ -274,6 +282,33 @@ function isDirectFileLink(value: string) {
   if (!normalized) return false;
   if (normalized.startsWith("=")) return false;
   return /^https?:\/\//i.test(normalized) || normalized.startsWith("/");
+}
+
+function createEmptyAttachmentSlots() {
+  return Array.from({ length: ATTACHMENT_SLOT_COUNT }, (): AttachmentSlotState => ({ kind: "empty" }));
+}
+
+function attachmentLooksLikeImage(mimeType?: string | null, fileName?: string | null) {
+  const normalizedMime = String(mimeType || "").toLowerCase();
+  if (normalizedMime.startsWith("image/")) return true;
+  const normalizedName = String(fileName || "").toLowerCase();
+  return [".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"].some((ext) => normalizedName.endsWith(ext));
+}
+
+function attachmentLooksLikePdf(mimeType?: string | null, fileName?: string | null) {
+  const normalizedMime = String(mimeType || "").toLowerCase();
+  if (normalizedMime.includes("pdf")) return true;
+  return String(fileName || "").toLowerCase().endsWith(".pdf");
+}
+
+function buildAttachmentSlotsFromExisting(attachments: DsOrderAttachment[]) {
+  const slots = attachments
+    .slice(0, ATTACHMENT_SLOT_COUNT)
+    .map<AttachmentSlotState>((attachment) => ({ kind: "existing", attachment }));
+  while (slots.length < ATTACHMENT_SLOT_COUNT) {
+    slots.push({ kind: "empty" });
+  }
+  return slots;
 }
 
 function PencilIcon() {
@@ -589,6 +624,10 @@ export function DropshippingClient({
   const [saving, setSaving] = useState(false);
   const [labelFiles, setLabelFiles] = useState<File[]>([]);
   const [proofFiles, setProofFiles] = useState<File[]>([]);
+  const [labelSlots, setLabelSlots] = useState<AttachmentSlotState[]>(() => createEmptyAttachmentSlots());
+  const [proofSlots, setProofSlots] = useState<AttachmentSlotState[]>(() => createEmptyAttachmentSlots());
+  const [labelSlotsDirty, setLabelSlotsDirty] = useState(false);
+  const [proofSlotsDirty, setProofSlotsDirty] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<number | null>(null);
   const [importSummary, setImportSummary] = useState<string>("");
@@ -604,6 +643,8 @@ export function DropshippingClient({
   const [deleteTrackingInput, setDeleteTrackingInput] = useState("");
   const financePreviewScrollRef = useRef<HTMLDivElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const labelInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const proofInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const financePreviewPageSize = 10;
   const inventoryPageSize = 11;
 
@@ -1045,6 +1086,108 @@ export function DropshippingClient({
     if (!form.id) return null;
     return orders.find((row) => row.id === form.id) || null;
   }, [form.id, orders]);
+
+  function revokeAttachmentSlotPreviews(slots: AttachmentSlotState[]) {
+    for (const slot of slots) {
+      if (slot.kind === "new" && slot.previewUrl) {
+        URL.revokeObjectURL(slot.previewUrl);
+      }
+    }
+  }
+
+  function replaceAttachmentSlots(
+    setter: Dispatch<SetStateAction<AttachmentSlotState[]>>,
+    nextSlots: AttachmentSlotState[],
+    currentSlots: AttachmentSlotState[],
+  ) {
+    revokeAttachmentSlotPreviews(currentSlots);
+    setter(nextSlots);
+  }
+
+  function resetAttachmentSlotStates() {
+    replaceAttachmentSlots(setLabelSlots, createEmptyAttachmentSlots(), labelSlots);
+    replaceAttachmentSlots(setProofSlots, createEmptyAttachmentSlots(), proofSlots);
+    setLabelSlotsDirty(false);
+    setProofSlotsDirty(false);
+  }
+
+  function hydrateAttachmentSlotStates(order?: DsOrderRow | null) {
+    replaceAttachmentSlots(
+      setLabelSlots,
+      buildAttachmentSlotsFromExisting(order?.shippingLabelAttachments || []),
+      labelSlots,
+    );
+    replaceAttachmentSlots(
+      setProofSlots,
+      buildAttachmentSlotsFromExisting(order?.shippingProofAttachments || []),
+      proofSlots,
+    );
+    setLabelSlotsDirty(false);
+    setProofSlotsDirty(false);
+  }
+
+  function triggerAttachmentPicker(type: "label" | "proof", slotIndex: number) {
+    const refs = type === "label" ? labelInputRefs.current : proofInputRefs.current;
+    refs[slotIndex]?.click();
+  }
+
+  function updateAttachmentSlot(type: "label" | "proof", slotIndex: number, file: File | null) {
+    if (!file) return;
+    if (type === "label") {
+      setLabelSlots((prev) => {
+        const next = [...prev];
+        const current = next[slotIndex];
+        if (current?.kind === "new" && current.previewUrl) {
+          URL.revokeObjectURL(current.previewUrl);
+        }
+        next[slotIndex] = {
+          kind: "new",
+          file,
+          previewUrl: attachmentLooksLikeImage(file.type, file.name) ? URL.createObjectURL(file) : null,
+        };
+        return next;
+      });
+      setLabelSlotsDirty(true);
+      return;
+    }
+
+    setProofSlots((prev) => {
+      const next = [...prev];
+      const current = next[slotIndex];
+      if (current?.kind === "new" && current.previewUrl) {
+        URL.revokeObjectURL(current.previewUrl);
+      }
+      next[slotIndex] = {
+        kind: "new",
+        file,
+        previewUrl: attachmentLooksLikeImage(file.type, file.name) ? URL.createObjectURL(file) : null,
+      };
+      return next;
+    });
+    setProofSlotsDirty(true);
+  }
+
+  async function materializeAttachmentSlotFiles(slots: AttachmentSlotState[]) {
+    const files: File[] = [];
+    for (const slot of slots) {
+      if (slot.kind === "empty") continue;
+      if (slot.kind === "new") {
+        files.push(slot.file);
+        continue;
+      }
+      const response = await fetch(slot.attachment.fileUrl);
+      if (!response.ok) {
+        throw new Error("attachment_materialize_failed");
+      }
+      const blob = await response.blob();
+      files.push(
+        new File([blob], slot.attachment.fileName, {
+          type: slot.attachment.mimeType || blob.type || "application/octet-stream",
+        }),
+      );
+    }
+    return files;
+  }
 
   const modalPrimaryOrder = useMemo(() => {
     const primaryId = modalPrimaryOrderId.trim();
@@ -1528,6 +1671,7 @@ export function DropshippingClient({
     setProductFieldsLocked(false);
     setLabelFiles([]);
     setProofFiles([]);
+    resetAttachmentSlotStates();
     setModalPrimaryOrderId("");
     setGroupProductSearchOpen(false);
     setGroupProductSearchKeyword("");
@@ -1558,6 +1702,7 @@ export function DropshippingClient({
     setProductFieldsLocked(order.catalogMatched);
     setLabelFiles([]);
     setProofFiles([]);
+    hydrateAttachmentSlotStates(order);
     setGroupProductSearchOpen(false);
     setGroupProductSearchKeyword("");
     setGroupProductOptions([]);
@@ -1774,16 +1919,17 @@ export function DropshippingClient({
   }
 
   async function uploadOrderAttachments(orderId: string) {
-    const uploadSets: Array<{ type: "label" | "proof"; files: File[] }> = [
-      { type: "label", files: labelFiles.slice(0, 1) },
-      { type: "proof", files: proofFiles },
+    const uploadSets: Array<{ type: "label" | "proof"; dirty: boolean; slots: AttachmentSlotState[] }> = [
+      { type: "label", dirty: labelSlotsDirty, slots: labelSlots },
+      { type: "proof", dirty: proofSlotsDirty, slots: proofSlots },
     ];
 
     for (const item of uploadSets) {
-      if (item.files.length === 0) continue;
+      if (!item.dirty) continue;
+      const files = await materializeAttachmentSlotFiles(item.slots);
       const formData = new FormData();
       formData.append("type", item.type);
-      for (const file of item.files) {
+      for (const file of files) {
         formData.append("files", file);
       }
       const response = await fetch(`/api/dropshipping/orders/${orderId}/attachments`, {
@@ -1795,6 +1941,81 @@ export function DropshippingClient({
         throw new Error(json?.error || "attachment_upload_failed");
       }
     }
+
+    setLabelSlotsDirty(false);
+    setProofSlotsDirty(false);
+  }
+
+  function renderAttachmentSlot(slot: AttachmentSlotState, type: "label" | "proof", slotIndex: number) {
+    const isLabel = type === "label";
+    const isEmpty = slot.kind === "empty";
+    const previewUrl = slot.kind === "existing"
+      ? slot.attachment.fileUrl
+      : slot.kind === "new"
+        ? slot.previewUrl
+        : "";
+    const mimeType = slot.kind === "existing"
+      ? slot.attachment.mimeType
+      : slot.kind === "new"
+        ? slot.file.type
+        : "";
+    const fileName = slot.kind === "existing"
+      ? slot.attachment.fileName
+      : slot.kind === "new"
+        ? slot.file.name
+        : "";
+    const isImage = !isEmpty && attachmentLooksLikeImage(mimeType, fileName) && Boolean(previewUrl);
+    const isPdf = !isEmpty && attachmentLooksLikePdf(mimeType, fileName);
+
+    return (
+      <div key={`${type}-${slotIndex}`} className="rounded-xl border border-slate-200 bg-white p-2.5">
+        <button
+          type="button"
+          onClick={() => triggerAttachmentPicker(type, slotIndex)}
+          className={`flex h-[88px] w-full flex-col items-center justify-center gap-1 rounded-lg text-slate-400 transition ${
+            isEmpty ? "hover:bg-slate-50 hover:text-primary" : "hover:bg-slate-50"
+          }`}
+        >
+          {isEmpty ? (
+            <>
+              <span className="text-lg leading-none">+</span>
+              <span className="text-[11px] font-medium">{lang === "zh" ? "添加附件" : "Agregar"}</span>
+            </>
+          ) : isImage ? (
+            <span className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+              <img src={previewUrl || ""} alt={fileName || `${type}-${slotIndex + 1}`} className="h-full w-full object-cover" />
+            </span>
+          ) : (
+            <span className="inline-flex h-14 w-14 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-600">
+              {isPdf ? "PDF" : "FILE"}
+            </span>
+          )}
+          {!isEmpty ? (
+            <span className="text-[11px] font-medium text-slate-500">
+              {isLabel
+                ? (lang === "zh" ? "点击替换" : "Reemplazar")
+                : (lang === "zh" ? "点击替换" : "Reemplazar")}
+            </span>
+          ) : null}
+        </button>
+        <input
+          ref={(node) => {
+            if (type === "label") {
+              labelInputRefs.current[slotIndex] = node;
+            } else {
+              proofInputRefs.current[slotIndex] = node;
+            }
+          }}
+          type="file"
+          accept=".pdf,image/*"
+          onChange={(event) => {
+            updateAttachmentSlot(type, slotIndex, event.target.files?.[0] || null);
+            event.currentTarget.value = "";
+          }}
+          className="sr-only"
+        />
+      </div>
+    );
   }
 
   async function submitOrder() {
@@ -1809,6 +2030,7 @@ export function DropshippingClient({
       setForm(EMPTY_ORDER_FORM);
       setLabelFiles([]);
       setProofFiles([]);
+      resetAttachmentSlotStates();
       setGroupProductSearchOpen(false);
       setGroupProductSearchKeyword("");
       setGroupProductOptions([]);
@@ -3668,77 +3890,18 @@ export function DropshippingClient({
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-1">
                     <span className="whitespace-nowrap text-xs text-slate-500">{text.fields.shippingLabel}</span>
-                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
-                      {currentEditingOrder?.shippingLabelAttachments[0]?.fileUrl ? (
-                        <a
-                          href={currentEditingOrder.shippingLabelAttachments[0].fileUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 hover:bg-slate-50"
-                        >
-                          PDF
-                        </a>
-                      ) : (
-                        <span className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs text-slate-400">
-                          {lang === "zh" ? "空" : "Vacio"}
-                        </span>
-                      )}
-                      <div className="mt-3 flex items-center gap-3">
-                        <label className="inline-flex h-9 cursor-pointer items-center justify-center rounded-lg bg-primary px-3 text-xs font-semibold text-white">
-                          {lang === "zh" ? "选择文件" : "Seleccionar archivo"}
-                          <input
-                            type="file"
-                            accept=".pdf,image/*"
-                            onChange={(event) => setLabelFiles(event.target.files ? [event.target.files[0]].filter(Boolean) as File[] : [])}
-                            className="sr-only"
-                          />
-                        </label>
-                        <span className="min-w-0 flex-1 truncate text-xs text-slate-500">
-                          {labelFiles[0]?.name || currentEditingOrder?.shippingLabelAttachments[0]?.fileName || ""}
-                        </span>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-3">
+                      <div className="grid grid-cols-3 gap-2">
+                        {labelSlots.map((slot, slotIndex) => renderAttachmentSlot(slot, "label", slotIndex))}
                       </div>
                     </div>
                   </div>
 
                   <div className="space-y-1">
                     <span className="whitespace-nowrap text-xs text-slate-500">{text.fields.shippingProof}</span>
-                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
-                      {currentEditingOrder?.shippingProofAttachments.length ? (
-                        <div className="flex flex-wrap gap-2">
-                          {currentEditingOrder.shippingProofAttachments.slice(0, 4).map((item) => (
-                            <button
-                              key={item.id}
-                              type="button"
-                              onClick={() => setPreviewImage({ src: item.fileUrl, title: item.fileName })}
-                              className="overflow-hidden rounded-md border border-slate-200"
-                            >
-                              <img src={item.fileUrl} alt={item.fileName} className="h-10 w-10 object-cover" />
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs text-slate-400">
-                          {lang === "zh" ? "空" : "Vacio"}
-                        </span>
-                      )}
-                      <div className="mt-3 flex items-center gap-3">
-                        <label className="inline-flex h-9 cursor-pointer items-center justify-center rounded-lg bg-primary px-3 text-xs font-semibold text-white">
-                          {lang === "zh" ? "选择文件" : "Seleccionar archivo"}
-                          <input
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            onChange={(event) => setProofFiles(event.target.files ? Array.from(event.target.files) : [])}
-                            className="sr-only"
-                          />
-                        </label>
-                        <span className="min-w-0 flex-1 truncate text-xs text-slate-500">
-                          {proofFiles.length > 0
-                            ? `${proofFiles.length} ${lang === "zh" ? "个文件" : "archivo(s)"}`
-                            : currentEditingOrder?.shippingProofAttachments.length
-                              ? `${currentEditingOrder.shippingProofAttachments.length} ${lang === "zh" ? "个文件" : "archivo(s)"}`
-                              : ""}
-                        </span>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-3">
+                      <div className="grid grid-cols-3 gap-2">
+                        {proofSlots.map((slot, slotIndex) => renderAttachmentSlot(slot, "proof", slotIndex))}
                       </div>
                     </div>
                   </div>
