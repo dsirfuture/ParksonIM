@@ -556,9 +556,12 @@ export function DropshippingClient({
   const [inventoryPreview, setInventoryPreview] = useState<InventoryPreviewState>(null);
   const [inventoryShippedPreview, setInventoryShippedPreview] = useState<InventoryShippedPreviewState>(null);
   const [financePreview, setFinancePreview] = useState<FinancePreviewState>(null);
+  const [financePreviewPage, setFinancePreviewPage] = useState(1);
   const [deleteTarget, setDeleteTarget] = useState<DeleteOrderState>(null);
   const [deleteTrackingInput, setDeleteTrackingInput] = useState("");
+  const financePreviewScrollRef = useRef<HTMLDivElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const financePreviewPageSize = 10;
 
   useEffect(() => {
     setLang(getClientLang());
@@ -568,6 +571,14 @@ export function DropshippingClient({
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    setFinancePreviewPage(1);
+  }, [financePreview]);
+
+  useEffect(() => {
+    financePreviewScrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
+  }, [financePreviewPage]);
 
   const financeDisplayRate = useMemo(() => exchangeRate.rateValue || null, [exchangeRate.rateValue]);
   const financeRateDate = exchangeRate.fetchedAt || exchangeRate.rateDate;
@@ -966,6 +977,17 @@ export function DropshippingClient({
       && row.shippingStatus === "shipped",
     );
   }, [inventoryShippedPreview, orders]);
+
+  const financePreviewTotalPages = financePreview
+    ? Math.max(1, Math.ceil(financePreview.settledOrders.length / financePreviewPageSize))
+    : 1;
+  const financePreviewCurrentPage = Math.min(financePreviewPage, financePreviewTotalPages);
+  const financePreviewVisibleOrders = financePreview
+    ? financePreview.settledOrders.slice(
+        (financePreviewCurrentPage - 1) * financePreviewPageSize,
+        financePreviewCurrentPage * financePreviewPageSize,
+      )
+    : [];
 
   const orderTableCardProps = {
     description: undefined,
@@ -3138,7 +3160,7 @@ export function DropshippingClient({
                 />
               ) : (
                 <div className="min-h-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                  <div className="h-[calc(100vh-182px)] overflow-auto">
+                  <div ref={financePreviewScrollRef} className="h-[calc(100vh-182px)] overflow-auto">
                     <table className="min-w-[1120px] w-full border-collapse">
                       <thead className="sticky top-0 z-10">
                         <tr className="border-b border-slate-200 bg-slate-50 text-left text-[12px] font-semibold text-slate-600 shadow-[0_1px_0_0_rgba(226,232,240,1),0_6px_16px_rgba(15,23,42,0.04)]">
@@ -3155,7 +3177,7 @@ export function DropshippingClient({
                         </tr>
                       </thead>
                       <tbody>
-                        {financePreview.settledOrders.map((item, index) => (
+                        {financePreviewVisibleOrders.map((item, index) => (
                           <tr
                             key={item.orderId}
                             className={`border-b border-slate-100 text-[12px] text-slate-700 ${index % 2 === 0 ? "bg-white" : "bg-slate-50/45"}`}
@@ -3213,6 +3235,43 @@ export function DropshippingClient({
                         ? `\u5171 ${financePreview.settledOrders.length} \u6761\u5df2\u7ed3\u7b97\u8bb0\u5f55`
                         : `${financePreview.settledOrders.length} settled records`}
                     </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setFinancePreviewPage(1)}
+                        disabled={financePreviewCurrentPage <= 1}
+                        className="inline-flex h-7 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {lang === "zh" ? "\u56de\u7b2c\u4e00\u9875" : "Primera"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFinancePreviewPage((prev) => Math.max(1, prev - 1))}
+                        disabled={financePreviewCurrentPage <= 1}
+                        className="inline-flex h-7 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {lang === "zh" ? "\u4e0a\u4e00\u9875" : "Anterior"}
+                      </button>
+                      <span className="inline-flex h-7 min-w-[78px] items-center justify-center rounded-lg bg-fuchsia-500 px-3 font-medium text-white">
+                        {financePreviewCurrentPage} / {financePreviewTotalPages}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setFinancePreviewPage((prev) => Math.min(financePreviewTotalPages, prev + 1))}
+                        disabled={financePreviewCurrentPage >= financePreviewTotalPages}
+                        className="inline-flex h-7 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {lang === "zh" ? "\u4e0b\u4e00\u9875" : "Siguiente"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFinancePreviewPage(financePreviewTotalPages)}
+                        disabled={financePreviewCurrentPage >= financePreviewTotalPages}
+                        className="inline-flex h-7 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {lang === "zh" ? "\u53bb\u6700\u540e\u9875" : "Ultima"}
+                      </button>
+                    </div>
                     <div className="hidden items-center gap-2">
                       <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white">‹</span>
                       <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-fuchsia-500 px-2 text-white">1</span>
