@@ -102,6 +102,11 @@ function startOfMexicoDay(value: Date | null | undefined) {
   return new Date(`${map.year}-${map.month}-${map.day}T00:00:00.000-06:00`);
 }
 
+function endOfMexicoDay(value: Date | null | undefined) {
+  const start = startOfMexicoDay(value);
+  return new Date(start.getTime() + 24 * 60 * 60 * 1000);
+}
+
 async function ensureRateByDate(
   session: Session,
   input: { date: Date | null; value: number | null; sourceName?: string },
@@ -1113,8 +1118,13 @@ export async function getOverview(session: Session) {
     ensureTodayExchangeRate(session),
   ]);
 
-  const todayStart = startOfTodayInMexico().getTime();
-  const todayOrders = orders.filter((row) => new Date(row.createdAt).getTime() >= todayStart);
+  const todayStart = startOfTodayInMexico();
+  const todayEnd = endOfMexicoDay(todayStart);
+  const todayOrders = orders.filter((row) => {
+    if (!row.shippedAt) return false;
+    const shippedAt = new Date(row.shippedAt);
+    return shippedAt >= todayStart && shippedAt < todayEnd;
+  });
   const stats: DsOverviewStats = {
     todayOrders: todayOrders.length,
     todayShippedOrders: todayOrders.filter((row) => row.shippingStatus === "shipped").length,
