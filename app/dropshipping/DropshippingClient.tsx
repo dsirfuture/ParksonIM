@@ -184,7 +184,8 @@ export function DropshippingClient({
           trackingNo: "物流号",
           warehouse: "发货仓",
           shippingFee: "代发费",
-          attachments: "附件",
+          shippingLabel: "面单",
+          shippingProof: "发货凭据",
           productZh: "中文名",
           remaining: "剩余",
           stocked: "备货",
@@ -279,7 +280,8 @@ export function DropshippingClient({
           trackingNo: "Guia",
           warehouse: "Almacen",
           shippingFee: "Cargo",
-          attachments: "Adjuntos",
+          shippingLabel: "Guia PDF",
+          shippingProof: "Prueba",
           productZh: "Nombre ZH",
           remaining: "Restante",
           stocked: "Stock",
@@ -742,7 +744,8 @@ export function DropshippingClient({
                     <th className="px-4 py-3 font-medium">{text.fields.status}</th>
                     <th className="px-4 py-3 font-medium">{text.fields.trackingNo}</th>
                     <th className="px-4 py-3 font-medium">{text.fields.shippingFee}</th>
-                    <th className="px-4 py-3 font-medium">{text.fields.attachments}</th>
+                    <th className="px-4 py-3 font-medium">{text.fields.shippingLabel}</th>
+                    <th className="px-4 py-3 font-medium">{text.fields.shippingProof}</th>
                     <th className="px-4 py-3 font-medium">{text.warnings}</th>
                     <th className="px-4 py-3 text-right font-medium">Edit</th>
                   </tr>
@@ -764,48 +767,50 @@ export function DropshippingClient({
                       <td className="px-4 py-3 text-sm text-slate-700">{row.trackingNo || "-"}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.shippingFee, lang)}</td>
                       <td className="px-4 py-3 text-sm text-slate-700">
-                        <div className="flex flex-wrap gap-2">
-                          {row.shippingLabelAttachments[0]?.fileUrl ? (
-                            <a
-                              href={row.shippingLabelAttachments[0].fileUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                            >
-                              PDF
-                            </a>
-                          ) : isDirectFileLink(row.shippingLabelFile) ? (
-                            <a
-                              href={row.shippingLabelFile}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                            >
-                              PDF
-                            </a>
-                          ) : null}
-                          {row.shippingProofAttachments[0]?.fileUrl ? (
-                            <a
-                              href={row.shippingProofAttachments[0].fileUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                            >
-                              IMG{row.shippingProofAttachments.length > 1 ? ` x${row.shippingProofAttachments.length}` : ""}
-                            </a>
-                          ) : isDirectFileLink(row.shippingProofFile) ? (
-                            <a
-                              href={row.shippingProofFile}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                            >
-                              IMG
-                            </a>
-                          ) : (
-                            <span className="text-slate-400">-</span>
-                          )}
-                        </div>
+                        {row.shippingLabelAttachments[0]?.fileUrl ? (
+                          <a
+                            href={row.shippingLabelAttachments[0].fileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            PDF
+                          </a>
+                        ) : isDirectFileLink(row.shippingLabelFile) ? (
+                          <a
+                            href={row.shippingLabelFile}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            PDF
+                          </a>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-700">
+                        {row.shippingProofAttachments[0]?.fileUrl ? (
+                          <a
+                            href={row.shippingProofAttachments[0].fileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            IMG{row.shippingProofAttachments.length > 1 ? ` x${row.shippingProofAttachments.length}` : ""}
+                          </a>
+                        ) : isDirectFileLink(row.shippingProofFile) ? (
+                          <a
+                            href={row.shippingProofFile}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            IMG
+                          </a>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm text-rose-600">{row.warnings.length > 0 ? row.warnings.join(", ") : "-"}</td>
                       <td className="px-4 py-3 text-right">
