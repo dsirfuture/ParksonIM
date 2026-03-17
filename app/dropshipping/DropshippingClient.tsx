@@ -1040,9 +1040,9 @@ export function DropshippingClient({
               <select
                 value={customerFilter}
                 onChange={(event) => setCustomerFilter(event.target.value)}
-                className="h-10 rounded-xl border border-primary bg-primary px-3 text-sm text-white"
+                className="h-10 rounded-xl border border-secondary-accent bg-secondary-accent px-3 text-sm text-primary"
               >
-                <option value="all" hidden>{lang === "zh" ? "????" : "Todos los clientes"}</option>
+                <option value="all" hidden>{lang === "zh" ? "全部客户" : "Todos los clientes"}</option>
                 {customerOptions.map((customer) => (
                   <option key={customer} value={customer}>
                     {customer}
@@ -1058,23 +1058,23 @@ export function DropshippingClient({
                 onChange={(event) => setSettlementFilter(event.target.value as typeof settlementFilter)}
                 className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
               >
-                <option value="all">{lang === "zh" ? "????" : "Toda liquidacion"}</option>
-                <option value="paid">{lang === "zh" ? "??" : "Liquidado"}</option>
-                <option value="unpaid">{lang === "zh" ? "??" : "Pendiente"}</option>
+                <option value="all">{lang === "zh" ? "全部结算" : "Toda liquidacion"}</option>
+                <option value="paid">{lang === "zh" ? "已结" : "Liquidado"}</option>
+                <option value="unpaid">{lang === "zh" ? "未结" : "Pendiente"}</option>
               </select>
               <div className="relative w-full max-w-[420px]">
                 <input
                   value={keyword}
                   onChange={(event) => setKeyword(event.target.value)}
-                  placeholder={lang === "zh" ? "???? / ??? / ??" : "Buscar plataforma / pedido / codigo"}
+                  placeholder={lang === "zh" ? "搜索平台 / 订单号 / 编码" : "Buscar plataforma / pedido / codigo"}
                   className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 pr-[130px] text-sm text-slate-700"
                 />
                 <select
                   value={statusFilter}
                   onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
-                  className="absolute right-1 top-1 h-8 rounded-lg border border-primary bg-primary px-3 text-sm text-white"
+                  className="absolute right-1 top-1 h-8 rounded-lg border border-secondary-accent bg-secondary-accent px-3 text-sm text-primary"
                 >
-                  <option value="all" hidden>{lang === "zh" ? "????" : "Todos"}</option>
+                  <option value="all" hidden>{lang === "zh" ? "全部状态" : "Todos"}</option>
                   <option value="pending">{getShippingStatusLabel("pending", lang)}</option>
                   <option value="shipped">{getShippingStatusLabel("shipped", lang)}</option>
                   <option value="cancelled">{getShippingStatusLabel("cancelled", lang)}</option>
