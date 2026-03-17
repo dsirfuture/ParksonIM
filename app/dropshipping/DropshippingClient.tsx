@@ -160,6 +160,11 @@ function fmtMoney(value: number, lang: "zh" | "es") {
   }).format(value);
 }
 
+function invertRate(value: number | null | undefined) {
+  if (!value || value === 0) return null;
+  return 1 / value;
+}
+
 function getMexicoDateParts(date: Date) {
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Mexico_City",
@@ -237,6 +242,9 @@ export function DropshippingClient({
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  const financeDisplayRate = useMemo(() => invertRate(exchangeRate.rateValue), [exchangeRate.rateValue]);
+  const financeRateDate = exchangeRate.fetchedAt || exchangeRate.rateDate;
 
   const text = lang === "zh"
     ? {
@@ -1200,8 +1208,8 @@ export function DropshippingClient({
               {showSaturdaySettlementReminder ? (
                 <div className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800">
                   {lang === "zh"
-                    ? "墨西哥地区时间每周六中午 12:00 后进入结算提醒时间，请及时核对并结算本周账目。"
-                    : "En horario de Mexico, despues de las 12:00 del sabado ya es momento de recordar la liquidacion semanal."}
+                    ? `???????????? 12:00 ????????????????? MXN ? RMB ${financeDisplayRate?.toFixed(4) || "-"} / ${fmtDateOnly(financeRateDate, lang)} ????????????????`
+                    : `En horario de Mexico, despues de las 12:00 del sabado ya es momento de recordar la liquidacion semanal. El tipo de cambio de hoy para liquidar se muestra como MXN -> RMB ${financeDisplayRate?.toFixed(4) || "-"} / ${fmtDateOnly(financeRateDate, lang)}.`}
                 </div>
               ) : null}
               <div className="overflow-x-auto">
@@ -1210,7 +1218,7 @@ export function DropshippingClient({
                     <tr className="bg-slate-50 text-left text-sm text-slate-500">
                       <th className="px-4 py-3 font-medium">{text.fields.customer}</th>
                       <th className="px-4 py-3 font-medium">{text.fields.stockAmount}</th>
-                      <th className="px-4 py-3 font-medium">{text.stats.rate}</th>
+                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "???? (MXN ? RMB)" : "Tipo de cambio hoy (MXN -> RMB)"}</th>
                       <th className="px-4 py-3 font-medium">{text.fields.rateAmount}</th>
                       <th className="px-4 py-3 font-medium">{text.fields.shippingFee}</th>
                       <th className="px-4 py-3 font-medium">{text.fields.total}</th>
@@ -1225,7 +1233,7 @@ export function DropshippingClient({
                       <tr key={row.customerId} className="border-t border-slate-100">
                         <td className="px-4 py-3 text-sm font-semibold text-slate-900">{row.customerName}</td>
                         <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.stockAmount, lang)}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700">{row.exchangeRate?.toFixed(4) || "-"}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{invertRate(row.exchangeRate)?.toFixed(4) || "-"}</td>
                         <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.exchangedAmount, lang)}</td>
                         <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.shippingAmount, lang)}</td>
                         <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.totalAmount, lang)}</td>
