@@ -1968,12 +1968,15 @@ export function DropshippingClient({
     const isPdf = !isEmpty && attachmentLooksLikePdf(mimeType, fileName);
 
     return (
-      <div key={`${type}-${slotIndex}`} className="rounded-xl border border-slate-200 bg-white p-2.5">
+      <div
+        key={`${type}-${slotIndex}`}
+        className={`rounded-xl border border-slate-200 bg-white ${isEmpty ? "p-0" : "p-2.5"}`}
+      >
         <button
           type="button"
           onClick={() => triggerAttachmentPicker(type, slotIndex)}
-          className={`flex h-[88px] w-full flex-col items-center justify-center gap-1 rounded-lg text-slate-400 transition ${
-            isEmpty ? "hover:bg-slate-50 hover:text-primary" : "hover:bg-slate-50"
+          className={`flex h-[88px] w-full flex-col items-center justify-center gap-1 text-slate-400 transition ${
+            isEmpty ? "rounded-xl hover:bg-slate-50 hover:text-primary" : "rounded-lg hover:bg-slate-50"
           }`}
         >
           {isEmpty ? (
@@ -3912,7 +3915,12 @@ export function DropshippingClient({
                   <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-3">
                     <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
                       {groupedOrderSlots.map((slot, index) => (
-                        <div key={slot.slotKey} className="relative min-h-[82px] rounded-xl border border-slate-200 bg-white p-2.5">
+                        <div
+                          key={slot.slotKey}
+                          className={`relative min-h-[82px] rounded-xl border border-slate-200 bg-white ${
+                            slot.orderId ? "p-2.5" : "p-0"
+                          }`}
+                        >
                           {slot.orderId ? (
                             <>
                               {!slot.isCurrent ? (
@@ -3959,7 +3967,7 @@ export function DropshippingClient({
                             <button
                               type="button"
                               onClick={() => openGroupProductSearch(slot.slotKey)}
-                              className="flex h-full min-h-[66px] w-full flex-col items-center justify-center gap-1 rounded-lg text-slate-400 transition hover:bg-slate-50 hover:text-primary"
+                              className="flex h-full min-h-[82px] w-full flex-col items-center justify-center gap-1 rounded-xl text-slate-400 transition hover:bg-slate-50 hover:text-primary"
                             >
                               <span className="text-lg leading-none">+</span>
                               <span className="text-[11px] font-medium">{lang === "zh" ? "添加商品" : "Agregar"}</span>
