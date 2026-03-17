@@ -973,12 +973,6 @@ export function DropshippingClient({
         badge={text.badge}
         title={text.title}
         description={text.desc}
-        meta={
-          <div className="space-y-1">
-            <div>RMB → MXN</div>
-            <div>{text.sections.rate}: {exchangeRate.rateValue.toFixed(4)}</div>
-          </div>
-        }
         actions={
           <>
             <input
