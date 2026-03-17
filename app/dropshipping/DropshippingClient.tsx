@@ -2027,12 +2027,26 @@ export function DropshippingClient({
                   description={lang === "zh" ? "当前客户还没有已结算的订单。" : "Este cliente aun no tiene pedidos liquidados."}
                 />
               ) : (
-                <div className="space-y-3">
-                  {financePreview.settledOrders.map((item) => (
-                    <div key={item.orderId} className="rounded-2xl border border-slate-200 bg-white p-4">
-                      <div className="flex flex-col gap-4 md:flex-row">
-                        <div className="flex items-center justify-center md:w-24 md:flex-none">
-                          <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                  <div className="hidden items-center gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-700 lg:grid lg:grid-cols-[72px_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1.5fr)_minmax(0,1.2fr)_110px_110px_110px_110px]">
+                    <div>{lang === "zh" ? "商品图" : "Imagen"}</div>
+                    <div>{text.fields.orderNo}</div>
+                    <div>{text.fields.sku}</div>
+                    <div>{text.fields.productZh}</div>
+                    <div>{text.fields.trackingNo}</div>
+                    <div>{text.fields.shippedAt}</div>
+                    <div>{lang === "zh" ? "结算日期" : "Fecha liquidacion"}</div>
+                    <div>{lang === "zh" ? "已结金额" : "Monto liquidado"}</div>
+                    <div>{text.fields.total}</div>
+                  </div>
+                  <div className="divide-y divide-slate-200">
+                    {financePreview.settledOrders.map((item) => (
+                      <div
+                        key={item.orderId}
+                        className="px-4 py-4 lg:grid lg:grid-cols-[72px_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1.5fr)_minmax(0,1.2fr)_110px_110px_110px_110px] lg:items-center lg:gap-4"
+                      >
+                        <div className="mb-4 flex justify-center lg:mb-0">
+                          <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
                             {item.productImageUrl ? (
                               <button
                                 type="button"
@@ -2055,43 +2069,43 @@ export function DropshippingClient({
                             )}
                           </div>
                         </div>
-                        <div className="grid flex-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-                          <div className="rounded-xl bg-slate-50 px-3 py-3">
-                            <div className="text-xs text-slate-500">{text.fields.orderNo}</div>
-                            <div className="mt-1 break-all text-sm text-slate-900">{item.platformOrderNo}</div>
+                        <div className="grid gap-3 text-sm lg:contents">
+                          <div>
+                            <div className="text-xs text-slate-500 lg:hidden">{text.fields.orderNo}</div>
+                            <div className="break-all text-[13px] text-slate-900">{item.platformOrderNo}</div>
                           </div>
-                          <div className="rounded-xl bg-slate-50 px-3 py-3">
-                            <div className="text-xs text-slate-500">{text.fields.sku}</div>
-                            <div className="mt-1 break-all text-sm text-slate-900">{item.sku}</div>
+                          <div>
+                            <div className="text-xs text-slate-500 lg:hidden">{text.fields.sku}</div>
+                            <div className="break-all text-[13px] text-slate-900">{item.sku}</div>
                           </div>
-                          <div className="rounded-xl bg-slate-50 px-3 py-3 md:col-span-2">
-                            <div className="text-xs text-slate-500">{text.fields.productZh}</div>
-                            <div className="mt-1 break-words text-sm text-slate-900">{item.productNameZh || "-"}</div>
+                          <div>
+                            <div className="text-xs text-slate-500 lg:hidden">{text.fields.productZh}</div>
+                            <div className="break-words text-[13px] text-slate-900">{item.productNameZh || "-"}</div>
                           </div>
-                          <div className="rounded-xl bg-slate-50 px-3 py-3">
-                            <div className="text-xs text-slate-500">{text.fields.trackingNo}</div>
-                            <div className="mt-1 break-all text-sm text-slate-900">{item.trackingNo || "-"}</div>
+                          <div>
+                            <div className="text-xs text-slate-500 lg:hidden">{text.fields.trackingNo}</div>
+                            <div className="break-all text-[13px] text-slate-900">{item.trackingNo || "-"}</div>
                           </div>
-                          <div className="rounded-xl bg-slate-50 px-3 py-3">
-                            <div className="text-xs text-slate-500">{text.fields.shippedAt}</div>
-                            <div className="mt-1 text-sm text-slate-900">{fmtDateOnly(item.shippedAt, lang)}</div>
+                          <div>
+                            <div className="text-xs text-slate-500 lg:hidden">{text.fields.shippedAt}</div>
+                            <div className="text-[13px] text-slate-900">{fmtDateOnly(item.shippedAt, lang)}</div>
                           </div>
-                          <div className="rounded-xl bg-slate-50 px-3 py-3">
-                            <div className="text-xs text-slate-500">{lang === "zh" ? "\u7ed3\u7b97\u65e5\u671f" : "Fecha liquidacion"}</div>
-                            <div className="mt-1 text-sm text-slate-900">{fmtDateOnly(item.settledAt, lang)}</div>
+                          <div>
+                            <div className="text-xs text-slate-500 lg:hidden">{lang === "zh" ? "结算日期" : "Fecha liquidacion"}</div>
+                            <div className="text-[13px] text-slate-900">{fmtDateOnly(item.settledAt, lang)}</div>
                           </div>
-                          <div className="rounded-xl bg-emerald-50 px-3 py-3">
-                            <div className="text-xs text-emerald-700">{lang === "zh" ? "\u5df2\u7ed3\u91d1\u989d" : "Monto liquidado"}</div>
-                            <div className="mt-1 text-sm text-emerald-700">{fmtMoney(item.paidAmount, lang)}</div>
+                          <div>
+                            <div className="text-xs text-slate-500 lg:hidden">{lang === "zh" ? "已结金额" : "Monto liquidado"}</div>
+                            <div className="text-[13px] text-emerald-700">{fmtMoney(item.paidAmount, lang)}</div>
                           </div>
-                          <div className="rounded-xl bg-slate-50 px-3 py-3">
-                            <div className="text-xs text-slate-500">{text.fields.total}</div>
-                            <div className="mt-1 text-sm text-slate-900">{fmtMoney(item.totalAmount, lang)}</div>
+                          <div>
+                            <div className="text-xs text-slate-500 lg:hidden">{text.fields.total}</div>
+                            <div className="text-[13px] text-slate-900">{fmtMoney(item.totalAmount, lang)}</div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
