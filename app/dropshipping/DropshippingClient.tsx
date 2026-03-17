@@ -1568,9 +1568,9 @@ export function DropshippingClient({
                   <thead>
                     <tr className="bg-slate-50 text-left text-sm text-slate-500">
                       <th className="px-4 py-3 font-medium">{text.fields.customer}</th>
-                      <th className="px-4 py-3 font-medium">{text.fields.stockAmount}</th>
+                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "备货金额 (MXN)" : "Monto stock (MXN)"}</th>
                       <th className="px-4 py-3 font-medium">{lang === "zh" ? "今日汇率 (MXN → RMB)" : "Tipo de cambio hoy (MXN -> RMB)"}</th>
-                      <th className="px-4 py-3 font-medium">{text.fields.rateAmount}</th>
+                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "汇率后金额 (RMB)" : "Monto convertido (RMB)"}</th>
                       <th className="px-4 py-3 font-medium">{text.fields.shippingFee}</th>
                       <th className="px-4 py-3 font-medium">{text.fields.total}</th>
                       <th className="px-4 py-3 font-medium">{text.fields.paid}</th>
