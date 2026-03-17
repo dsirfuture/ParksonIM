@@ -102,17 +102,17 @@ const EMPTY_ORDER_FORM: OrderFormState = {
   quantity: "1",
   trackingNo: "",
   color: "",
-  warehouse: "???-???",
+  warehouse: "墨西哥-百盛仓",
   shippedAt: "",
   shippingFee: "",
   shippingStatus: "pending",
   notes: "",
 };
 
-const FIXED_WAREHOUSE = "???-???";
+const FIXED_WAREHOUSE = "墨西哥-百盛仓";
 
 const PLATFORM_OPTIONS = [
-  "?",
+  "无",
   "Mercado Libre",
   "Amazon",
   "Shopee",
@@ -1126,7 +1126,7 @@ export function DropshippingClient({
                 onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
                 className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
               >
-                <option value="all" hidden>{lang === "zh" ? "????" : "Todos"}</option>
+                <option value="all" hidden>{lang === "zh" ? "全部结算" : "Todos"}</option>
                 <option value="pending">{text.status.pending}</option>
                 <option value="shipped">{text.status.shipped}</option>
                 <option value="cancelled">{text.status.cancelled}</option>
@@ -1533,7 +1533,7 @@ export function DropshippingClient({
               {showSaturdaySettlementReminder ? (
                 <div className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800">
                   {lang === "zh"
-                    ? `???????????? 12:00 ????????????????? MXN ? RMB ${financeDisplayRate?.toFixed(4) || "-"} / ${fmtDateOnly(financeRateDate, lang)} ????????????????`
+                    ? `按墨西哥时间，每周六中午 12:00 后提醒本周结算。当天结算汇率按 MXN → RMB ${financeDisplayRate?.toFixed(4) || "-"} / ${fmtDateOnly(financeRateDate, lang)} 显示。`
                     : `En horario de Mexico, despues de las 12:00 del sabado ya es momento de recordar la liquidacion semanal. El tipo de cambio de hoy para liquidar se muestra como MXN -> RMB ${financeDisplayRate?.toFixed(4) || "-"} / ${fmtDateOnly(financeRateDate, lang)}.`}
                 </div>
               ) : null}
@@ -1543,7 +1543,7 @@ export function DropshippingClient({
                     <tr className="bg-slate-50 text-left text-sm text-slate-500">
                       <th className="px-4 py-3 font-medium">{text.fields.customer}</th>
                       <th className="px-4 py-3 font-medium">{text.fields.stockAmount}</th>
-                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "???? (MXN ? RMB)" : "Tipo de cambio hoy (MXN -> RMB)"}</th>
+                      <th className="px-4 py-3 font-medium">{lang === "zh" ? "今日汇率 (MXN → RMB)" : "Tipo de cambio hoy (MXN -> RMB)"}</th>
                       <th className="px-4 py-3 font-medium">{text.fields.rateAmount}</th>
                       <th className="px-4 py-3 font-medium">{text.fields.shippingFee}</th>
                       <th className="px-4 py-3 font-medium">{text.fields.total}</th>
@@ -1658,8 +1658,8 @@ export function DropshippingClient({
                               type="button"
                               onClick={() => void deleteSameTrackingOrder(item)}
                               className="inline-flex"
-                              title={lang === "zh" ? "?????????" : "Eliminar este producto agrupado"}
-                              aria-label={lang === "zh" ? "?????????" : "Eliminar este producto agrupado"}
+                              title={lang === "zh" ? "删除这个同物流号商品" : "Eliminar este producto agrupado"}
+                              aria-label={lang === "zh" ? "删除这个同物流号商品" : "Eliminar este producto agrupado"}
                             >
                               <MinusBadge />
                             </button>
@@ -1670,8 +1670,8 @@ export function DropshippingClient({
                         type="button"
                         onClick={openCreateModalWithTrackingSeed}
                         className="inline-flex"
-                        title={lang === "zh" ? "????????" : "Agregar producto con la misma guia"}
-                        aria-label={lang === "zh" ? "????????" : "Agregar producto con la misma guia"}
+                        title={lang === "zh" ? "新增同物流号商品" : "Agregar producto con la misma guia"}
+                        aria-label={lang === "zh" ? "新增同物流号商品" : "Agregar producto con la misma guia"}
                       >
                         <PlusBadge />
                       </button>
