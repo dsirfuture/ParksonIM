@@ -57,9 +57,10 @@ export async function middleware(request: NextRequest) {
   }
 
   const isLoginRoute = pathname === "/login";
+  const isRegisterRoute = pathname === "/register";
   const hasSession = await hasValidSession(request);
 
-  if (!hasSession && !isLoginRoute) {
+  if (!hasSession && !isLoginRoute && !isRegisterRoute) {
     const loginUrl = new URL("/login", request.url);
     if (pathname !== "/") {
       loginUrl.searchParams.set("next", `${pathname}${search}`);
@@ -67,7 +68,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (hasSession && (pathname === "/" || isLoginRoute)) {
+  if (hasSession && (pathname === "/" || isLoginRoute || isRegisterRoute)) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
