@@ -71,10 +71,13 @@ type InventoryEditState = {
   productNameEs: string;
   isStocked: boolean;
   stockedQty: string;
+  stockAmount: string;
   unitPrice: string;
   unitPriceLocked: boolean;
   discountRate: string;
   warehouse: string;
+  remainingQty: number | null;
+  status: DsInventoryStatus | null;
 } | null;
 
 type InventoryCustomerOption = {
@@ -2233,10 +2236,13 @@ export function DropshippingClient({
       productNameEs: row.productNameEs || "",
       isStocked: row.isStocked,
       stockedQty: String(row.stockedQty),
+      stockAmount: String(Math.round((row.stockAmount || 0) * 100) / 100),
       unitPrice: String(row.unitPrice ?? ""),
       unitPriceLocked: true,
       discountRate: String(Math.round((row.discountRate || 0) * 10000) / 100),
       warehouse: FIXED_WAREHOUSE,
+      remainingQty: row.remainingQty,
+      status: row.status,
     });
     setInventoryProductQuery(`${row.sku} / ${row.productNameZh || ""}`.trim());
   }
@@ -2264,10 +2270,13 @@ export function DropshippingClient({
         productNameEs: "",
         isStocked: false,
         stockedQty: "0",
+        stockAmount: "",
         unitPrice: "",
         unitPriceLocked: false,
         discountRate: "",
         warehouse: FIXED_WAREHOUSE,
+        remainingQty: null,
+        status: null,
       });
       setInventoryProductQuery("");
       setInventoryProductOptions([]);
@@ -2277,6 +2286,12 @@ export function DropshippingClient({
   }
 
   function pickInventoryProduct(option: InventoryProductOption) {
+    const qty = Number(inventoryEdit?.stockedQty || 0);
+    const pickedUnitPrice = Number(option.unitPrice || 0);
+    const pickedDiscount = Number(option.discountRate || 0);
+    const nextAmount = qty > 0 && pickedUnitPrice > 0
+      ? Math.round(pickedUnitPrice * qty * (1 - pickedDiscount) * 100) / 100
+      : 0;
     setInventoryEdit((prev) => (prev ? {
       ...prev,
       productCatalogId: option.id,
@@ -2288,6 +2303,7 @@ export function DropshippingClient({
       discountRate: option.discountRate
         ? String(Math.round(Number(option.discountRate) * 10000) / 100)
         : prev.discountRate,
+      stockAmount: nextAmount > 0 ? String(nextAmount) : prev.stockAmount,
     } : prev));
     setInventoryProductQuery(`${option.sku} / ${option.nameZh || option.nameEs || ""}`.trim());
   }
@@ -2299,9 +2315,23 @@ export function DropshippingClient({
       setError("");
       const stockedQty = Number(inventoryEdit.stockedQty || 0);
       const unitPrice = inventoryEdit.unitPrice.trim();
+      const stockAmount = inventoryEdit.stockAmount.trim();
       const discountRate = inventoryEdit.discountRate.trim();
       if (inventoryEdit.mode === "create" && (!inventoryEdit.customerId || !inventoryEdit.sku)) {
         throw new Error(lang === "zh" ? "请选择客户和产品" : "Selecciona cliente y producto");
+      }
+      const discountRateValue = discountRate === "" ? null : Number(discountRate) / 100;
+      const amountValue = stockAmount === "" ? null : Number(stockAmount);
+      let unitPriceValue = unitPrice === "" ? null : Number(unitPrice);
+      if (
+        amountValue !== null
+        && Number.isFinite(amountValue)
+        && stockedQty > 0
+      ) {
+        const multiplier = 1 - (discountRateValue ?? 0);
+        unitPriceValue = multiplier > 0
+          ? amountValue / stockedQty / multiplier
+          : amountValue / stockedQty;
       }
 
       const response = await fetch(
@@ -2317,8 +2347,8 @@ export function DropshippingClient({
             productNameEs: inventoryEdit.productNameEs,
             isStocked: inventoryEdit.isStocked,
             stockedQty,
-            unitPrice: unitPrice === "" ? null : Number(unitPrice),
-            discountRate: discountRate === "" ? null : Number(discountRate) / 100,
+            unitPrice: unitPriceValue,
+            discountRate: discountRateValue,
             warehouse: FIXED_WAREHOUSE,
           }),
         },
@@ -3486,12 +3516,8 @@ export function DropshippingClient({
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{text.fields.productZh}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "单价" : "Precio"}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "普通折扣" : "Dsc"}</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "是否备货" : "Stock"}</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "备货数量" : "Stock"}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "备货金额" : "Monto stock"}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{text.fields.shipped}</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{text.fields.remaining}</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{text.fields.status}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 text-right font-semibold">{lang === "zh" ? "操作" : "Acciones"}</th>
                   </tr>
                 </thead>
@@ -3529,16 +3555,23 @@ export function DropshippingClient({
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-2 text-sm text-slate-900">{row.sku}</td>
+                      <td className="px-4 py-2 text-sm text-slate-900">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => beginInventoryEdit(row)}
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-semibold text-white transition hover:bg-primary/90"
+                            title={lang === "zh" ? "编辑备货" : "Editar stock"}
+                            aria-label={lang === "zh" ? "编辑备货" : "Editar stock"}
+                          >
+                            备
+                          </button>
+                          <span>{row.sku}</span>
+                        </div>
+                      </td>
                       <td className="px-4 py-2 text-sm text-slate-700">{row.productNameZh}</td>
                       <td className="px-4 py-2 text-sm text-slate-700">${fmtMoney(row.unitPrice, lang)}</td>
                       <td className="px-4 py-2 text-sm text-slate-700">{fmtPercent(row.discountRate, lang)}%</td>
-                      <td className="px-4 py-2 text-sm text-slate-700">
-                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${row.isStocked ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-                          {row.isStocked ? (lang === "zh" ? "已备货" : "Si") : (lang === "zh" ? "未备货" : "No")}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 text-sm text-slate-700">{row.stockedQty}</td>
                       <td className="px-4 py-2 text-sm text-slate-700">${fmtMoney(row.stockAmount, lang)}</td>
                       <td className="px-4 py-2 text-sm text-slate-700">
                         {row.shippedQty > 0 ? (
@@ -3560,37 +3593,18 @@ export function DropshippingClient({
                           row.shippedQty
                         )}
                       </td>
-                      <td className="px-4 py-2 text-sm font-semibold text-slate-900">
-                        {row.isStocked ? row.remainingQty : "-"}
-                      </td>
-                      <td className={`px-4 py-2 text-sm ${row.isStocked ? getInventoryStatusClass(row.status) : "text-slate-400"}`}>
-                        {row.isStocked ? text.status[row.status] : "-"}
-                      </td>
                       <td className="px-4 py-2 text-right">
-                        {row.isStocked ? (
-                          <div className="inline-flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => beginInventoryEdit(row)}
-                              title={lang === "zh" ? "编辑" : "Editar"}
-                              aria-label={lang === "zh" ? "编辑" : "Editar"}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
-                            >
-                              <PencilIcon />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void removeInventoryRow(row)}
-                              title={lang === "zh" ? "删除" : "Eliminar"}
-                              aria-label={lang === "zh" ? "删除" : "Eliminar"}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-500 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600"
-                            >
-                              <TrashIcon />
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-slate-400">-</span>
-                        )}
+                        <div className="inline-flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => beginInventoryEdit(row)}
+                            title={lang === "zh" ? "编辑" : "Editar"}
+                            aria-label={lang === "zh" ? "编辑" : "Editar"}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+                          >
+                            <PencilIcon />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -4641,32 +4655,39 @@ export function DropshippingClient({
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-1">
                 <p className="text-xs text-slate-500">{lang === "zh" ? "客户" : "Cliente"}</p>
-                <select
-                  value={inventoryEdit.customerId}
-                  disabled={inventoryEdit.mode !== "create"}
-                  onChange={(event) => {
-                    const nextCustomerId = event.target.value;
-                    const customer = inventoryCustomers.find((row) => row.id === nextCustomerId);
-                    setInventoryEdit((prev) => (prev ? {
-                      ...prev,
-                      customerId: nextCustomerId,
-                      customerName: customer?.name || "",
-                    } : prev));
-                  }}
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary/40 disabled:bg-slate-50 disabled:text-slate-500"
-                >
-                  <option value="">{lang === "zh" ? "请选择客户" : "Selecciona cliente"}</option>
-                  {inventoryCustomers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name}
-                    </option>
-                  ))}
-                </select>
+                {inventoryEdit.mode === "create" ? (
+                  <select
+                    value={inventoryEdit.customerId}
+                    onChange={(event) => {
+                      const nextCustomerId = event.target.value;
+                      const customer = inventoryCustomers.find((row) => row.id === nextCustomerId);
+                      setInventoryEdit((prev) => (prev ? {
+                        ...prev,
+                        customerId: nextCustomerId,
+                        customerName: customer?.name || "",
+                      } : prev));
+                    }}
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary/40"
+                  >
+                    <option value="">{lang === "zh" ? "请选择客户" : "Selecciona cliente"}</option>
+                    {inventoryCustomers.map((customer) => (
+                      <option key={customer.id} value={customer.id}>
+                        {customer.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    value={inventoryEdit.customerName}
+                    disabled
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600 outline-none"
+                  />
+                )}
               </div>
               <div className="space-y-1">
                 <p className="text-xs text-slate-500">{lang === "zh" ? "产品（编码 / 中文名）" : "Producto (codigo / nombre)"}</p>
                 <input
-                  value={inventoryProductQuery}
+                  value={inventoryEdit.mode === "create" ? inventoryProductQuery : `${inventoryEdit.sku} / ${inventoryEdit.productNameZh || "-"}`}
                   disabled={inventoryEdit.mode !== "create"}
                   onChange={(event) => setInventoryProductQuery(event.target.value)}
                   placeholder={lang === "zh" ? "搜索编码 / 中文名" : "Buscar codigo / nombre"}
@@ -4721,10 +4742,16 @@ export function DropshippingClient({
                     setInventoryEdit((prev) => {
                       if (!prev) return prev;
                       const nextQty = event.target.value.replace(/[^\d]/g, "");
+                      const nextQtyNumber = Number(nextQty || 0);
+                      const baseUnitPrice = Number(prev.unitPrice || 0);
+                      const discountRate = Number(prev.discountRate || 0) / 100;
                       return {
                         ...prev,
                         stockedQty: nextQty,
-                        isStocked: Number(nextQty || 0) > 1 ? true : prev.isStocked,
+                        isStocked: nextQtyNumber > 1 ? true : prev.isStocked,
+                        stockAmount: baseUnitPrice > 0 && nextQtyNumber > 0
+                          ? String(Math.round(baseUnitPrice * nextQtyNumber * (1 - discountRate) * 100) / 100)
+                          : prev.stockAmount,
                       };
                     })
                   }
@@ -4732,13 +4759,12 @@ export function DropshippingClient({
                 />
               </div>
               <div className="space-y-1">
-                <p className="text-xs text-slate-500">{lang === "zh" ? "单价" : "Precio"}</p>
+                <p className="text-xs text-slate-500">{lang === "zh" ? "备货金额" : "Monto stock"}</p>
                 <input
                   inputMode="decimal"
-                  value={inventoryEdit.unitPrice}
-                  onChange={(event) => setInventoryEdit((prev) => (prev ? { ...prev, unitPrice: event.target.value.replace(/[^\d.]/g, "") } : prev))}
-                  disabled={inventoryEdit.unitPriceLocked}
-                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40 disabled:bg-slate-50 disabled:text-slate-500"
+                  value={inventoryEdit.stockAmount}
+                  onChange={(event) => setInventoryEdit((prev) => (prev ? { ...prev, stockAmount: event.target.value.replace(/[^\d.]/g, "") } : prev))}
+                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40"
                 />
               </div>
               <div className="space-y-1">
@@ -4754,6 +4780,22 @@ export function DropshippingClient({
                 <p className="text-xs text-slate-500">{lang === "zh" ? "发货仓" : "Almacen"}</p>
                 <input
                   value={inventoryEdit.warehouse}
+                  disabled
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none"
+                />
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-slate-500">{lang === "zh" ? "剩余" : "Restante"}</p>
+                <input
+                  value={inventoryEdit.remainingQty ?? "-"}
+                  disabled
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none"
+                />
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-slate-500">{lang === "zh" ? "状态" : "Estado"}</p>
+                <input
+                  value={inventoryEdit.status ? text.status[inventoryEdit.status] : "-"}
                   disabled
                   className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none"
                 />
