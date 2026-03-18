@@ -49,6 +49,7 @@ export function RegisterForm({ lang }: { lang: Lang }) {
             email: "邮箱",
             emailPlaceholder: "请输入邮箱",
             submit: "注册",
+            backToLogin: "返回登录",
             loading: "注册中",
             phoneInvalid: "请输入有效的墨西哥手机号",
             avatarTitle: "上传头像图片",
@@ -72,6 +73,7 @@ export function RegisterForm({ lang }: { lang: Lang }) {
             email: "Correo",
             emailPlaceholder: "Ingresa el correo",
             submit: "Registrar",
+            backToLogin: "Volver al inicio de sesion",
             loading: "Registrando",
             phoneInvalid: "Ingresa un teléfono válido de México",
             avatarTitle: "Subir imagen de avatar",
@@ -270,6 +272,17 @@ export function RegisterForm({ lang }: { lang: Lang }) {
             className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-white shadow-soft transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading ? text.loading : text.submit}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              router.push("/login");
+              router.refresh();
+            }}
+            className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+          >
+            {text.backToLogin}
           </button>
         </form>
       </div>
