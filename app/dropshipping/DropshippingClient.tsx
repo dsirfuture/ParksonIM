@@ -4269,8 +4269,20 @@ export function DropshippingClient({
                                 className={`flex w-full items-start gap-1.5 text-left ${slot.isCurrent ? "cursor-default" : "cursor-pointer"}`}
                               >
                                 <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg">
-                                  {slot.productImageUrl ? (
-                                    <img src={slot.productImageUrl} alt={slot.productNameZh || slot.sku} className="h-full w-full object-cover" />
+                                  {slot.sku ? (
+                                    <ProductImage
+                                      sku={slot.sku}
+                                      hasImage
+                                      size={40}
+                                      roundedClassName="rounded-lg"
+                                      onClick={() => {
+                                        if (!slot.sku) return;
+                                        setPreviewImage({
+                                          src: slot.productImageUrl || "",
+                                          title: `${slot.sku} / ${slot.productNameZh || "-"}`,
+                                        });
+                                      }}
+                                    />
                                   ) : (
                                     <span className="text-[10px] text-slate-400">{lang === "zh" ? "空" : "Vacio"}</span>
                                   )}
