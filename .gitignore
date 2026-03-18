@@ -10,5 +10,6 @@ coverage/
 *.log
 .env*
 !.env.example
+data/
 public/products/
 tmp/ParksonMX-*/

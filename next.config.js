@@ -1,14 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    // Avoid bundling massive local image folders into serverless functions.
-    outputFileTracingExcludes: {
-      "*": [
-        "public/products/**/*",
-        "public/supplier-logos/**/*",
-        "tmp/**/*",
-      ],
-    },
+  output: "standalone",
+  // Avoid bundling massive local image folders into the runtime image.
+  outputFileTracingExcludes: {
+    "*": [
+      "public/products/**/*",
+      "public/supplier-logos/**/*",
+      "tmp/**/*",
+    ],
   },
 };
 
