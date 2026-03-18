@@ -2584,13 +2584,6 @@ export function DropshippingClient({
           >
             {importing ? text.importing : text.import}
           </button>
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-soft transition hover:opacity-95"
-          >
-            {text.create}
-          </button>
         </div>
       </div>
 
@@ -3131,7 +3124,14 @@ export function DropshippingClient({
             </span>
           }
           right={
-            <div className="flex w-full justify-end lg:w-auto">
+            <div className="flex w-full flex-wrap justify-end gap-2 lg:w-auto lg:flex-nowrap">
+              <button
+                type="button"
+                onClick={openCreateModal}
+                className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-soft transition hover:opacity-95"
+              >
+                {text.create}
+              </button>
               <div className="relative w-full max-w-[760px] rounded-xl border border-slate-200 bg-white shadow-sm shadow-slate-100/60">
                 <input
                   value={keyword}
