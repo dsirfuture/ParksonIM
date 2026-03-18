@@ -140,6 +140,7 @@ export default async function YgCustomersPage() {
       regionName: normalizeText(row.region_name),
       statusText: normalizeText(row.status_text),
       salesRepName: normalizeText(row.sales_rep_name),
+      registeredAtText: formatDateOnly(row.registered_at),
       lastVisitedAtText: formatDateOnly(row.last_visited_at),
       lastOrderAtText: formatDateOnly(row.last_order_at),
       lastOrderNo: normalizeText(row.last_order_no),
@@ -162,6 +163,17 @@ export default async function YgCustomersPage() {
   const latestSyncedAt = customers[0] ? formatDateTime(customers[0].synced_at ?? customers[0].updated_at) : "-";
   const customersWithOrders = sortedRows.filter((row) => row.totalOrderCount > 0).length;
   const totalAmount = sortedRows.reduce((sum, row) => sum + Number(row.totalOrderAmountText || 0), 0);
+  const monthFormatter = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    timeZone: "America/Mexico_City",
+  });
+  const currentMonthKey = monthFormatter.format(new Date());
+  const monthlyRegisteredCount = customers.filter((row) => {
+    if (!row.registered_at) return false;
+    return monthFormatter.format(row.registered_at) === currentMonthKey;
+  }).length;
+  const [currentYear, currentMonth] = currentMonthKey.split("-");
 
   return (
     <AppShell>
@@ -173,6 +185,8 @@ export default async function YgCustomersPage() {
           totalOrders: orders.length,
           totalOrderAmountText: moneyText(totalAmount),
           latestSyncedAtText: latestSyncedAt,
+          monthlyRegisteredCount,
+          monthlyRegisteredLabel: `本月（${currentYear}/${String(Number(currentMonth))}）注册客户量`,
         }}
       />
     </AppShell>

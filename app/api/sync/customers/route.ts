@@ -42,6 +42,8 @@ type RawCustomer = {
   status?: unknown;
   sales_rep_name?: unknown;
   salesRepName?: unknown;
+  registered_at?: unknown;
+  registeredAt?: unknown;
   last_visited_at?: unknown;
   lastVisitedAt?: unknown;
   updated_at?: unknown;
@@ -174,6 +176,7 @@ export async function POST(request: Request) {
           region_name: text(item.region_name) || text(item.regionName) || text(item.region) || text(item.city),
           status_text: text(item.status_text) || text(item.statusText) || text(item.status),
           sales_rep_name: text(item.sales_rep_name) || text(item.salesRepName),
+          registered_at: dateOrNull(item.registered_at) || dateOrNull(item.registeredAt),
           last_visited_at:
             dateOrNull(item.last_visited_at) ||
             dateOrNull(item.lastVisitedAt) ||
@@ -199,6 +202,7 @@ export async function POST(request: Request) {
           region_name: text(item.region_name) || text(item.regionName) || text(item.region) || text(item.city),
           status_text: text(item.status_text) || text(item.statusText) || text(item.status),
           sales_rep_name: text(item.sales_rep_name) || text(item.salesRepName),
+          registered_at: dateOrNull(item.registered_at) || dateOrNull(item.registeredAt),
           last_visited_at:
             dateOrNull(item.last_visited_at) ||
             dateOrNull(item.lastVisitedAt) ||

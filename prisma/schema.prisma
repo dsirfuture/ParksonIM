@@ -859,6 +859,7 @@ model YgCustomerImport {
   region_name      String?
   status_text      String?
   sales_rep_name   String?
+  registered_at    DateTime? @db.Timestamptz(6)
   last_visited_at  DateTime? @db.Timestamptz(6)
   last_order_at    DateTime? @db.Timestamptz(6)
   last_order_no    String?
