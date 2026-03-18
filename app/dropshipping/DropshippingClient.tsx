@@ -3958,6 +3958,18 @@ export function DropshippingClient({
                 </select>
               </label>
 
+              <label className="hidden space-y-1 md:col-span-1 xl:col-span-6 xl:order-12">
+                <span className="whitespace-nowrap text-xs text-slate-500">{text.form.settlement}</span>
+                <select
+                  value={form.settlementStatus}
+                  onChange={(event) => setForm((prev) => ({ ...prev, settlementStatus: event.target.value as OrderFormState["settlementStatus"] }))}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                >
+                  <option value="paid">{getSettlementStatusLabel("paid", lang)}</option>
+                  <option value="unpaid">{getSettlementStatusLabel("unpaid", lang)}</option>
+                </select>
+              </label>
+
               <label className="hidden space-y-1 md:col-span-2 xl:col-span-12 xl:order-14">
                 <span className="whitespace-nowrap text-xs text-slate-500">{text.form.notes}</span>
                 <input
@@ -4015,7 +4027,19 @@ export function DropshippingClient({
                 </select>
               </label>
 
-              <div className="hidden space-y-1 md:col-span-3 md:order-12">
+              <label className="hidden space-y-1 md:col-span-1 md:order-12">
+                <span className="whitespace-nowrap text-xs text-slate-500">{text.form.settlement}</span>
+                <select
+                  value={form.settlementStatus}
+                  onChange={(event) => setForm((prev) => ({ ...prev, settlementStatus: event.target.value as OrderFormState["settlementStatus"] }))}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                >
+                  <option value="paid">{getSettlementStatusLabel("paid", lang)}</option>
+                  <option value="unpaid">{getSettlementStatusLabel("unpaid", lang)}</option>
+                </select>
+              </label>
+
+              <div className="hidden space-y-1 md:col-span-3 md:order-13">
                 <span className="whitespace-nowrap text-xs text-slate-500">{text.fields.shippingLabel}</span>
                 <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
                   {currentEditingOrder?.shippingLabelAttachments[0]?.fileUrl ? (
