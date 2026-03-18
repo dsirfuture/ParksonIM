@@ -2046,6 +2046,7 @@ export function DropshippingClient({
           warehouse: targetOrder.warehouse || FIXED_WAREHOUSE,
           shippedAt: targetOrder.shippedAt ? targetOrder.shippedAt.slice(0, 10) : "",
           shippingFee: targetOrder.shippingFee ? String(targetOrder.shippingFee) : "",
+          settlementStatus: targetOrder.settlementStatus,
           shippingStatus: targetOrder.shippingStatus,
           notes: targetOrder.notes,
         },

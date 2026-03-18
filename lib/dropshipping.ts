@@ -689,7 +689,7 @@ export async function saveOrder(
   const normalizedDiscountRate = Math.abs(rawDiscountRate) <= 1 ? rawDiscountRate : rawDiscountRate / 100;
   const safeDiscountRate = Math.min(Math.max(normalizedDiscountRate, 0), 1);
   const stockAmount = toNumber(product.unit_price) * payload.quantity * (1 - safeDiscountRate);
-  const shippingFee = payload.shippingFee ?? product.default_shipping_fee ?? 0;
+  const shippingFee = payload.shippingFee ?? toNumber(product.default_shipping_fee) ?? 0;
   const totalAmount = stockAmount + shippingFee;
   const settlementStatus = payload.settlementStatus === "paid" ? "paid" : "unpaid";
   const settledAt = settlementStatus === "paid" ? new Date() : null;
