@@ -210,25 +210,14 @@ export function BillingClient({
     setCurrentTab(activeTab);
   }, [activeTab]);
 
-  const theme = currentTab === "supplier"
-    ? {
-        panel: "bg-transparent",
-        tabActive:
-          "border-slate-200 bg-white text-slate-900 before:border-slate-200 after:border-slate-200 shadow-[0_18px_36px_rgba(148,163,184,0.22)]",
-        tabInactive:
-          "border-slate-200 bg-[linear-gradient(180deg,#dfe9fb_0%,#cfdcf4_100%)] text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]",
-        contentBg: "border-slate-200 bg-white",
-        tabHalo: "",
-      }
-    : {
-        panel: "bg-transparent",
-        tabActive:
-          "border-slate-200 bg-white text-slate-900 before:border-slate-200 after:border-slate-200 shadow-[0_18px_36px_rgba(148,163,184,0.22)]",
-        tabInactive:
-          "border-slate-200 bg-[linear-gradient(180deg,#dfe9fb_0%,#cfdcf4_100%)] text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]",
-        contentBg: "border-slate-200 bg-white",
-        tabHalo: "",
-      };
+  const theme = {
+    panel: "bg-transparent",
+    tabActive:
+      "border-[#d9e4f5] bg-white text-slate-900 shadow-[0_10px_22px_rgba(148,163,184,0.16)] after:border-[#d9e4f5] after:bg-white",
+    tabInactive:
+      "border-[#cddcf3] bg-[linear-gradient(180deg,#dfe8f7_0%,#cfdcf3_100%)] text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] after:border-[#cddcf3] after:bg-[linear-gradient(180deg,#dfe8f7_0%,#cfdcf3_100%)]",
+    contentBg: "border-[#e4ebf7] bg-white",
+  };
 
   const totalCount = rows.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
@@ -380,25 +369,25 @@ export function BillingClient({
   return (
     <section className={`mt-0 ${theme.panel}`}>
       <div className="relative px-3 pt-3">
-        <div className="relative z-10 flex flex-wrap items-end gap-1.5 px-4">
+        <div className="relative z-10 flex flex-wrap items-end gap-3 px-5">
           <button
             type="button"
             onClick={() => setCurrentTab("customer")}
-            className={`relative inline-flex min-w-[148px] items-center justify-center rounded-t-[16px] border px-6 py-3 text-sm font-semibold transition before:pointer-events-none before:absolute before:-bottom-px before:-left-[14px] before:h-[14px] before:w-[14px] before:rounded-br-[14px] before:border-b before:border-r before:bg-transparent before:content-[''] after:pointer-events-none after:absolute after:-bottom-px after:-right-[14px] after:h-[14px] after:w-[14px] after:rounded-bl-[14px] after:border-b after:border-l after:bg-transparent after:content-[''] ${currentTab === "customer" ? `${theme.tabActive} ${theme.tabHalo} z-20 border-b-white` : `${theme.tabInactive} z-0 translate-y-[8px] before:hidden after:hidden hover:-translate-y-[1px] hover:text-slate-700`}`}
+            className={`relative inline-flex min-w-[148px] items-center justify-center rounded-t-[16px] border border-b-0 px-7 py-3 text-sm font-semibold transition after:pointer-events-none after:absolute after:-right-[13px] after:bottom-0 after:h-full after:w-7 after:-skew-x-[22deg] after:origin-bottom after:rounded-tr-[14px] after:border after:border-b-0 after:border-l-0 after:content-[''] ${currentTab === "customer" ? `${theme.tabActive} z-20` : `${theme.tabInactive} z-0 translate-y-[9px] hover:-translate-y-[1px] hover:text-slate-700`}`}
           >
-            客户出账单
+            <span className="relative z-10">客户出账单</span>
           </button>
           <button
             type="button"
             onClick={() => setCurrentTab("supplier")}
-            className={`relative inline-flex min-w-[148px] items-center justify-center rounded-t-[16px] border px-6 py-3 text-sm font-semibold transition before:pointer-events-none before:absolute before:-bottom-px before:-left-[14px] before:h-[14px] before:w-[14px] before:rounded-br-[14px] before:border-b before:border-r before:bg-transparent before:content-[''] after:pointer-events-none after:absolute after:-bottom-px after:-right-[14px] after:h-[14px] after:w-[14px] after:rounded-bl-[14px] after:border-b after:border-l after:bg-transparent after:content-[''] ${currentTab === "supplier" ? `${theme.tabActive} ${theme.tabHalo} z-20 border-b-white` : `${theme.tabInactive} z-0 translate-y-[8px] before:hidden after:hidden hover:-translate-y-[1px] hover:text-slate-700`}`}
+            className={`relative inline-flex min-w-[148px] items-center justify-center rounded-t-[16px] border border-b-0 px-7 py-3 text-sm font-semibold transition after:pointer-events-none after:absolute after:-right-[13px] after:bottom-0 after:h-full after:w-7 after:-skew-x-[22deg] after:origin-bottom after:rounded-tr-[14px] after:border after:border-b-0 after:border-l-0 after:content-[''] ${currentTab === "supplier" ? `${theme.tabActive} z-20` : `${theme.tabInactive} z-0 translate-y-[9px] hover:-translate-y-[1px] hover:text-slate-700`}`}
           >
-            供应商账单
+            <span className="relative z-10">供应商账单</span>
           </button>
         </div>
 
-        <div className={`relative z-0 -mt-px rounded-[24px] border p-5 pt-6 shadow-[0_20px_44px_rgba(148,163,184,0.14)] ${theme.contentBg}`}>
-          <div className="absolute inset-x-0 top-0 h-5 rounded-t-[24px] bg-inherit" />
+        <div className={`relative z-0 -mt-px rounded-[24px] border p-5 pt-6 shadow-[0_16px_34px_rgba(148,163,184,0.12)] ${theme.contentBg}`}>
+          <div className="absolute inset-x-0 top-0 h-4 rounded-t-[24px] bg-inherit" />
         <div>
           <TableCard title="待出账单列表" description={`共 ${totalCount} 条待导出账单`}>
             <div className="overflow-x-auto">
