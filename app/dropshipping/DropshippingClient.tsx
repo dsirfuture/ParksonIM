@@ -71,6 +71,7 @@ type InventoryEditState = {
   productNameEs: string;
   stockedQty: string;
   unitPrice: string;
+  unitPriceLocked: boolean;
   discountRate: string;
   warehouse: string;
 } | null;
@@ -86,6 +87,8 @@ type InventoryProductOption = {
   nameZh: string;
   nameEs: string;
   imageUrl: string;
+  unitPrice: string;
+  discountRate: string;
 };
 
 type FinancePreviewState = DsFinanceRow | null;
@@ -2205,6 +2208,7 @@ export function DropshippingClient({
       productNameEs: row.productNameEs || "",
       stockedQty: String(row.stockedQty),
       unitPrice: String(row.unitPrice ?? ""),
+      unitPriceLocked: true,
       discountRate: String(Math.round((row.discountRate || 0) * 10000) / 100),
       warehouse: FIXED_WAREHOUSE,
     });
@@ -2234,6 +2238,7 @@ export function DropshippingClient({
         productNameEs: "",
         stockedQty: "0",
         unitPrice: "",
+        unitPriceLocked: false,
         discountRate: "",
         warehouse: FIXED_WAREHOUSE,
       });
@@ -2251,6 +2256,11 @@ export function DropshippingClient({
       sku: option.sku,
       productNameZh: option.nameZh || option.sku,
       productNameEs: option.nameEs || "",
+      unitPrice: option.unitPrice || "",
+      unitPriceLocked: Boolean(option.unitPrice),
+      discountRate: option.discountRate
+        ? String(Math.round(Number(option.discountRate) * 10000) / 100)
+        : prev.discountRate,
     } : prev));
     setInventoryProductQuery(`${option.sku} / ${option.nameZh || option.nameEs || ""}`.trim());
   }
@@ -3407,10 +3417,10 @@ export function DropshippingClient({
               <button
                 type="button"
                 onClick={() => void beginInventoryCreate()}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-white transition hover:bg-primary/90"
+                className="inline-flex h-10 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-primary px-4 text-sm font-semibold text-white transition hover:bg-primary/90"
               >
                 <PlusIcon />
-                <span>{lang === "zh" ? "新增备货" : "Nuevo stock"}</span>
+                <span className="whitespace-nowrap">{lang === "zh" ? "新增备货" : "Nuevo stock"}</span>
               </button>
               <div className="relative w-full max-w-[340px]">
                 <input
@@ -4605,7 +4615,8 @@ export function DropshippingClient({
                   inputMode="decimal"
                   value={inventoryEdit.unitPrice}
                   onChange={(event) => setInventoryEdit((prev) => (prev ? { ...prev, unitPrice: event.target.value.replace(/[^\d.]/g, "") } : prev))}
-                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40"
+                  disabled={inventoryEdit.unitPriceLocked}
+                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40 disabled:bg-slate-50 disabled:text-slate-500"
                 />
               </div>
               <div className="space-y-1">

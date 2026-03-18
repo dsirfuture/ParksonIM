@@ -39,6 +39,8 @@ export async function GET(request: Request) {
         sku: true,
         name_zh: true,
         name_es: true,
+        price: true,
+        normal_discount: true,
       },
       orderBy: [{ updated_at: "desc" }, { sku: "asc" }],
       take: keyword ? 24 : 12,
@@ -52,6 +54,8 @@ export async function GET(request: Request) {
         nameZh: row.name_zh || "",
         nameEs: row.name_es || "",
         imageUrl: buildProductImageUrl(row.sku, "jpg"),
+        unitPrice: row.price?.toString?.() || "",
+        discountRate: row.normal_discount?.toString?.() || "",
       })),
     });
   } catch (error) {
