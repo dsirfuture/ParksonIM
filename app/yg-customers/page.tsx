@@ -51,6 +51,10 @@ function buildCustomerKey(input: {
   );
 }
 
+function isExcludedCustomerName(value: string | null | undefined) {
+  return normalizeText(value) === "百盛供应链 Parkson";
+}
+
 export default async function YgCustomersPage() {
   const session = await getSession();
   if (!session) {
@@ -86,6 +90,34 @@ export default async function YgCustomersPage() {
     }),
   ]);
 
+  const includedCustomers = customers.filter((row) => !isExcludedCustomerName(row.company_name));
+  const includedCustomerKeys = new Set(
+    includedCustomers.map((row) =>
+      buildCustomerKey({
+        customer_id: row.customer_id,
+        registered_phone: row.registered_phone,
+        company_name: row.company_name,
+        relation_no: row.relation_no,
+        relation_name: row.relation_name,
+      }) || row.customer_key,
+    ),
+  );
+
+  const filteredOrders = orders.filter((order) => {
+    if (isExcludedCustomerName(order.company_name || order.customer_name || order.contact_name)) {
+      return false;
+    }
+    const key =
+      buildCustomerKey({
+        customer_id: order.customer_id,
+        registered_phone: order.contact_phone,
+        company_name: order.company_name || order.customer_name || order.contact_name,
+        relation_no: null,
+        relation_name: order.customer_name || order.contact_name,
+      }) || `fallback::${order.order_no}`;
+    return includedCustomerKeys.has(key);
+  });
+
   const orderGroups = new Map<
     string,
     Array<{
@@ -96,7 +128,7 @@ export default async function YgCustomersPage() {
     }>
   >();
 
-  for (const order of orders) {
+  for (const order of filteredOrders) {
     const key =
       buildCustomerKey({
         customer_id: order.customer_id,
@@ -115,7 +147,7 @@ export default async function YgCustomersPage() {
     orderGroups.set(key, group);
   }
 
-  const rows = customers.map((row) => {
+  const rows = includedCustomers.map((row) => {
     const customerKey =
       buildCustomerKey({
         customer_id: row.customer_id,
@@ -160,7 +192,9 @@ export default async function YgCustomersPage() {
     return right.totalOrderCount - left.totalOrderCount || right.syncedAtText.localeCompare(left.syncedAtText);
   });
 
-  const latestSyncedAt = customers[0] ? formatDateTime(customers[0].synced_at ?? customers[0].updated_at) : "-";
+  const latestSyncedAt = includedCustomers[0]
+    ? formatDateTime(includedCustomers[0].synced_at ?? includedCustomers[0].updated_at)
+    : "-";
   const customersWithOrders = sortedRows.filter((row) => row.totalOrderCount > 0).length;
   const totalAmount = sortedRows.reduce((sum, row) => sum + Number(row.totalOrderAmountText || 0), 0);
   const monthFormatter = new Intl.DateTimeFormat("en-CA", {
@@ -169,7 +203,7 @@ export default async function YgCustomersPage() {
     timeZone: "America/Mexico_City",
   });
   const currentMonthKey = monthFormatter.format(new Date());
-  const monthlyRegisteredCount = customers.filter((row) => {
+  const monthlyRegisteredCount = includedCustomers.filter((row) => {
     if (!row.registered_at) return false;
     return monthFormatter.format(row.registered_at) === currentMonthKey;
   }).length;
@@ -182,7 +216,7 @@ export default async function YgCustomersPage() {
         summary={{
           totalCustomers: sortedRows.length,
           customersWithOrders,
-          totalOrders: orders.length,
+          totalOrders: filteredOrders.length,
           totalOrderAmountText: moneyText(totalAmount),
           latestSyncedAtText: latestSyncedAt,
           monthlyRegisteredCount,

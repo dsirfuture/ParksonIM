@@ -222,7 +222,11 @@ export function YgCustomersClient({ initialRows, summary }: YgCustomersClientPro
                           <button
                             type="button"
                             onClick={() => setDetailCustomerKey(row.customerKey)}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-stone-300 hover:text-slate-900"
+                            className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition ${
+                              row.totalOrderCount > 0
+                                ? "border-primary bg-primary text-white hover:opacity-90"
+                                : "border-stone-200 text-stone-500 hover:border-stone-300 hover:text-slate-900"
+                            }`}
                             title="查看客户详情"
                           >
                             <EyeIcon />
