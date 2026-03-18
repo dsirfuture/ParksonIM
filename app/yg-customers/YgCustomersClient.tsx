@@ -111,11 +111,11 @@ export function YgCustomersClient({ initialRows, summary }: YgCustomersClientPro
     <div className="space-y-5">
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-soft">
-          <div className="text-sm text-slate-500">顾客数量</div>
+          <div className="text-sm text-slate-500">客户数量</div>
           <div className="mt-2 text-3xl font-semibold text-slate-900">{summary.totalCustomers}</div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-soft">
-          <div className="text-sm text-slate-500">有订单顾客</div>
+          <div className="text-sm text-slate-500">有订单客户</div>
           <div className="mt-2 text-3xl font-semibold text-slate-900">{summary.customersWithOrders}</div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-soft">
@@ -127,14 +127,14 @@ export function YgCustomersClient({ initialRows, summary }: YgCustomersClientPro
           <div className="mt-2 text-3xl font-semibold text-slate-900">$ {summary.totalOrderAmountText}</div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-soft">
-          <div className="text-sm text-slate-500">最近同步</div>
+          <div className="text-sm text-slate-500">最近一次友购客户更新时间</div>
           <div className="mt-2 text-lg font-semibold text-slate-900">{summary.latestSyncedAtText}</div>
         </div>
       </section>
 
       <TableCard
-        title="友购顾客列表"
-        description="以友购顾客资料为主；若顾客有关联订单，可展开查看订单详情。"
+        title="友购客户列表"
+        description={`最近一次友购客户更新时间是：${summary.latestSyncedAtText}`}
         right={
           <div className="flex items-center gap-3">
             <div className="rounded-xl border border-slate-200 bg-white px-4 py-2">共 {filteredRows.length} 位</div>
@@ -154,7 +154,7 @@ export function YgCustomersClient({ initialRows, summary }: YgCustomersClientPro
         }
       >
         {pagedRows.length === 0 ? (
-          <div className="px-5 py-12 text-center text-sm text-slate-500">当前没有匹配到友购顾客数据</div>
+          <div className="px-5 py-12 text-center text-sm text-slate-500">当前没有匹配到友购客户数据</div>
         ) : (
           <>
             <div className="overflow-x-auto">
@@ -220,7 +220,7 @@ export function YgCustomersClient({ initialRows, summary }: YgCustomersClientPro
                             <td colSpan={12} className="px-4 py-3">
                               <div className="space-y-3">
                                 <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
-                                  <span>顾客：{row.companyName || "-"}</span>
+                                  <span>客户：{row.companyName || "-"}</span>
                                   <span>累计订单金额：$ {row.totalOrderAmountText}</span>
                                   <span>累计订单次数：{row.totalOrderCount}</span>
                                 </div>

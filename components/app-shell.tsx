@@ -47,7 +47,7 @@ export async function AppShell({
     },
     {
       href: "/yg-customers",
-      label: lang === "zh" ? "友购顾客" : "YG Cust",
+      label: lang === "zh" ? "友购客户" : "YG Cust",
       visible:
         Boolean(session) &&
         Boolean(perms?.viewAllData || perms?.manageCustomers || perms?.manageSuppliers),

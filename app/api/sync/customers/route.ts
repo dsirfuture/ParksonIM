@@ -217,7 +217,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "同步友购顾客失败" },
+      { ok: false, error: error instanceof Error ? error.message : "同步友购客户失败" },
       { status: 500 },
     );
   }

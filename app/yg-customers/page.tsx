@@ -115,59 +115,34 @@ export default async function YgCustomersPage() {
     orderGroups.set(key, group);
   }
 
-  const fallbackCustomerRows = new Map<
-    string,
-    {
-      customerKey: string;
-      customerId: string;
-      registeredPhone: string;
-      companyName: string;
-      noteText: string;
-      relationNo: string;
-      relationName: string;
-      groupName: string;
-      provinceName: string;
-      regionName: string;
-      statusText: string;
-      lastVisitedAtText: string;
-      lastOrderAtText: string;
-      lastOrderNo: string;
-      syncedAtText: string;
-      detailRows: Array<{ orderNo: string; orderDateText: string; orderAmountText: string; latestStatus: string }>;
-      totalOrderAmountText: string;
-      totalOrderCount: number;
-    }
-  >();
-
-  for (const order of orders) {
-    const key =
+  const rows = customers.map((row) => {
+    const customerKey =
       buildCustomerKey({
-        customer_id: order.customer_id,
-        registered_phone: order.contact_phone,
-        company_name: order.company_name || order.customer_name || order.contact_name,
-        relation_no: null,
-        relation_name: order.customer_name || order.contact_name,
-      }) || `fallback::${order.order_no}`;
-    if (fallbackCustomerRows.has(key)) continue;
+        customer_id: row.customer_id,
+        registered_phone: row.registered_phone,
+        company_name: row.company_name,
+        relation_no: row.relation_no,
+        relation_name: row.relation_name,
+      }) || row.customer_key;
+    const details = orderGroups.get(customerKey) || [];
+    const totalAmount = details.reduce((sum, item) => sum + item.orderAmount, 0);
 
-    const details = orderGroups.get(key) || [];
-    const totalAmount = details.reduce((sum, row) => sum + row.orderAmount, 0);
-    fallbackCustomerRows.set(key, {
-      customerKey: key,
-      customerId: normalizeText(order.customer_id),
-      registeredPhone: normalizeText(order.contact_phone),
-      companyName: normalizeText(order.company_name) || normalizeText(order.customer_name) || normalizeText(order.contact_name) || "未命名顾客",
-      noteText: "",
-      relationNo: "",
-      relationName: normalizeText(order.customer_name) || normalizeText(order.contact_name),
-      groupName: "",
-      provinceName: "",
-      regionName: "",
-      statusText: normalizeText(order.latest_status),
-      lastVisitedAtText: formatDateOnly(order.updated_at),
-      lastOrderAtText: formatDateOnly(order.order_created_at ?? order.updated_at),
-      lastOrderNo: order.order_no,
-      syncedAtText: formatDateTime(order.updated_at),
+    return {
+      customerKey,
+      customerId: normalizeText(row.customer_id),
+      registeredPhone: normalizeText(row.registered_phone),
+      companyName: normalizeText(row.company_name) || "未命名客户",
+      noteText: normalizeText(row.note_text),
+      relationNo: normalizeText(row.relation_no),
+      relationName: normalizeText(row.relation_name),
+      groupName: normalizeText(row.group_name),
+      provinceName: normalizeText(row.province_name),
+      regionName: normalizeText(row.region_name),
+      statusText: normalizeText(row.status_text),
+      lastVisitedAtText: formatDateOnly(row.last_visited_at),
+      lastOrderAtText: formatDateOnly(row.last_order_at),
+      lastOrderNo: normalizeText(row.last_order_no),
+      syncedAtText: formatDateTime(row.synced_at ?? row.updated_at),
       detailRows: details.map((detail) => ({
         orderNo: detail.orderNo,
         orderDateText: detail.orderDateText,
@@ -176,56 +151,14 @@ export default async function YgCustomersPage() {
       })),
       totalOrderAmountText: moneyText(totalAmount),
       totalOrderCount: details.length,
-    });
-  }
-
-  const rows =
-    customers.length > 0
-      ? customers.map((row) => {
-          const customerKey =
-            buildCustomerKey({
-              customer_id: row.customer_id,
-              registered_phone: row.registered_phone,
-              company_name: row.company_name,
-              relation_no: row.relation_no,
-              relation_name: row.relation_name,
-            }) || row.customer_key;
-          const details = orderGroups.get(customerKey) || [];
-          const totalAmount = details.reduce((sum, item) => sum + item.orderAmount, 0);
-
-          return {
-            customerKey,
-            customerId: normalizeText(row.customer_id),
-            registeredPhone: normalizeText(row.registered_phone),
-            companyName: normalizeText(row.company_name) || "未命名顾客",
-            noteText: normalizeText(row.note_text),
-            relationNo: normalizeText(row.relation_no),
-            relationName: normalizeText(row.relation_name),
-            groupName: normalizeText(row.group_name),
-            provinceName: normalizeText(row.province_name),
-            regionName: normalizeText(row.region_name),
-            statusText: normalizeText(row.status_text),
-            lastVisitedAtText: formatDateOnly(row.last_visited_at),
-            lastOrderAtText: formatDateOnly(row.last_order_at),
-            lastOrderNo: normalizeText(row.last_order_no),
-            syncedAtText: formatDateTime(row.synced_at ?? row.updated_at),
-            detailRows: details.map((detail) => ({
-              orderNo: detail.orderNo,
-              orderDateText: detail.orderDateText,
-              orderAmountText: moneyText(detail.orderAmount),
-              latestStatus: detail.latestStatus,
-            })),
-            totalOrderAmountText: moneyText(totalAmount),
-            totalOrderCount: details.length,
-          };
-        })
-      : Array.from(fallbackCustomerRows.values());
+    };
+  });
 
   const sortedRows = rows.sort((left, right) => {
     return right.totalOrderCount - left.totalOrderCount || right.syncedAtText.localeCompare(left.syncedAtText);
   });
 
-  const latestSyncedAt = sortedRows[0]?.syncedAtText || "-";
+  const latestSyncedAt = customers[0] ? formatDateTime(customers[0].synced_at ?? customers[0].updated_at) : "-";
   const customersWithOrders = sortedRows.filter((row) => row.totalOrderCount > 0).length;
   const totalAmount = sortedRows.reduce((sum, row) => sum + Number(row.totalOrderAmountText || 0), 0);
 
