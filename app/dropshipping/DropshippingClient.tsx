@@ -70,6 +70,7 @@ type InventoryEditState = {
   productNameZh: string;
   productNameEs: string;
   isStocked: boolean;
+  stockedAt: string;
   stockedQty: string;
   stockAmount: string;
   unitPrice: string;
@@ -249,6 +250,12 @@ function fmtDateOnly(value: string | null | undefined, lang: "zh" | "es") {
     day: "2-digit",
     timeZone: "America/Mexico_City",
   }).format(new Date(value));
+}
+
+function toDateInputValue(value: string | null | undefined) {
+  const parts = parseDateOnlyParts(String(value || ""));
+  if (!parts) return "";
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 function fmtMoney(value: number, lang: "zh" | "es") {
@@ -2235,6 +2242,7 @@ export function DropshippingClient({
       productNameZh: row.productNameZh,
       productNameEs: row.productNameEs || "",
       isStocked: row.isStocked,
+      stockedAt: row.stockedAt ? toDateInputValue(row.stockedAt) : "",
       stockedQty: String(row.stockedQty),
       stockAmount: String(Math.round((row.stockAmount || 0) * 100) / 100),
       unitPrice: String(row.unitPrice ?? ""),
@@ -2269,6 +2277,7 @@ export function DropshippingClient({
         productNameZh: "",
         productNameEs: "",
         isStocked: false,
+        stockedAt: "",
         stockedQty: "0",
         stockAmount: "",
         unitPrice: "",
@@ -2317,6 +2326,7 @@ export function DropshippingClient({
       const unitPrice = inventoryEdit.unitPrice.trim();
       const stockAmount = inventoryEdit.stockAmount.trim();
       const discountRate = inventoryEdit.discountRate.trim();
+      const stockedAt = inventoryEdit.stockedAt.trim();
       if (inventoryEdit.mode === "create" && (!inventoryEdit.customerId || !inventoryEdit.sku)) {
         throw new Error(lang === "zh" ? "请选择客户和产品" : "Selecciona cliente y producto");
       }
@@ -2346,6 +2356,7 @@ export function DropshippingClient({
             productNameZh: inventoryEdit.productNameZh,
             productNameEs: inventoryEdit.productNameEs,
             isStocked: inventoryEdit.isStocked,
+            stockedAt: stockedAt || null,
             stockedQty,
             unitPrice: unitPriceValue,
             discountRate: discountRateValue,
@@ -3510,7 +3521,6 @@ export function DropshippingClient({
               <table className="min-w-full border-separate border-spacing-0">
                 <thead>
                   <tr className="bg-slate-50 text-left text-sm text-slate-700">
-                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "备货时间" : "Fecha de stock"}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{text.fields.productImage}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{text.fields.sku}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{text.fields.productZh}</th>
@@ -3524,7 +3534,6 @@ export function DropshippingClient({
                 <tbody>
                   {pagedInventory.map((row) => (
                     <tr key={row.inventoryId} className="border-t border-slate-100">
-                      <td className="px-4 py-2 text-sm text-slate-700">{row.stockedAt ? fmtDateOnly(row.stockedAt, lang) : "-"}</td>
                       <td className="px-4 py-2 text-sm text-slate-700">
                         <div className="flex min-h-8 items-center justify-center">
                           {row.productImageUrl && !failedInventoryImages.includes(row.inventoryId) ? (
@@ -3557,16 +3566,18 @@ export function DropshippingClient({
                       </td>
                       <td className="px-4 py-2 text-sm text-slate-900">
                         <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => beginInventoryEdit(row)}
-                            className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-semibold text-white transition hover:bg-primary/90"
-                            title={lang === "zh" ? "编辑备货" : "Editar stock"}
-                            aria-label={lang === "zh" ? "编辑备货" : "Editar stock"}
-                          >
-                            备
-                          </button>
                           <span>{row.sku}</span>
+                          {row.isStocked ? (
+                            <button
+                              type="button"
+                              onClick={() => beginInventoryEdit(row)}
+                              className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-semibold text-white transition hover:bg-primary/90"
+                              title={lang === "zh" ? "编辑备货" : "Editar stock"}
+                              aria-label={lang === "zh" ? "编辑备货" : "Editar stock"}
+                            >
+                              备
+                            </button>
+                          ) : null}
                         </div>
                       </td>
                       <td className="px-4 py-2 text-sm text-slate-700">{row.productNameZh}</td>
@@ -4646,11 +4657,6 @@ export function DropshippingClient({
                   ? (lang === "zh" ? "新增备货记录" : "Nuevo stock")
                   : (lang === "zh" ? "编辑备货记录" : "Editar stock")}
               </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                {inventoryEdit.mode === "create"
-                  ? (lang === "zh" ? "选择客户与产品后录入备货信息" : "Selecciona cliente y producto")
-                  : `${inventoryEdit.customerName} / ${inventoryEdit.sku} / ${inventoryEdit.productNameZh || "-"}`}
-              </p>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-1">
@@ -4732,6 +4738,15 @@ export function DropshippingClient({
                     )}
                   </div>
                 ) : null}
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-slate-500">{lang === "zh" ? "备货时间" : "Fecha de stock"}</p>
+                <input
+                  type="date"
+                  value={inventoryEdit.stockedAt}
+                  onChange={(event) => setInventoryEdit((prev) => (prev ? { ...prev, stockedAt: event.target.value } : prev))}
+                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40"
+                />
               </div>
               <div className="space-y-1">
                 <p className="text-xs text-slate-500">{lang === "zh" ? "备货数量" : "Stock"}</p>

@@ -39,6 +39,7 @@ export async function POST(request: Request) {
     const productNameZh = String(body.productNameZh || "").trim() || null;
     const productNameEs = String(body.productNameEs || "").trim() || null;
     const isStocked = Boolean(body.isStocked);
+    const stockedAt = String(body.stockedAt || "").trim() || null;
     const stockedQty = Number(body.stockedQty ?? 0);
     const unitPriceRaw = body.unitPrice;
     const discountRateRaw = body.discountRate;
@@ -55,6 +56,7 @@ export async function POST(request: Request) {
       productNameZh,
       productNameEs,
       isStocked,
+      stockedAt,
       stockedQty,
       unitPrice:
         unitPriceRaw === "" || unitPriceRaw === null || unitPriceRaw === undefined

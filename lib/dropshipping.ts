@@ -1191,29 +1191,6 @@ export async function getInventoryRows(session: Session) {
     shippedOrders.map((row) => [`${row.customer_id}::${row.product_id}`, row._sum.quantity || 0]),
   );
 
-  const stockedAtRows = await prisma.dropshippingOrder.findMany({
-    where: {
-      tenant_id: session.tenantId,
-      company_id: session.companyId,
-      snapshot_stocked_qty: { not: null },
-      shipped_at: { not: null },
-    },
-    select: {
-      customer_id: true,
-      product_id: true,
-      shipped_at: true,
-    },
-    orderBy: [{ shipped_at: "asc" }, { created_at: "asc" }],
-  });
-
-  const stockedAtMap = new Map<string, string>();
-  for (const row of stockedAtRows) {
-    const key = `${row.customer_id}::${row.product_id}`;
-    if (!stockedAtMap.has(key) && row.shipped_at) {
-      stockedAtMap.set(key, row.shipped_at.toISOString());
-    }
-  }
-
   const catalogBySku = new Map(
     catalogRows.map((row) => [normalizeProductCode(row.sku), row]),
   );
@@ -1236,7 +1213,7 @@ export async function getInventoryRows(session: Session) {
       productNameZh: catalog?.name_zh?.trim() || row.product.name_zh,
       productNameEs: catalog?.name_es?.trim() || row.product.name_es || "",
       productImageUrl: row.product.image_url || buildProductImageUrl(matchedSku, "jpg"),
-      stockedAt: stockedAtMap.get(`${row.customer_id}::${row.product_id}`) || null,
+      stockedAt: row.stocked_at?.toISOString() || null,
       warehouse: row.warehouse || row.product.default_warehouse || "",
       isStocked: row.is_stocked,
       stockedQty: row.stocked_qty,
@@ -1278,6 +1255,7 @@ export async function createInventory(
     productNameZh?: string | null;
     productNameEs?: string | null;
     isStocked?: boolean;
+    stockedAt?: string | null;
     stockedQty: number;
     unitPrice?: number | null;
     discountRate?: number | null;
@@ -1391,6 +1369,7 @@ export async function createInventory(
       company_id: session.companyId,
       customer_id: payload.customerId,
       product_id: product.id,
+      stocked_at: payload.stockedAt ? new Date(`${payload.stockedAt}T12:00:00Z`) : null,
       is_stocked: Boolean(payload.isStocked),
       stocked_qty: payload.stockedQty,
       locked_unit_price:
@@ -1413,6 +1392,7 @@ export async function updateInventory(
   payload: {
     id: string;
     isStocked?: boolean;
+    stockedAt?: string | null;
     stockedQty: number;
     unitPrice?: number | null;
     discountRate?: number | null;
@@ -1436,6 +1416,7 @@ export async function updateInventory(
     where: { id: inventory.id },
     data: {
       is_stocked: Boolean(payload.isStocked),
+      stocked_at: payload.stockedAt ? new Date(`${payload.stockedAt}T12:00:00Z`) : null,
       stocked_qty: payload.stockedQty,
       locked_unit_price: payload.unitPrice ?? null,
       locked_discount_rate: payload.discountRate ?? null,
