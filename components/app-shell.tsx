@@ -47,7 +47,7 @@ export async function AppShell({
     },
     {
       href: "/products-management",
-      label: lang === "zh" ? "产品管理" : "Prod",
+      label: lang === "zh" ? "友购产品" : "YG Prod",
       visible: Boolean(session) && Boolean(perms?.manageProducts),
     },
     {

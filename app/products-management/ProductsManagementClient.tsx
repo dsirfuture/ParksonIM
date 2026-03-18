@@ -243,7 +243,7 @@ export function ProductsManagementClient({
     "Fix fail": "修复商品数据失败",
     "Delete this import record?": "确认删除这条导入记录吗？",
     "Delete hist fail": "删除导入记录失败",
-    "Prod cfg": "产品管理",
+    "Prod cfg": "友购产品",
     "Imp + cmp SKU": "导入产品目录并按 SKU 自动对比",
     "Proc...": "处理中...",
     "Imp cmp": "对比数据导入",
@@ -965,7 +965,7 @@ export function ProductsManagementClient({
     <section className="space-y-4">
       <TableCard
         className="!mt-0"
-        title={tx("产品管理", "Prod cfg")}
+        title={tx("友购产品", "Prod cfg")}
         description={tx("导入、筛选、批量修改并维护商品数据。", "Importe, filtre, edite por lote y mantenga datos de productos.")}
       >
         <div className="space-y-3 p-4">

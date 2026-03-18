@@ -20,6 +20,42 @@ function toNumber(value: unknown) {
   return null;
 }
 
+const LEGACY_YOGO_CATEGORY_NAME_MAP: Record<string, string> = {
+  "000": "下单加微",
+  "001": "随时更新",
+  "01": "玩具",
+  "02": "袜子",
+  "03": "生日气球",
+  "04": "数字气球",
+  "05": "铝膜气球",
+  "06": "派对套装",
+  "07": "节庆装饰",
+  "08": "蜡烛",
+  "09": "浪漫礼品",
+  "10": "派对服饰",
+  "11": "宠物口部用品",
+  "12": "宠物穿戴",
+  "13": "宠物清洁护理",
+  "14": "宠物玩具",
+  "15": "宠物项圈",
+  "16": "宠物牵引绳",
+  "17": "宠物外出用品",
+  "18": "宠物喂食用品",
+  "19": "猫用品",
+  "20": "装饰画",
+  "21": "家居装饰",
+  "22": "相框",
+  "23": "餐盒",
+  "24": "电池",
+  "25": "香水",
+  "26": "杯具",
+  "27": "IP周边",
+  "28": "香薰",
+  "30": "帽子",
+  "31": "厨房用品",
+  "32": "毛绒玩具",
+};
+
 function formatPercent(value: number) {
   return Number.isInteger(value) ? `${value}%` : `${value.toFixed(2)}%`;
 }
@@ -64,4 +100,10 @@ export function extractCategoryCode(value: string | null | undefined) {
   if (!text) return "";
   const match = text.match(/^(\d+)/u);
   return match ? match[1] : "";
+}
+
+export function getLegacyYogoCategoryName(value: string | null | undefined) {
+  const code = extractCategoryCode(value);
+  if (!code) return "";
+  return LEGACY_YOGO_CATEGORY_NAME_MAP[code.slice(0, 3).padStart(code.length >= 3 ? 3 : 2, "0")] || "";
 }
