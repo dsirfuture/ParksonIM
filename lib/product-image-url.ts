@@ -8,6 +8,25 @@ function normalizeImageKey(value: string) {
   return String(value || "").trim();
 }
 
+function buildImageKeyCandidates(raw: string) {
+  const candidates = new Set<string>();
+  if (!raw) return [];
+
+  candidates.add(raw);
+  candidates.add(raw.toUpperCase());
+  candidates.add(raw.toLowerCase());
+
+  const hyphenIndex = raw.indexOf("-");
+  if (hyphenIndex > 0) {
+    const prefix = raw.slice(0, hyphenIndex);
+    const suffix = raw.slice(hyphenIndex);
+    const titlePrefix = prefix.charAt(0).toUpperCase() + prefix.slice(1).toLowerCase();
+    candidates.add(`${titlePrefix}${suffix}`);
+  }
+
+  return Array.from(candidates).filter(Boolean);
+}
+
 export function buildProductImageUrl(key: string, ext = "jpg") {
   const raw = normalizeImageKey(key);
   if (!raw) return "";
@@ -22,8 +41,6 @@ export function buildProductImageUrl(key: string, ext = "jpg") {
 export function buildProductImageUrls(key: string, exts: string[]) {
   const raw = normalizeImageKey(key);
   if (!raw) return [];
-  const candidates = Array.from(
-    new Set([raw, raw.toUpperCase(), raw.toLowerCase()].filter(Boolean)),
-  );
+  const candidates = buildImageKeyCandidates(raw);
   return candidates.flatMap((candidate) => exts.map((ext) => buildProductImageUrl(candidate, ext)));
 }
