@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { randomUUID } from "crypto";
 import type { Session } from "@/lib/tenant";
 import type {
   DsAlertItem,
@@ -91,6 +92,14 @@ function toNumber(value: unknown) {
     }
   }
   return 0;
+}
+
+function legacyGroupKeyOf(row: Pick<DsLegacyImportRow, "customerName" | "platform" | "platformOrderNo">) {
+  return [
+    String(row.customerName || "").trim().toLowerCase(),
+    String(row.platform || "").trim().toLowerCase(),
+    String(row.platformOrderNo || "").trim().toLowerCase(),
+  ].join("::");
 }
 
 async function fetchWiseMxnToCnyRate() {
@@ -715,6 +724,19 @@ export async function importLegacyOrders(
   session: Session,
   rows: DsLegacyImportRow[],
 ): Promise<DsLegacyImportSummary> {
+  const legacyGroupCounts = new Map<string, number>();
+  for (const row of rows) {
+    const key = legacyGroupKeyOf(row);
+    if (!key || !row.platformOrderNo?.trim()) continue;
+    legacyGroupCounts.set(key, (legacyGroupCounts.get(key) || 0) + 1);
+  }
+  const legacyTrackingGroupIds = new Map<string, string>();
+  for (const [key, count] of legacyGroupCounts.entries()) {
+    if (count > 1) {
+      legacyTrackingGroupIds.set(key, randomUUID());
+    }
+  }
+
   const touchedCustomers = new Set<string>();
   const touchedProducts = new Set<string>();
   const paymentSeededCustomers = new Set<string>();
@@ -797,6 +819,7 @@ export async function importLegacyOrders(
       product_id: product.id,
       platform: row.platform.trim(),
       platform_order_no: row.platformOrderNo.trim(),
+      tracking_group_id: legacyTrackingGroupIds.get(legacyGroupKeyOf(row)) || null,
       tracking_no: row.trackingNo || null,
       shipping_label_file: row.shippingLabelFile || null,
       quantity: row.quantity,
