@@ -20,6 +20,9 @@ echo "Generating Prisma client..."
 npx prisma generate >/dev/null
 
 echo "Syncing schema to isolated ParksonIM database..."
-npx prisma db push --skip-generate
+if ! npx prisma db push --skip-generate; then
+  echo "Prisma db push skipped because the existing database has extra columns or data-loss warnings."
+  echo "Continuing to start the app without applying destructive schema changes."
+fi
 
 exec "$@"

@@ -191,6 +191,8 @@ export default async function ProductsManagementPage() {
     const discount = parseYogoDiscountParts(row.category_name, row.source_discount);
     const categoryCode = extractCategoryCode(row.category_name);
     const yogoCode = categoryCode ? categoryCode.slice(0, 2).padStart(2, "0") : "-";
+    const mappedCategoryName = yogoCode === "-" ? "" : categoryCodeMap.get(yogoCode) || "";
+    const fallbackCategoryName = stripLeadingCategoryCode(row.category_name);
     return {
       id: row.id,
       sku: row.product_code,
@@ -203,7 +205,7 @@ export default async function ProductsManagementPage() {
       normalDiscountText: discount.normal,
       vipDiscountText: discount.vip,
       category: yogoCode,
-      categoryName: yogoCode === "-" ? "-" : categoryCodeMap.get(yogoCode) || "-",
+      categoryName: mappedCategoryName || fallbackCategoryName || "-",
       subcategory: stripLeadingCategoryCode(row.subcategory_name),
       supplier: row.supplier || "",
       hasImage: hasProductImage(row.product_code),
