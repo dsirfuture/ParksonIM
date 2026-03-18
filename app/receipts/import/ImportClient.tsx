@@ -42,6 +42,7 @@ type ValidateResponse = {
   summary?: {
     totalRows: number;
     receiptCount: number;
+    supplierCount?: number;
     skuCount: number;
     totalExpectedQty: number;
   };
@@ -612,6 +613,7 @@ export function ImportClient({
             modalTitleImportSuccess: "导入结果",
             statTotalRows: "总行数",
             statReceiptCount: "验货单数",
+            statSupplierCount: "供应商数",
             statSkuCount: "总单SKU",
             statTotalExpectedQty: "应验总数量",
             previewTab: "导入预览",
@@ -669,6 +671,7 @@ export function ImportClient({
             modalTitleImportSuccess: "Resultado de importación",
             statTotalRows: "Filas totales",
             statReceiptCount: "Recepciones",
+            statSupplierCount: "Proveedores",
             statSkuCount: "SKU totales",
             statTotalExpectedQty: "Cantidad total",
             previewTab: "Vista previa",
@@ -780,6 +783,7 @@ export function ImportClient({
           ? [
               `${text.statTotalRows}：${data.summary.totalRows}`,
               `${text.statReceiptCount}：${data.summary.receiptCount}`,
+              `${text.statSupplierCount}：${data.summary.supplierCount ?? 0}`,
               `${text.statSkuCount}：${data.summary.skuCount}`,
               `${text.statTotalExpectedQty}：${data.summary.totalExpectedQty}`,
             ]
@@ -1298,7 +1302,7 @@ export function ImportClient({
 
             <div className="px-5 py-5">
               {modal.kind === "success" && modal.mode === "validate" ? (
-                <div className="grid gap-3 md:grid-cols-4">
+                <div className="grid gap-3 md:grid-cols-5">
                   {modal.lines.map((line, index) => {
                     const [label, value] = line.split("：");
                     return (

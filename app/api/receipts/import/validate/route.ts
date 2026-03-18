@@ -454,6 +454,11 @@ export async function POST(req: Request) {
     });
 
     const receiptSet = new Set(mergedRows.map((row) => row.receipt_no));
+    const supplierSet = new Set(
+      mergedRows
+        .map((row) => row.supplier_name?.trim())
+        .filter((value): value is string => Boolean(value)),
+    );
     const skuSet = new Set(mergedRows.map((row) => row.sku));
     const totalExpectedQty = mergedRows.reduce(
       (sum, row) => sum + (row.expected_qty || 0),
@@ -465,6 +470,7 @@ export async function POST(req: Request) {
       summary: {
         totalRows: rows.length,
         receiptCount: receiptSet.size,
+        supplierCount: supplierSet.size,
         skuCount: skuSet.size,
         totalExpectedQty,
       },
