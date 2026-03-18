@@ -22,6 +22,7 @@ type YgCustomerRow = {
   provinceName: string;
   regionName: string;
   statusText: string;
+  salesRepName: string;
   lastVisitedAtText: string;
   lastOrderAtText: string;
   lastOrderNo: string;
@@ -74,6 +75,7 @@ export function YgCustomersClient({ initialRows, summary }: YgCustomersClientPro
         row.provinceName,
         row.regionName,
         row.statusText,
+        row.salesRepName,
         row.lastOrderNo,
         ...row.detailRows.flatMap((detail) => [detail.orderNo, detail.orderDateText]),
       ]
@@ -171,7 +173,8 @@ export function YgCustomersClient({ initialRows, summary }: YgCustomersClientPro
                     <th className="px-4 py-3 font-semibold">省份</th>
                     <th className="px-4 py-3 font-semibold">地区</th>
                     <th className="px-4 py-3 font-semibold">最后访问</th>
-                    <th className="px-4 py-3 font-semibold">最后订单</th>
+                    <th className="px-4 py-3 font-semibold">最近订单</th>
+                    <th className="px-4 py-3 font-semibold">业务员</th>
                     <th className="px-4 py-3 font-semibold">累计订单金额</th>
                     <th className="px-4 py-3 font-semibold">累计订单次数</th>
                   </tr>
@@ -211,13 +214,14 @@ export function YgCustomersClient({ initialRows, summary }: YgCustomersClientPro
                           <td className="px-4 py-3 text-sm text-slate-700">{row.regionName || "-"}</td>
                           <td className="px-4 py-3 text-sm text-slate-700">{row.lastVisitedAtText || "-"}</td>
                           <td className="px-4 py-3 text-sm text-slate-700">{row.lastOrderAtText || "-"}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{row.salesRepName || "-"}</td>
                           <td className="px-4 py-3 text-sm text-slate-700">$ {row.totalOrderAmountText}</td>
                           <td className="px-4 py-3 text-sm text-slate-700">{row.totalOrderCount}</td>
                         </tr>
                         {expanded ? (
                           <tr className="border-t border-slate-100 bg-slate-50/70">
                             <td className="px-4 py-3" />
-                            <td colSpan={12} className="px-4 py-3">
+                            <td colSpan={13} className="px-4 py-3">
                               <div className="space-y-3">
                                 <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
                                   <span>客户：{row.companyName || "-"}</span>

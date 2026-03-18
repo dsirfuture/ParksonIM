@@ -40,6 +40,8 @@ type RawCustomer = {
   status_text?: unknown;
   statusText?: unknown;
   status?: unknown;
+  sales_rep_name?: unknown;
+  salesRepName?: unknown;
   last_visited_at?: unknown;
   lastVisitedAt?: unknown;
   updated_at?: unknown;
@@ -171,6 +173,7 @@ export async function POST(request: Request) {
           province_name: text(item.province_name) || text(item.provinceName) || text(item.province),
           region_name: text(item.region_name) || text(item.regionName) || text(item.region) || text(item.city),
           status_text: text(item.status_text) || text(item.statusText) || text(item.status),
+          sales_rep_name: text(item.sales_rep_name) || text(item.salesRepName),
           last_visited_at:
             dateOrNull(item.last_visited_at) ||
             dateOrNull(item.lastVisitedAt) ||
@@ -195,6 +198,7 @@ export async function POST(request: Request) {
           province_name: text(item.province_name) || text(item.provinceName) || text(item.province),
           region_name: text(item.region_name) || text(item.regionName) || text(item.region) || text(item.city),
           status_text: text(item.status_text) || text(item.statusText) || text(item.status),
+          sales_rep_name: text(item.sales_rep_name) || text(item.salesRepName),
           last_visited_at:
             dateOrNull(item.last_visited_at) ||
             dateOrNull(item.lastVisitedAt) ||
@@ -206,6 +210,21 @@ export async function POST(request: Request) {
         },
       });
       upsertedCount += 1;
+    }
+
+    const currentSyncTime = rawCustomers
+      .map((item) => dateOrNull(item.synced_at) || dateOrNull(item.syncedAt))
+      .find(Boolean);
+    if (currentSyncTime) {
+      await prisma.ygCustomerImport.deleteMany({
+        where: {
+          tenant_id: tenantId,
+          company_id: companyId,
+          NOT: {
+            synced_at: currentSyncTime,
+          },
+        },
+      });
     }
 
     return NextResponse.json({

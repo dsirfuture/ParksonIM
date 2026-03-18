@@ -139,6 +139,7 @@ export default async function YgCustomersPage() {
       provinceName: normalizeText(row.province_name),
       regionName: normalizeText(row.region_name),
       statusText: normalizeText(row.status_text),
+      salesRepName: normalizeText(row.sales_rep_name),
       lastVisitedAtText: formatDateOnly(row.last_visited_at),
       lastOrderAtText: formatDateOnly(row.last_order_at),
       lastOrderNo: normalizeText(row.last_order_no),
