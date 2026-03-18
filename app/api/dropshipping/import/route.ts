@@ -26,21 +26,21 @@ type CellMeta = {
 type ColumnKey = keyof Omit<DsLegacyImportRow, "shippingLabelFiles" | "shippingProofFiles">;
 
 const COLUMN_ALIASES: Record<ColumnKey, string[]> = {
-  customerName: ["客户名称", "客户"],
-  platform: ["下单平台", "平台"],
-  platformOrderNo: ["后台订单号", "订单号"],
+  customerName: ["客户名称", "客户", "收货方", "收件人", "客户名"],
+  platform: ["下单平台", "平台", "店铺", "来源平台", "销售平台"],
+  platformOrderNo: ["后台订单号", "订单号", "平台订单号", "后台单号", "原始订单号", "系统订单号"],
   trackingNo: ["面单物流号", "物流号", "运单号"],
   shippingLabelFile: ["面单文件"],
   shipped: ["是否发货"],
   shippedAt: ["发货日期"],
   shippingProofFile: ["发货凭据", "发货凭证"],
-  sku: ["产品sku", "sku", "产品SKU"],
-  quantity: ["下单数", "数量"],
+  sku: ["产品sku", "sku", "产品SKU", "商品SKU", "产品编码", "商品编码", "编码"],
+  quantity: ["下单数", "数量", "下单数量", "购买数量", "产品数量", "件数", "发货数量", "总数量"],
   color: ["发货颜色", "颜色"],
   warehouse: ["发货仓", "仓库"],
   shippingFee: ["代发费"],
   productImageUrl: ["产品图"],
-  productNameZh: ["产品中文名"],
+  productNameZh: ["产品中文名", "产品名称", "商品名称", "中文名", "品名"],
   unitPrice: ["产品单价"],
   discountRate: ["普通折扣"],
   stockedQty: ["备货数量"],
@@ -144,10 +144,10 @@ function findHeaderRow(rows: string[][]) {
   return rows.findIndex((row) => {
     const keys = row.map((cell) => headerKey(cell));
     return (
-      keys.includes(headerKey("客户名称")) &&
-      keys.includes(headerKey("下单平台")) &&
-      keys.includes(headerKey("后台订单号")) &&
-      keys.includes(headerKey("产品SKU"))
+      COLUMN_ALIASES.customerName.some((alias) => keys.includes(headerKey(alias))) &&
+      COLUMN_ALIASES.platform.some((alias) => keys.includes(headerKey(alias))) &&
+      COLUMN_ALIASES.platformOrderNo.some((alias) => keys.includes(headerKey(alias))) &&
+      COLUMN_ALIASES.sku.some((alias) => keys.includes(headerKey(alias)))
     );
   });
 }
@@ -155,6 +155,20 @@ function findHeaderRow(rows: string[][]) {
 function findColumnIndex(headers: string[], aliases: string[]) {
   const normalizedAliases = aliases.map((item) => headerKey(item));
   return headers.findIndex((item) => normalizedAliases.includes(headerKey(item)));
+}
+
+function resolveLegacyQuantity(
+  directQty: number | null,
+  stockedQty: number | null,
+  shippingAmount: number | null,
+  totalAmount: number | null,
+) {
+  if (directQty !== null && directQty > 0) return directQty;
+  if (stockedQty !== null && stockedQty > 0) return stockedQty;
+  if ((shippingAmount !== null && shippingAmount > 0) || (totalAmount !== null && totalAmount > 0)) {
+    return 1;
+  }
+  return 0;
 }
 
 function buildAssetIndexes(files: AssetFile[]) {
@@ -410,6 +424,16 @@ async function parseXlsxWorkbook(bytes: Uint8Array, assetFiles: AssetFile[], cel
         }
       }
 
+      const stockedQty = parseNumber(indexes.stockedQty >= 0 ? row[indexes.stockedQty] : null);
+      const shippingAmount = parseNumber(indexes.shippingAmount >= 0 ? row[indexes.shippingAmount] : null);
+      const totalAmount = parseNumber(indexes.totalAmount >= 0 ? row[indexes.totalAmount] : null);
+      const quantity = resolveLegacyQuantity(
+        parseNumber(indexes.quantity >= 0 ? row[indexes.quantity] : null),
+        stockedQty,
+        shippingAmount,
+        totalAmount,
+      );
+
       items.push({
         customerName,
         platform,
@@ -423,20 +447,20 @@ async function parseXlsxWorkbook(bytes: Uint8Array, assetFiles: AssetFile[], cel
           carriedProofMeta.hyperlink || shippingProofFiles[0]?.relativePath || shippingProofFile || "",
         shippingProofFiles,
         sku,
-        quantity: parseNumber(indexes.quantity >= 0 ? row[indexes.quantity] : null) ?? 0,
+        quantity,
         color: indexes.color >= 0 ? text(row[indexes.color]) : "",
         warehouse: indexes.warehouse >= 0 ? text(row[indexes.warehouse]) : "",
         shippingFee: parseNumber(indexes.shippingFee >= 0 ? row[indexes.shippingFee] : null),
         productImageUrl: indexes.productImageUrl >= 0 ? text(row[indexes.productImageUrl]) : "",
-        productNameZh: indexes.productNameZh >= 0 ? text(row[indexes.productNameZh]) : "",
+        productNameZh: indexes.productNameZh >= 0 ? text(row[indexes.productNameZh]) || sku : sku,
         unitPrice: parseNumber(indexes.unitPrice >= 0 ? row[indexes.unitPrice] : null),
         discountRate: parseDiscount(indexes.discountRate >= 0 ? row[indexes.discountRate] : null),
-        stockedQty: parseNumber(indexes.stockedQty >= 0 ? row[indexes.stockedQty] : null),
+        stockedQty,
         stockAmount: parseNumber(indexes.stockAmount >= 0 ? row[indexes.stockAmount] : null),
         rateValue: parseNumber(indexes.rateValue >= 0 ? row[indexes.rateValue] : null),
         exchangedAmount: parseNumber(indexes.exchangedAmount >= 0 ? row[indexes.exchangedAmount] : null),
-        shippingAmount: parseNumber(indexes.shippingAmount >= 0 ? row[indexes.shippingAmount] : null),
-        totalAmount: parseNumber(indexes.totalAmount >= 0 ? row[indexes.totalAmount] : null),
+        shippingAmount,
+        totalAmount,
         paidAmount: parseNumber(indexes.paidAmount >= 0 ? row[indexes.paidAmount] : null),
         unpaidAmount: parseNumber(indexes.unpaidAmount >= 0 ? row[indexes.unpaidAmount] : null),
         settledAt: parseDate(indexes.settledAt >= 0 ? row[indexes.settledAt] : null),
@@ -487,6 +511,16 @@ function parseFlatWorkbook(bytes: ArrayBuffer) {
       const shippingLabelFile = getCarriedValue(row, indexes, carriedValues, "shippingLabelFile");
       const shippingProofFile = getCarriedValue(row, indexes, carriedValues, "shippingProofFile");
 
+      const stockedQty = parseNumber(indexes.stockedQty >= 0 ? row[indexes.stockedQty] : null);
+      const shippingAmount = parseNumber(indexes.shippingAmount >= 0 ? row[indexes.shippingAmount] : null);
+      const totalAmount = parseNumber(indexes.totalAmount >= 0 ? row[indexes.totalAmount] : null);
+      const quantity = resolveLegacyQuantity(
+        parseNumber(indexes.quantity >= 0 ? row[indexes.quantity] : null),
+        stockedQty,
+        shippingAmount,
+        totalAmount,
+      );
+
       items.push({
         customerName,
         platform,
@@ -499,20 +533,20 @@ function parseFlatWorkbook(bytes: ArrayBuffer) {
         shippingProofFile,
         shippingProofFiles: [],
         sku,
-        quantity: parseNumber(indexes.quantity >= 0 ? row[indexes.quantity] : null) ?? 0,
+        quantity,
         color: indexes.color >= 0 ? text(row[indexes.color]) : "",
         warehouse: indexes.warehouse >= 0 ? text(row[indexes.warehouse]) : "",
         shippingFee: parseNumber(indexes.shippingFee >= 0 ? row[indexes.shippingFee] : null),
         productImageUrl: indexes.productImageUrl >= 0 ? text(row[indexes.productImageUrl]) : "",
-        productNameZh: indexes.productNameZh >= 0 ? text(row[indexes.productNameZh]) : "",
+        productNameZh: indexes.productNameZh >= 0 ? text(row[indexes.productNameZh]) || sku : sku,
         unitPrice: parseNumber(indexes.unitPrice >= 0 ? row[indexes.unitPrice] : null),
         discountRate: parseDiscount(indexes.discountRate >= 0 ? row[indexes.discountRate] : null),
-        stockedQty: parseNumber(indexes.stockedQty >= 0 ? row[indexes.stockedQty] : null),
+        stockedQty,
         stockAmount: parseNumber(indexes.stockAmount >= 0 ? row[indexes.stockAmount] : null),
         rateValue: parseNumber(indexes.rateValue >= 0 ? row[indexes.rateValue] : null),
         exchangedAmount: parseNumber(indexes.exchangedAmount >= 0 ? row[indexes.exchangedAmount] : null),
-        shippingAmount: parseNumber(indexes.shippingAmount >= 0 ? row[indexes.shippingAmount] : null),
-        totalAmount: parseNumber(indexes.totalAmount >= 0 ? row[indexes.totalAmount] : null),
+        shippingAmount,
+        totalAmount,
         paidAmount: parseNumber(indexes.paidAmount >= 0 ? row[indexes.paidAmount] : null),
         unpaidAmount: parseNumber(indexes.unpaidAmount >= 0 ? row[indexes.unpaidAmount] : null),
         settledAt: parseDate(indexes.settledAt >= 0 ? row[indexes.settledAt] : null),
