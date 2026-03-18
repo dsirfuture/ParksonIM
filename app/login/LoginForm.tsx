@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -30,6 +31,8 @@ export function LoginForm({ lang }: { lang: Lang }) {
             loginUnavailable: "当前未能完成登录，请稍后再试",
             showPassword: "显示密码",
             hidePassword: "隐藏密码",
+            registerHint: "还没有账号？",
+            register: "去注册",
           }
         : {
             title: "Acceder a ParksonIM",
@@ -43,6 +46,8 @@ export function LoginForm({ lang }: { lang: Lang }) {
             loginUnavailable: "Por ahora no fue posible iniciar sesión",
             showPassword: "Mostrar contraseña",
             hidePassword: "Ocultar contraseña",
+            registerHint: "Todavia no tienes cuenta?",
+            register: "Registrarse",
           },
     [lang],
   );
@@ -142,6 +147,13 @@ export function LoginForm({ lang }: { lang: Lang }) {
         >
           {loading ? text.loading : text.submit}
         </button>
+
+        <div className="flex items-center justify-center gap-2 pt-1 text-sm text-slate-500">
+          <span>{text.registerHint}</span>
+          <Link href="/register" className="font-medium text-primary transition hover:opacity-80">
+            {text.register}
+          </Link>
+        </div>
       </form>
     </div>
   );
