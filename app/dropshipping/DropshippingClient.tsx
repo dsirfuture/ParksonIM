@@ -4392,12 +4392,12 @@ export function DropshippingClient({
           <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
             <div className="px-5 pb-3 pt-5">
               <h3 className="text-base font-semibold text-slate-900">
-                {lang === "zh" ? "确认移除商品" : "Confirmar eliminacion"}
+                {lang === "zh" ? "确认移除添加商品" : "Confirmar eliminacion"}
               </h3>
               <p className="mt-2 text-sm text-slate-600">
                 {lang === "zh"
-                  ? `确认将 ${groupedDeleteTarget.sku || groupedDeleteTarget.productNameZh || "该商品"} 从同物流号商品组中移除？`
-                  : `Quitar ${groupedDeleteTarget.sku || groupedDeleteTarget.productNameZh || "este producto"} del grupo?`}
+                  ? `确认将 ${groupedDeleteTarget.sku || groupedDeleteTarget.productNameZh || "该商品"} 从当前订单中移除？`
+                  : `Quitar ${groupedDeleteTarget.sku || groupedDeleteTarget.productNameZh || "este producto"} del pedido actual?`}
               </p>
             </div>
             <div className="flex justify-end gap-3 border-t border-slate-200 px-5 py-4">
