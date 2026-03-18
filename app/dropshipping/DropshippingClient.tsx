@@ -4198,7 +4198,7 @@ export function DropshippingClient({
                   </label>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-[168px_140px_140px_140px_140px] md:justify-start">
+                <div className="grid gap-4 md:grid-cols-5">
                   <label className="space-y-1">
                     <span className="whitespace-nowrap text-xs text-slate-500">{text.form.shippedAt}</span>
                     <input
