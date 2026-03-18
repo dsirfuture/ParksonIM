@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { normalizeProductCode } from "@/lib/product-code";
-import { buildProductImageUrl, HAS_REMOTE_PRODUCT_IMAGE_BASE } from "@/lib/product-image-url";
+import { useEffect, useMemo, useState } from "react";
+import { buildProductImageUrls, HAS_REMOTE_PRODUCT_IMAGE_BASE } from "@/lib/product-image-url";
 
 type ProductImageProps = {
   sku?: string | null;
@@ -15,7 +14,7 @@ type ProductImageProps = {
 };
 
 function normalizeSku(sku?: string | null) {
-  return normalizeProductCode(sku);
+  return String(sku || "").trim();
 }
 
 export function ProductImage({
@@ -27,10 +26,13 @@ export function ProductImage({
   roundedClassName = "rounded-lg",
   onClick,
 }: ProductImageProps) {
-  const [failed, setFailed] = useState(false);
+  const [resolvedSrc, setResolvedSrc] = useState<string | null | undefined>(undefined);
 
   const normalizedSku = useMemo(() => normalizeSku(sku), [sku]);
-  const src = normalizedSku ? buildProductImageUrl(normalizedSku, "jpg") : "";
+  const sources = useMemo(
+    () => (normalizedSku ? buildProductImageUrls(normalizedSku, ["jpg", "jpeg", "png", "webp"]) : []),
+    [normalizedSku],
+  );
 
   const placeholder = (
     <div
@@ -43,7 +45,43 @@ export function ProductImage({
 
   const shouldTryLoad = hasImage || HAS_REMOTE_PRODUCT_IMAGE_BASE;
 
-  if (!normalizedSku || failed || !shouldTryLoad) {
+  useEffect(() => {
+    if (!normalizedSku || !shouldTryLoad || sources.length === 0) {
+      setResolvedSrc(null);
+      return;
+    }
+
+    let canceled = false;
+    setResolvedSrc(undefined);
+
+    (async () => {
+      for (const url of sources) {
+        const ok = await new Promise<boolean>((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve(true);
+          img.onerror = () => resolve(false);
+          img.src = url;
+        });
+
+        if (ok) {
+          if (!canceled) setResolvedSrc(url);
+          return;
+        }
+      }
+
+      if (!canceled) setResolvedSrc(null);
+    })();
+
+    return () => {
+      canceled = true;
+    };
+  }, [normalizedSku, shouldTryLoad, sources]);
+
+  if (!normalizedSku || resolvedSrc === null || !shouldTryLoad) {
+    return placeholder;
+  }
+
+  if (!resolvedSrc) {
     return placeholder;
   }
 
@@ -55,12 +93,12 @@ export function ProductImage({
       style={{ width: size, height: size }}
     >
       <img
-        src={src}
+        src={resolvedSrc}
         alt={alt || normalizedSku}
         width={size}
         height={size}
         className="h-full w-full object-cover"
-        onError={() => setFailed(true)}
+        onError={() => setResolvedSrc(null)}
       />
     </button>
   );
