@@ -5,6 +5,11 @@ import { getLang } from "@/lib/i18n-server";
 export const metadata: Metadata = {
   title: "ParksonIM",
   description: "Parkson Inspection Management Platform",
+  icons: {
+    icon: "/BSLOGO.png",
+    shortcut: "/BSLOGO.png",
+    apple: "/BSLOGO.png",
+  },
 };
 
 export default async function RootLayout({
