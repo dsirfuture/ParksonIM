@@ -33,31 +33,32 @@ export async function AppShell({
     {
       href: "/dashboard",
       label: lang === "zh" ? "仪表盘" : "Dash",
+      visible: Boolean(session),
     },
     {
       href: "/receipts",
       label: lang === "zh" ? "验货单" : "Rec",
-      visible: !session || perms?.inspectGoods || perms?.importReceipts,
+      visible: Boolean(session) && Boolean(perms?.inspectGoods || perms?.importReceipts),
     },
     {
       href: "/yg-orders",
       label: lang === "zh" ? "友购订单" : "YG",
-      visible: !session || perms?.viewAllData || perms?.manageSuppliers,
+      visible: Boolean(session) && Boolean(perms?.viewAllData || perms?.manageSuppliers),
     },
     {
       href: "/products-management",
       label: lang === "zh" ? "产品管理" : "Prod",
-      visible: !session || perms?.manageProducts,
+      visible: Boolean(session) && Boolean(perms?.manageProducts),
     },
     {
       href: "/billing",
       label: lang === "zh" ? "账单" : "Bill",
-      visible: !session || perms?.viewReports,
+      visible: Boolean(session) && Boolean(perms?.viewReports),
     },
     {
       href: "/dropshipping",
       label: lang === "zh" ? "一件代发" : "Drops",
-      visible: !session || perms?.viewReports,
+      visible: Boolean(session) && Boolean(perms?.viewReports),
     },
   ];
 
@@ -65,7 +66,7 @@ export async function AppShell({
     <main className="flex min-h-screen flex-col bg-background-light font-display text-slate-900">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex w-full max-w-[1720px] items-center justify-between px-6 py-3">
-          <Link href="/dashboard" className="flex min-w-0 items-center gap-3">
+          <Link href={session ? "/dashboard" : "/login"} className="flex min-w-0 items-center gap-3">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white">
               <Image
                 src="/BSLOGO.png"

@@ -11,7 +11,9 @@ RUN npm ci --include=dev
 
 COPY . .
 
-RUN npm run build
+RUN npm run build \
+  && mkdir -p .next/standalone/.next \
+  && cp -R .next/static .next/standalone/.next/
 
 ENV NODE_ENV=production
 

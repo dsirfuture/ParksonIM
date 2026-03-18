@@ -1,14 +1,14 @@
 "use client";
 
 import { Eye, EyeOff } from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 type Lang = "zh" | "es";
 
 export function LoginForm({ lang }: { lang: Lang }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -26,7 +26,6 @@ export function LoginForm({ lang }: { lang: Lang }) {
             passwordPlaceholder: "请输入密码",
             submit: "登录",
             loading: "登录中",
-            register: "注册新账号",
             loginFailed: "登录失败",
             loginUnavailable: "当前未能完成登录，请稍后再试",
             showPassword: "显示密码",
@@ -40,7 +39,6 @@ export function LoginForm({ lang }: { lang: Lang }) {
             passwordPlaceholder: "Ingresa la contraseña",
             submit: "Entrar",
             loading: "Ingresando",
-            register: "Crear cuenta",
             loginFailed: "Acceso fallido",
             loginUnavailable: "Por ahora no fue posible iniciar sesión",
             showPassword: "Mostrar contraseña",
@@ -73,7 +71,8 @@ export function LoginForm({ lang }: { lang: Lang }) {
         return;
       }
 
-      router.push("/dashboard");
+      const next = searchParams.get("next");
+      router.push(next || "/dashboard");
       router.refresh();
     } catch (caughtError) {
       console.error("[login] request failed:", caughtError);
@@ -144,15 +143,6 @@ export function LoginForm({ lang }: { lang: Lang }) {
           {loading ? text.loading : text.submit}
         </button>
       </form>
-
-      <div className="mt-4 flex justify-center">
-        <Link
-          href="/register"
-          className="text-sm font-medium text-primary transition hover:opacity-80"
-        >
-          {text.register}
-        </Link>
-      </div>
     </div>
   );
 }
