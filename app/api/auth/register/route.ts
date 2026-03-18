@@ -64,17 +64,15 @@ export async function POST(req: NextRequest) {
       where: {
         tenant_id: company.tenant_id,
         company_id: company.id,
-        OR: [{ name }, { phone }, ...(email ? [{ email }] : [])],
+        OR: [{ phone }, ...(email ? [{ email }] : [])],
       },
-      select: { id: true, name: true, phone: true, email: true },
+      select: { id: true, phone: true, email: true },
     });
 
     if (exists) {
-      const duplicateName = exists.name === name;
       const duplicatePhone = exists.phone === phone;
       const duplicateEmail = Boolean(email) && exists.email === email;
       const duplicateFields = [
-        duplicateName ? "姓名" : null,
         duplicatePhone ? "手机号" : null,
         duplicateEmail ? "邮箱" : null,
       ].filter(Boolean);
@@ -112,7 +110,7 @@ export async function POST(req: NextRequest) {
     console.error("register failed", error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       return NextResponse.json(
-        { ok: false, error: "姓名、手机号或邮箱已存在" },
+        { ok: false, error: "手机号或邮箱已存在" },
         { status: 400 },
       );
     }

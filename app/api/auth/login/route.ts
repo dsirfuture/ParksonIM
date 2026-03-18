@@ -47,7 +47,8 @@ export async function POST(req: NextRequest) {
           active: true,
           OR: [
             { user_id: account },
-            { name: account },
+            { name: { equals: account, mode: "insensitive" } },
+            { email: { equals: account, mode: "insensitive" } },
             { phone: phone || "__invalid__" },
           ],
         },

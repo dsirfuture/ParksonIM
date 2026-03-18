@@ -153,8 +153,8 @@ model User {
   permission UserPermission?
 
   @@unique([tenant_id, company_id, user_id])
-  @@unique([tenant_id, company_id, name])
   @@unique([tenant_id, company_id, phone])
+  @@index([tenant_id, company_id, name])
   @@index([tenant_id, company_id])
 }
 
