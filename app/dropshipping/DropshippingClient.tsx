@@ -211,8 +211,25 @@ function fmtDate(value: string | null | undefined, lang: "zh" | "es") {
   }).format(new Date(value));
 }
 
+function parseDateOnlyParts(value: string) {
+  const trimmed = String(value || "").trim();
+  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/);
+  if (!match) return null;
+  return {
+    year: match[1],
+    month: match[2],
+    day: match[3],
+  };
+}
+
 function fmtDateOnly(value: string | null | undefined, lang: "zh" | "es") {
   if (!value) return "-";
+  const parts = parseDateOnlyParts(value);
+  if (parts) {
+    return lang === "zh"
+      ? `${parts.year}/${parts.month}/${parts.day}`
+      : `${parts.day}/${parts.month}/${parts.year}`;
+  }
   return new Intl.DateTimeFormat(lang === "zh" ? "zh-CN" : "es-MX", {
     year: "numeric",
     month: "2-digit",
