@@ -3469,23 +3469,9 @@ export function DropshippingClient({
         <TableCard
           title={text.sections.inventory}
           titleRight={
-            <div className="flex items-center gap-2">
-              <select
-                value={inventoryCustomerFilter}
-                onChange={(event) => setInventoryCustomerFilter(event.target.value)}
-                className="h-10 rounded-xl border border-secondary-accent bg-secondary-accent px-3 text-sm text-primary"
-              >
-                <option value="all" hidden>{lang === "zh" ? "全部客户" : "Todos los clientes"}</option>
-                {inventoryCustomerOptions.map((customer) => (
-                  <option key={customer} value={customer}>
-                    {customer}
-                  </option>
-                ))}
-              </select>
-              <span className="whitespace-nowrap text-sm text-slate-500">
-                {lang === "zh" ? `已发商品共：${filteredInventory.length}个` : `Productos enviados: ${filteredInventory.length}`}
-              </span>
-            </div>
+            <span className="whitespace-nowrap text-sm text-slate-500">
+              {lang === "zh" ? `已发商品共：${filteredInventory.length}个` : `Productos enviados: ${filteredInventory.length}`}
+            </span>
           }
           right={
             <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-end lg:w-auto">
@@ -3497,13 +3483,27 @@ export function DropshippingClient({
                 <PlusIcon />
                 <span className="whitespace-nowrap">{lang === "zh" ? "新增备货" : "Nuevo stock"}</span>
               </button>
-              <div className="relative w-full max-w-[340px]">
+              <div className="relative w-full max-w-[420px]">
                 <input
                   value={inventoryKeyword}
                   onChange={(event) => setInventoryKeyword(event.target.value)}
                   placeholder={lang === "zh" ? "搜索编码 / 中文名" : "Buscar codigo / nombre"}
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-3 pr-32 text-sm text-slate-700 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
                 />
+                <div className="absolute inset-y-0 right-2 flex items-center">
+                  <select
+                    value={inventoryCustomerFilter}
+                    onChange={(event) => setInventoryCustomerFilter(event.target.value)}
+                    className="h-8 max-w-[118px] rounded-lg border border-secondary-accent bg-secondary-accent px-2.5 text-sm text-primary outline-none"
+                  >
+                    <option value="all">{lang === "zh" ? "全部客户" : "Todos"}</option>
+                    {inventoryCustomerOptions.map((customer) => (
+                      <option key={customer} value={customer}>
+                        {customer}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
           }
