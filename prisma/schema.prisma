@@ -65,6 +65,7 @@ model Tenant {
   masterShareLinks     MasterShareLink[]
 
   ygOrderImports       YgOrderImport[]
+  ygCustomerImports    YgCustomerImport[]
   ygSupplierOrders     YgSupplierOrder[]
   ygSupplierOrderItems YgSupplierOrderItemS[]
   productCatalogs      ProductCatalog[]
@@ -107,6 +108,7 @@ model Company {
   masterShareLinks     MasterShareLink[]
 
   ygOrderImports       YgOrderImport[]
+  ygCustomerImports    YgCustomerImport[]
   ygSupplierOrders     YgSupplierOrder[]
   ygSupplierOrderItems YgSupplierOrderItemS[]
   productCatalogs      ProductCatalog[]
@@ -821,6 +823,14 @@ model YgOrderImport {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
+  header_status_id  String?
+  header_status     String?
+  latest_status     String?
+  header_updated_at DateTime? @db.Timestamptz(6)
+  order_created_at  DateTime? @db.Timestamptz(6)
+  order_key         String?
+  customer_id       String?
+
   tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
@@ -830,6 +840,40 @@ model YgOrderImport {
   @@index([tenant_id, company_id])
   @@index([created_at])
   @@map("yg_order_imports")
+}
+
+model YgCustomerImport {
+  id         String @id @default(uuid()) @db.Uuid
+  tenant_id  String @db.Uuid
+  company_id String @db.Uuid
+
+  customer_key     String
+  customer_id      String?
+  registered_phone String?
+  company_name     String?
+  note_text        String?
+  relation_no      String?
+  relation_name    String?
+  group_name       String?
+  province_name    String?
+  region_name      String?
+  status_text      String?
+  last_visited_at  DateTime? @db.Timestamptz(6)
+  last_order_at    DateTime? @db.Timestamptz(6)
+  last_order_no    String?
+  synced_at        DateTime? @db.Timestamptz(6)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, company_id, customer_key])
+  @@index([tenant_id, company_id])
+  @@index([customer_id])
+  @@index([last_order_at])
+  @@map("yg_customer_imports")
 }
 
 model YgSupplierOrder {
