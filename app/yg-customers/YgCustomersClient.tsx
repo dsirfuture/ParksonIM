@@ -11,6 +11,7 @@ type OrderDetailRow = {
 };
 
 type YgCustomerRow = {
+  rowKey: string;
   customerKey: string;
   customerId: string;
   registeredPhone: string;
@@ -90,7 +91,7 @@ export function YgCustomersClient({ initialRows, summary }: YgCustomersClientPro
 
   const pagedRows = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
-    return filteredRows.slice(start, start + PAGE_SIZE);
+    return filteredRows.slice(start, start + PAGE_SIZE).slice(0, PAGE_SIZE);
   }, [filteredRows, currentPage]);
 
   function changeKeyword(value: string) {
@@ -205,7 +206,7 @@ export function YgCustomersClient({ initialRows, summary }: YgCustomersClientPro
                 <tbody>
                   {pagedRows.map((row) => {
                     return (
-                      <tr key={row.customerKey} className="border-t border-slate-100 transition hover:bg-rose-50/50">
+                      <tr key={row.rowKey} className="border-t border-slate-100 transition hover:bg-rose-50/50">
                         <td className="px-3 py-2 text-sm text-slate-700">{row.registeredPhone || "-"}</td>
                         <td className="max-w-[280px] px-3 py-2 text-sm font-medium leading-5 text-slate-900">
                           <div className="line-clamp-2" title={row.companyName || "-"}>

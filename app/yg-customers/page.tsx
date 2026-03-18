@@ -160,6 +160,7 @@ export default async function YgCustomersPage() {
     const totalAmount = details.reduce((sum, item) => sum + item.orderAmount, 0);
 
     return {
+      rowKey: `${customerKey}::${normalizeText(row.relation_no)}::${normalizeText(row.company_name)}::${normalizeText(row.registered_phone)}`,
       customerKey,
       customerId: normalizeText(row.customer_id),
       registeredPhone: normalizeText(row.registered_phone),
