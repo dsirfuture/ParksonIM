@@ -4603,7 +4603,7 @@ export function DropshippingClient({
                   placeholder={lang === "zh" ? "搜索编码 / 中文名" : "Buscar codigo / nombre"}
                   className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40 disabled:bg-slate-50 disabled:text-slate-500"
                 />
-                {inventoryEdit.mode === "create" ? (
+                {inventoryEdit.mode === "create" && inventoryProductQuery.trim().length > 0 ? (
                   <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50">
                     {inventoryProductOptions.length > 0 ? (
                       inventoryProductOptions.map((option) => (
