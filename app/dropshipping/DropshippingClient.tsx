@@ -4604,19 +4604,33 @@ export function DropshippingClient({
                   className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40 disabled:bg-slate-50 disabled:text-slate-500"
                 />
                 {inventoryEdit.mode === "create" ? (
-                  <div className="max-h-40 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50">
+                  <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50">
                     {inventoryProductOptions.length > 0 ? (
                       inventoryProductOptions.map((option) => (
                         <button
                           key={option.id}
                           type="button"
                           onClick={() => pickInventoryProduct(option)}
-                          className={`flex w-full items-center justify-between gap-3 border-b border-slate-200 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-white ${
+                          className={`flex w-full items-center gap-3 border-b border-slate-200 px-3 py-2.5 text-left last:border-b-0 hover:bg-white ${
                             inventoryEdit.productCatalogId === option.id ? "bg-white" : ""
                           }`}
                         >
-                          <span className="font-medium text-slate-900">{option.sku}</span>
-                          <span className="truncate text-slate-500">{option.nameZh || option.nameEs || "-"}</span>
+                          <span className="shrink-0">
+                            <ProductImage
+                              sku={option.sku}
+                              hasImage
+                              size={42}
+                              roundedClassName="rounded-lg"
+                            />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-semibold text-slate-900">
+                              {option.sku}
+                            </span>
+                            <span className="mt-0.5 block truncate text-xs text-slate-500">
+                              {option.nameZh || option.nameEs || "-"}
+                            </span>
+                          </span>
                         </button>
                       ))
                     ) : (
