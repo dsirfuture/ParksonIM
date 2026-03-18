@@ -982,6 +982,9 @@ export function ProductsManagementClient({
               <input value={keyword} onChange={(e) => { setKeyword(e.target.value); setPage(1); }} placeholder={tx("搜索 SKU、条形码、品名、分类、供应商", "Buscar SKU/cod/nom/cat/prov")} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm" />
 
               <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+              <div className="mr-2 text-xs font-semibold text-slate-500">
+                {lang === "zh" ? `友购总产品数：${rows.length}` : `Total YG products: ${rows.length}`}
+              </div>
               <div className="inline-flex items-center gap-1 rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
                 <span>{tx("上架", "ON")}</span>
                 <span className="rounded-md border border-emerald-300 bg-white px-1.5 py-0.5">{on}</span>
@@ -1088,11 +1091,6 @@ export function ProductsManagementClient({
         </div>
         {filtered.length > 0 ? (
           <div className="border-t border-slate-200 px-5 py-4">
-            <div className="mb-2 text-center text-xs text-slate-500">
-              {lang === "zh"
-                ? `当前页 ${safePage} / ${totalPages}，总记录 ${filtered.length}`
-                : `Page ${safePage}/${totalPages}, Total ${filtered.length}`}
-            </div>
             <div className="flex flex-nowrap items-center justify-center gap-2 overflow-x-auto">
               <button
                 type="button"

@@ -8,7 +8,6 @@ import { hasPermission } from "@/lib/permissions";
 import { getSession } from "@/lib/tenant";
 import {
   extractCategoryCode,
-  getLegacyYogoCategoryName,
   parseYogoDiscountParts,
   stripLeadingCategoryCode,
 } from "@/lib/yogo-product-utils";
@@ -193,10 +192,6 @@ export default async function ProductsManagementPage() {
     const categoryCode = extractCategoryCode(row.category_name);
     const yogoCode = categoryCode ? categoryCode.slice(0, 2).padStart(2, "0") : "-";
     const mappedCategoryName = yogoCode === "-" ? "" : categoryCodeMap.get(yogoCode) || "";
-    const fallbackCategoryName =
-      mappedCategoryName ||
-      getLegacyYogoCategoryName(row.category_name) ||
-      stripLeadingCategoryCode(row.category_name);
     return {
       id: row.id,
       sku: row.product_code,
@@ -209,7 +204,7 @@ export default async function ProductsManagementPage() {
       normalDiscountText: discount.normal,
       vipDiscountText: discount.vip,
       category: yogoCode,
-      categoryName: fallbackCategoryName || "-",
+      categoryName: mappedCategoryName || "-",
       subcategory: stripLeadingCategoryCode(row.subcategory_name),
       supplier: row.supplier || "",
       hasImage: hasProductImage(row.product_code),
@@ -220,14 +215,10 @@ export default async function ProductsManagementPage() {
   });
   const visibleCategoryOptions = Array.from(
     new Set(
-      [
-        ...categoryMapRows
-          .filter((item) => item.active)
-          .map((item) => stripLeadingCategoryCode(item.category_zh)),
-        ...visibleRows
-          .map((row) => getLegacyYogoCategoryName(row.category_name))
-          .filter(Boolean),
-      ].filter((value) => value && value !== "-"),
+      categoryMapRows
+        .filter((item) => item.active)
+        .map((item) => stripLeadingCategoryCode(item.category_zh))
+        .filter((value) => value && value !== "-"),
     ),
   );
   const visibleSupplierOptions = Array.from(
