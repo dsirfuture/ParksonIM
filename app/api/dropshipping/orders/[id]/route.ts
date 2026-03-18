@@ -45,6 +45,7 @@ export async function PATCH(
       warehouse: FIXED_WAREHOUSE,
       shippedAt: body.shippedAt ? String(body.shippedAt) : null,
       shippingFee: body.shippingFee === "" || body.shippingFee === null || body.shippingFee === undefined ? undefined : Number(body.shippingFee),
+      settlementStatus: String(body.settlementStatus || "unpaid") as "unpaid" | "paid",
       shippingStatus: String(body.shippingStatus || "pending") as "pending" | "shipped" | "cancelled",
       notes: String(body.notes || "").trim() || undefined,
     });

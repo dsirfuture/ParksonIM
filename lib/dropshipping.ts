@@ -665,6 +665,7 @@ export async function saveOrder(
     warehouse?: string;
     shippedAt?: string | null;
     shippingFee?: number;
+    settlementStatus?: "unpaid" | "paid";
     shippingStatus: DsShippingStatus;
     notes?: string;
   },
@@ -684,6 +685,17 @@ export async function saveOrder(
     warehouse: payload.warehouse,
   });
 
+  const rawDiscountRate = toNumber(product.discount_rate);
+  const normalizedDiscountRate = Math.abs(rawDiscountRate) <= 1 ? rawDiscountRate : rawDiscountRate / 100;
+  const safeDiscountRate = Math.min(Math.max(normalizedDiscountRate, 0), 1);
+  const stockAmount = toNumber(product.unit_price) * payload.quantity * (1 - safeDiscountRate);
+  const shippingFee = payload.shippingFee ?? product.default_shipping_fee ?? 0;
+  const totalAmount = stockAmount + shippingFee;
+  const settlementStatus = payload.settlementStatus === "paid" ? "paid" : "unpaid";
+  const settledAt = settlementStatus === "paid" ? new Date() : null;
+  const paidAmount = settlementStatus === "paid" ? totalAmount : 0;
+  const unpaidAmount = settlementStatus === "paid" ? 0 : totalAmount;
+
   const data = {
     customer_id: customer.id,
     product_id: product.id,
@@ -698,8 +710,13 @@ export async function saveOrder(
     color: payload.color?.trim() || null,
     warehouse: payload.warehouse?.trim() || product.default_warehouse || null,
     shipped_at: payload.shippedAt ? new Date(payload.shippedAt) : null,
-    shipping_fee: payload.shippingFee ?? product.default_shipping_fee ?? null,
+    shipping_fee: shippingFee || null,
     shipping_status: payload.shippingStatus,
+    snapshot_stock_amount: stockAmount,
+    snapshot_total_amount: totalAmount,
+    snapshot_paid_amount: paidAmount,
+    snapshot_unpaid_amount: unpaidAmount,
+    settled_at: settledAt,
     notes: payload.notes?.trim() || null,
     exchange_rate_id: rate.id,
   };
@@ -1432,7 +1449,7 @@ export async function deleteInventory(session: Session, id: string) {
 }
 
 export async function getFinanceRows(session: Session) {
-  const [customers, inventoryRows, paymentRows, currentRate, catalogRows] = await Promise.all([
+  const [customers, inventoryRows, paymentRows, currentRate, catalogRows, financeOrders] = await Promise.all([
     prisma.dropshippingCustomer.findMany({
       where: {
         tenant_id: session.tenantId,
@@ -1457,6 +1474,21 @@ export async function getFinanceRows(session: Session) {
       select: {
         sku: true,
         name_zh: true,
+      },
+    }),
+    prisma.dropshippingOrder.findMany({
+      where: {
+        tenant_id: session.tenantId,
+        company_id: session.companyId,
+      },
+      select: {
+        customer_id: true,
+        settled_at: true,
+        snapshot_stock_amount: true,
+        snapshot_total_amount: true,
+        snapshot_paid_amount: true,
+        snapshot_unpaid_amount: true,
+        shipping_fee: true,
       },
     }),
   ]);
@@ -1505,6 +1537,34 @@ export async function getFinanceRows(session: Session) {
     });
   }
 
+  const orderSettlementByCustomer = new Map<string, { totalAmount: number; paidAmount: number; unpaidAmount: number; lastPaidAt: string | null }>();
+  for (const row of financeOrders) {
+    const current = orderSettlementByCustomer.get(row.customer_id) || {
+      totalAmount: 0,
+      paidAmount: 0,
+      unpaidAmount: 0,
+      lastPaidAt: null,
+    };
+    const totalAmount =
+      toNumber(row.snapshot_total_amount)
+      || (toNumber(row.snapshot_stock_amount) + toNumber(row.shipping_fee));
+    const paidAmount =
+      toNumber(row.snapshot_paid_amount)
+      || (row.settled_at ? totalAmount : 0);
+    const unpaidAmount =
+      row.settled_at || toNumber(row.snapshot_unpaid_amount) <= 0
+        ? 0
+        : (toNumber(row.snapshot_unpaid_amount) || Math.max(totalAmount - paidAmount, 0));
+
+    current.totalAmount += totalAmount;
+    current.paidAmount += paidAmount;
+    current.unpaidAmount += unpaidAmount;
+    if (!current.lastPaidAt && row.settled_at) {
+      current.lastPaidAt = row.settled_at.toISOString();
+    }
+    orderSettlementByCustomer.set(row.customer_id, current);
+  }
+
   const catalogBySku = new Map(
     catalogRows.map((row) => [normalizeProductCode(row.sku), row]),
   );
@@ -1537,7 +1597,10 @@ export async function getFinanceRows(session: Session) {
     const shippingAmount = shippingByCustomer.get(customer.id) || 0;
     const totalAmount = exchangedAmount + shippingAmount;
     const paidItem = paidByCustomer.get(customer.id) || { amount: 0, lastPaidAt: null };
-    const unpaidAmount = totalAmount - paidItem.amount;
+    const orderSettlement = orderSettlementByCustomer.get(customer.id);
+    const paidAmount = orderSettlement && orderSettlement.totalAmount > 0 ? orderSettlement.paidAmount : paidItem.amount;
+    const unpaidAmount = orderSettlement && orderSettlement.totalAmount > 0 ? orderSettlement.unpaidAmount : Math.max(totalAmount - paidItem.amount, 0);
+    const lastPaidAt = orderSettlement?.lastPaidAt || paidItem.lastPaidAt;
     return {
       customerId: customer.id,
       customerName: customer.name,
@@ -1546,10 +1609,10 @@ export async function getFinanceRows(session: Session) {
       exchangedAmount,
       shippingAmount,
       totalAmount,
-      paidAmount: paidItem.amount,
+      paidAmount,
       unpaidAmount,
-      status: deriveFinanceStatus(totalAmount, paidItem.amount),
-      lastPaidAt: paidItem.lastPaidAt,
+      status: deriveFinanceStatus(totalAmount, paidAmount),
+      lastPaidAt,
       settledOrders: settledOrdersByCustomer.get(customer.id) || [],
     };
   });

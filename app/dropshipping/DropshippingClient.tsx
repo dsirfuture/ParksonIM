@@ -141,6 +141,7 @@ type OrderFormState = {
   warehouse: string;
   shippedAt: string;
   shippingFee: string;
+  settlementStatus: "unpaid" | "paid";
   shippingStatus: "pending" | "shipped" | "cancelled";
   notes: string;
 };
@@ -160,6 +161,7 @@ const EMPTY_ORDER_FORM: OrderFormState = {
   warehouse: "墨西哥-百盛仓",
   shippedAt: "",
   shippingFee: "",
+  settlementStatus: "unpaid",
   shippingStatus: "pending",
   notes: "",
 };
@@ -196,6 +198,13 @@ function getShippingStatusClass(status: OrderFormState["shippingStatus"]) {
   if (status === "shipped") return "bg-emerald-50 text-emerald-700";
   if (status === "cancelled") return "bg-rose-50 text-rose-700";
   return "bg-slate-100 text-slate-900";
+}
+
+function getSettlementStatusLabel(status: OrderFormState["settlementStatus"], lang: "zh" | "es") {
+  if (lang === "zh") {
+    return status === "paid" ? "已结" : "未结";
+  }
+  return status === "paid" ? "Liquidado" : "Pendiente";
 }
 
 function fmtDate(value: string | null | undefined, lang: "zh" | "es") {
@@ -918,6 +927,7 @@ export function DropshippingClient({
           warehouse: "发货仓",
           shippedAt: "发货日期",
           shippingFee: "代发费",
+          settlement: "结算",
           status: "发货状态",
           notes: "备注",
           cancel: "取消",
@@ -1017,6 +1027,7 @@ export function DropshippingClient({
           warehouse: "Almacen",
           shippedAt: "Fecha envio",
           shippingFee: "Cargo",
+          settlement: "Liquidacion",
           status: "Estado",
           notes: "Nota",
           cancel: "Cancelar",
@@ -1828,6 +1839,7 @@ export function DropshippingClient({
       warehouse: order.warehouse || FIXED_WAREHOUSE,
       shippedAt: order.shippedAt ? order.shippedAt.slice(0, 10) : "",
       shippingFee: order.shippingFee ? String(order.shippingFee) : "",
+      settlementStatus: order.settlementStatus,
       shippingStatus: order.shippingStatus,
       notes: order.notes,
     });
@@ -1858,6 +1870,7 @@ export function DropshippingClient({
       warehouse: FIXED_WAREHOUSE,
       shippedAt: source.shippedAt || null,
       shippingFee: source.shippingFee || null,
+      settlementStatus: source.settlementStatus,
       shippingStatus: source.shippingStatus,
       notes: source.notes,
     };
@@ -1895,6 +1908,7 @@ export function DropshippingClient({
           warehouse: row.warehouse || FIXED_WAREHOUSE,
           shippedAt: row.shippedAt ? row.shippedAt.slice(0, 10) : "",
           shippingFee: row.shippingFee ? String(row.shippingFee) : "",
+          settlementStatus: row.settlementStatus,
           shippingStatus: row.shippingStatus,
           notes: row.notes,
         },
@@ -1969,6 +1983,7 @@ export function DropshippingClient({
           warehouse: FIXED_WAREHOUSE,
           shippedAt: form.shippedAt || null,
           shippingFee: form.shippingFee || null,
+          settlementStatus: form.settlementStatus,
           shippingStatus: form.shippingStatus,
           notes: "",
         }),
@@ -4159,7 +4174,7 @@ export function DropshippingClient({
                   </label>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-[168px_140px_140px_140px] md:justify-start">
+                <div className="grid gap-4 md:grid-cols-[168px_140px_140px_140px_140px] md:justify-start">
                   <label className="space-y-1">
                     <span className="whitespace-nowrap text-xs text-slate-500">{text.form.shippedAt}</span>
                     <input
@@ -4211,6 +4226,17 @@ export function DropshippingClient({
                           {fee}
                         </option>
                       ))}
+                    </select>
+                  </label>
+                  <label className="space-y-1">
+                    <span className="whitespace-nowrap text-xs text-slate-500">{text.form.settlement}</span>
+                    <select
+                      value={form.settlementStatus}
+                      onChange={(event) => setForm((prev) => ({ ...prev, settlementStatus: event.target.value as OrderFormState["settlementStatus"] }))}
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                    >
+                      <option value="paid">{getSettlementStatusLabel("paid", lang)}</option>
+                      <option value="unpaid">{getSettlementStatusLabel("unpaid", lang)}</option>
                     </select>
                   </label>
                 </div>
