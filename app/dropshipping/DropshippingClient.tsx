@@ -2025,11 +2025,6 @@ export function DropshippingClient({
     try {
       setSaving(true);
       setError("");
-      const trackingGroupId = form.trackingGroupId || crypto.randomUUID();
-      const { orderId } = await persistCurrentOrder(trackingGroupId);
-      if (orderId) {
-        await uploadOrderAttachments(orderId);
-      }
       await persistOrderRequest(
         {
           id: targetOrder.id,
@@ -2055,7 +2050,8 @@ export function DropshippingClient({
       await refreshAll();
       const freshOrders = await fetchOrdersOnly();
       setOrders(freshOrders);
-      const refreshed = freshOrders.find((row) => row.id === orderId);
+      const currentOrderId = form.id || modalPrimaryOrderId;
+      const refreshed = currentOrderId ? freshOrders.find((row) => row.id === currentOrderId) : null;
       if (refreshed) {
         openEditModal(refreshed, modalPrimaryOrderId || form.id || refreshed.id);
       }
