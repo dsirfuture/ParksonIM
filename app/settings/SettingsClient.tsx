@@ -195,6 +195,61 @@ async function readJson<T = unknown>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
+async function readJsonSafe<T = unknown>(res: Response): Promise<T | null> {
+  const contentType = res.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    return null;
+  }
+  return readJson<T>(res);
+}
+
+async function compressImageForUpload(file: File, maxSizeBytes = 900 * 1024): Promise<File> {
+  if (!file.type.startsWith("image/") || file.size <= maxSizeBytes) {
+    return file;
+  }
+
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("read_failed"));
+    reader.readAsDataURL(file);
+  });
+
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("image_load_failed"));
+    img.src = dataUrl;
+  });
+
+  const maxEdge = 1200;
+  const ratio = Math.min(1, maxEdge / Math.max(image.width, image.height));
+  const width = Math.max(1, Math.round(image.width * ratio));
+  const height = Math.max(1, Math.round(image.height * ratio));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return file;
+  }
+  ctx.drawImage(image, 0, 0, width, height);
+
+  let quality = 0.9;
+  let blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+  while (blob && blob.size > maxSizeBytes && quality > 0.45) {
+    quality -= 0.1;
+    blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+  }
+
+  if (!blob) {
+    return file;
+  }
+
+  const targetName = file.name.replace(/\.[^.]+$/, "") || "upload";
+  return new File([blob], `${targetName}.jpg`, { type: "image/jpeg" });
+}
+
 function parseSupplierDiscountRules(input: string): SupplierDiscountRule[] {
   const raw = String(input || "").trim();
   if (!raw) return [];
@@ -455,15 +510,21 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
     try {
       setError("");
       setUploadingSupplierLogo(true);
+      const prepared = await compressImageForUpload(file);
       const form = new FormData();
-      form.append("file", file);
+      form.append("file", prepared);
       const res = await fetch("/api/settings/suppliers/logo", {
         method: "POST",
         body: form,
       });
-      const json = await readJson<any>(res);
+      const json = await readJsonSafe<any>(res);
       if (!res.ok || !json?.ok || !json?.url) {
-        throw new Error(json?.error || tx("上传失败", "Upload fail"));
+        throw new Error(
+          json?.error
+            || (res.status === 413
+              ? tx("图片太大，已超出上传限制，请换小一点的图片", "Imagen demasiado grande")
+              : tx("上传失败，请换一张更小的图片再试", "Upload failed, try a smaller image")),
+        );
       }
       setSupplierForm((prev) => ({ ...prev, logoUrl: json.url }));
       showSaved(tx("Logo 已上传", "Logo uploaded"));
@@ -522,15 +583,21 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
     try {
       setError("");
       setUploadingLogo(true);
+      const prepared = await compressImageForUpload(file);
       const form = new FormData();
-      form.append("file", file);
+      form.append("file", prepared);
       const res = await fetch("/api/settings/catalog-config/logo", {
         method: "POST",
         body: form,
       });
-      const json = await readJson<any>(res);
+      const json = await readJsonSafe<any>(res);
       if (!res.ok || !json?.ok || !json?.url) {
-        throw new Error(json?.error || tx("上传失败", "Upload fail"));
+        throw new Error(
+          json?.error
+            || (res.status === 413
+              ? tx("图片太大，已超出上传限制，请换小一点的图片", "Imagen demasiado grande")
+              : tx("上传失败，请换一张更小的图片再试", "Upload failed, try a smaller image")),
+        );
       }
       setCatalogConfig((p) => ({ ...p, docLogoUrl: json.url }));
       showSaved(tx("Logo 已上传，请保存文档设置", "Logo uploaded, save settings"));
