@@ -2021,35 +2021,18 @@ export function DropshippingClient({
   async function confirmRemoveGroupedOrder() {
     const slot = groupedDeleteTarget;
     if (!slot?.orderId || slot.isCurrent) return;
-    const targetOrder = orders.find((row) => row.id === slot.orderId);
     setGroupedDeleteTarget(null);
-    if (!targetOrder) return;
 
     try {
       setSaving(true);
       setError("");
-      await persistOrderRequest(
-        {
-          id: targetOrder.id,
-          trackingGroupId: "",
-          customerName: targetOrder.customerName,
-          platform: targetOrder.platform,
-          platformOrderNo: targetOrder.platformOrderNo,
-          sku: targetOrder.sku,
-          productNameZh: targetOrder.productNameZh,
-          productNameEs: targetOrder.productNameEs,
-          quantity: String(targetOrder.quantity),
-          trackingNo: targetOrder.trackingNo,
-          color: targetOrder.color,
-          warehouse: targetOrder.warehouse || FIXED_WAREHOUSE,
-          shippedAt: targetOrder.shippedAt ? targetOrder.shippedAt.slice(0, 10) : "",
-          shippingFee: targetOrder.shippingFee ? String(targetOrder.shippingFee) : "",
-          settlementStatus: targetOrder.settlementStatus,
-          shippingStatus: targetOrder.shippingStatus,
-          notes: targetOrder.notes,
-        },
-        null,
-      );
+      const response = await fetch(`/api/dropshipping/orders/${slot.orderId}`, {
+        method: "DELETE",
+      });
+      const json = await response.json();
+      if (!response.ok || !json?.ok) {
+        throw new Error(json?.error || "delete_failed");
+      }
       await refreshAll();
       const freshOrders = await fetchOrdersOnly();
       setOrders(freshOrders);
