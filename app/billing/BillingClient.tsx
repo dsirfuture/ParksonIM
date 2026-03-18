@@ -213,17 +213,21 @@ export function BillingClient({
   const theme = currentTab === "supplier"
     ? {
         panel: "bg-transparent",
-        tabActive: "border-amber-200 bg-amber-50 text-amber-900 before:border-amber-100 after:border-amber-100",
-        tabInactive: "border-stone-200 bg-stone-100/95 text-stone-500",
-        contentBg: "border-amber-100 bg-[linear-gradient(180deg,#fffaf1_0%,#fffdf9_100%)]",
-        tabHalo: "shadow-[0_14px_30px_rgba(245,158,11,0.08)]",
+        tabActive:
+          "border-slate-200 bg-white text-slate-900 before:border-slate-200 after:border-slate-200 shadow-[0_18px_36px_rgba(148,163,184,0.22)]",
+        tabInactive:
+          "border-slate-200 bg-[linear-gradient(180deg,#dfe9fb_0%,#cfdcf4_100%)] text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]",
+        contentBg: "border-slate-200 bg-white",
+        tabHalo: "",
       }
     : {
         panel: "bg-transparent",
-        tabActive: "border-sky-200 bg-sky-50 text-sky-950 before:border-sky-100 after:border-sky-100",
-        tabInactive: "border-stone-200 bg-stone-100/95 text-stone-500",
-        contentBg: "border-sky-100 bg-[linear-gradient(180deg,#f7fbff_0%,#ffffff_100%)]",
-        tabHalo: "shadow-[0_14px_30px_rgba(14,165,233,0.08)]",
+        tabActive:
+          "border-slate-200 bg-white text-slate-900 before:border-slate-200 after:border-slate-200 shadow-[0_18px_36px_rgba(148,163,184,0.22)]",
+        tabInactive:
+          "border-slate-200 bg-[linear-gradient(180deg,#dfe9fb_0%,#cfdcf4_100%)] text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]",
+        contentBg: "border-slate-200 bg-white",
+        tabHalo: "",
       };
 
   const totalCount = rows.length;
@@ -376,25 +380,25 @@ export function BillingClient({
   return (
     <section className={`mt-0 ${theme.panel}`}>
       <div className="relative px-3 pt-3">
-        <div className="relative z-10 flex flex-wrap items-end gap-2 px-4">
+        <div className="relative z-10 flex flex-wrap items-end gap-1.5 px-4">
           <button
             type="button"
             onClick={() => setCurrentTab("customer")}
-            className={`relative inline-flex min-w-[148px] items-center justify-center rounded-t-[18px] border px-5 py-2.5 text-sm font-semibold transition before:pointer-events-none before:absolute before:-bottom-px before:-left-[14px] before:h-[14px] before:w-[14px] before:rounded-br-[14px] before:border-b before:border-r before:bg-transparent before:content-[''] after:pointer-events-none after:absolute after:-bottom-px after:-right-[14px] after:h-[14px] after:w-[14px] after:rounded-bl-[14px] after:border-b after:border-l after:bg-transparent after:content-[''] ${currentTab === "customer" ? `${theme.tabActive} ${theme.tabHalo} z-20 border-b-transparent` : `${theme.tabInactive} z-0 translate-y-[6px] before:hidden after:hidden`}`}
+            className={`relative inline-flex min-w-[148px] items-center justify-center rounded-t-[16px] border px-6 py-3 text-sm font-semibold transition before:pointer-events-none before:absolute before:-bottom-px before:-left-[14px] before:h-[14px] before:w-[14px] before:rounded-br-[14px] before:border-b before:border-r before:bg-transparent before:content-[''] after:pointer-events-none after:absolute after:-bottom-px after:-right-[14px] after:h-[14px] after:w-[14px] after:rounded-bl-[14px] after:border-b after:border-l after:bg-transparent after:content-[''] ${currentTab === "customer" ? `${theme.tabActive} ${theme.tabHalo} z-20 border-b-white` : `${theme.tabInactive} z-0 translate-y-[8px] before:hidden after:hidden hover:-translate-y-[1px] hover:text-slate-700`}`}
           >
             客户出账单
           </button>
           <button
             type="button"
             onClick={() => setCurrentTab("supplier")}
-            className={`relative inline-flex min-w-[148px] items-center justify-center rounded-t-[18px] border px-5 py-2.5 text-sm font-semibold transition before:pointer-events-none before:absolute before:-bottom-px before:-left-[14px] before:h-[14px] before:w-[14px] before:rounded-br-[14px] before:border-b before:border-r before:bg-transparent before:content-[''] after:pointer-events-none after:absolute after:-bottom-px after:-right-[14px] after:h-[14px] after:w-[14px] after:rounded-bl-[14px] after:border-b after:border-l after:bg-transparent after:content-[''] ${currentTab === "supplier" ? `${theme.tabActive} ${theme.tabHalo} z-20 border-b-transparent` : `${theme.tabInactive} z-0 translate-y-[6px] before:hidden after:hidden`}`}
+            className={`relative inline-flex min-w-[148px] items-center justify-center rounded-t-[16px] border px-6 py-3 text-sm font-semibold transition before:pointer-events-none before:absolute before:-bottom-px before:-left-[14px] before:h-[14px] before:w-[14px] before:rounded-br-[14px] before:border-b before:border-r before:bg-transparent before:content-[''] after:pointer-events-none after:absolute after:-bottom-px after:-right-[14px] after:h-[14px] after:w-[14px] after:rounded-bl-[14px] after:border-b after:border-l after:bg-transparent after:content-[''] ${currentTab === "supplier" ? `${theme.tabActive} ${theme.tabHalo} z-20 border-b-white` : `${theme.tabInactive} z-0 translate-y-[8px] before:hidden after:hidden hover:-translate-y-[1px] hover:text-slate-700`}`}
           >
             供应商账单
           </button>
         </div>
 
-        <div className={`relative z-0 -mt-px rounded-[30px] border p-5 pt-7 shadow-[0_16px_40px_rgba(15,23,42,0.05)] ${theme.contentBg}`}>
-          <div className="absolute inset-x-0 top-0 h-6 rounded-t-[30px] bg-inherit" />
+        <div className={`relative z-0 -mt-px rounded-[24px] border p-5 pt-6 shadow-[0_20px_44px_rgba(148,163,184,0.14)] ${theme.contentBg}`}>
+          <div className="absolute inset-x-0 top-0 h-5 rounded-t-[24px] bg-inherit" />
         <div>
           <TableCard title="待出账单列表" description={`共 ${totalCount} 条待导出账单`}>
             <div className="overflow-x-auto">
