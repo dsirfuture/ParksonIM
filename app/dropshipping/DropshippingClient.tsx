@@ -868,7 +868,7 @@ export function DropshippingClient({
         refresh: "刷新数据",
         create: "新增订单",
         import: "历史迁移导入",
-        tabs: { overview: "总览", orders: "订单管理", inventory: "商品备货", finance: "财务结算" },
+        tabs: { overview: "总览", orders: "订单管理", inventory: "已发商品", finance: "财务结算" },
         stats: {
           todayOrders: "今日录单",
           todayShipped: "今日已发货",
@@ -883,7 +883,7 @@ export function DropshippingClient({
           recent: "最近订单",
           alerts: "待处理提醒",
           orders: "订单列表",
-          inventory: "商品备货汇总",
+          inventory: "已发商品列表",
           finance: "客户结算",
           rate: "汇率状态",
         },
@@ -3441,6 +3441,9 @@ export function DropshippingClient({
                   </option>
                 ))}
               </select>
+              <span className="whitespace-nowrap text-sm text-slate-500">
+                {lang === "zh" ? `已发商品共：${filteredInventory.length}个` : `Productos enviados: ${filteredInventory.length}`}
+              </span>
             </div>
           }
           right={
