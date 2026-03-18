@@ -240,6 +240,14 @@ export function YgCustomersClient({ initialRows, summary }: YgCustomersClientPro
                 <div className="flex items-center justify-center gap-2">
                   <button
                     type="button"
+                    onClick={() => goToPage(1)}
+                    disabled={currentPage === 1}
+                    className="inline-flex h-9 min-w-[40px] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    回首页
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => goToPage(currentPage - 1)}
                     disabled={currentPage === 1}
                     className="inline-flex h-9 min-w-[40px] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
@@ -276,6 +284,14 @@ export function YgCustomersClient({ initialRows, summary }: YgCustomersClientPro
                     className="inline-flex h-9 min-w-[40px] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     下一页
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => goToPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                    className="inline-flex h-9 min-w-[40px] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    去尾页
                   </button>
                 </div>
               </div>
