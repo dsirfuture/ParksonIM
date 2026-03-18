@@ -914,7 +914,6 @@ export function ProductsManagementClient({
       子分类: r.subcategory || "",
       供应商: r.supplier || "",
       是否上架: r.statusText === "上架" ? "上架" : "下架",
-      是否新增: r.isNewProduct === null ? "-" : r.isNewProduct ? "新" : "无",
     }));
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(data);
