@@ -1222,6 +1222,59 @@ export async function getInventoryRows(session: Session) {
   });
 }
 
+export async function updateInventory(
+  session: Session,
+  payload: {
+    id: string;
+    stockedQty: number;
+    unitPrice?: number | null;
+    discountRate?: number | null;
+    warehouse?: string | null;
+  },
+) {
+  const inventory = await prisma.dropshippingCustomerInventory.findFirst({
+    where: {
+      id: payload.id,
+      tenant_id: session.tenantId,
+      company_id: session.companyId,
+    },
+    select: { id: true },
+  });
+
+  if (!inventory) {
+    throw new Error("inventory_not_found");
+  }
+
+  return prisma.dropshippingCustomerInventory.update({
+    where: { id: inventory.id },
+    data: {
+      stocked_qty: payload.stockedQty,
+      locked_unit_price: payload.unitPrice ?? null,
+      locked_discount_rate: payload.discountRate ?? null,
+      warehouse: payload.warehouse?.trim() || null,
+    },
+  });
+}
+
+export async function deleteInventory(session: Session, id: string) {
+  const inventory = await prisma.dropshippingCustomerInventory.findFirst({
+    where: {
+      id,
+      tenant_id: session.tenantId,
+      company_id: session.companyId,
+    },
+    select: { id: true },
+  });
+
+  if (!inventory) {
+    throw new Error("inventory_not_found");
+  }
+
+  await prisma.dropshippingCustomerInventory.delete({
+    where: { id: inventory.id },
+  });
+}
+
 export async function getFinanceRows(session: Session) {
   const [customers, inventoryRows, paymentRows, currentRate, catalogRows] = await Promise.all([
     prisma.dropshippingCustomer.findMany({
