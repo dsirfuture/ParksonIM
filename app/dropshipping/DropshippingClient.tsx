@@ -4198,8 +4198,8 @@ export function DropshippingClient({
                   </label>
                 </div>
 
-                <div className="flex flex-nowrap gap-3">
-                  <label className="min-w-0 w-[156px] shrink-0 space-y-1">
+                <div className="grid gap-3 md:grid-cols-[156px_132px_132px_minmax(190px,1fr)]">
+                  <label className="min-w-0 space-y-1">
                     <span className="whitespace-nowrap text-xs text-slate-500">{text.form.shippedAt}</span>
                     <input
                       type="date"
@@ -4208,7 +4208,7 @@ export function DropshippingClient({
                       className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
                     />
                   </label>
-                  <label className="min-w-0 w-[132px] shrink-0 space-y-1">
+                  <label className="min-w-0 space-y-1">
                     <span className="whitespace-nowrap text-xs text-slate-500">{text.form.platform}</span>
                     <select
                       value={form.platform}
@@ -4223,7 +4223,7 @@ export function DropshippingClient({
                       ))}
                     </select>
                   </label>
-                  <label className="min-w-0 w-[132px] shrink-0 space-y-1">
+                  <label className="min-w-0 space-y-1">
                     <span className="whitespace-nowrap text-xs text-slate-500">{text.form.status}</span>
                     <select
                       value={form.shippingStatus}
@@ -4237,32 +4237,34 @@ export function DropshippingClient({
                       ))}
                     </select>
                   </label>
-                  <label className="min-w-0 w-[82px] shrink-0 space-y-1">
-                    <span className="whitespace-nowrap text-xs text-slate-500">{text.form.shippingFee}</span>
-                    <select
-                      value={form.shippingFee}
-                      onChange={(event) => setForm((prev) => ({ ...prev, shippingFee: event.target.value }))}
-                      className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
-                    >
-                      <option value="">{lang === "zh" ? "请选择代发费" : "Selecciona cargo"}</option>
-                      {shippingFeeOptions.map((fee) => (
-                        <option key={fee} value={fee}>
-                          {fee}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="min-w-0 w-[82px] shrink-0 space-y-1">
-                    <span className="whitespace-nowrap text-xs text-slate-500">{text.form.settlement}</span>
-                    <select
-                      value={form.settlementStatus}
-                      onChange={(event) => setForm((prev) => ({ ...prev, settlementStatus: event.target.value as OrderFormState["settlementStatus"] }))}
-                      className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
-                    >
-                      <option value="paid">{getSettlementStatusLabel("paid", lang)}</option>
-                      <option value="unpaid">{getSettlementStatusLabel("unpaid", lang)}</option>
-                    </select>
-                  </label>
+                  <div className="grid min-w-0 grid-cols-[82px_82px] gap-3">
+                    <label className="min-w-0 space-y-1">
+                      <span className="whitespace-nowrap text-xs text-slate-500">{text.form.shippingFee}</span>
+                      <select
+                        value={form.shippingFee}
+                        onChange={(event) => setForm((prev) => ({ ...prev, shippingFee: event.target.value }))}
+                        className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                      >
+                        <option value="">{lang === "zh" ? "请选择代发费" : "Selecciona cargo"}</option>
+                        {shippingFeeOptions.map((fee) => (
+                          <option key={fee} value={fee}>
+                            {fee}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="min-w-0 space-y-1">
+                      <span className="whitespace-nowrap text-xs text-slate-500">{text.form.settlement}</span>
+                      <select
+                        value={form.settlementStatus}
+                        onChange={(event) => setForm((prev) => ({ ...prev, settlementStatus: event.target.value as OrderFormState["settlementStatus"] }))}
+                        className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                      >
+                        <option value="paid">{getSettlementStatusLabel("paid", lang)}</option>
+                        <option value="unpaid">{getSettlementStatusLabel("unpaid", lang)}</option>
+                      </select>
+                    </label>
+                  </div>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
