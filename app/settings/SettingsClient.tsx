@@ -235,6 +235,10 @@ function normalizeYogoCodeInput(value: string) {
   return Array.from(new Set(segments)).join(",");
 }
 
+function formatYogoCodeDraft(value: string) {
+  return normalizeYogoCodeInput(value).replace(/,/g, " ");
+}
+
 export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientProps) {
   const [lang, setLang] = useState<"zh" | "es">("zh");
   const [tab, setTab] = useState<TabKey>("perm");
@@ -540,7 +544,15 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   async function saveCategoryMap() {
     try {
       setError("");
-      await saveEntity("/api/settings/category-maps", categoryForm, "分类已保存", "Category saved");
+      await saveEntity(
+        "/api/settings/category-maps",
+        {
+          ...categoryForm,
+          yogoCode: normalizeYogoCodeInput(categoryForm.yogoCode),
+        },
+        "分类已保存",
+        "Category saved",
+      );
       setCategoryForm(EMPTY_CATEGORY_MAP);
       await loadCategoryMaps();
       return true;
@@ -1417,14 +1429,17 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                         onBlur={(e) =>
                           setCategoryForm((p) => ({
                             ...p,
-                            yogoCode: normalizeYogoCodeInput(e.target.value),
+                            yogoCode: formatYogoCodeDraft(e.target.value),
                           }))
                         }
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
                             e.preventDefault();
-                            const normalized = normalizeYogoCodeInput((e.currentTarget as HTMLInputElement).value);
-                            setCategoryForm((p) => ({ ...p, yogoCode: normalized }));
+                            const normalized = formatYogoCodeDraft((e.currentTarget as HTMLInputElement).value);
+                            setCategoryForm((p) => ({
+                              ...p,
+                              yogoCode: normalized ? `${normalized} ` : "",
+                            }));
                           }
                         }}
                         placeholder={tx("例如 10 11 12", "Ej. 10 11 12")}
