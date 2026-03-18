@@ -4198,7 +4198,10 @@ export function DropshippingClient({
                   </label>
                 </div>
 
-                <div className="grid gap-2 md:grid-cols-[148px_124px_124px_72px_72px]">
+                <div
+                  className="grid gap-2"
+                  style={{ gridTemplateColumns: "148px 124px 124px 72px 72px" }}
+                >
                   <label className="min-w-0 space-y-1">
                     <span className="whitespace-nowrap text-xs text-slate-500">{text.form.shippedAt}</span>
                     <input
