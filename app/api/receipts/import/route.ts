@@ -112,24 +112,40 @@ export async function POST(req: Request) {
     }
 
     const rows = parsed.data.rows;
-    const receiptNos = [...new Set(rows.map((row) => row.receipt_no))];
+    const receiptSupplierPairs = [
+      ...new Map(
+        rows.map((row) => [
+          `${row.receipt_no}__${row.supplier_name}`,
+          {
+            receipt_no: row.receipt_no,
+            supplier_name: row.supplier_name,
+          },
+        ]),
+      ).values(),
+    ];
 
     const existingReceipts = await prisma.receipt.findMany({
       where: {
         tenant_id: tenantId,
         company_id: companyId,
-        receipt_no: {
-          in: receiptNos,
-        },
+        OR: receiptSupplierPairs.map((item) => ({
+          receipt_no: item.receipt_no,
+          supplier_name: item.supplier_name,
+        })),
       },
       select: {
         receipt_no: true,
+        supplier_name: true,
       },
     });
 
     if (existingReceipts.length > 0) {
       const duplicated = [
-        ...new Set(existingReceipts.map((item) => item.receipt_no)),
+        ...new Set(
+          existingReceipts.map(
+            (item) => `${item.receipt_no} / ${item.supplier_name || "-"}`,
+          ),
+        ),
       ];
 
       return NextResponse.json(
@@ -144,9 +160,10 @@ export async function POST(req: Request) {
     const grouped = new Map<string, typeof rows>();
 
     for (const row of rows) {
-      const list = grouped.get(row.receipt_no) || [];
+      const key = `${row.receipt_no}__${row.supplier_name}`;
+      const list = grouped.get(key) || [];
       list.push(row);
-      grouped.set(row.receipt_no, list);
+      grouped.set(key, list);
     }
 
     const skuSet = new Set(
@@ -171,7 +188,8 @@ export async function POST(req: Request) {
     let createdBatchCount = 0;
 
     await prisma.$transaction(async (tx) => {
-      for (const [receiptNo, receiptRows] of grouped.entries()) {
+      for (const [groupKey, receiptRows] of grouped.entries()) {
+        const [receiptNo] = groupKey.split("__");
         const supplierName = receiptRows[0]?.supplier_name || null;
 
         const receipt = await tx.receipt.create({

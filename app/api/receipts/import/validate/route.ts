@@ -261,7 +261,7 @@ export async function POST(req: Request) {
 
     const duplicateKeyMap = new Map<string, number[]>();
     normalizedRows.forEach((row, index) => {
-      const key = `${row.receipt_no}__${row.sku}`;
+      const key = `${row.receipt_no}__${row.supplier_name}__${row.sku}`;
       const list = duplicateKeyMap.get(key) || [];
       list.push(index + 2);
       duplicateKeyMap.set(key, list);
@@ -275,11 +275,11 @@ export async function POST(req: Request) {
 
     for (const [key, rowNos] of duplicateKeyMap.entries()) {
       if (rowNos.length > 1) {
-        const [receiptNo, sku] = key.split("__");
+        const [receiptNo, supplierName, sku] = key.split("__");
         duplicateErrors.push({
           row: rowNos[0],
-          field: "receipt_no+sku",
-          message: `表格中重复：友购订单号 ${receiptNo} / 编码 ${sku}`,
+          field: "receipt_no+supplier_name+sku",
+          message: `表格中重复：友购订单号 ${receiptNo} / 供应商 ${supplierName} / 编码 ${sku}`,
         });
       }
     }
@@ -295,24 +295,41 @@ export async function POST(req: Request) {
       );
     }
 
-    const receiptNos = [...new Set(normalizedRows.map((row) => row.receipt_no))];
-    if (receiptNos.length > 0) {
+    const receiptSupplierPairs = [
+      ...new Map(
+        normalizedRows.map((row) => [
+          `${row.receipt_no}__${row.supplier_name}`,
+          {
+            receipt_no: row.receipt_no,
+            supplier_name: row.supplier_name,
+          },
+        ]),
+      ).values(),
+    ];
+    if (receiptSupplierPairs.length > 0) {
       const existingReceipts = await prisma.receipt.findMany({
         where: {
           tenant_id: session.tenantId,
           company_id: session.companyId,
-          receipt_no: { in: receiptNos },
+          OR: receiptSupplierPairs.map((item) => ({
+            receipt_no: item.receipt_no,
+            supplier_name: item.supplier_name,
+          })),
         },
-        select: { receipt_no: true },
+        select: { receipt_no: true, supplier_name: true },
       });
 
       if (existingReceipts.length > 0) {
         const uniqueNos = [
-          ...new Set(existingReceipts.map((item) => item.receipt_no)),
+          ...new Set(
+            existingReceipts.map(
+              (item) => `${item.receipt_no} / ${item.supplier_name || "-"}`,
+            ),
+          ),
         ];
         const existsErrors = uniqueNos.map((no) => ({
           row: 0,
-          field: "receipt_no",
+          field: "receipt_no+supplier_name",
           message: `此验货单已存在：${no}`,
         }));
         return NextResponse.json(
@@ -453,7 +470,9 @@ export async function POST(req: Request) {
       };
     });
 
-    const receiptSet = new Set(mergedRows.map((row) => row.receipt_no));
+    const receiptSet = new Set(
+      mergedRows.map((row) => `${row.receipt_no}__${row.supplier_name}`),
+    );
     const supplierSet = new Set(
       mergedRows
         .map((row) => row.supplier_name?.trim())
