@@ -60,15 +60,33 @@ type InventoryShippedPreviewState = {
 } | null;
 
 type InventoryEditState = {
+  mode: "create" | "edit";
   id: string;
+  customerId: string;
   customerName: string;
+  productCatalogId: string;
+  productId: string;
   sku: string;
   productNameZh: string;
+  productNameEs: string;
   stockedQty: string;
   unitPrice: string;
   discountRate: string;
   warehouse: string;
 } | null;
+
+type InventoryCustomerOption = {
+  id: string;
+  name: string;
+};
+
+type InventoryProductOption = {
+  id: string;
+  sku: string;
+  nameZh: string;
+  nameEs: string;
+  imageUrl: string;
+};
 
 type FinancePreviewState = DsFinanceRow | null;
 type OverviewRange = "day" | "week" | "month" | "year";
@@ -385,6 +403,20 @@ function TrashIcon() {
   );
 }
 
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" aria-hidden="true">
+      <path
+        d="M10 4.16663V15.8333M4.16669 10H15.8334"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function OverviewLineChart({
   data,
   lineColor = "#1d4ed8",
@@ -661,6 +693,10 @@ export function DropshippingClient({
   const [inventoryPreview, setInventoryPreview] = useState<InventoryPreviewState>(null);
   const [inventoryShippedPreview, setInventoryShippedPreview] = useState<InventoryShippedPreviewState>(null);
   const [inventoryEdit, setInventoryEdit] = useState<InventoryEditState>(null);
+  const [inventoryCustomers, setInventoryCustomers] = useState<InventoryCustomerOption[]>([]);
+  const [inventoryProductQuery, setInventoryProductQuery] = useState("");
+  const [inventoryProductOptions, setInventoryProductOptions] = useState<InventoryProductOption[]>([]);
+  const [inventoryProductLoading, setInventoryProductLoading] = useState(false);
   const [financePreview, setFinancePreview] = useState<FinancePreviewState>(null);
   const [financePreviewPage, setFinancePreviewPage] = useState(1);
   const [deleteTarget, setDeleteTarget] = useState<DeleteOrderState>(null);
@@ -684,6 +720,35 @@ export function DropshippingClient({
   useEffect(() => {
     setInventoryPage(1);
   }, [inventoryCustomerFilter, inventoryKeyword]);
+
+  useEffect(() => {
+    if (!inventoryEdit || inventoryEdit.mode !== "create") return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        setInventoryProductLoading(true);
+        const keyword = inventoryProductQuery.trim();
+        const response = await fetch(`/api/dropshipping/product-search${keyword ? `?keyword=${encodeURIComponent(keyword)}` : ""}`, {
+          signal: controller.signal,
+        });
+        const json = await response.json();
+        if (!response.ok || !json?.ok) {
+          throw new Error(json?.error || "product_search_failed");
+        }
+        setInventoryProductOptions(json.items || []);
+      } catch (searchError) {
+        if ((searchError as Error).name === "AbortError") return;
+        setError(searchError instanceof Error ? searchError.message : "product_search_failed");
+      } finally {
+        setInventoryProductLoading(false);
+      }
+    }, 220);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [inventoryEdit, inventoryProductQuery]);
 
   useEffect(() => {
     setFinancePreviewPage(1);
@@ -990,6 +1055,7 @@ export function DropshippingClient({
       setOverview(overviewJson.data);
       setOrders(ordersJson.items || []);
       setInventory(inventoryJson.items || []);
+      setInventoryCustomers(inventoryJson.customers || []);
       setFinance(financeJson.items || []);
       setExchangeRate(rateJson.item);
     } catch (fetchError) {
@@ -2128,15 +2194,65 @@ export function DropshippingClient({
 
   function beginInventoryEdit(row: DsInventoryRow) {
     setInventoryEdit({
+      mode: "edit",
       id: row.inventoryId,
+      customerId: row.customerId,
       customerName: row.customerName,
+      productCatalogId: "",
+      productId: row.productId,
       sku: row.sku,
       productNameZh: row.productNameZh,
+      productNameEs: row.productNameEs || "",
       stockedQty: String(row.stockedQty),
       unitPrice: String(row.unitPrice ?? ""),
       discountRate: String(Math.round((row.discountRate || 0) * 10000) / 100),
-      warehouse: row.warehouse || "",
+      warehouse: FIXED_WAREHOUSE,
     });
+    setInventoryProductQuery(`${row.sku} / ${row.productNameZh || ""}`.trim());
+  }
+
+  async function beginInventoryCreate() {
+    try {
+      setError("");
+      if (inventoryCustomers.length === 0) {
+        const response = await fetch("/api/dropshipping/inventory/options");
+        const json = await response.json();
+        if (!response.ok || !json?.ok) {
+          throw new Error(json?.error || "inventory_options_failed");
+        }
+        setInventoryCustomers(json.customers || []);
+      }
+      setInventoryEdit({
+        mode: "create",
+        id: "",
+        customerId: "",
+        customerName: "",
+        productCatalogId: "",
+        productId: "",
+        sku: "",
+        productNameZh: "",
+        productNameEs: "",
+        stockedQty: "0",
+        unitPrice: "",
+        discountRate: "",
+        warehouse: FIXED_WAREHOUSE,
+      });
+      setInventoryProductQuery("");
+      setInventoryProductOptions([]);
+    } catch (openError) {
+      setError(openError instanceof Error ? openError.message : "inventory_options_failed");
+    }
+  }
+
+  function pickInventoryProduct(option: InventoryProductOption) {
+    setInventoryEdit((prev) => (prev ? {
+      ...prev,
+      productCatalogId: option.id,
+      sku: option.sku,
+      productNameZh: option.nameZh || option.sku,
+      productNameEs: option.nameEs || "",
+    } : prev));
+    setInventoryProductQuery(`${option.sku} / ${option.nameZh || option.nameEs || ""}`.trim());
   }
 
   async function saveInventoryEdit() {
@@ -2147,21 +2263,35 @@ export function DropshippingClient({
       const stockedQty = Number(inventoryEdit.stockedQty || 0);
       const unitPrice = inventoryEdit.unitPrice.trim();
       const discountRate = inventoryEdit.discountRate.trim();
-      const response = await fetch(`/api/dropshipping/inventory/${inventoryEdit.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          stockedQty,
-          unitPrice: unitPrice === "" ? null : Number(unitPrice),
-          discountRate: discountRate === "" ? null : Number(discountRate) / 100,
-          warehouse: inventoryEdit.warehouse,
-        }),
-      });
+      if (inventoryEdit.mode === "create" && (!inventoryEdit.customerId || !inventoryEdit.sku)) {
+        throw new Error(lang === "zh" ? "请选择客户和产品" : "Selecciona cliente y producto");
+      }
+
+      const response = await fetch(
+        inventoryEdit.mode === "create" ? "/api/dropshipping/inventory" : `/api/dropshipping/inventory/${inventoryEdit.id}`,
+        {
+          method: inventoryEdit.mode === "create" ? "POST" : "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            customerId: inventoryEdit.customerId,
+            productCatalogId: inventoryEdit.productCatalogId || null,
+            sku: inventoryEdit.sku,
+            productNameZh: inventoryEdit.productNameZh,
+            productNameEs: inventoryEdit.productNameEs,
+            stockedQty,
+            unitPrice: unitPrice === "" ? null : Number(unitPrice),
+            discountRate: discountRate === "" ? null : Number(discountRate) / 100,
+            warehouse: FIXED_WAREHOUSE,
+          }),
+        },
+      );
       const json = await response.json();
       if (!response.ok || !json?.ok) {
         throw new Error(json?.error || "save_failed");
       }
       setInventoryEdit(null);
+      setInventoryProductQuery("");
+      setInventoryProductOptions([]);
       await refreshAll();
     } catch (editError) {
       setError(editError instanceof Error ? editError.message : "save_failed");
@@ -3273,7 +3403,15 @@ export function DropshippingClient({
             </div>
           }
           right={
-            <div className="flex w-full justify-end lg:w-auto">
+            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-end lg:w-auto">
+              <button
+                type="button"
+                onClick={() => void beginInventoryCreate()}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-white transition hover:bg-primary/90"
+              >
+                <PlusIcon />
+                <span>{lang === "zh" ? "新增备货" : "Nuevo stock"}</span>
+              </button>
               <div className="relative w-full max-w-[340px]">
                 <input
                   value={inventoryKeyword}
@@ -4381,12 +4519,77 @@ export function DropshippingClient({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4" onClick={() => setInventoryEdit(null)}>
           <div className="w-full max-w-2xl rounded-[28px] bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="mb-5">
-              <h3 className="text-xl font-semibold text-slate-900">{lang === "zh" ? "编辑备货记录" : "Editar stock"}</h3>
+              <h3 className="text-xl font-semibold text-slate-900">
+                {inventoryEdit.mode === "create"
+                  ? (lang === "zh" ? "新增备货记录" : "Nuevo stock")
+                  : (lang === "zh" ? "编辑备货记录" : "Editar stock")}
+              </h3>
               <p className="mt-1 text-sm text-slate-500">
-                {inventoryEdit.customerName} / {inventoryEdit.sku} / {inventoryEdit.productNameZh || "-"}
+                {inventoryEdit.mode === "create"
+                  ? (lang === "zh" ? "选择客户与产品后录入备货信息" : "Selecciona cliente y producto")
+                  : `${inventoryEdit.customerName} / ${inventoryEdit.sku} / ${inventoryEdit.productNameZh || "-"}`}
               </p>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-1">
+                <p className="text-xs text-slate-500">{lang === "zh" ? "客户" : "Cliente"}</p>
+                <select
+                  value={inventoryEdit.customerId}
+                  disabled={inventoryEdit.mode !== "create"}
+                  onChange={(event) => {
+                    const nextCustomerId = event.target.value;
+                    const customer = inventoryCustomers.find((row) => row.id === nextCustomerId);
+                    setInventoryEdit((prev) => (prev ? {
+                      ...prev,
+                      customerId: nextCustomerId,
+                      customerName: customer?.name || "",
+                    } : prev));
+                  }}
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary/40 disabled:bg-slate-50 disabled:text-slate-500"
+                >
+                  <option value="">{lang === "zh" ? "请选择客户" : "Selecciona cliente"}</option>
+                  {inventoryCustomers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-slate-500">{lang === "zh" ? "产品（编码 / 中文名）" : "Producto (codigo / nombre)"}</p>
+                <input
+                  value={inventoryProductQuery}
+                  disabled={inventoryEdit.mode !== "create"}
+                  onChange={(event) => setInventoryProductQuery(event.target.value)}
+                  placeholder={lang === "zh" ? "搜索编码 / 中文名" : "Buscar codigo / nombre"}
+                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40 disabled:bg-slate-50 disabled:text-slate-500"
+                />
+                {inventoryEdit.mode === "create" ? (
+                  <div className="max-h-40 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50">
+                    {inventoryProductOptions.length > 0 ? (
+                      inventoryProductOptions.map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => pickInventoryProduct(option)}
+                          className={`flex w-full items-center justify-between gap-3 border-b border-slate-200 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-white ${
+                            inventoryEdit.productCatalogId === option.id ? "bg-white" : ""
+                          }`}
+                        >
+                          <span className="font-medium text-slate-900">{option.sku}</span>
+                          <span className="truncate text-slate-500">{option.nameZh || option.nameEs || "-"}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-2 text-xs text-slate-500">
+                        {inventoryProductLoading
+                          ? (lang === "zh" ? "正在查找产品..." : "Buscando productos...")
+                          : (lang === "zh" ? "请输入编码或中文名查找产品" : "Escribe para buscar productos")}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
               <div className="space-y-1">
                 <p className="text-xs text-slate-500">{lang === "zh" ? "备货数量" : "Stock"}</p>
                 <input
@@ -4418,8 +4621,8 @@ export function DropshippingClient({
                 <p className="text-xs text-slate-500">{lang === "zh" ? "发货仓" : "Almacen"}</p>
                 <input
                   value={inventoryEdit.warehouse}
-                  onChange={(event) => setInventoryEdit((prev) => (prev ? { ...prev, warehouse: event.target.value } : prev))}
-                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40"
+                  disabled
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none"
                 />
               </div>
             </div>
@@ -4744,4 +4947,3 @@ export function DropshippingClient({
     </section>
   );
 }
-

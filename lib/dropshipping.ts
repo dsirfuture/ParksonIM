@@ -1222,6 +1222,124 @@ export async function getInventoryRows(session: Session) {
   });
 }
 
+export async function getDropshippingCustomerOptions(session: Session) {
+  const rows = await prisma.dropshippingCustomer.findMany({
+    where: {
+      tenant_id: session.tenantId,
+      company_id: session.companyId,
+    },
+    select: {
+      id: true,
+      name: true,
+    },
+    orderBy: { name: "asc" },
+  });
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+  }));
+}
+
+export async function createInventory(
+  session: Session,
+  payload: {
+    customerId: string;
+    productCatalogId?: string | null;
+    sku: string;
+    productNameZh?: string | null;
+    productNameEs?: string | null;
+    stockedQty: number;
+    unitPrice?: number | null;
+    discountRate?: number | null;
+    warehouse?: string | null;
+  },
+) {
+  const customer = await prisma.dropshippingCustomer.findFirst({
+    where: {
+      id: payload.customerId,
+      tenant_id: session.tenantId,
+      company_id: session.companyId,
+    },
+    select: { id: true },
+  });
+
+  if (!customer) {
+    throw new Error("customer_not_found");
+  }
+
+  const normalizedSku = normalizeProductCode(payload.sku);
+  if (!normalizedSku) {
+    throw new Error("sku_required");
+  }
+
+  const catalog = payload.productCatalogId
+    ? await prisma.productCatalog.findFirst({
+        where: {
+          id: payload.productCatalogId,
+          tenant_id: session.tenantId,
+          company_id: session.companyId,
+        },
+        select: {
+          sku: true,
+          name_zh: true,
+          name_es: true,
+          price: true,
+          normal_discount: true,
+        },
+      })
+    : await prisma.productCatalog.findFirst({
+        where: {
+          tenant_id: session.tenantId,
+          company_id: session.companyId,
+          sku: { equals: normalizedSku, mode: "insensitive" as const },
+        },
+        select: {
+          sku: true,
+          name_zh: true,
+          name_es: true,
+          price: true,
+          normal_discount: true,
+        },
+      });
+
+  const product = await ensureProduct(session, {
+    sku: catalog?.sku || normalizedSku,
+    nameZh: payload.productNameZh?.trim() || catalog?.name_zh || normalizedSku,
+    nameEs: payload.productNameEs?.trim() || catalog?.name_es || undefined,
+    warehouse: payload.warehouse?.trim() || undefined,
+  });
+
+  const existing = await prisma.dropshippingCustomerInventory.findFirst({
+    where: {
+      tenant_id: session.tenantId,
+      company_id: session.companyId,
+      customer_id: payload.customerId,
+      product_id: product.id,
+    },
+    select: { id: true },
+  });
+
+  if (existing) {
+    throw new Error("inventory_exists");
+  }
+
+  return prisma.dropshippingCustomerInventory.create({
+    data: {
+      tenant_id: session.tenantId,
+      company_id: session.companyId,
+      customer_id: payload.customerId,
+      product_id: product.id,
+      stocked_qty: payload.stockedQty,
+      locked_unit_price:
+        payload.unitPrice ?? toOptionalNumber(catalog?.price) ?? toOptionalNumber(product.unit_price),
+      locked_discount_rate:
+        payload.discountRate ?? toOptionalNumber(catalog?.normal_discount) ?? toOptionalNumber(product.discount_rate),
+      warehouse: payload.warehouse?.trim() || null,
+    },
+  });
+}
+
 export async function updateInventory(
   session: Session,
   payload: {
