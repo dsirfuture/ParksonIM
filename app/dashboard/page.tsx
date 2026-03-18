@@ -179,12 +179,6 @@ export default async function DashboardPage() {
         badge={text.badge}
         title={text.title}
         description={text.desc}
-        meta={
-          <div className="space-y-1">
-            <div>Tenant: {session.tenantId}</div>
-            <div>Company: {session.companyId}</div>
-          </div>
-        }
         actions={
           <>
             <Link
