@@ -1303,10 +1303,42 @@ export async function createInventory(
         },
       });
 
+  const yogoSource = catalog
+    ? null
+    : payload.productCatalogId
+      ? await prisma.yogoProductSource.findFirst({
+          where: {
+            id: payload.productCatalogId,
+            tenant_id: session.tenantId,
+            company_id: session.companyId,
+          },
+          select: {
+            product_code: true,
+            name_cn: true,
+            name_es: true,
+            source_price: true,
+            source_discount: true,
+          },
+        })
+      : await prisma.yogoProductSource.findFirst({
+          where: {
+            tenant_id: session.tenantId,
+            company_id: session.companyId,
+            product_code: { equals: normalizedSku, mode: "insensitive" as const },
+          },
+          select: {
+            product_code: true,
+            name_cn: true,
+            name_es: true,
+            source_price: true,
+            source_discount: true,
+          },
+        });
+
   const product = await ensureProduct(session, {
-    sku: catalog?.sku || normalizedSku,
-    nameZh: payload.productNameZh?.trim() || catalog?.name_zh || normalizedSku,
-    nameEs: payload.productNameEs?.trim() || catalog?.name_es || undefined,
+    sku: catalog?.sku || yogoSource?.product_code || normalizedSku,
+    nameZh: payload.productNameZh?.trim() || catalog?.name_zh || yogoSource?.name_cn || normalizedSku,
+    nameEs: payload.productNameEs?.trim() || catalog?.name_es || yogoSource?.name_es || undefined,
     warehouse: payload.warehouse?.trim() || undefined,
   });
 
@@ -1332,9 +1364,15 @@ export async function createInventory(
       product_id: product.id,
       stocked_qty: payload.stockedQty,
       locked_unit_price:
-        payload.unitPrice ?? toOptionalNumber(catalog?.price) ?? toOptionalNumber(product.unit_price),
+        payload.unitPrice
+        ?? toOptionalNumber(catalog?.price)
+        ?? toOptionalNumber(yogoSource?.source_price)
+        ?? toOptionalNumber(product.unit_price),
       locked_discount_rate:
-        payload.discountRate ?? toOptionalNumber(catalog?.normal_discount) ?? toOptionalNumber(product.discount_rate),
+        payload.discountRate
+        ?? toOptionalNumber(catalog?.normal_discount)
+        ?? toOptionalNumber(yogoSource?.source_discount)
+        ?? toOptionalNumber(product.discount_rate),
       warehouse: payload.warehouse?.trim() || null,
     },
   });

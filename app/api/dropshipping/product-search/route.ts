@@ -17,18 +17,19 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const keyword = searchParams.get("keyword")?.trim() || "";
 
-    const rows = await prisma.productCatalog.findMany({
+    const rows = await prisma.yogoProductSource.findMany({
       where: {
         tenant_id: session.tenantId,
         company_id: session.companyId,
         ...(keyword
           ? {
               OR: [
-                { sku: { contains: keyword, mode: "insensitive" } },
-                { barcode: { contains: keyword, mode: "insensitive" } },
-                { name_zh: { contains: keyword, mode: "insensitive" } },
+                { product_code: { contains: keyword, mode: "insensitive" } },
+                { product_no: { contains: keyword, mode: "insensitive" } },
+                { name_cn: { contains: keyword, mode: "insensitive" } },
                 { name_es: { contains: keyword, mode: "insensitive" } },
-                { category: { contains: keyword, mode: "insensitive" } },
+                { category_name: { contains: keyword, mode: "insensitive" } },
+                { subcategory_name: { contains: keyword, mode: "insensitive" } },
                 { supplier: { contains: keyword, mode: "insensitive" } },
               ],
             }
@@ -36,13 +37,14 @@ export async function GET(request: Request) {
       },
       select: {
         id: true,
-        sku: true,
-        name_zh: true,
+        product_code: true,
+        product_no: true,
+        name_cn: true,
         name_es: true,
-        price: true,
-        normal_discount: true,
+        source_price: true,
+        source_discount: true,
       },
-      orderBy: [{ updated_at: "desc" }, { sku: "asc" }],
+      orderBy: [{ source_updated_at: "desc" }, { updated_at: "desc" }, { product_code: "asc" }],
       take: keyword ? 24 : 12,
     });
 
@@ -50,12 +52,13 @@ export async function GET(request: Request) {
       ok: true,
       items: rows.map((row) => ({
         id: row.id,
-        sku: row.sku,
-        nameZh: row.name_zh || "",
+        sku: row.product_code,
+        productNo: row.product_no || "",
+        nameZh: row.name_cn || "",
         nameEs: row.name_es || "",
-        imageUrl: buildProductImageUrl(row.sku, "jpg"),
-        unitPrice: row.price?.toString?.() || "",
-        discountRate: row.normal_discount?.toString?.() || "",
+        imageUrl: buildProductImageUrl(row.product_code, "jpg"),
+        unitPrice: row.source_price?.toString?.() || "",
+        discountRate: row.source_discount?.toString?.() || "",
       })),
     });
   } catch (error) {
