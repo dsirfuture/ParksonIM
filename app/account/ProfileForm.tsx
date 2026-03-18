@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { getAvatarFallback } from "@/lib/user-account";
 
 type Lang = "zh" | "es";
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
 type UserProfile = {
   id: string;
@@ -50,6 +51,8 @@ export function ProfileForm({
             profileCardDesc: "保持姓名 手机号 邮箱和头像信息准确",
             avatarHint: "点击头像可更新图片",
             avatarSubHint: "建议使用清晰的正方形图片",
+            avatarTooLarge: "头像图片不能超过 2MB",
+            avatarInvalid: "当前未能读取图片 请重新选择",
             name: "姓名",
             phone: "手机号",
             email: "邮箱",
@@ -65,6 +68,8 @@ export function ProfileForm({
               "Mantén actualizado el nombre el teléfono el correo y el avatar",
             avatarHint: "Haz clic en el avatar para actualizar la imagen",
             avatarSubHint: "Se recomienda una imagen cuadrada y clara",
+            avatarTooLarge: "El avatar no puede superar 2 MB",
+            avatarInvalid: "Por ahora no fue posible leer la imagen",
             name: "Nombre",
             phone: "Teléfono",
             email: "Correo",
@@ -80,15 +85,17 @@ export function ProfileForm({
   async function handleAvatarChange(file: File | null) {
     if (!file) return;
 
+    if (file.size > MAX_AVATAR_BYTES) {
+      setError(text.avatarTooLarge);
+      return;
+    }
+
     try {
       const dataUrl = await fileToDataUrl(file);
       setAvatarUrl(dataUrl);
+      setError("");
     } catch {
-      setError(
-        lang === "zh"
-          ? "当前未能读取图片 请重新选择"
-          : "Por ahora no fue posible leer la imagen",
-      );
+      setError(text.avatarInvalid);
     }
   }
 

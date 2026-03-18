@@ -8,6 +8,12 @@ import {
   isValidMxPhone,
   normalizePhone,
 } from "@/lib/user-account";
+import {
+  deleteStoredAvatar,
+  isInlineAvatarUrl,
+  sanitizeAvatarUrl,
+  storeAvatarDataUrl,
+} from "@/lib/avatar-storage";
 
 export async function GET() {
   const session = await getSession();
@@ -33,7 +39,15 @@ export async function GET() {
     },
   });
 
-  return NextResponse.json({ ok: true, user });
+  return NextResponse.json({
+    ok: true,
+    user: user
+      ? {
+          ...user,
+          avatar_url: sanitizeAvatarUrl(user.avatar_url),
+        }
+      : null,
+  });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -98,6 +112,41 @@ export async function PATCH(req: NextRequest) {
     );
   }
 
+  const existingUser = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { avatar_url: true },
+  });
+
+  let normalizedAvatarUrl = sanitizeAvatarUrl(existingUser?.avatar_url);
+
+  if (!avatarUrl) {
+    await deleteStoredAvatar(existingUser?.avatar_url);
+    normalizedAvatarUrl = null;
+  } else if (isInlineAvatarUrl(avatarUrl)) {
+    try {
+      normalizedAvatarUrl = await storeAvatarDataUrl(
+        avatarUrl,
+        session.userId,
+        existingUser?.avatar_url,
+      );
+    } catch (error) {
+      const code = error instanceof Error ? error.message : String(error);
+      if (code === "AVATAR_TOO_LARGE") {
+        return NextResponse.json(
+          { ok: false, error: "头像图片不能超过 2MB" },
+          { status: 400 },
+        );
+      }
+
+      return NextResponse.json(
+        { ok: false, error: "头像格式不正确" },
+        { status: 400 },
+      );
+    }
+  } else {
+    normalizedAvatarUrl = sanitizeAvatarUrl(avatarUrl);
+  }
+
   const user = await prisma.user.update({
     where: { id: session.userId },
     data: {
@@ -105,7 +154,7 @@ export async function PATCH(req: NextRequest) {
       phone,
       user_id: phone,
       email: email || null,
-      avatar_url: avatarUrl || null,
+      avatar_url: normalizedAvatarUrl,
       ...(password ? { password_hash: hashPassword(password) } : {}),
     },
     select: {
@@ -119,5 +168,11 @@ export async function PATCH(req: NextRequest) {
     },
   });
 
-  return NextResponse.json({ ok: true, user });
+  return NextResponse.json({
+    ok: true,
+    user: {
+      ...user,
+      avatar_url: sanitizeAvatarUrl(user.avatar_url),
+    },
+  });
 }

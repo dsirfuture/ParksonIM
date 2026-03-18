@@ -5,6 +5,7 @@ import { useMemo, useRef, useState } from "react";
 import { getAvatarFallback } from "@/lib/user-account";
 
 type Lang = "zh" | "es";
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
 async function fileToDataUrl(file: File) {
   return await new Promise<string>((resolve, reject) => {
@@ -51,6 +52,7 @@ export function RegisterForm({ lang }: { lang: Lang }) {
             avatarUpload: "保存头像",
             avatarUploading: "保存中",
             avatarSkip: "取消",
+            avatarTooLarge: "头像图片不能超过 2MB",
           }
         : {
             title: "Crear cuenta",
@@ -70,6 +72,7 @@ export function RegisterForm({ lang }: { lang: Lang }) {
             avatarUpload: "Guardar avatar",
             avatarUploading: "Guardando",
             avatarSkip: "Cancelar",
+            avatarTooLarge: "El avatar no puede superar 2 MB",
           },
     [lang],
   );
@@ -151,6 +154,17 @@ export function RegisterForm({ lang }: { lang: Lang }) {
     setShowAvatarModal(false);
     router.push("/login");
     router.refresh();
+  }
+
+  function handleAvatarFileChange(file: File | null) {
+    if (!file) return;
+    if (file.size > MAX_AVATAR_BYTES) {
+      setError(text.avatarTooLarge);
+      return;
+    }
+
+    setError("");
+    setAvatarFile(file);
   }
 
   return (
@@ -257,7 +271,7 @@ export function RegisterForm({ lang }: { lang: Lang }) {
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    onChange={(e) => setAvatarFile(e.target.files?.[0] || null)}
+                    onChange={(e) => handleAvatarFileChange(e.target.files?.[0] || null)}
                   />
                 </label>
               </div>

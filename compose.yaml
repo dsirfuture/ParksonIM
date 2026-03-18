@@ -49,6 +49,8 @@ services:
       CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${CLOUDFLARE_R2_SECRET_ACCESS_KEY}
     ports:
       - "127.0.0.1:13000:3000"
+    volumes:
+      - ./data/avatars:/data/avatars
     networks:
       - parksonim_internal
       - nginx-proxy-manager_default

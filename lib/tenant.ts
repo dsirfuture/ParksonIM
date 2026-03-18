@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { readSignedSession, SESSION_COOKIE_NAME } from "@/lib/auth";
 import { withPrismaRetry } from "@/lib/prisma-retry";
+import { sanitizeAvatarUrl } from "@/lib/avatar-storage";
 
 export type TenantContext = {
   tenantId: string;
@@ -97,6 +98,6 @@ export async function getSession(): Promise<Session | null> {
     companyId: user.company_id,
     name: user.name,
     phone: user.phone,
-    avatarUrl: user.avatar_url,
+    avatarUrl: sanitizeAvatarUrl(user.avatar_url),
   };
 }

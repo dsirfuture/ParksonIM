@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { prisma } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n-server";
 import { getSession } from "@/lib/tenant";
+import { sanitizeAvatarUrl } from "@/lib/avatar-storage";
 import { ProfileForm } from "./ProfileForm";
 
 export default async function AccountPage() {
@@ -33,7 +34,13 @@ export default async function AccountPage() {
   return (
     <AppShell>
       <div className="mx-auto w-full max-w-[880px]">
-        <ProfileForm lang={lang} initialUser={user} />
+        <ProfileForm
+          lang={lang}
+          initialUser={{
+            ...user,
+            avatar_url: sanitizeAvatarUrl(user.avatar_url),
+          }}
+        />
       </div>
     </AppShell>
   );
