@@ -189,7 +189,7 @@ export function YgCustomersClient({ initialRows, summary }: YgCustomersClientPro
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="min-w-full border-separate border-spacing-0">
+              <table key={`yg-customers-${currentPage}-${keyword}`} className="min-w-full border-separate border-spacing-0">
                 <thead>
                   <tr className="bg-slate-50 text-left text-sm text-slate-500">
                     <th className="px-3 py-2.5 font-semibold">注册手机</th>
@@ -203,7 +203,7 @@ export function YgCustomersClient({ initialRows, summary }: YgCustomersClientPro
                     <th className="px-3 py-2.5 text-center font-semibold">详情</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody key={`yg-customers-body-${currentPage}-${keyword}`}>
                   {pagedRows.map((row) => {
                     return (
                       <tr key={row.rowKey} className="border-t border-slate-100 transition hover:bg-rose-50/50">
