@@ -18,15 +18,58 @@ export async function PATCH(
     }
 
     const { id } = await context.params;
-    const body = (await request.json()) as Record<string, unknown>;
-    const customerName = String(body.customerName || "").trim();
-    const platform = String(body.platform || "").trim();
-    const platformOrderNo = String(body.platformOrderNo || "").trim();
-    const sku = String(body.sku || "").trim();
-    const productNameZh = String(body.productNameZh || "").trim();
-    const quantity = Number(body.quantity || 0);
+    if (!id) {
+      return NextResponse.json({ ok: false, error: "参数不完整" }, { status: 400 });
+    }
 
-    if (!id || !customerName || !platform || !platformOrderNo || !sku || !productNameZh || quantity <= 0) {
+    const body = (await request.json()) as Record<string, unknown>;
+    const existing = await prisma.dropshippingOrder.findFirst({
+      where: {
+        id,
+        tenant_id: session.tenantId,
+        company_id: session.companyId,
+      },
+      include: {
+        customer: {
+          select: { name: true },
+        },
+        product: {
+          select: {
+            sku: true,
+            name_zh: true,
+            name_es: true,
+            default_warehouse: true,
+            default_shipping_fee: true,
+          },
+        },
+      },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ ok: false, error: "order_not_found" }, { status: 404 });
+    }
+
+    const customerName =
+      body.customerName === undefined
+        ? existing.customer.name
+        : String(body.customerName || "").trim();
+    const platform =
+      body.platform === undefined ? existing.platform : String(body.platform || "").trim();
+    const platformOrderNo =
+      body.platformOrderNo === undefined
+        ? existing.platform_order_no
+        : String(body.platformOrderNo || "").trim();
+    const sku = body.sku === undefined ? existing.product.sku : String(body.sku || "").trim();
+    const productNameZh =
+      body.productNameZh === undefined
+        ? existing.product.name_zh
+        : String(body.productNameZh || "").trim();
+    const quantity =
+      body.quantity === undefined || body.quantity === null || body.quantity === ""
+        ? existing.quantity
+        : Number(body.quantity);
+
+    if (!customerName || !platform || !platformOrderNo || !sku || !productNameZh || quantity <= 0) {
       return NextResponse.json({ ok: false, error: "参数不完整" }, { status: 400 });
     }
 
@@ -35,19 +78,50 @@ export async function PATCH(
       customerName,
       platform,
       platformOrderNo,
-      trackingGroupId: body.trackingGroupId === undefined ? undefined : String(body.trackingGroupId || "").trim() || null,
+      trackingGroupId:
+        body.trackingGroupId === undefined
+          ? undefined
+          : String(body.trackingGroupId || "").trim() || null,
       sku,
       productNameZh,
-      productNameEs: String(body.productNameEs || "").trim() || undefined,
+      productNameEs:
+        body.productNameEs === undefined
+          ? existing.product.name_es || undefined
+          : String(body.productNameEs || "").trim() || undefined,
       quantity,
-      trackingNo: String(body.trackingNo || "").trim() || undefined,
-      color: String(body.color || "").trim() || undefined,
+      trackingNo:
+        body.trackingNo === undefined
+          ? existing.tracking_no || undefined
+          : String(body.trackingNo || "").trim() || undefined,
+      color:
+        body.color === undefined
+          ? existing.color || undefined
+          : String(body.color || "").trim() || undefined,
       warehouse: FIXED_WAREHOUSE,
-      shippedAt: body.shippedAt ? String(body.shippedAt) : null,
-      shippingFee: body.shippingFee === "" || body.shippingFee === null || body.shippingFee === undefined ? undefined : Number(body.shippingFee),
-      settlementStatus: String(body.settlementStatus || "unpaid") as "unpaid" | "paid",
-      shippingStatus: String(body.shippingStatus || "pending") as "pending" | "shipped" | "cancelled",
-      notes: String(body.notes || "").trim() || undefined,
+      shippedAt:
+        body.shippedAt === undefined
+          ? (existing.shipped_at ? existing.shipped_at.toISOString().slice(0, 10) : null)
+          : body.shippedAt
+            ? String(body.shippedAt)
+            : null,
+      shippingFee:
+        body.shippingFee === undefined
+          ? (existing.shipping_fee ? Number(existing.shipping_fee) : undefined)
+          : body.shippingFee === "" || body.shippingFee === null
+            ? undefined
+            : Number(body.shippingFee),
+      settlementStatus:
+        body.settlementStatus === undefined
+          ? (existing.settled_at ? "paid" : "unpaid")
+          : (String(body.settlementStatus || "unpaid") as "unpaid" | "paid"),
+      shippingStatus:
+        body.shippingStatus === undefined
+          ? existing.shipping_status
+          : (String(body.shippingStatus || "pending") as "pending" | "shipped" | "cancelled"),
+      notes:
+        body.notes === undefined
+          ? existing.notes || undefined
+          : String(body.notes || "").trim() || undefined,
     });
 
     return NextResponse.json({ ok: true, id: order.id });
