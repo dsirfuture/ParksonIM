@@ -69,7 +69,7 @@ export async function PATCH(
         ? existing.quantity
         : Number(body.quantity);
 
-    if (!customerName || !platform || !platformOrderNo || !sku || !productNameZh || quantity <= 0) {
+    if (!customerName || !platform || !platformOrderNo || !sku || !productNameZh || quantity < 0) {
       return NextResponse.json({ ok: false, error: "参数不完整" }, { status: 400 });
     }
 
