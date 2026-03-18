@@ -1238,6 +1238,7 @@ export async function getInventoryRows(session: Session) {
       productImageUrl: row.product.image_url || buildProductImageUrl(matchedSku, "jpg"),
       stockedAt: stockedAtMap.get(`${row.customer_id}::${row.product_id}`) || null,
       warehouse: row.warehouse || row.product.default_warehouse || "",
+      isStocked: row.is_stocked,
       stockedQty: row.stocked_qty,
       shippedQty,
       remainingQty,
@@ -1276,6 +1277,7 @@ export async function createInventory(
     sku: string;
     productNameZh?: string | null;
     productNameEs?: string | null;
+    isStocked?: boolean;
     stockedQty: number;
     unitPrice?: number | null;
     discountRate?: number | null;
@@ -1389,6 +1391,7 @@ export async function createInventory(
       company_id: session.companyId,
       customer_id: payload.customerId,
       product_id: product.id,
+      is_stocked: Boolean(payload.isStocked),
       stocked_qty: payload.stockedQty,
       locked_unit_price:
         payload.unitPrice
@@ -1409,6 +1412,7 @@ export async function updateInventory(
   session: Session,
   payload: {
     id: string;
+    isStocked?: boolean;
     stockedQty: number;
     unitPrice?: number | null;
     discountRate?: number | null;
@@ -1431,6 +1435,7 @@ export async function updateInventory(
   return prisma.dropshippingCustomerInventory.update({
     where: { id: inventory.id },
     data: {
+      is_stocked: Boolean(payload.isStocked),
       stocked_qty: payload.stockedQty,
       locked_unit_price: payload.unitPrice ?? null,
       locked_discount_rate: payload.discountRate ?? null,

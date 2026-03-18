@@ -372,6 +372,7 @@ model DropshippingCustomerInventory {
   customer_id String @db.Uuid
   product_id  String @db.Uuid
 
+  is_stocked            Boolean  @default(false)
   stocked_qty           Int
   locked_unit_price     Decimal? @db.Decimal(14, 2)
   locked_discount_rate  Decimal? @db.Decimal(8, 4)

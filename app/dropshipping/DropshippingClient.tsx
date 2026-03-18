@@ -69,6 +69,7 @@ type InventoryEditState = {
   sku: string;
   productNameZh: string;
   productNameEs: string;
+  isStocked: boolean;
   stockedQty: string;
   unitPrice: string;
   unitPriceLocked: boolean;
@@ -1124,6 +1125,15 @@ export function DropshippingClient({
       return customerHit && hit && statusHit && settlementHit;
     });
   }, [customerFilter, keyword, orders, settlementFilter, statusFilter]);
+
+  const filteredOrderCount = useMemo(() => {
+    const seen = new Set<string>();
+    for (const row of filteredOrders) {
+      const trackingNo = row.trackingNo.trim().toLowerCase();
+      seen.add(trackingNo || row.id);
+    }
+    return seen.size;
+  }, [filteredOrders]);
 
   const sortedOrders = useMemo(() => {
     return [...filteredOrders].sort((a, b) => {
@@ -2221,6 +2231,7 @@ export function DropshippingClient({
       sku: row.sku,
       productNameZh: row.productNameZh,
       productNameEs: row.productNameEs || "",
+      isStocked: row.isStocked,
       stockedQty: String(row.stockedQty),
       unitPrice: String(row.unitPrice ?? ""),
       unitPriceLocked: true,
@@ -2251,6 +2262,7 @@ export function DropshippingClient({
         sku: "",
         productNameZh: "",
         productNameEs: "",
+        isStocked: false,
         stockedQty: "0",
         unitPrice: "",
         unitPriceLocked: false,
@@ -2303,6 +2315,7 @@ export function DropshippingClient({
             sku: inventoryEdit.sku,
             productNameZh: inventoryEdit.productNameZh,
             productNameEs: inventoryEdit.productNameEs,
+            isStocked: inventoryEdit.isStocked,
             stockedQty,
             unitPrice: unitPrice === "" ? null : Number(unitPrice),
             discountRate: discountRate === "" ? null : Number(discountRate) / 100,
@@ -3093,7 +3106,7 @@ export function DropshippingClient({
                 </span>
               </div>
               <span className="whitespace-nowrap text-sm text-slate-500">
-                {lang === "zh" ? `共有：${filteredOrders.length}订单` : `Total: ${filteredOrders.length} pedidos`}
+                {lang === "zh" ? `共有：${filteredOrderCount}订单` : `Total: ${filteredOrderCount} pedidos`}
               </span>
             </div>
           }
@@ -3470,6 +3483,7 @@ export function DropshippingClient({
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{text.fields.productZh}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "单价" : "Precio"}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "普通折扣" : "Dsc"}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "是否备货" : "Stock"}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "备货数量" : "Stock"}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "备货金额" : "Monto stock"}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{text.fields.shipped}</th>
@@ -3516,6 +3530,11 @@ export function DropshippingClient({
                       <td className="px-4 py-2 text-sm text-slate-700">{row.productNameZh}</td>
                       <td className="px-4 py-2 text-sm text-slate-700">${fmtMoney(row.unitPrice, lang)}</td>
                       <td className="px-4 py-2 text-sm text-slate-700">{fmtPercent(row.discountRate, lang)}%</td>
+                      <td className="px-4 py-2 text-sm text-slate-700">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${row.isStocked ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                          {row.isStocked ? (lang === "zh" ? "已备货" : "Si") : (lang === "zh" ? "未备货" : "No")}
+                        </span>
+                      </td>
                       <td className="px-4 py-2 text-sm text-slate-700">{row.stockedQty}</td>
                       <td className="px-4 py-2 text-sm text-slate-700">${fmtMoney(row.stockAmount, lang)}</td>
                       <td className="px-4 py-2 text-sm text-slate-700">
@@ -4687,7 +4706,17 @@ export function DropshippingClient({
                 <input
                   inputMode="numeric"
                   value={inventoryEdit.stockedQty}
-                  onChange={(event) => setInventoryEdit((prev) => (prev ? { ...prev, stockedQty: event.target.value.replace(/[^\d]/g, "") } : prev))}
+                  onChange={(event) =>
+                    setInventoryEdit((prev) => {
+                      if (!prev) return prev;
+                      const nextQty = event.target.value.replace(/[^\d]/g, "");
+                      return {
+                        ...prev,
+                        stockedQty: nextQty,
+                        isStocked: Number(nextQty || 0) > 1 ? true : prev.isStocked,
+                      };
+                    })
+                  }
                   className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40"
                 />
               </div>
@@ -4717,6 +4746,31 @@ export function DropshippingClient({
                   disabled
                   className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none"
                 />
+              </div>
+              <div className="space-y-1 md:col-span-2">
+                <p className="text-xs text-slate-500">{lang === "zh" ? "备货" : "Stock"}</p>
+                <button
+                  type="button"
+                  onClick={() => setInventoryEdit((prev) => (prev ? { ...prev, isStocked: !prev.isStocked } : prev))}
+                  className={`inline-flex h-11 w-full items-center justify-between rounded-xl border px-3 text-sm transition ${
+                    inventoryEdit.isStocked
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-slate-200 bg-white text-slate-500"
+                  }`}
+                >
+                  <span>{inventoryEdit.isStocked ? (lang === "zh" ? "已备货" : "Activo") : (lang === "zh" ? "未备货" : "Inactivo")}</span>
+                  <span
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+                      inventoryEdit.isStocked ? "bg-emerald-500" : "bg-slate-300"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white transition ${
+                        inventoryEdit.isStocked ? "translate-x-5" : "translate-x-0.5"
+                      }`}
+                    />
+                  </span>
+                </button>
               </div>
             </div>
             <div className="mt-6 flex items-center justify-end gap-3">

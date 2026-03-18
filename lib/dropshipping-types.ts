@@ -133,6 +133,7 @@ export type DsInventoryRow = {
   productImageUrl: string;
   stockedAt: string | null;
   warehouse: string;
+  isStocked: boolean;
   stockedQty: number;
   shippedQty: number;
   remainingQty: number;
