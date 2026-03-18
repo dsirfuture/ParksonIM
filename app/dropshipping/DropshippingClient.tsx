@@ -3560,29 +3560,37 @@ export function DropshippingClient({
                           row.shippedQty
                         )}
                       </td>
-                      <td className="px-4 py-2 text-sm font-semibold text-slate-900">{row.remainingQty}</td>
-                      <td className={`px-4 py-2 text-sm ${getInventoryStatusClass(row.status)}`}>{text.status[row.status]}</td>
+                      <td className="px-4 py-2 text-sm font-semibold text-slate-900">
+                        {row.isStocked ? row.remainingQty : "-"}
+                      </td>
+                      <td className={`px-4 py-2 text-sm ${row.isStocked ? getInventoryStatusClass(row.status) : "text-slate-400"}`}>
+                        {row.isStocked ? text.status[row.status] : "-"}
+                      </td>
                       <td className="px-4 py-2 text-right">
-                        <div className="inline-flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => beginInventoryEdit(row)}
-                            title={lang === "zh" ? "编辑" : "Editar"}
-                            aria-label={lang === "zh" ? "编辑" : "Editar"}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
-                          >
-                            <PencilIcon />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void removeInventoryRow(row)}
-                            title={lang === "zh" ? "删除" : "Eliminar"}
-                            aria-label={lang === "zh" ? "删除" : "Eliminar"}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-500 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600"
-                          >
-                            <TrashIcon />
-                          </button>
-                        </div>
+                        {row.isStocked ? (
+                          <div className="inline-flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => beginInventoryEdit(row)}
+                              title={lang === "zh" ? "编辑" : "Editar"}
+                              aria-label={lang === "zh" ? "编辑" : "Editar"}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+                            >
+                              <PencilIcon />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void removeInventoryRow(row)}
+                              title={lang === "zh" ? "删除" : "Eliminar"}
+                              aria-label={lang === "zh" ? "删除" : "Eliminar"}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-500 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600"
+                            >
+                              <TrashIcon />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-slate-400">-</span>
+                        )}
                       </td>
                     </tr>
                   ))}
