@@ -4198,8 +4198,8 @@ export function DropshippingClient({
                   </label>
                 </div>
 
-                <div className="flex flex-nowrap gap-4">
-                  <label className="min-w-0 flex-[1.15] space-y-1">
+                <div className="flex flex-nowrap gap-3">
+                  <label className="min-w-0 w-[156px] shrink-0 space-y-1">
                     <span className="whitespace-nowrap text-xs text-slate-500">{text.form.shippedAt}</span>
                     <input
                       type="date"
@@ -4208,7 +4208,7 @@ export function DropshippingClient({
                       className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
                     />
                   </label>
-                  <label className="min-w-0 flex-1 space-y-1">
+                  <label className="min-w-0 w-[132px] shrink-0 space-y-1">
                     <span className="whitespace-nowrap text-xs text-slate-500">{text.form.platform}</span>
                     <select
                       value={form.platform}
@@ -4223,7 +4223,7 @@ export function DropshippingClient({
                       ))}
                     </select>
                   </label>
-                  <label className="min-w-0 flex-1 space-y-1">
+                  <label className="min-w-0 w-[132px] shrink-0 space-y-1">
                     <span className="whitespace-nowrap text-xs text-slate-500">{text.form.status}</span>
                     <select
                       value={form.shippingStatus}
@@ -4237,7 +4237,7 @@ export function DropshippingClient({
                       ))}
                     </select>
                   </label>
-                  <label className="min-w-0 w-[88px] shrink-0 space-y-1">
+                  <label className="min-w-0 w-[82px] shrink-0 space-y-1">
                     <span className="whitespace-nowrap text-xs text-slate-500">{text.form.shippingFee}</span>
                     <select
                       value={form.shippingFee}
@@ -4252,7 +4252,7 @@ export function DropshippingClient({
                       ))}
                     </select>
                   </label>
-                  <label className="min-w-0 w-[96px] shrink-0 space-y-1">
+                  <label className="min-w-0 w-[82px] shrink-0 space-y-1">
                     <span className="whitespace-nowrap text-xs text-slate-500">{text.form.settlement}</span>
                     <select
                       value={form.settlementStatus}
