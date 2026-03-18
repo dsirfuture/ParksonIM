@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     await fs.mkdir(folder, { recursive: true });
     await fs.writeFile(fullPath, Buffer.from(await file.arrayBuffer()));
 
-    return NextResponse.json({ ok: true, url: `/supplier-logos/${fileName}` });
+    return NextResponse.json({ ok: true, url: `/api/settings/suppliers/logo/${fileName}` });
   } catch (error) {
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : "Upload failed" },
