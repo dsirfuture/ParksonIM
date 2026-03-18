@@ -1500,6 +1500,9 @@ export function DropshippingClient({
             </option>
           ))}
         </select>
+        <span className="whitespace-nowrap text-sm text-slate-500">
+          {lang === "zh" ? `共有：${filteredOrders.length}订单` : `Total: ${filteredOrders.length} pedidos`}
+        </span>
       </div>
     ),
     right: (

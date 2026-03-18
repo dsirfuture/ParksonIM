@@ -819,6 +819,8 @@ export async function importLegacyOrders(
       sourceName: "legacy-import",
     });
 
+    const trackingNo = String(row.trackingNo || "").trim();
+    const color = String(row.color || "").trim();
     const existingOrder = await prisma.dropshippingOrder.findFirst({
       where: {
         tenant_id: session.tenantId,
@@ -827,6 +829,14 @@ export async function importLegacyOrders(
         platform: row.platform,
         platform_order_no: row.platformOrderNo,
         product_id: product.id,
+        AND: [
+          trackingNo
+            ? { tracking_no: trackingNo }
+            : { OR: [{ tracking_no: null }, { tracking_no: "" }] },
+          color
+            ? { color }
+            : { OR: [{ color: null }, { color: "" }] },
+        ],
       },
       select: { id: true },
     });
