@@ -82,12 +82,11 @@ export async function AppShell({
               <div className="text-[15px] font-semibold leading-5 tracking-tight text-slate-900">
                 {title}
               </div>
-              <div className="mt-0.5 text-xs leading-4 text-slate-500">
-                {subtitle ||
-                  (lang === "zh"
-                    ? "验货管理平台"
-                    : "Plataforma de gestión de inspección")}
-              </div>
+              {subtitle ? (
+                <div className="mt-0.5 text-xs leading-4 text-slate-500">
+                  {subtitle}
+                </div>
+              ) : null}
             </div>
           </Link>
 

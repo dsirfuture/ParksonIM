@@ -50,6 +50,12 @@ export async function middleware(request: NextRequest) {
   }
 
   const { pathname, search } = request.nextUrl;
+  const isStaticAsset = /\.[a-zA-Z0-9]+$/.test(pathname);
+
+  if (isStaticAsset) {
+    return response;
+  }
+
   const isLoginRoute = pathname === "/login";
   const hasSession = await hasValidSession(request);
 

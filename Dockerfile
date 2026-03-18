@@ -13,7 +13,8 @@ COPY . .
 
 RUN npm run build \
   && mkdir -p .next/standalone/.next \
-  && cp -R .next/static .next/standalone/.next/
+  && cp -R .next/static .next/standalone/.next/ \
+  && cp -R public .next/standalone/
 
 ENV NODE_ENV=production
 
