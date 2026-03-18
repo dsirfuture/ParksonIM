@@ -4198,7 +4198,7 @@ export function DropshippingClient({
                   </label>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-5">
+                <div className="grid gap-4 md:grid-cols-[168px_140px_140px_92px_108px] md:justify-start">
                   <label className="space-y-1">
                     <span className="whitespace-nowrap text-xs text-slate-500">{text.form.shippedAt}</span>
                     <input
@@ -4242,7 +4242,7 @@ export function DropshippingClient({
                     <select
                       value={form.shippingFee}
                       onChange={(event) => setForm((prev) => ({ ...prev, shippingFee: event.target.value }))}
-                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                      className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
                     >
                       <option value="">{lang === "zh" ? "请选择代发费" : "Selecciona cargo"}</option>
                       {shippingFeeOptions.map((fee) => (
@@ -4257,7 +4257,7 @@ export function DropshippingClient({
                     <select
                       value={form.settlementStatus}
                       onChange={(event) => setForm((prev) => ({ ...prev, settlementStatus: event.target.value as OrderFormState["settlementStatus"] }))}
-                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                      className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
                     >
                       <option value="paid">{getSettlementStatusLabel("paid", lang)}</option>
                       <option value="unpaid">{getSettlementStatusLabel("unpaid", lang)}</option>
