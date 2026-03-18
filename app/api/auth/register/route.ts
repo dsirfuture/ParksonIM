@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth";
 import {
@@ -63,14 +64,22 @@ export async function POST(req: NextRequest) {
       where: {
         tenant_id: company.tenant_id,
         company_id: company.id,
-        OR: [{ name }, { phone }],
+        OR: [{ name }, { phone }, ...(email ? [{ email }] : [])],
       },
-      select: { id: true },
+      select: { id: true, name: true, phone: true, email: true },
     });
 
     if (exists) {
+      const duplicateName = exists.name === name;
+      const duplicatePhone = exists.phone === phone;
+      const duplicateEmail = Boolean(email) && exists.email === email;
+      const duplicateFields = [
+        duplicateName ? "姓名" : null,
+        duplicatePhone ? "手机号" : null,
+        duplicateEmail ? "邮箱" : null,
+      ].filter(Boolean);
       return NextResponse.json(
-        { ok: false, error: "姓名或手机号已存在" },
+        { ok: false, error: `${duplicateFields.join("、") || "账号信息"}已存在` },
         { status: 400 },
       );
     }
@@ -99,7 +108,14 @@ export async function POST(req: NextRequest) {
       ok: true,
       user,
     });
-  } catch {
+  } catch (error) {
+    console.error("register failed", error);
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return NextResponse.json(
+        { ok: false, error: "姓名、手机号或邮箱已存在" },
+        { status: 400 },
+      );
+    }
     return NextResponse.json(
       { ok: false, error: "当前未能完成注册 请稍后再试" },
       { status: 500 },
