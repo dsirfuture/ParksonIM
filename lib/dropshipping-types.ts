@@ -123,6 +123,7 @@ export type DsOrderAttachment = {
 };
 
 export type DsInventoryRow = {
+  orderId: string;
   inventoryId: string;
   customerId: string;
   customerName: string;
@@ -132,6 +133,8 @@ export type DsInventoryRow = {
   productNameEs: string;
   productImageUrl: string;
   stockedAt: string | null;
+  shippedAt: string | null;
+  trackingNo: string;
   warehouse: string;
   isStocked: boolean;
   stockedQty: number;

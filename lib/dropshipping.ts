@@ -796,18 +796,10 @@ export async function importLegacyOrders(
       warehouse: row.warehouse || undefined,
     });
 
-    const nextStockedQty = row.stockedQty ?? inventory.stocked_qty;
     await prisma.dropshippingCustomerInventory.update({
       where: { id: inventory.id },
       data: {
-        stocked_qty: nextStockedQty,
-        locked_unit_price: row.unitPrice ?? undefined,
-        locked_discount_rate: row.discountRate ?? undefined,
         warehouse: row.warehouse || inventory.warehouse || undefined,
-        notes:
-          row.stockAmount !== null
-            ? `legacy-stock-amount:${row.stockAmount.toFixed(2)}`
-            : inventory.notes || undefined,
       },
     });
 
@@ -1136,20 +1128,21 @@ export async function listOrders(session: Session) {
 }
 
 export async function getInventoryRows(session: Session) {
-  const inventories = await prisma.dropshippingCustomerInventory.findMany({
+  const shippedOrders = await prisma.dropshippingOrder.findMany({
     where: {
       tenant_id: session.tenantId,
       company_id: session.companyId,
+      shipping_status: "shipped",
     },
     include: {
       customer: true,
       product: true,
     },
-    orderBy: [{ updated_at: "desc" }],
+    orderBy: [{ shipped_at: "desc" }, { created_at: "desc" }],
   });
 
   const normalizedSkus = [...new Set(
-    inventories
+    shippedOrders
       .map((row) => row.product.sku.trim())
       .filter(Boolean),
   )];
@@ -1175,37 +1168,51 @@ export async function getInventoryRows(session: Session) {
     },
   });
 
-  const shippedOrders = await prisma.dropshippingOrder.groupBy({
-    by: ["customer_id", "product_id"],
+  const inventories = await prisma.dropshippingCustomerInventory.findMany({
     where: {
       tenant_id: session.tenantId,
       company_id: session.companyId,
-      shipping_status: "shipped",
     },
-    _sum: {
-      quantity: true,
+    select: {
+      id: true,
+      customer_id: true,
+      product_id: true,
+      stocked_at: true,
+      warehouse: true,
+      is_stocked: true,
+      stocked_qty: true,
+      locked_unit_price: true,
+      locked_discount_rate: true,
     },
   });
 
-  const shippedMap = new Map<string, number>(
-    shippedOrders.map((row) => [`${row.customer_id}::${row.product_id}`, row._sum.quantity || 0]),
+  const inventoryByPair = new Map(
+    inventories.map((row) => [`${row.customer_id}::${row.product_id}`, row]),
   );
+  const shippedTotals = new Map<string, number>();
+  for (const row of shippedOrders) {
+    const key = `${row.customer_id}::${row.product_id}`;
+    shippedTotals.set(key, (shippedTotals.get(key) || 0) + row.quantity);
+  }
 
   const catalogBySku = new Map(
     catalogRows.map((row) => [normalizeProductCode(row.sku), row]),
   );
 
-  return inventories.map((row): DsInventoryRow => {
-    const shippedQty = shippedMap.get(`${row.customer_id}::${row.product_id}`) || 0;
-    const remainingQty = row.stocked_qty - shippedQty;
+  return shippedOrders.map((row): DsInventoryRow => {
+    const pairKey = `${row.customer_id}::${row.product_id}`;
+    const inventory = inventoryByPair.get(pairKey);
+    const totalShippedQty = shippedTotals.get(pairKey) || 0;
+    const remainingQty = inventory ? inventory.stocked_qty - totalShippedQty : 0;
     const normalizedSku = normalizeProductCode(row.product.sku);
     const catalog = catalogBySku.get(normalizedSku);
     const matchedSku = catalog?.sku?.trim() || row.product.sku;
-    const unitPrice = toNumber(catalog?.price ?? row.locked_unit_price ?? row.product.unit_price);
-    const rawDiscountRate = toNumber(catalog?.normal_discount ?? row.locked_discount_rate ?? row.product.discount_rate);
+    const unitPrice = toNumber(catalog?.price ?? inventory?.locked_unit_price ?? row.product.unit_price);
+    const rawDiscountRate = toNumber(catalog?.normal_discount ?? inventory?.locked_discount_rate ?? row.product.discount_rate);
     const discountRate = Math.abs(rawDiscountRate) <= 1 ? rawDiscountRate : rawDiscountRate / 100;
     return {
-      inventoryId: row.id,
+      orderId: row.id,
+      inventoryId: inventory?.id || row.id,
       customerId: row.customer_id,
       customerName: row.customer.name,
       productId: row.product_id,
@@ -1213,15 +1220,20 @@ export async function getInventoryRows(session: Session) {
       productNameZh: catalog?.name_zh?.trim() || row.product.name_zh,
       productNameEs: catalog?.name_es?.trim() || row.product.name_es || "",
       productImageUrl: row.product.image_url || buildProductImageUrl(matchedSku, "jpg"),
-      stockedAt: row.stocked_at?.toISOString() || null,
-      warehouse: row.warehouse || row.product.default_warehouse || "",
-      isStocked: row.is_stocked,
-      stockedQty: row.stocked_qty,
-      shippedQty,
+      stockedAt: inventory?.stocked_at?.toISOString() || null,
+      shippedAt: row.shipped_at?.toISOString() || null,
+      trackingNo: row.tracking_no || "",
+      warehouse: inventory?.warehouse || row.warehouse || row.product.default_warehouse || "",
+      isStocked: inventory?.is_stocked ?? false,
+      stockedQty: inventory?.stocked_qty ?? 0,
+      shippedQty: row.quantity,
       remainingQty,
       unitPrice,
       discountRate,
-      stockAmount: computeStockAmount(unitPrice, row.stocked_qty, discountRate),
+      stockAmount:
+        row.snapshot_stock_amount !== null && row.snapshot_stock_amount !== undefined
+          ? toNumber(row.snapshot_stock_amount)
+          : computeStockAmount(unitPrice, row.quantity, discountRate),
       status: deriveInventoryStatus(remainingQty),
     };
   });

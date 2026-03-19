@@ -3523,10 +3523,10 @@ export function DropshippingClient({
                 </thead>
                 <tbody>
                   {pagedInventory.map((row) => (
-                    <tr key={row.inventoryId} className="border-t border-slate-100">
+                    <tr key={row.orderId} className="border-t border-slate-100">
                       <td className="px-4 py-2 text-sm text-slate-700">
                         <div className="flex min-h-8 items-center justify-center">
-                          {row.productImageUrl && !failedInventoryImages.includes(row.inventoryId) ? (
+                          {row.productImageUrl && !failedInventoryImages.includes(row.orderId) ? (
                             <button
                               type="button"
                               onClick={() =>
@@ -3544,7 +3544,7 @@ export function DropshippingClient({
                                 className="h-8 w-8 object-cover"
                                 onError={() =>
                                   setFailedInventoryImages((prev) =>
-                                    prev.includes(row.inventoryId) ? prev : [...prev, row.inventoryId],
+                                    prev.includes(row.orderId) ? prev : [...prev, row.orderId],
                                   )
                                 }
                               />
@@ -3615,8 +3615,8 @@ export function DropshippingClient({
               <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-xs text-slate-500">
               <span>
                 {lang === "zh"
-                  ? `共 ${filteredInventory.length} 条备货记录`
-                  : `${filteredInventory.length} registros de stock`}
+                  ? `共 ${filteredInventory.length} 条已发商品记录`
+                  : `${filteredInventory.length} registros enviados`}
               </span>
               <div className="flex items-center gap-2">
                 <button
