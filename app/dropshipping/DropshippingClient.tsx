@@ -4805,7 +4805,7 @@ export function DropshippingClient({
                   className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none"
                 />
               </div>
-              <div className="space-y-1 md:col-span-2">
+              <div className="space-y-1">
                 <p className="text-xs text-slate-500">{lang === "zh" ? "备货" : "Stock"}</p>
                 <button
                   type="button"
