@@ -414,6 +414,15 @@ export async function getBillingExportData(params: {
       ),
     ),
   );
+  const barcodeList = Array.from(
+    new Set(
+      matchedReceipts.flatMap((receipt) =>
+        receipt.items
+          .map((item) => String(item.barcode || "").trim())
+          .filter((barcode) => barcode.length > 0),
+      ),
+    ),
+  );
 
   const productDiscountRows =
     skuList.length > 0
@@ -442,12 +451,15 @@ export async function getBillingExportData(params: {
   );
 
   const yogoDiscountRows =
-    skuList.length > 0
+    skuList.length > 0 || barcodeList.length > 0
       ? await prisma.yogoProductSource.findMany({
           where: {
             tenant_id: tenantId,
             company_id: companyId,
-            product_code: { in: skuList },
+            OR: [
+              ...(skuList.length > 0 ? [{ product_code: { in: skuList } }] : []),
+              ...(barcodeList.length > 0 ? [{ product_no: { in: barcodeList } }] : []),
+            ],
           },
           select: {
             product_code: true,
