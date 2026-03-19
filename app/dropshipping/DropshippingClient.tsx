@@ -2605,7 +2605,7 @@ export function DropshippingClient({
         </div>
       ) : null}
 
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
           {(["overview", "orders", "inventory", "finance"] as TabKey[]).map((tab) => (
             <button key={tab} type="button" className={tabButtonClass(tab)} onClick={() => setActiveTab(tab)}>
