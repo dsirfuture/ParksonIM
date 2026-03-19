@@ -2575,7 +2575,7 @@ export function DropshippingClient({
     }`;
 
   return (
-    <section className="space-y-4 pt-2">
+    <section className="space-y-4">
       <input
         ref={importInputRef}
         type="file"
