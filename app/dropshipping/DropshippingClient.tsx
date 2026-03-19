@@ -812,6 +812,7 @@ export function DropshippingClient({
         if (!response.ok || !json?.ok || !Array.isArray(json.items)) return;
         const match =
           json.items.find((item: Record<string, unknown>) => normalizeProductCode(String(item.sku || "")) === normalizedSku)
+          || json.items.find((item: Record<string, unknown>) => normalizeProductCode(String(item.sku || "")).includes(normalizedSku))
           || json.items[0];
         if (!match) return;
 
@@ -819,6 +820,7 @@ export function DropshippingClient({
           if (prev.id || normalizeProductCode(prev.sku) !== normalizedSku) return prev;
           return {
             ...prev,
+            sku: String(match.sku || prev.sku).trim(),
             productNameZh: String(match.nameZh || prev.productNameZh || prev.sku).trim(),
             productNameEs: String(match.nameEs || prev.productNameEs || "").trim(),
             color: prev.color.trim() || (lang === "zh" ? "随机" : "Aleatorio"),
@@ -2656,7 +2658,7 @@ export function DropshippingClient({
     }`;
 
   return (
-    <section className="-mt-[12px] space-y-4">
+    <section className="-mt-[9px] space-y-4">
       {error ? (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">{error}</div>
       ) : null}
