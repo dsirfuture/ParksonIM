@@ -18,3 +18,9 @@ View your app in AI Studio: https://ai.studio/apps/42c4638e-84c1-43ee-94bb-a8bf3
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+## Server Maintenance
+
+- Docker cleanup script: `scripts/docker-maintenance.sh`
+- Recommended cron entry:
+  `20 4 * * * /opt/stacks/parksonim/scripts/docker-maintenance.sh >> /var/log/parksonim_docker_cleanup.log 2>&1`
