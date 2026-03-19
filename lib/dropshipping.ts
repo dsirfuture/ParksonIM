@@ -1162,6 +1162,27 @@ export async function getInventoryRows(session: Session) {
     },
   });
 
+  const yogoSourceRows = await prisma.yogoProductSource.findMany({
+    where: {
+      tenant_id: session.tenantId,
+      company_id: session.companyId,
+      ...(normalizedSkus.length
+        ? {
+            OR: normalizedSkus.map((sku) => ({
+              product_code: { equals: sku, mode: "insensitive" as const },
+            })),
+          }
+        : {}),
+    },
+    select: {
+      product_code: true,
+      name_cn: true,
+      name_es: true,
+      source_price: true,
+      source_discount: true,
+    },
+  });
+
   const inventories = await prisma.dropshippingCustomerInventory.findMany({
     where: {
       tenant_id: session.tenantId,
@@ -1204,6 +1225,19 @@ export async function getInventoryRows(session: Session) {
   const catalogBySku = new Map(
     catalogRows.map((row) => [normalizeProductCode(row.sku), row]),
   );
+  const yogoSourceBySku = new Map(
+    yogoSourceRows.map((row) => [normalizeProductCode(row.product_code), row]),
+  );
+
+  function pickPreferredNumber(...values: Array<number | null | undefined>) {
+    for (const value of values) {
+      if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
+    }
+    for (const value of values) {
+      if (typeof value === "number" && Number.isFinite(value)) return value;
+    }
+    return 0;
+  }
 
   return shippedOrders.map((row): DsInventoryRow => {
     const pairKey = `${row.customer_id}::${row.product_id}`;
@@ -1212,9 +1246,20 @@ export async function getInventoryRows(session: Session) {
     const remainingQty = inventory ? inventory.stocked_qty - totalShippedQty : 0;
     const normalizedSku = normalizeProductCode(row.product.sku);
     const catalog = catalogBySku.get(normalizedSku);
-    const matchedSku = catalog?.sku?.trim() || row.product.sku;
-    const unitPrice = toNumber(inventory?.locked_unit_price ?? catalog?.price ?? row.product.unit_price);
-    const rawDiscountRate = toNumber(inventory?.locked_discount_rate ?? catalog?.normal_discount ?? row.product.discount_rate);
+    const yogoSource = yogoSourceBySku.get(normalizedSku);
+    const matchedSku = catalog?.sku?.trim() || yogoSource?.product_code?.trim() || row.product.sku;
+    const unitPrice = pickPreferredNumber(
+      toOptionalNumber(yogoSource?.source_price),
+      toOptionalNumber(catalog?.price),
+      toOptionalNumber(row.product.unit_price),
+      toOptionalNumber(inventory?.locked_unit_price),
+    );
+    const rawDiscountRate = pickPreferredNumber(
+      toOptionalNumber(yogoSource?.source_discount),
+      toOptionalNumber(catalog?.normal_discount),
+      toOptionalNumber(row.product.discount_rate),
+      toOptionalNumber(inventory?.locked_discount_rate),
+    );
     const discountRate = Math.abs(rawDiscountRate) <= 1 ? rawDiscountRate : rawDiscountRate / 100;
     const stockedAt = inventory?.stocked_at?.toISOString() || null;
     const shippedAt = row.shipped_at?.toISOString() || null;
