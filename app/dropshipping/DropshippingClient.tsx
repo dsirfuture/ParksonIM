@@ -744,7 +744,6 @@ export function DropshippingClient({
   const [deleteTarget, setDeleteTarget] = useState<DeleteOrderState>(null);
   const [deleteTrackingInput, setDeleteTrackingInput] = useState("");
   const financePreviewScrollRef = useRef<HTMLDivElement | null>(null);
-  const importInputRef = useRef<HTMLInputElement | null>(null);
   const labelInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const proofInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const financePreviewPageSize = 10;
@@ -796,6 +795,47 @@ export function DropshippingClient({
   useEffect(() => {
     setFinancePreviewPage(1);
   }, [financePreview]);
+
+  useEffect(() => {
+    if (!modalOpen || form.id) return;
+    const rawSku = form.sku.trim();
+    if (!rawSku) return;
+
+    const normalizedSku = normalizeProductCode(rawSku);
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/dropshipping/product-search?keyword=${encodeURIComponent(rawSku)}`, {
+          signal: controller.signal,
+        });
+        const json = await response.json();
+        if (!response.ok || !json?.ok || !Array.isArray(json.items)) return;
+        const match =
+          json.items.find((item: Record<string, unknown>) => normalizeProductCode(String(item.sku || "")) === normalizedSku)
+          || json.items[0];
+        if (!match) return;
+
+        setForm((prev) => {
+          if (prev.id || normalizeProductCode(prev.sku) !== normalizedSku) return prev;
+          return {
+            ...prev,
+            productNameZh: String(match.nameZh || prev.productNameZh || prev.sku).trim(),
+            productNameEs: String(match.nameEs || prev.productNameEs || "").trim(),
+            color: prev.color.trim() || (lang === "zh" ? "随机" : "Aleatorio"),
+          };
+        });
+      } catch (lookupError) {
+        if ((lookupError as Error).name !== "AbortError") {
+          console.error("[DropshippingClient] sku auto match failed", lookupError);
+        }
+      }
+    }, 220);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [form.id, form.sku, lang, modalOpen]);
 
   useEffect(() => {
     financePreviewScrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
@@ -1326,6 +1366,33 @@ export function DropshippingClient({
     setProofSlotsDirty(true);
   }
 
+  function clearAttachmentSlot(type: "label" | "proof", slotIndex: number) {
+    if (type === "label") {
+      setLabelSlots((prev) => {
+        const next = [...prev];
+        const current = next[slotIndex];
+        if (current?.kind === "new" && current.previewUrl) {
+          URL.revokeObjectURL(current.previewUrl);
+        }
+        next[slotIndex] = { kind: "empty" };
+        return next;
+      });
+      setLabelSlotsDirty(true);
+      return;
+    }
+
+    setProofSlots((prev) => {
+      const next = [...prev];
+      const current = next[slotIndex];
+      if (current?.kind === "new" && current.previewUrl) {
+        URL.revokeObjectURL(current.previewUrl);
+      }
+      next[slotIndex] = { kind: "empty" };
+      return next;
+    });
+    setProofSlotsDirty(true);
+  }
+
   function previewAttachmentSlot(slot: AttachmentSlotState, type: "label" | "proof", slotIndex: number) {
     if (slot.kind === "empty") {
       triggerAttachmentPicker(type, slotIndex);
@@ -1851,7 +1918,11 @@ export function DropshippingClient({
     };
   }, [exchangeRate.rateValue, inventory, lang, now, orders, overviewRange]);
   function openCreateModal() {
-    setForm({ ...EMPTY_ORDER_FORM, warehouse: FIXED_WAREHOUSE });
+    setForm({
+      ...EMPTY_ORDER_FORM,
+      warehouse: FIXED_WAREHOUSE,
+      color: lang === "zh" ? "随机" : "Aleatorio",
+    });
     setProductFieldsLocked(false);
     setLabelFiles([]);
     setProofFiles([]);
@@ -2188,6 +2259,15 @@ export function DropshippingClient({
             className="absolute right-3 top-3 inline-flex h-6 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-medium text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
           >
             {lang === "zh" ? "替换" : "Cambiar"}
+          </button>
+        ) : null}
+        {!isEmpty && type === "proof" ? (
+          <button
+            type="button"
+            onClick={() => clearAttachmentSlot(type, slotIndex)}
+            className="absolute bottom-3 right-3 inline-flex h-6 items-center justify-center rounded-lg border border-rose-200 bg-white px-2 text-[10px] font-medium text-rose-500 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600"
+          >
+            {lang === "zh" ? "去除" : "Quitar"}
           </button>
         ) : null}
         <input
@@ -2577,32 +2657,8 @@ export function DropshippingClient({
 
   return (
     <section className="-mt-[12px] space-y-4">
-      <input
-        ref={importInputRef}
-        type="file"
-        accept=".zip,.xlsx,.xls,.csv"
-        className="hidden"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) void handleImport(file);
-          event.currentTarget.value = "";
-        }}
-      />
-
       {error ? (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">{error}</div>
-      ) : null}
-
-      {importSummary ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{importSummary}</div>
-      ) : null}
-
-      {importing && importProgress !== null ? (
-        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700">
-          {lang === "zh"
-            ? `历史迁移处理中：${importProgress}%`
-            : `Processing history import: ${importProgress}%`}
-        </div>
       ) : null}
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -2612,15 +2668,6 @@ export function DropshippingClient({
               {text.tabs[tab]}
             </button>
           ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => importInputRef.current?.click()}
-            className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-          >
-            {importing ? text.importing : text.import}
-          </button>
         </div>
       </div>
 
@@ -4268,6 +4315,7 @@ export function DropshippingClient({
                     <span className="whitespace-nowrap text-xs text-slate-500">{text.form.customer}</span>
                     <input
                       type="text"
+                      list="dropshipping-customer-options"
                       value={form.customerName}
                       onChange={(event) => setForm((prev) => ({ ...prev, customerName: event.target.value }))}
                       className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
@@ -4309,8 +4357,7 @@ export function DropshippingClient({
                       type="text"
                       value={form.sku}
                       onChange={(event) => setForm((prev) => ({ ...prev, sku: event.target.value }))}
-                      disabled={productFieldsLocked}
-                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
                     />
                   </label>
                   <label className="space-y-1">
@@ -4515,6 +4562,11 @@ export function DropshippingClient({
                     className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
                   />
                 </label>
+                <datalist id="dropshipping-customer-options">
+                  {customerOptions.map((customer) => (
+                    <option key={customer} value={customer} />
+                  ))}
+                </datalist>
               </div>
             </div>
             </div>
