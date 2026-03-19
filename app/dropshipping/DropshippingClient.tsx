@@ -60,6 +60,7 @@ type InventoryShippedPreviewState = {
   productNameZh: string;
   trackingNo: string;
   orderId: string;
+  mode: "exact" | "related";
 } | null;
 
 type InventoryEditState = {
@@ -1603,7 +1604,8 @@ export function DropshippingClient({
       row.customerId === inventoryShippedPreview.customerId
       && row.sku.trim().toLowerCase() === inventoryShippedPreview.sku.trim().toLowerCase()
       && (
-        (inventoryShippedPreview.trackingNo && row.trackingNo.trim() === inventoryShippedPreview.trackingNo.trim())
+        inventoryShippedPreview.mode === "related"
+        || (inventoryShippedPreview.trackingNo && row.trackingNo.trim() === inventoryShippedPreview.trackingNo.trim())
         || row.id === inventoryShippedPreview.orderId
       )
       && row.shippingStatus === "shipped",
@@ -3740,10 +3742,20 @@ export function DropshippingClient({
                           {row.isStocked ? (
                             <button
                               type="button"
-                              onClick={() => beginInventoryEdit(row)}
+                              onClick={() =>
+                                setInventoryShippedPreview({
+                                  customerId: row.customerId,
+                                  customerName: row.customerName,
+                                  sku: row.sku,
+                                  productNameZh: row.productNameZh,
+                                  trackingNo: row.trackingNo,
+                                  orderId: row.orderId,
+                                  mode: "related",
+                                })
+                              }
                               className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-semibold text-white transition hover:bg-primary/90"
-                              title={lang === "zh" ? "编辑备货" : "Editar stock"}
-                              aria-label={lang === "zh" ? "编辑备货" : "Editar stock"}
+                              title={lang === "zh" ? "查看相关发货记录" : "Ver pedidos enviados relacionados"}
+                              aria-label={lang === "zh" ? "查看相关发货记录" : "Ver pedidos enviados relacionados"}
                             >
                               备
                             </button>
@@ -3780,6 +3792,7 @@ export function DropshippingClient({
                                 productNameZh: row.productNameZh,
                                 trackingNo: row.trackingNo,
                                 orderId: row.orderId,
+                                mode: "exact",
                               })
                             }
                             className="text-primary underline-offset-2 hover:underline"
@@ -5076,7 +5089,9 @@ export function DropshippingClient({
           <div className="w-full max-w-[920px] rounded-xl bg-white shadow-2xl">
             <div className="border-b border-slate-200 px-5 py-4">
               <h3 className="text-base font-semibold text-slate-900">
-                {lang === "zh" ? "已发记录" : "Registros enviados"}
+                {inventoryShippedPreview.mode === "related"
+                  ? (lang === "zh" ? "相关发货记录" : "Pedidos enviados relacionados")
+                  : (lang === "zh" ? "已发记录" : "Registros enviados")}
               </h3>
               <p className="mt-1 text-xs text-slate-500">
                 {inventoryShippedPreview.customerName} / {inventoryShippedPreview.sku} / {inventoryShippedPreview.productNameZh || "-"}
@@ -5085,8 +5100,12 @@ export function DropshippingClient({
             <div className="max-h-[70vh] overflow-auto px-5 py-5">
               {shippedOrdersForInventoryPreview.length === 0 ? (
                 <EmptyState
-                  title={lang === "zh" ? "暂无已发记录" : "Sin registros enviados"}
-                  description={lang === "zh" ? "当前商品还没有已发出的订单记录。" : "Este producto aun no tiene pedidos enviados."}
+                  title={inventoryShippedPreview.mode === "related"
+                    ? (lang === "zh" ? "暂无相关发货记录" : "Sin pedidos relacionados")
+                    : (lang === "zh" ? "暂无已发记录" : "Sin registros enviados")}
+                  description={inventoryShippedPreview.mode === "related"
+                    ? (lang === "zh" ? "当前商品还没有相关的发货订单记录。" : "Este producto aun no tiene pedidos enviados relacionados.")
+                    : (lang === "zh" ? "当前商品还没有已发出的订单记录。" : "Este producto aun no tiene pedidos enviados.")}
                 />
               ) : (
                 <div className="overflow-x-auto">
