@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { saveOrder } from "@/lib/dropshipping";
 import { hasPermission } from "@/lib/permissions";
-import { normalizeProductCode } from "@/lib/product-code";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
 
@@ -61,9 +60,7 @@ export async function PATCH(
         ? existing.platform_order_no
         : String(body.platformOrderNo || "").trim();
     const sku =
-      body.sku === undefined
-        ? existing.product.sku
-        : normalizeProductCode(body.sku);
+      body.sku === undefined ? existing.product.sku : String(body.sku || "").trim();
     const productNameZh =
       body.productNameZh === undefined
         ? existing.product.name_zh

@@ -400,12 +400,13 @@ async function ensureProduct(
     warehouse?: string;
   },
 ) {
-  const normalizedSku = normalizeProductCode(input.sku);
+  const rawSku = String(input.sku || "").trim();
+  const normalizedSku = normalizeProductCode(rawSku);
   let product = await prisma.dropshippingProduct.findFirst({
     where: {
       tenant_id: session.tenantId,
       company_id: session.companyId,
-      sku: normalizedSku,
+      sku: { equals: rawSku, mode: "insensitive" as const },
     },
   });
 
@@ -417,6 +418,7 @@ async function ensureProduct(
         sku: { equals: normalizedSku, mode: "insensitive" as const },
       },
       select: {
+        sku: true,
         name_zh: true,
         name_es: true,
         price: true,
@@ -428,8 +430,8 @@ async function ensureProduct(
       data: {
         tenant_id: session.tenantId,
         company_id: session.companyId,
-        sku: normalizedSku,
-        name_zh: input.nameZh.trim() || catalog?.name_zh || normalizedSku,
+        sku: rawSku || catalog?.sku || normalizedSku,
+        name_zh: input.nameZh.trim() || catalog?.name_zh || rawSku || normalizedSku,
         name_es: input.nameEs?.trim() || catalog?.name_es || null,
         unit_price: toOptionalNumber(catalog?.price),
         discount_rate: toOptionalNumber(catalog?.normal_discount),
@@ -440,6 +442,7 @@ async function ensureProduct(
   }
 
   const nextData: Record<string, unknown> = {};
+  if (rawSku && product.sku !== rawSku) nextData.sku = rawSku;
   if (input.nameZh.trim() && product.name_zh !== input.nameZh.trim()) nextData.name_zh = input.nameZh.trim();
   if (input.nameEs?.trim() && product.name_es !== input.nameEs.trim()) nextData.name_es = input.nameEs.trim();
   if (input.shippingFee !== undefined && input.shippingFee !== null) nextData.default_shipping_fee = input.shippingFee;

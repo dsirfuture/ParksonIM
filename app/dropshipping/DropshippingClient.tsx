@@ -1975,7 +1975,7 @@ export function DropshippingClient({
       platform: source.platform,
       platformOrderNo: source.platformOrderNo,
       trackingGroupId: trackingGroupId === undefined ? source.trackingGroupId || null : trackingGroupId,
-      sku: normalizeProductCode(source.sku),
+      sku: source.sku.trim(),
       productNameZh: source.productNameZh,
       productNameEs: source.productNameEs,
       quantity: Number(source.quantity || 0),
