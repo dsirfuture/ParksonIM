@@ -278,6 +278,13 @@ function computeInventoryAmount(unitPrice: string, stockedQty: string, discountR
   return String(Math.round(price * qty * (1 - safeDiscount) * 100) / 100);
 }
 
+function formatDiscountPercentInput(value: string | number | null | undefined) {
+  const numeric = Number(value ?? 0);
+  if (!Number.isFinite(numeric) || numeric === 0) return "";
+  const percent = Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
+  return String(Math.round(percent * 100) / 100);
+}
+
 function fmtYuanMoney(value: number, lang: "zh" | "es") {
   return `￥${fmtMoney(value, lang)}`;
 }
@@ -2363,11 +2370,11 @@ export function DropshippingClient({
       stockAmount: computeInventoryAmount(
         String(row.unitPrice ?? ""),
         String(row.stockedQty),
-        String(Math.round((row.discountRate || 0) * 10000) / 100),
+        formatDiscountPercentInput(row.discountRate),
       ),
       unitPrice: String(row.unitPrice ?? ""),
       unitPriceLocked: true,
-      discountRate: String(Math.round((row.discountRate || 0) * 10000) / 100),
+      discountRate: formatDiscountPercentInput(row.discountRate),
       warehouse: FIXED_WAREHOUSE,
       remainingQty: row.remainingQty,
       status: row.status,
@@ -2430,7 +2437,7 @@ export function DropshippingClient({
       unitPrice: option.unitPrice || "",
       unitPriceLocked: Boolean(option.unitPrice),
       discountRate: option.discountRate
-        ? String(Math.round(Number(option.discountRate) * 10000) / 100)
+        ? formatDiscountPercentInput(option.discountRate)
         : prev.discountRate,
       stockAmount: nextAmount > 0 ? String(nextAmount) : prev.stockAmount,
     } : prev));
