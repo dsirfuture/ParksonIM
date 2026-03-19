@@ -1201,9 +1201,16 @@ export async function getInventoryRows(session: Session) {
     const normalizedSku = normalizeProductCode(row.product.sku);
     const catalog = catalogBySku.get(normalizedSku);
     const matchedSku = catalog?.sku?.trim() || row.product.sku;
-    const unitPrice = toNumber(catalog?.price ?? inventory?.locked_unit_price ?? row.product.unit_price);
-    const rawDiscountRate = toNumber(catalog?.normal_discount ?? inventory?.locked_discount_rate ?? row.product.discount_rate);
+    const unitPrice = toNumber(inventory?.locked_unit_price ?? catalog?.price ?? row.product.unit_price);
+    const rawDiscountRate = toNumber(inventory?.locked_discount_rate ?? catalog?.normal_discount ?? row.product.discount_rate);
     const discountRate = Math.abs(rawDiscountRate) <= 1 ? rawDiscountRate : rawDiscountRate / 100;
+    const stockedAt = inventory?.stocked_at?.toISOString() || null;
+    const shippedAt = row.shipped_at?.toISOString() || null;
+    const matchesStockDate =
+      Boolean(inventory?.is_stocked)
+      && Boolean(stockedAt)
+      && Boolean(shippedAt)
+      && stockedAt?.slice(0, 10) === shippedAt?.slice(0, 10);
     return {
       orderId: row.id,
       inventoryId: inventory?.id || row.id,
@@ -1214,20 +1221,17 @@ export async function getInventoryRows(session: Session) {
       productNameZh: catalog?.name_zh?.trim() || row.product.name_zh,
       productNameEs: catalog?.name_es?.trim() || row.product.name_es || "",
       productImageUrl: row.product.image_url || buildProductImageUrl(matchedSku, "jpg"),
-      stockedAt: inventory?.stocked_at?.toISOString() || null,
-      shippedAt: row.shipped_at?.toISOString() || null,
+      stockedAt,
+      shippedAt,
       trackingNo: row.tracking_no || "",
       warehouse: inventory?.warehouse || row.warehouse || row.product.default_warehouse || "",
-      isStocked: inventory?.is_stocked ?? false,
+      isStocked: matchesStockDate,
       stockedQty: inventory?.stocked_qty ?? 0,
       shippedQty: row.quantity,
       remainingQty,
       unitPrice,
       discountRate,
-      stockAmount:
-        row.snapshot_stock_amount !== null && row.snapshot_stock_amount !== undefined
-          ? toNumber(row.snapshot_stock_amount)
-          : computeStockAmount(unitPrice, row.quantity, discountRate),
+      stockAmount: computeStockAmount(unitPrice, inventory?.stocked_qty ?? 0, discountRate),
       status: deriveInventoryStatus(remainingQty),
     };
   });

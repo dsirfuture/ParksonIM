@@ -58,6 +58,8 @@ type InventoryShippedPreviewState = {
   customerName: string;
   sku: string;
   productNameZh: string;
+  trackingNo: string;
+  orderId: string;
 } | null;
 
 type InventoryEditState = {
@@ -264,6 +266,16 @@ function fmtMoney(value: number, lang: "zh" | "es") {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);
+}
+
+function computeInventoryAmount(unitPrice: string, stockedQty: string, discountRate: string) {
+  const qty = Number(stockedQty || 0);
+  const price = Number(unitPrice || 0);
+  const discount = Number(discountRate || 0);
+  if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price) || price <= 0) return "";
+  const normalizedDiscount = Math.abs(discount) <= 1 ? discount : discount / 100;
+  const safeDiscount = Math.min(Math.max(normalizedDiscount, 0), 1);
+  return String(Math.round(price * qty * (1 - safeDiscount) * 100) / 100);
 }
 
 function fmtYuanMoney(value: number, lang: "zh" | "es") {
@@ -1576,6 +1588,10 @@ export function DropshippingClient({
     return orders.filter((row) =>
       row.customerId === inventoryShippedPreview.customerId
       && row.sku.trim().toLowerCase() === inventoryShippedPreview.sku.trim().toLowerCase()
+      && (
+        (inventoryShippedPreview.trackingNo && row.trackingNo.trim() === inventoryShippedPreview.trackingNo.trim())
+        || row.id === inventoryShippedPreview.orderId
+      )
       && row.shippingStatus === "shipped",
     );
   }, [inventoryShippedPreview, orders]);
@@ -2342,9 +2358,13 @@ export function DropshippingClient({
       productNameZh: row.productNameZh,
       productNameEs: row.productNameEs || "",
       isStocked: row.isStocked,
-      stockedAt: row.stockedAt ? toDateInputValue(row.stockedAt) : "",
+      stockedAt: toDateInputValue(row.stockedAt),
       stockedQty: String(row.stockedQty),
-      stockAmount: String(Math.round((row.stockAmount || 0) * 100) / 100),
+      stockAmount: computeInventoryAmount(
+        String(row.unitPrice ?? ""),
+        String(row.stockedQty),
+        String(Math.round((row.discountRate || 0) * 10000) / 100),
+      ),
       unitPrice: String(row.unitPrice ?? ""),
       unitPriceLocked: true,
       discountRate: String(Math.round((row.discountRate || 0) * 10000) / 100),
@@ -2399,7 +2419,7 @@ export function DropshippingClient({
     const pickedUnitPrice = Number(option.unitPrice || 0);
     const pickedDiscount = Number(option.discountRate || 0);
     const nextAmount = qty > 0 && pickedUnitPrice > 0
-      ? Math.round(pickedUnitPrice * qty * (1 - pickedDiscount) * 100) / 100
+      ? Math.round(pickedUnitPrice * qty * (1 - (Math.abs(pickedDiscount) <= 1 ? pickedDiscount : pickedDiscount / 100)) * 100) / 100
       : 0;
     setInventoryEdit((prev) => (prev ? {
       ...prev,
@@ -2424,25 +2444,13 @@ export function DropshippingClient({
       setError("");
       const stockedQty = Number(inventoryEdit.stockedQty || 0);
       const unitPrice = inventoryEdit.unitPrice.trim();
-      const stockAmount = inventoryEdit.stockAmount.trim();
       const discountRate = inventoryEdit.discountRate.trim();
       const stockedAt = inventoryEdit.stockedAt.trim();
       if (inventoryEdit.mode === "create" && (!inventoryEdit.customerId || !inventoryEdit.sku)) {
         throw new Error(lang === "zh" ? "请选择客户和产品" : "Selecciona cliente y producto");
       }
       const discountRateValue = discountRate === "" ? null : Number(discountRate) / 100;
-      const amountValue = stockAmount === "" ? null : Number(stockAmount);
-      let unitPriceValue = unitPrice === "" ? null : Number(unitPrice);
-      if (
-        amountValue !== null
-        && Number.isFinite(amountValue)
-        && stockedQty > 0
-      ) {
-        const multiplier = 1 - (discountRateValue ?? 0);
-        unitPriceValue = multiplier > 0
-          ? amountValue / stockedQty / multiplier
-          : amountValue / stockedQty;
-      }
+      const unitPriceValue = unitPrice === "" ? null : Number(unitPrice);
 
       const response = await fetch(
         inventoryEdit.mode === "create" ? "/api/dropshipping/inventory" : `/api/dropshipping/inventory/${inventoryEdit.id}`,
@@ -3670,7 +3678,7 @@ export function DropshippingClient({
                   {pagedInventory.map((row) => (
                     <tr key={row.orderId} className="border-t border-slate-100">
                       <td className="px-4 py-2 text-sm text-slate-700">
-                        <div className="flex min-h-8 items-center justify-center">
+                        <div className="flex min-h-8 items-center justify-start">
                           {row.productImageUrl && !failedInventoryImages.includes(row.orderId) ? (
                             <button
                               type="button"
@@ -3729,6 +3737,8 @@ export function DropshippingClient({
                                 customerName: row.customerName,
                                 sku: row.sku,
                                 productNameZh: row.productNameZh,
+                                trackingNo: row.trackingNo,
+                                orderId: row.orderId,
                               })
                             }
                             className="text-primary underline-offset-2 hover:underline"
@@ -4899,7 +4909,7 @@ export function DropshippingClient({
                   type="date"
                   value={inventoryEdit.stockedAt}
                   onChange={(event) => setInventoryEdit((prev) => (prev ? { ...prev, stockedAt: event.target.value } : prev))}
-                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40"
+                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm text-slate-700 outline-none focus:border-primary/40"
                 />
               </div>
               <div className="space-y-1">
@@ -4912,15 +4922,11 @@ export function DropshippingClient({
                       if (!prev) return prev;
                       const nextQty = event.target.value.replace(/[^\d]/g, "");
                       const nextQtyNumber = Number(nextQty || 0);
-                      const baseUnitPrice = Number(prev.unitPrice || 0);
-                      const discountRate = Number(prev.discountRate || 0) / 100;
                       return {
                         ...prev,
                         stockedQty: nextQty,
                         isStocked: nextQtyNumber > 1 ? true : prev.isStocked,
-                        stockAmount: baseUnitPrice > 0 && nextQtyNumber > 0
-                          ? String(Math.round(baseUnitPrice * nextQtyNumber * (1 - discountRate) * 100) / 100)
-                          : prev.stockAmount,
+                        stockAmount: computeInventoryAmount(prev.unitPrice, nextQty, prev.discountRate) || prev.stockAmount,
                       };
                     })
                   }
@@ -4930,10 +4936,9 @@ export function DropshippingClient({
               <div className="space-y-1">
                 <p className="text-xs text-slate-500">{lang === "zh" ? "备货金额" : "Monto stock"}</p>
                 <input
-                  inputMode="decimal"
                   value={inventoryEdit.stockAmount}
-                  onChange={(event) => setInventoryEdit((prev) => (prev ? { ...prev, stockAmount: event.target.value.replace(/[^\d.]/g, "") } : prev))}
-                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40"
+                  readOnly
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none"
                 />
               </div>
               <div className="space-y-1">
@@ -4941,7 +4946,17 @@ export function DropshippingClient({
                 <input
                   inputMode="decimal"
                   value={inventoryEdit.discountRate}
-                  onChange={(event) => setInventoryEdit((prev) => (prev ? { ...prev, discountRate: event.target.value.replace(/[^\d.]/g, "") } : prev))}
+                  onChange={(event) =>
+                    setInventoryEdit((prev) => {
+                      if (!prev) return prev;
+                      const nextDiscountRate = event.target.value.replace(/[^\d.]/g, "");
+                      return {
+                        ...prev,
+                        discountRate: nextDiscountRate,
+                        stockAmount: computeInventoryAmount(prev.unitPrice, prev.stockedQty, nextDiscountRate) || prev.stockAmount,
+                      };
+                    })
+                  }
                   className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40"
                 />
               </div>
