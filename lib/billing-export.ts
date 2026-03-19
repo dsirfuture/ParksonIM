@@ -150,6 +150,10 @@ function normalizeLookupKey(value: string | null | undefined) {
   return String(value || "").trim().toUpperCase();
 }
 
+function normalizeCustomerKey(value: string | null | undefined) {
+  return String(value || "").trim().toUpperCase();
+}
+
 function formatDateOnly(value: Date | null | undefined) {
   if (!value) return "-";
   return new Intl.DateTimeFormat("zh-CN", {
@@ -373,6 +377,43 @@ export async function getBillingExportData(params: {
   }
   const vipDiscountEnabled = parseBillingBooleanFlag(parsedRemark.meta.generatedVipEnabled);
 
+  const customerMatchKeys = [orderRow.customer_name, orderRow.company_name, orderRow.contact_name]
+    .map((value) => normalizeCustomerKey(value))
+    .filter(Boolean);
+
+  const customerPhoneRows =
+    customerMatchKeys.length > 0
+      ? await prisma.ygOrderImport.findMany({
+          where: {
+            tenant_id: tenantId,
+            company_id: companyId,
+            contact_phone: { not: null },
+          },
+          select: {
+            customer_name: true,
+            company_name: true,
+            contact_name: true,
+            contact_phone: true,
+            updated_at: true,
+          },
+          orderBy: { updated_at: "desc" },
+        })
+      : [];
+
+  let fallbackPhone = "";
+  for (const row of customerPhoneRows) {
+    const phone = String(row.contact_phone || "").trim();
+    if (!phone) continue;
+    const keys = [row.customer_name, row.company_name, row.contact_name]
+      .map((value) => normalizeCustomerKey(value))
+      .filter(Boolean);
+    if (keys.some((key) => customerMatchKeys.includes(key))) {
+      fallbackPhone = phone;
+      break;
+    }
+  }
+  const resolvedPhone = String(orderRow.contact_phone || "").trim() || fallbackPhone;
+
   const receipts = await prisma.receipt.findMany({
     where: {
       tenant_id: tenantId,
@@ -576,7 +617,7 @@ export async function getBillingExportData(params: {
     orderNo,
     companyName: orderRow.customer_name || orderRow.company_name || "-",
     contactName: orderRow.contact_name || orderRow.customer_name || orderRow.company_name || "-",
-    contactPhone: orderRow.contact_phone || "-",
+    contactPhone: resolvedPhone || "-",
     addressText: orderRow.address_text || "",
     remarkText: orderRow.order_remark || "",
     storeLabelText: normalizeStoreLabelInput(orderRow.store_label || ""),
@@ -597,7 +638,7 @@ export async function getBillingExportData(params: {
       orderRow.customer_name ||
       orderRow.company_name ||
       "",
-    recipientPhoneText: parsedRemark.meta.recipientPhone || orderRow.contact_phone || "",
+    recipientPhoneText: parsedRemark.meta.recipientPhone || resolvedPhone || "",
     carrierCompanyText: parsedRemark.meta.carrierCompany,
     paymentTermText: parsedRemark.meta.paymentTerm,
     generatedAtText: parsedRemark.meta.generatedAt,

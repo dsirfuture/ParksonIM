@@ -69,6 +69,10 @@ function normalizeLookupKey(value: string | null | undefined) {
   return String(value || "").trim().toUpperCase();
 }
 
+function normalizeCustomerKey(value: string | null | undefined) {
+  return String(value || "").trim().toUpperCase();
+}
+
 export default async function BillingPage({
   searchParams,
 }: {
@@ -365,6 +369,48 @@ export default async function BillingPage({
         })
       : [];
 
+  const customerMatchKeys = Array.from(
+    new Set(
+      ygOrders.flatMap((row) =>
+        [row.customer_name, row.company_name, row.contact_name]
+          .map((value) => normalizeCustomerKey(value))
+          .filter(Boolean),
+      ),
+    ),
+  );
+
+  const customerPhoneRows =
+    customerMatchKeys.length > 0
+      ? await prisma.ygOrderImport.findMany({
+          where: {
+            tenant_id: session.tenantId,
+            company_id: session.companyId,
+            contact_phone: { not: null },
+          },
+          select: {
+            customer_name: true,
+            company_name: true,
+            contact_name: true,
+            contact_phone: true,
+            updated_at: true,
+          },
+          orderBy: { updated_at: "desc" },
+        })
+      : [];
+
+  const customerPhoneMap = new Map<string, string>();
+  for (const row of customerPhoneRows) {
+    const phone = String(row.contact_phone || "").trim();
+    if (!phone) continue;
+    for (const key of [row.customer_name, row.company_name, row.contact_name]
+      .map((value) => normalizeCustomerKey(value))
+      .filter(Boolean)) {
+      if (!customerPhoneMap.has(key)) {
+        customerPhoneMap.set(key, phone);
+      }
+    }
+  }
+
   const orderMap = new Map<
     string,
     {
@@ -394,13 +440,19 @@ export default async function BillingPage({
     if (orderMap.has(row.order_no)) continue;
     const companyName = row.customer_name || row.company_name || "-";
     const contactName = row.contact_name || row.customer_name || row.company_name || "-";
+    const fallbackPhone =
+      customerPhoneMap.get(normalizeCustomerKey(row.customer_name)) ||
+      customerPhoneMap.get(normalizeCustomerKey(row.company_name)) ||
+      customerPhoneMap.get(normalizeCustomerKey(row.contact_name)) ||
+      "";
+    const resolvedPhone = String(row.contact_phone || "").trim() || fallbackPhone;
     const parsedRemark = parseBillingRemark(row.order_remark);
     orderMap.set(row.order_no, {
       id: row.id,
       companyName,
       customerName: row.customer_name || row.company_name || "",
       contactName,
-      contactPhone: row.contact_phone || "-",
+      contactPhone: resolvedPhone || "-",
       addressText: row.address_text || "",
       remarkText: parsedRemark.noteText,
       storeLabelText: normalizeStoreLabelInput(row.store_label),
@@ -410,7 +462,7 @@ export default async function BillingPage({
       warehouseText: FIXED_WAREHOUSE,
       shippingMethodText: parsedRemark.meta.shippingMethod,
       recipientNameText: parsedRemark.meta.recipientName || contactName,
-      recipientPhoneText: parsedRemark.meta.recipientPhone || row.contact_phone || "",
+      recipientPhoneText: parsedRemark.meta.recipientPhone || resolvedPhone || "",
       carrierCompanyText: parsedRemark.meta.carrierCompany,
       paymentTermText: parsedRemark.meta.paymentTerm,
       generatedAtText: parsedRemark.meta.generatedAt,
