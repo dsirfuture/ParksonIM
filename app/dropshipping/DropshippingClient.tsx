@@ -3678,8 +3678,10 @@ export function DropshippingClient({
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{text.fields.productZh}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "单价" : "Precio"}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "普通折扣" : "Dsc"}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "备货数量" : "Cant. stock"}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "备货金额" : "Monto stock"}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "备货时间" : "Fecha stock"}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "备货状态" : "Estado stock"}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{text.fields.shipped}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 text-right font-semibold">{lang === "zh" ? "操作" : "Acciones"}</th>
                   </tr>
@@ -3737,10 +3739,16 @@ export function DropshippingClient({
                       <td className="px-4 py-2 text-sm text-slate-700">${fmtMoney(row.unitPrice, lang)}</td>
                       <td className="px-4 py-2 text-sm text-slate-700">{fmtPercent(row.discountRate, lang)}%</td>
                       <td className="px-4 py-2 text-sm text-slate-700">
+                        {row.isStocked ? row.stockedQty : "-"}
+                      </td>
+                      <td className="px-4 py-2 text-sm text-slate-700">
                         {row.isStocked ? `$${fmtMoney(row.stockAmount, lang)}` : "-"}
                       </td>
                       <td className="whitespace-nowrap px-4 py-2 text-sm text-slate-700">
                         {row.isStocked && row.stockedAt ? fmtDateOnly(row.stockedAt, lang) : "-"}
+                      </td>
+                      <td className="px-4 py-2 text-sm text-slate-700">
+                        {row.isStocked ? text.status[row.status] : "-"}
                       </td>
                       <td className="px-4 py-2 text-sm text-slate-700">
                         {row.shippedQty > 0 ? (
