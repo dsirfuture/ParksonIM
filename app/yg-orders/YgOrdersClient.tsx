@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { TableCard } from "@/components/table-card";
+import { extractCustomerContactPhone } from "@/lib/billing-meta";
 import { buildProductImageUrls } from "@/lib/product-image-url";
 
 type SupplierOrderItem = {
@@ -87,17 +88,8 @@ type YgOrdersClientProps = {
 const ORDER_PAGE_SIZE = 10;
 const DETAIL_PAGE_SIZE = 10;
 
-function normalizeMexicoPhone(value: string) {
-  const digits = (value || "").replace(/\D/g, "");
-  if (digits.length < 10) return "";
-  return `+52${digits.slice(-10)}`;
-}
-
 function extractPhone(contactPhone: string, remarkText: string) {
-  if (contactPhone) return contactPhone;
-  const matched = (remarkText || "").match(/\+?\d{8,15}/g);
-  if (!matched || matched.length === 0) return "-";
-  return normalizeMexicoPhone(matched[0]) || "-";
+  return extractCustomerContactPhone(contactPhone, remarkText) || "-";
 }
 
 function cleanRemarkText(value: string) {

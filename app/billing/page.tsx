@@ -1,6 +1,11 @@
 // @ts-nocheck
 import { AppShell } from "@/components/app-shell";
-import { normalizeStoreLabelInput, parseBillingBooleanFlag, parseBillingRemark } from "@/lib/billing-meta";
+import {
+  extractCustomerContactPhone,
+  normalizeStoreLabelInput,
+  parseBillingBooleanFlag,
+  parseBillingRemark,
+} from "@/lib/billing-meta";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
 import { parseYogoDiscountNumbers } from "@/lib/yogo-product-utils";
@@ -385,13 +390,13 @@ export default async function BillingPage({
           where: {
             tenant_id: session.tenantId,
             company_id: session.companyId,
-            contact_phone: { not: null },
           },
           select: {
             customer_name: true,
             company_name: true,
             contact_name: true,
             contact_phone: true,
+            order_remark: true,
             updated_at: true,
           },
           orderBy: { updated_at: "desc" },
@@ -400,7 +405,8 @@ export default async function BillingPage({
 
   const customerPhoneMap = new Map<string, string>();
   for (const row of customerPhoneRows) {
-    const phone = String(row.contact_phone || "").trim();
+    const parsedCustomerRemark = parseBillingRemark(row.order_remark);
+    const phone = extractCustomerContactPhone(row.contact_phone, parsedCustomerRemark.noteText);
     if (!phone) continue;
     for (const key of [row.customer_name, row.company_name, row.contact_name]
       .map((value) => normalizeCustomerKey(value))
@@ -442,12 +448,16 @@ export default async function BillingPage({
     const contactName = row.contact_name || row.customer_name || row.company_name || "-";
     const parsedRemark = parseBillingRemark(row.order_remark);
     const metaPhone = String(parsedRemark.meta.recipientPhone || "").trim();
+    const directCustomerPhone = extractCustomerContactPhone(
+      row.contact_phone,
+      parsedRemark.noteText,
+    );
     const fallbackPhone =
       customerPhoneMap.get(normalizeCustomerKey(row.customer_name)) ||
       customerPhoneMap.get(normalizeCustomerKey(row.company_name)) ||
       customerPhoneMap.get(normalizeCustomerKey(row.contact_name)) ||
       "";
-    const resolvedPhone = metaPhone || String(row.contact_phone || "").trim() || fallbackPhone;
+    const resolvedPhone = directCustomerPhone || fallbackPhone;
     orderMap.set(row.order_no, {
       id: row.id,
       companyName,
@@ -463,7 +473,7 @@ export default async function BillingPage({
       warehouseText: FIXED_WAREHOUSE,
       shippingMethodText: parsedRemark.meta.shippingMethod,
       recipientNameText: parsedRemark.meta.recipientName || contactName,
-      recipientPhoneText: metaPhone || resolvedPhone || "",
+      recipientPhoneText: metaPhone || "",
       carrierCompanyText: parsedRemark.meta.carrierCompany,
       paymentTermText: parsedRemark.meta.paymentTerm,
       generatedAtText: parsedRemark.meta.generatedAt,

@@ -63,6 +63,21 @@ export function parseBillingBooleanFlag(value: unknown) {
   return text === "1" || text === "true" || text === "yes";
 }
 
+export function normalizeMexicoPhone(value: unknown) {
+  const digits = trimString(value).replace(/\D/g, "");
+  if (digits.length < 10) return "";
+  return `+52${digits.slice(-10)}`;
+}
+
+export function extractCustomerContactPhone(contactPhone: unknown, remarkText: unknown) {
+  const directPhone = trimString(contactPhone);
+  if (directPhone) return directPhone;
+
+  const matched = trimString(remarkText).match(/\+?\d{8,15}/g);
+  if (!matched || matched.length === 0) return "";
+  return normalizeMexicoPhone(matched[0]);
+}
+
 export function toBillingBooleanFlag(value: unknown) {
   return value ? "1" : "";
 }

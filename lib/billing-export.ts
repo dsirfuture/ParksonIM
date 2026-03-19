@@ -4,7 +4,14 @@ import path from "node:path";
 import ExcelJS from "exceljs";
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
-import { formatStoreLabelDisplay, getPaymentTermDisplayLines, normalizeStoreLabelInput, parseBillingBooleanFlag, parseBillingRemark } from "@/lib/billing-meta";
+import {
+  extractCustomerContactPhone,
+  formatStoreLabelDisplay,
+  getPaymentTermDisplayLines,
+  normalizeStoreLabelInput,
+  parseBillingBooleanFlag,
+  parseBillingRemark,
+} from "@/lib/billing-meta";
 import { prisma } from "@/lib/prisma";
 import { buildProductImageUrls } from "@/lib/product-image-url";
 import { parseYogoDiscountNumbers } from "@/lib/yogo-product-utils";
@@ -388,13 +395,13 @@ export async function getBillingExportData(params: {
           where: {
             tenant_id: tenantId,
             company_id: companyId,
-            contact_phone: { not: null },
           },
           select: {
             customer_name: true,
             company_name: true,
             contact_name: true,
             contact_phone: true,
+            order_remark: true,
             updated_at: true,
           },
           orderBy: { updated_at: "desc" },
@@ -403,7 +410,8 @@ export async function getBillingExportData(params: {
 
   let fallbackPhone = "";
   for (const row of customerPhoneRows) {
-    const phone = String(row.contact_phone || "").trim();
+    const parsedCustomerRemark = parseBillingRemark(row.order_remark);
+    const phone = extractCustomerContactPhone(row.contact_phone, parsedCustomerRemark.noteText);
     if (!phone) continue;
     const keys = [row.customer_name, row.company_name, row.contact_name]
       .map((value) => normalizeCustomerKey(value))
@@ -413,7 +421,8 @@ export async function getBillingExportData(params: {
       break;
     }
   }
-  const resolvedPhone = metaPhone || String(orderRow.contact_phone || "").trim() || fallbackPhone;
+  const resolvedPhone =
+    extractCustomerContactPhone(orderRow.contact_phone, parsedRemark.noteText) || fallbackPhone;
 
   const receipts = await prisma.receipt.findMany({
     where: {
@@ -639,7 +648,7 @@ export async function getBillingExportData(params: {
       orderRow.customer_name ||
       orderRow.company_name ||
       "",
-    recipientPhoneText: metaPhone || resolvedPhone || "",
+    recipientPhoneText: metaPhone || "",
     carrierCompanyText: parsedRemark.meta.carrierCompany,
     paymentTermText: parsedRemark.meta.paymentTerm,
     generatedAtText: parsedRemark.meta.generatedAt,
