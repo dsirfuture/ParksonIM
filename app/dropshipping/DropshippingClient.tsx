@@ -3736,9 +3736,11 @@ export function DropshippingClient({
                       <td className="px-4 py-2 text-sm text-slate-700">{row.productNameZh}</td>
                       <td className="px-4 py-2 text-sm text-slate-700">${fmtMoney(row.unitPrice, lang)}</td>
                       <td className="px-4 py-2 text-sm text-slate-700">{fmtPercent(row.discountRate, lang)}%</td>
-                      <td className="px-4 py-2 text-sm text-slate-700">${fmtMoney(row.stockAmount, lang)}</td>
+                      <td className="px-4 py-2 text-sm text-slate-700">
+                        {row.isStocked ? `$${fmtMoney(row.stockAmount, lang)}` : "-"}
+                      </td>
                       <td className="whitespace-nowrap px-4 py-2 text-sm text-slate-700">
-                        {row.isStocked && row.stockedAt ? fmtDateOnly(row.stockedAt, lang) : ""}
+                        {row.isStocked && row.stockedAt ? fmtDateOnly(row.stockedAt, lang) : "-"}
                       </td>
                       <td className="px-4 py-2 text-sm text-slate-700">
                         {row.shippedQty > 0 ? (
