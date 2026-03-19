@@ -2405,6 +2405,32 @@ export function DropshippingClient({
     }
   }
 
+  async function removeShippedItemRow(row: DsInventoryRow) {
+    const confirmed = window.confirm(
+      lang === "zh"
+        ? `确认删除这条已发商品记录？\n${row.sku} / ${row.productNameZh || "-"}`
+        : `Eliminar este registro enviado?\n${row.sku} / ${row.productNameZh || "-"}`,
+    );
+    if (!confirmed) return;
+
+    try {
+      setSaving(true);
+      setError("");
+      const response = await fetch(`/api/dropshipping/orders/${row.orderId}`, {
+        method: "DELETE",
+      });
+      const json = await response.json();
+      if (!response.ok || !json?.ok) {
+        throw new Error(json?.error || "delete_failed");
+      }
+      await refreshAll();
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "delete_failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function confirmDeleteOrder() {
     if (!deleteTarget) return;
 
@@ -3596,6 +3622,15 @@ export function DropshippingClient({
                       </td>
                       <td className="px-4 py-2 text-right">
                         <div className="inline-flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void removeShippedItemRow(row)}
+                            title={lang === "zh" ? "删除" : "Eliminar"}
+                            aria-label={lang === "zh" ? "删除" : "Eliminar"}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-500 transition hover:border-rose-300 hover:text-rose-600"
+                          >
+                            <TrashIcon />
+                          </button>
                           <button
                             type="button"
                             onClick={() => beginInventoryEdit(row)}
