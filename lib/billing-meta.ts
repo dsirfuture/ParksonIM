@@ -95,9 +95,13 @@ export function parseBillingRemark(raw: string | null | undefined) {
     };
   }
 
-  const newlineIndex = text.indexOf("\n");
-  const metaJson = text.slice(BILLING_META_PREFIX.length, newlineIndex === -1 ? undefined : newlineIndex).trim();
-  const noteText = newlineIndex === -1 ? "" : text.slice(newlineIndex + 1).trim();
+  const body = text.slice(BILLING_META_PREFIX.length);
+  const metaMatch = body.match(/^\s*(\{[\s\S]*?\})/);
+  const metaJson = metaMatch?.[1]?.trim() || "";
+  const noteText = body
+    .slice(metaMatch?.[0]?.length || 0)
+    .replace(/^\s*\+\s*/u, "")
+    .trim();
 
   try {
     const parsed = JSON.parse(metaJson) as Partial<BillingHeaderMeta>;
