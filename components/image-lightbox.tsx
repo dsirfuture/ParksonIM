@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type ImageLightboxProps = {
   open: boolean;
@@ -20,11 +20,24 @@ export function ImageLightbox({
   onClose,
 }: ImageLightboxProps) {
   const [rotation, setRotation] = useState(0);
-  const [activeSrc, setActiveSrc] = useState(src);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const sources = useMemo(() => {
+    const seen = new Set<string>();
+    return [src, ...fallbackSources]
+      .map((item) => String(item || "").trim())
+      .filter((item) => {
+        if (!item || seen.has(item)) return false;
+        seen.add(item);
+        return true;
+      });
+  }, [src, fallbackSources]);
+
+  const activeSrc = sources[activeIndex] || "";
 
   useEffect(() => {
-    setActiveSrc(src);
-  }, [src]);
+    setActiveIndex(0);
+  }, [src, fallbackSources]);
 
   useEffect(() => {
     if (!open) return;
@@ -77,16 +90,23 @@ export function ImageLightbox({
           className="flex max-h-[78vh] cursor-zoom-out items-center justify-center bg-slate-100 p-4"
           onClick={onClose}
         >
-          <img
-            src={activeSrc}
-            alt={alt || title || "preview"}
-            className="max-h-[72vh] w-auto max-w-full cursor-zoom-out object-contain transition-transform duration-150"
-            style={{ transform: `rotate(${rotation}deg)` }}
-            onError={() => {
-              const nextSrc = fallbackSources.find((candidate) => candidate && candidate !== activeSrc);
-              if (nextSrc) setActiveSrc(nextSrc);
-            }}
-          />
+          {activeSrc ? (
+            <img
+              src={activeSrc}
+              alt={alt || title || "preview"}
+              className="max-h-[72vh] w-auto max-w-full cursor-zoom-out object-contain transition-transform duration-150"
+              style={{ transform: `rotate(${rotation}deg)` }}
+              onError={() => {
+                if (activeIndex < sources.length - 1) {
+                  setActiveIndex((prev) => prev + 1);
+                }
+              }}
+            />
+          ) : (
+            <div className="flex h-[320px] w-full items-center justify-center text-sm text-slate-400">
+              图片打不开
+            </div>
+          )}
         </div>
       </div>
     </div>
