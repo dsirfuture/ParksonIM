@@ -981,6 +981,7 @@ export function DropshippingClient({
           stocked: "备货",
           shipped: "已发",
           stockAmount: "备货金额",
+          stockedAt: "备货时间",
           rateAmount: "汇率后金额",
           total: "总金额",
           paid: "已付",
@@ -1081,6 +1082,7 @@ export function DropshippingClient({
           stocked: "Stock",
           shipped: "Enviado",
           stockAmount: "Monto stock",
+          stockedAt: "Fecha stock",
           rateAmount: "Monto convertido",
           total: "Total",
           paid: "Pagado",
@@ -3677,6 +3679,7 @@ export function DropshippingClient({
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "单价" : "Precio"}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "普通折扣" : "Dsc"}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "备货金额" : "Monto stock"}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "备货时间" : "Fecha stock"}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{text.fields.shipped}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 text-right font-semibold">{lang === "zh" ? "操作" : "Acciones"}</th>
                   </tr>
@@ -3734,6 +3737,9 @@ export function DropshippingClient({
                       <td className="px-4 py-2 text-sm text-slate-700">${fmtMoney(row.unitPrice, lang)}</td>
                       <td className="px-4 py-2 text-sm text-slate-700">{fmtPercent(row.discountRate, lang)}%</td>
                       <td className="px-4 py-2 text-sm text-slate-700">${fmtMoney(row.stockAmount, lang)}</td>
+                      <td className="whitespace-nowrap px-4 py-2 text-sm text-slate-700">
+                        {row.isStocked && row.stockedAt ? fmtDateOnly(row.stockedAt, lang) : ""}
+                      </td>
                       <td className="px-4 py-2 text-sm text-slate-700">
                         {row.shippedQty > 0 ? (
                           <button
