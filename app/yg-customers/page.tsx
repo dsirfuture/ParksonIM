@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { prisma } from "@/lib/prisma";

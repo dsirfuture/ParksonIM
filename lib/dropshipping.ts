@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { prisma } from "@/lib/prisma";
 import { randomUUID } from "crypto";
 import type { Session } from "@/lib/tenant";

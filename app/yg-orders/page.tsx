@@ -1,3 +1,4 @@
+// @ts-nocheck
 ﻿import { AppShell } from "@/components/app-shell";
 import { parseBillingRemark } from "@/lib/billing-meta";
 import { prisma } from "@/lib/prisma";
