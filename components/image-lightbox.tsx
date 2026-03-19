@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 type ImageLightboxProps = {
   open: boolean;
   src: string;
+  fallbackSources?: string[];
   alt?: string;
   title?: string;
   onClose: () => void;
@@ -13,11 +14,17 @@ type ImageLightboxProps = {
 export function ImageLightbox({
   open,
   src,
+  fallbackSources = [],
   alt,
   title,
   onClose,
 }: ImageLightboxProps) {
   const [rotation, setRotation] = useState(0);
+  const [activeSrc, setActiveSrc] = useState(src);
+
+  useEffect(() => {
+    setActiveSrc(src);
+  }, [src]);
 
   useEffect(() => {
     if (!open) return;
@@ -71,10 +78,14 @@ export function ImageLightbox({
           onClick={onClose}
         >
           <img
-            src={src}
+            src={activeSrc}
             alt={alt || title || "preview"}
             className="max-h-[72vh] w-auto max-w-full cursor-zoom-out object-contain transition-transform duration-150"
             style={{ transform: `rotate(${rotation}deg)` }}
+            onError={() => {
+              const nextSrc = fallbackSources.find((candidate) => candidate && candidate !== activeSrc);
+              if (nextSrc) setActiveSrc(nextSrc);
+            }}
           />
         </div>
       </div>

@@ -8,6 +8,7 @@ import { StatCard } from "@/components/stat-card";
 import { TableCard } from "@/components/table-card";
 import { getClientLang } from "@/lib/lang-client";
 import { normalizeProductCode } from "@/lib/product-code";
+import { buildProductImageUrls } from "@/lib/product-image-url";
 import type {
   DsAlertItem,
   DsOrderAttachment,
@@ -728,7 +729,7 @@ export function DropshippingClient({
   const [importProgress, setImportProgress] = useState<number | null>(null);
   const [importSummary, setImportSummary] = useState<string>("");
   const [error, setError] = useState("");
-  const [previewImage, setPreviewImage] = useState<{ src: string; title: string } | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ src: string; title: string; fallbackSources?: string[] } | null>(null);
   const [failedInventoryImages, setFailedInventoryImages] = useState<string[]>([]);
   const [failedFinanceImages, setFailedFinanceImages] = useState<string[]>([]);
   const [inventoryPreview, setInventoryPreview] = useState<InventoryPreviewState>(null);
@@ -3409,6 +3410,7 @@ export function DropshippingClient({
                                   onClick={() =>
                                     setPreviewImage({
                                       src: row.productImageUrl || "",
+                                      fallbackSources: buildProductImageUrls(row.sku, ["jpg", "jpeg", "png", "webp"]),
                                       title: `${row.sku} / ${row.productNameZh || "-"}`,
                                     })
                                   }
@@ -4469,6 +4471,7 @@ export function DropshippingClient({
                                         if (!slot.sku) return;
                                         setPreviewImage({
                                           src: slot.productImageUrl || "",
+                                          fallbackSources: buildProductImageUrls(slot.sku, ["jpg", "jpeg", "png", "webp"]),
                                           title: `${slot.sku} / ${slot.productNameZh || "-"}`,
                                         });
                                       }}
@@ -4652,23 +4655,21 @@ export function DropshippingClient({
                   </p>
                 </div>
                 <div className="flex h-16 w-16 flex-none items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-                  {currentInventoryPreview?.productImageUrl ? (
-                    <button
-                      type="button"
+                  {currentInventoryPreview?.sku ? (
+                    <ProductImage
+                      sku={currentInventoryPreview.sku}
+                      hasImage
+                      size={64}
+                      className="h-full w-full"
+                      roundedClassName="rounded-xl"
                       onClick={() =>
                         setPreviewImage({
-                          src: currentInventoryPreview.productImageUrl,
+                          src: currentInventoryPreview.productImageUrl || "",
+                          fallbackSources: buildProductImageUrls(currentInventoryPreview.sku, ["jpg", "jpeg", "png", "webp"]),
                           title: `${currentInventoryPreview.sku} / ${currentInventoryPreview.productNameZh || "-"}`,
                         })
                       }
-                      className="h-full w-full"
-                    >
-                      <img
-                        src={currentInventoryPreview.productImageUrl}
-                        alt={currentInventoryPreview.productNameZh || currentInventoryPreview.sku}
-                        className="h-full w-full object-cover"
-                      />
-                    </button>
+                    />
                   ) : (
                     <span className="text-sm text-slate-400">{lang === "zh" ? "\u7a7a" : "Vacio"}</span>
                   )}
@@ -5252,6 +5253,7 @@ export function DropshippingClient({
       <ImageLightbox
         open={Boolean(previewImage)}
         src={previewImage?.src || ""}
+        fallbackSources={previewImage?.fallbackSources || []}
         title={previewImage?.title || ""}
         onClose={() => setPreviewImage(null)}
       />
