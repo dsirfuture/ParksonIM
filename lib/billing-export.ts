@@ -146,6 +146,10 @@ function baseOrderNo(receiptNo: string) {
   return head || String(receiptNo || "").trim();
 }
 
+function normalizeLookupKey(value: string | null | undefined) {
+  return String(value || "").trim().toUpperCase();
+}
+
 function formatDateOnly(value: Date | null | undefined) {
   if (!value) return "-";
   return new Intl.DateTimeFormat("zh-CN", {
@@ -447,6 +451,7 @@ export async function getBillingExportData(params: {
           },
           select: {
             product_code: true,
+            product_no: true,
             category_name: true,
             source_discount: true,
             updated_at: true,
@@ -463,13 +468,21 @@ export async function getBillingExportData(params: {
     }
   >();
   for (const row of yogoDiscountRows) {
-    const key = String(row.product_code || "").trim();
-    if (!key || yogoDiscountMap.has(key)) continue;
+    const skuKey = normalizeLookupKey(row.product_code);
     const discount = parseYogoDiscountNumbers(row.category_name, row.source_discount);
-    yogoDiscountMap.set(key, {
-      normalDiscount: discount.normal,
-      vipDiscount: discount.vip,
-    });
+    if (skuKey && !yogoDiscountMap.has(skuKey)) {
+      yogoDiscountMap.set(skuKey, {
+        normalDiscount: discount.normal,
+        vipDiscount: discount.vip,
+      });
+    }
+    const barcodeKey = normalizeLookupKey(row.product_no);
+    if (barcodeKey && !yogoDiscountMap.has(barcodeKey)) {
+      yogoDiscountMap.set(barcodeKey, {
+        normalDiscount: discount.normal,
+        vipDiscount: discount.vip,
+      });
+    }
   }
 
   const itemsMap = new Map<string, BillingExportItem>();
@@ -490,14 +503,16 @@ export async function getBillingExportData(params: {
       // `sell_price` in receipt import/export is the 验货单“供应价”, not a product catalog selling price.
       const supplierUnitPrice = toNumber(item.sell_price) || 0;
       const catalogDiscount = productDiscountMap.get(sku);
-      const yogoDiscount = yogoDiscountMap.get(sku);
+      const yogoDiscount =
+        yogoDiscountMap.get(normalizeLookupKey(sku)) ??
+        yogoDiscountMap.get(normalizeLookupKey(barcode));
       const normalDiscountRaw =
-        catalogDiscount?.normalDiscount ??
         yogoDiscount?.normalDiscount ??
+        catalogDiscount?.normalDiscount ??
         (item.normal_discount === null ? null : Number(item.normal_discount));
       const vipDiscountRaw =
-        catalogDiscount?.vipDiscount ??
         yogoDiscount?.vipDiscount ??
+        catalogDiscount?.vipDiscount ??
         (item.vip_discount === null ? null : Number(item.vip_discount));
       const normalDiscount = toDiscountFactor(normalDiscountRaw);
       const vipDiscount = toDiscountFactor(vipDiscountRaw);

@@ -65,6 +65,10 @@ function baseOrderNo(receiptNo: string) {
   return head || String(receiptNo || "").trim();
 }
 
+function normalizeLookupKey(value: string | null | undefined) {
+  return String(value || "").trim().toUpperCase();
+}
+
 export default async function BillingPage({
   searchParams,
 }: {
@@ -164,6 +168,7 @@ export default async function BillingPage({
           },
           select: {
             product_code: true,
+            product_no: true,
             category_name: true,
             source_discount: true,
             updated_at: true,
@@ -180,13 +185,21 @@ export default async function BillingPage({
     }
   >();
   for (const row of yogoDiscountRows) {
-    const key = String(row.product_code || "").trim();
-    if (!key || yogoDiscountMap.has(key)) continue;
+    const skuKey = normalizeLookupKey(row.product_code);
     const discount = parseYogoDiscountNumbers(row.category_name, row.source_discount);
-    yogoDiscountMap.set(key, {
-      normalDiscount: discount.normal,
-      vipDiscount: discount.vip,
-    });
+    if (skuKey && !yogoDiscountMap.has(skuKey)) {
+      yogoDiscountMap.set(skuKey, {
+        normalDiscount: discount.normal,
+        vipDiscount: discount.vip,
+      });
+    }
+    const barcodeKey = normalizeLookupKey((row as { product_no?: string | null }).product_no);
+    if (barcodeKey && !yogoDiscountMap.has(barcodeKey)) {
+      yogoDiscountMap.set(barcodeKey, {
+        normalDiscount: discount.normal,
+        vipDiscount: discount.vip,
+      });
+    }
   }
 
   const grouped = new Map<
@@ -234,19 +247,22 @@ export default async function BillingPage({
 
     for (const item of receipt.items) {
       const sku = String(item.sku || "").trim();
+      const barcode = String(item.barcode || "").trim();
       const qty = Number(item.expected_qty || 0);
       // Billing unit price must always come from the completed receipt's supplier price.
       // `sell_price` here is the imported 验货单“供应价”, not the product catalog selling price.
       const supplierUnitPrice = item.sell_price === null ? 0 : Number(item.sell_price);
       const catalogDiscount = productDiscountMap.get(sku);
-      const yogoDiscount = yogoDiscountMap.get(sku);
+      const yogoDiscount =
+        yogoDiscountMap.get(normalizeLookupKey(sku)) ??
+        yogoDiscountMap.get(normalizeLookupKey(barcode));
       const normalDiscountRaw =
-        catalogDiscount?.normalDiscount ??
         yogoDiscount?.normalDiscount ??
+        catalogDiscount?.normalDiscount ??
         (item.normal_discount === null ? null : Number(item.normal_discount));
       const vipDiscountRaw =
-        catalogDiscount?.vipDiscount ??
         yogoDiscount?.vipDiscount ??
+        catalogDiscount?.vipDiscount ??
         (item.vip_discount === null ? null : Number(item.vip_discount));
       const normalDiscount = toDiscountFactor(normalDiscountRaw);
       const vipDiscount = toDiscountFactor(vipDiscountRaw);
@@ -257,7 +273,6 @@ export default async function BillingPage({
       receiptOriginalAmount += lineOriginalTotal;
       receiptDiscountedAmount += lineDiscountedTotal;
 
-      const barcode = String(item.barcode || "").trim();
       const key = `${sku}|${barcode}`;
       const old = orderDetail.get(key);
       if (!old) {
