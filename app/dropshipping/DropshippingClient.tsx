@@ -3131,6 +3131,7 @@ export function DropshippingClient({
 
       {activeTab === "orders" ? (
         <TableCard
+          className="!mt-0"
           title={text.sections.orders}
           description={lang === "zh" ? "支持快速录单、状态切换和异常提示。" : "Alta rapida, estado y alertas basicas."}
           unusedTitleRight={
@@ -3547,6 +3548,7 @@ export function DropshippingClient({
 
       {activeTab === "inventory" ? (
         <TableCard
+          className="!mt-0"
           title={text.sections.inventory}
           titleRight={
             <span className="whitespace-nowrap text-sm text-slate-500">
@@ -3766,6 +3768,7 @@ export function DropshippingClient({
 
       {activeTab === "finance" ? (
         <TableCard
+          className="!mt-0"
           title={text.sections.finance}
           titleRight={
             <div className="flex items-center gap-3 text-sm text-slate-500">
