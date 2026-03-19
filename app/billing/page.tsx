@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { normalizeStoreLabelInput, parseBillingBooleanFlag, parseBillingRemark } from "@/lib/billing-meta";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
+import { parseYogoDiscountNumbers } from "@/lib/yogo-product-utils";
 import { BillingClient } from "./BillingClient";
 
 type TabKey = "customer" | "supplier";
@@ -153,6 +154,41 @@ export default async function BillingPage({
     ]),
   );
 
+  const yogoDiscountRows =
+    skuList.length > 0
+      ? await prisma.yogoProductSource.findMany({
+          where: {
+            tenant_id: session.tenantId,
+            company_id: session.companyId,
+            product_code: { in: skuList },
+          },
+          select: {
+            product_code: true,
+            category_name: true,
+            source_discount: true,
+            updated_at: true,
+          },
+          orderBy: [{ updated_at: "desc" }],
+        })
+      : [];
+
+  const yogoDiscountMap = new Map<
+    string,
+    {
+      normalDiscount: number | null;
+      vipDiscount: number | null;
+    }
+  >();
+  for (const row of yogoDiscountRows) {
+    const key = String(row.product_code || "").trim();
+    if (!key || yogoDiscountMap.has(key)) continue;
+    const discount = parseYogoDiscountNumbers(row.category_name, row.source_discount);
+    yogoDiscountMap.set(key, {
+      normalDiscount: discount.normal,
+      vipDiscount: discount.vip,
+    });
+  }
+
   const grouped = new Map<
     string,
     {
@@ -203,11 +239,14 @@ export default async function BillingPage({
       // `sell_price` here is the imported 验货单“供应价”, not the product catalog selling price.
       const supplierUnitPrice = item.sell_price === null ? 0 : Number(item.sell_price);
       const catalogDiscount = productDiscountMap.get(sku);
+      const yogoDiscount = yogoDiscountMap.get(sku);
       const normalDiscountRaw =
         catalogDiscount?.normalDiscount ??
+        yogoDiscount?.normalDiscount ??
         (item.normal_discount === null ? null : Number(item.normal_discount));
       const vipDiscountRaw =
         catalogDiscount?.vipDiscount ??
+        yogoDiscount?.vipDiscount ??
         (item.vip_discount === null ? null : Number(item.vip_discount));
       const normalDiscount = toDiscountFactor(normalDiscountRaw);
       const vipDiscount = toDiscountFactor(vipDiscountRaw);

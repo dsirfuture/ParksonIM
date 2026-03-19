@@ -25,13 +25,19 @@ function formatPercent(value: number) {
   return Number.isInteger(value) ? `${value}%` : `${value.toFixed(2)}%`;
 }
 
-export function parseYogoDiscountParts(categoryName: string | null, sourceDiscount: unknown) {
+function parsePercentNumber(value: string | undefined) {
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function parseYogoDiscountNumbers(categoryName: string | null, sourceDiscount: unknown) {
   const text = String(categoryName || "");
   const pair = text.match(/(\d+(?:\.\d+)?)%\s*\+\s*VIP\s*(\d+(?:\.\d+)?)%/i);
   if (pair) {
     return {
-      normal: formatPercent(Number(pair[1])),
-      vip: formatPercent(Number(pair[2])),
+      normal: parsePercentNumber(pair[1]),
+      vip: parsePercentNumber(pair[2]),
     };
   }
 
@@ -39,15 +45,22 @@ export function parseYogoDiscountParts(categoryName: string | null, sourceDiscou
   if (vipOnly) {
     const normalOnly = text.match(/(\d+(?:\.\d+)?)%/);
     return {
-      normal: normalOnly ? formatPercent(Number(normalOnly[1])) : "-",
-      vip: formatPercent(Number(vipOnly[1])),
+      normal: parsePercentNumber(normalOnly?.[1]),
+      vip: parsePercentNumber(vipOnly[1]),
     };
   }
 
-  const num = toNumber(sourceDiscount);
   return {
-    normal: num === null ? "-" : formatPercent(num),
-    vip: "-",
+    normal: toNumber(sourceDiscount),
+    vip: null,
+  };
+}
+
+export function parseYogoDiscountParts(categoryName: string | null, sourceDiscount: unknown) {
+  const { normal, vip } = parseYogoDiscountNumbers(categoryName, sourceDiscount);
+  return {
+    normal: normal === null ? "-" : formatPercent(normal),
+    vip: vip === null ? "-" : formatPercent(vip),
   };
 }
 

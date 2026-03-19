@@ -7,6 +7,7 @@ import fontkit from "@pdf-lib/fontkit";
 import { formatStoreLabelDisplay, getPaymentTermDisplayLines, normalizeStoreLabelInput, parseBillingBooleanFlag, parseBillingRemark } from "@/lib/billing-meta";
 import { prisma } from "@/lib/prisma";
 import { buildProductImageUrls } from "@/lib/product-image-url";
+import { parseYogoDiscountNumbers } from "@/lib/yogo-product-utils";
 
 export type BillingExportItem = {
   sku: string;
@@ -436,6 +437,41 @@ export async function getBillingExportData(params: {
     ]),
   );
 
+  const yogoDiscountRows =
+    skuList.length > 0
+      ? await prisma.yogoProductSource.findMany({
+          where: {
+            tenant_id: tenantId,
+            company_id: companyId,
+            product_code: { in: skuList },
+          },
+          select: {
+            product_code: true,
+            category_name: true,
+            source_discount: true,
+            updated_at: true,
+          },
+          orderBy: [{ updated_at: "desc" }],
+        })
+      : [];
+
+  const yogoDiscountMap = new Map<
+    string,
+    {
+      normalDiscount: number | null;
+      vipDiscount: number | null;
+    }
+  >();
+  for (const row of yogoDiscountRows) {
+    const key = String(row.product_code || "").trim();
+    if (!key || yogoDiscountMap.has(key)) continue;
+    const discount = parseYogoDiscountNumbers(row.category_name, row.source_discount);
+    yogoDiscountMap.set(key, {
+      normalDiscount: discount.normal,
+      vipDiscount: discount.vip,
+    });
+  }
+
   const itemsMap = new Map<string, BillingExportItem>();
   let totalAmount = 0;
   let totalQty = 0;
@@ -454,11 +490,14 @@ export async function getBillingExportData(params: {
       // `sell_price` in receipt import/export is the 验货单“供应价”, not a product catalog selling price.
       const supplierUnitPrice = toNumber(item.sell_price) || 0;
       const catalogDiscount = productDiscountMap.get(sku);
+      const yogoDiscount = yogoDiscountMap.get(sku);
       const normalDiscountRaw =
         catalogDiscount?.normalDiscount ??
+        yogoDiscount?.normalDiscount ??
         (item.normal_discount === null ? null : Number(item.normal_discount));
       const vipDiscountRaw =
         catalogDiscount?.vipDiscount ??
+        yogoDiscount?.vipDiscount ??
         (item.vip_discount === null ? null : Number(item.vip_discount));
       const normalDiscount = toDiscountFactor(normalDiscountRaw);
       const vipDiscount = toDiscountFactor(vipDiscountRaw);
