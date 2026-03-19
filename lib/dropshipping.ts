@@ -1183,6 +1183,18 @@ export async function getInventoryRows(session: Session) {
   const inventoryByPair = new Map(
     inventories.map((row) => [`${row.customer_id}::${row.product_id}`, row]),
   );
+  const inventoryAssignedOrderByPair = new Map<string, string>();
+  for (const [pairKey, inventory] of inventoryByPair.entries()) {
+    const stockedAt = inventory.stocked_at?.toISOString()?.slice(0, 10);
+    if (!inventory.is_stocked || !stockedAt) continue;
+    const matchedOrder = shippedOrders.find((row) => {
+      if (`${row.customer_id}::${row.product_id}` !== pairKey) return false;
+      return row.shipped_at?.toISOString()?.slice(0, 10) === stockedAt;
+    });
+    if (matchedOrder) {
+      inventoryAssignedOrderByPair.set(pairKey, matchedOrder.id);
+    }
+  }
   const shippedTotals = new Map<string, number>();
   for (const row of shippedOrders) {
     const key = `${row.customer_id}::${row.product_id}`;
@@ -1211,6 +1223,8 @@ export async function getInventoryRows(session: Session) {
       && Boolean(stockedAt)
       && Boolean(shippedAt)
       && stockedAt?.slice(0, 10) === shippedAt?.slice(0, 10);
+    const assignedOrderId = inventoryAssignedOrderByPair.get(pairKey);
+    const showsStockDetails = matchesStockDate && assignedOrderId === row.id;
     return {
       orderId: row.id,
       inventoryId: inventory?.id || row.id,
@@ -1221,17 +1235,17 @@ export async function getInventoryRows(session: Session) {
       productNameZh: catalog?.name_zh?.trim() || row.product.name_zh,
       productNameEs: catalog?.name_es?.trim() || row.product.name_es || "",
       productImageUrl: row.product.image_url || buildProductImageUrl(matchedSku, "jpg"),
-      stockedAt,
+      stockedAt: showsStockDetails ? stockedAt : null,
       shippedAt,
       trackingNo: row.tracking_no || "",
       warehouse: inventory?.warehouse || row.warehouse || row.product.default_warehouse || "",
-      isStocked: matchesStockDate,
+      isStocked: showsStockDetails,
       stockedQty: inventory?.stocked_qty ?? 0,
       shippedQty: row.quantity,
       remainingQty,
       unitPrice,
       discountRate,
-      stockAmount: computeStockAmount(unitPrice, inventory?.stocked_qty ?? 0, discountRate),
+      stockAmount: showsStockDetails ? computeStockAmount(unitPrice, inventory?.stocked_qty ?? 0, discountRate) : 0,
       status: deriveInventoryStatus(remainingQty),
     };
   });
