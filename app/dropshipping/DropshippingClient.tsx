@@ -3562,18 +3562,18 @@ export function DropshippingClient({
               >
                 <span className="whitespace-nowrap">{lang === "zh" ? "新增备货" : "Nuevo stock"}</span>
               </button>
-              <div className="relative w-full max-w-[420px]">
+              <div className="relative w-full max-w-[420px] rounded-xl border border-slate-200 bg-white shadow-sm shadow-slate-100/60">
                 <input
                   value={inventoryKeyword}
                   onChange={(event) => setInventoryKeyword(event.target.value)}
                   placeholder={lang === "zh" ? "搜索编码 / 中文名" : "Buscar codigo / nombre"}
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-3 pr-32 text-sm text-slate-700 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
+                  className="h-10 w-full rounded-xl bg-transparent pl-3 pr-32 text-sm text-slate-700 outline-none"
                 />
-                <div className="absolute inset-y-0 right-2 flex items-center">
+                <div className="absolute inset-y-1 right-1 flex items-center border-l border-slate-200 pl-1.5">
                   <select
                     value={inventoryCustomerFilter}
                     onChange={(event) => setInventoryCustomerFilter(event.target.value)}
-                    className="h-8 max-w-[118px] rounded-lg border border-secondary-accent bg-secondary-accent px-2.5 text-sm text-primary outline-none"
+                    className="h-8 min-w-[116px] appearance-none rounded-lg bg-transparent px-3 pr-8 text-sm text-slate-700 outline-none transition"
                   >
                     <option value="all">{lang === "zh" ? "全部客户" : "Todos"}</option>
                     {inventoryCustomerOptions.map((customer) => (
@@ -3582,6 +3582,11 @@ export function DropshippingClient({
                       </option>
                     ))}
                   </select>
+                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">
+                    <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m4 6 4 4 4-4" />
+                    </svg>
+                  </span>
                 </div>
               </div>
             </div>
