@@ -797,7 +797,7 @@ export function DropshippingClient({
   }, [financePreview]);
 
   useEffect(() => {
-    if (!modalOpen || form.id) return;
+    if (!modalOpen) return;
     const rawSku = form.sku.trim();
     if (!rawSku) return;
 
@@ -817,7 +817,7 @@ export function DropshippingClient({
         if (!match) return;
 
         setForm((prev) => {
-          if (prev.id || normalizeProductCode(prev.sku) !== normalizedSku) return prev;
+          if (normalizeProductCode(prev.sku) !== normalizedSku) return prev;
           return {
             ...prev,
             sku: String(match.sku || prev.sku).trim(),
@@ -1975,7 +1975,7 @@ export function DropshippingClient({
       platform: source.platform,
       platformOrderNo: source.platformOrderNo,
       trackingGroupId: trackingGroupId === undefined ? source.trackingGroupId || null : trackingGroupId,
-      sku: source.sku,
+      sku: normalizeProductCode(source.sku),
       productNameZh: source.productNameZh,
       productNameEs: source.productNameEs,
       quantity: Number(source.quantity || 0),
@@ -2658,7 +2658,7 @@ export function DropshippingClient({
     }`;
 
   return (
-    <section className="-mt-[9px] space-y-4">
+    <section className="-mt-[2px] space-y-4">
       {error ? (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">{error}</div>
       ) : null}
@@ -3972,7 +3972,10 @@ export function DropshippingClient({
                 <input
                   type="text"
                   value={form.sku}
-                  onChange={(event) => setForm((prev) => ({ ...prev, sku: event.target.value }))}
+                  onChange={(event) => {
+                    setProductFieldsLocked(false);
+                    setForm((prev) => ({ ...prev, sku: event.target.value }));
+                  }}
                   disabled={productFieldsLocked}
                   className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                 />
@@ -4358,7 +4361,10 @@ export function DropshippingClient({
                     <input
                       type="text"
                       value={form.sku}
-                      onChange={(event) => setForm((prev) => ({ ...prev, sku: event.target.value }))}
+                      onChange={(event) => {
+                        setProductFieldsLocked(false);
+                        setForm((prev) => ({ ...prev, sku: event.target.value }));
+                      }}
                       className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
                     />
                   </label>
