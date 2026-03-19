@@ -3182,7 +3182,7 @@ export function DropshippingClient({
                       onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
                       className="h-8 min-w-[116px] appearance-none rounded-lg bg-transparent px-3 pr-8 text-sm text-slate-700 outline-none transition"
                     >
-                      <option value="all" hidden>{lang === "zh" ? "\u5168\u90e8\u72b6\u6001" : "Todos"}</option>
+                      <option value="all">{lang === "zh" ? "\u5168\u90e8\u72b6\u6001" : "Todos"}</option>
                       <option value="pending">{getShippingStatusLabel("pending", lang)}</option>
                       <option value="shipped">{getShippingStatusLabel("shipped", lang)}</option>
                       <option value="cancelled">{getShippingStatusLabel("cancelled", lang)}</option>
