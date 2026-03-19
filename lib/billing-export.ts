@@ -376,6 +376,7 @@ export async function getBillingExportData(params: {
     throw new Error("请先生成账单后再导出");
   }
   const vipDiscountEnabled = parseBillingBooleanFlag(parsedRemark.meta.generatedVipEnabled);
+  const metaPhone = String(parsedRemark.meta.recipientPhone || "").trim();
 
   const customerMatchKeys = [orderRow.customer_name, orderRow.company_name, orderRow.contact_name]
     .map((value) => normalizeCustomerKey(value))
@@ -412,7 +413,7 @@ export async function getBillingExportData(params: {
       break;
     }
   }
-  const resolvedPhone = String(orderRow.contact_phone || "").trim() || fallbackPhone;
+  const resolvedPhone = metaPhone || String(orderRow.contact_phone || "").trim() || fallbackPhone;
 
   const receipts = await prisma.receipt.findMany({
     where: {
@@ -638,7 +639,7 @@ export async function getBillingExportData(params: {
       orderRow.customer_name ||
       orderRow.company_name ||
       "",
-    recipientPhoneText: parsedRemark.meta.recipientPhone || resolvedPhone || "",
+    recipientPhoneText: metaPhone || resolvedPhone || "",
     carrierCompanyText: parsedRemark.meta.carrierCompany,
     paymentTermText: parsedRemark.meta.paymentTerm,
     generatedAtText: parsedRemark.meta.generatedAt,

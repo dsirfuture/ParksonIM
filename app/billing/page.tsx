@@ -440,13 +440,14 @@ export default async function BillingPage({
     if (orderMap.has(row.order_no)) continue;
     const companyName = row.customer_name || row.company_name || "-";
     const contactName = row.contact_name || row.customer_name || row.company_name || "-";
+    const parsedRemark = parseBillingRemark(row.order_remark);
+    const metaPhone = String(parsedRemark.meta.recipientPhone || "").trim();
     const fallbackPhone =
       customerPhoneMap.get(normalizeCustomerKey(row.customer_name)) ||
       customerPhoneMap.get(normalizeCustomerKey(row.company_name)) ||
       customerPhoneMap.get(normalizeCustomerKey(row.contact_name)) ||
       "";
-    const resolvedPhone = String(row.contact_phone || "").trim() || fallbackPhone;
-    const parsedRemark = parseBillingRemark(row.order_remark);
+    const resolvedPhone = metaPhone || String(row.contact_phone || "").trim() || fallbackPhone;
     orderMap.set(row.order_no, {
       id: row.id,
       companyName,
@@ -462,7 +463,7 @@ export default async function BillingPage({
       warehouseText: FIXED_WAREHOUSE,
       shippingMethodText: parsedRemark.meta.shippingMethod,
       recipientNameText: parsedRemark.meta.recipientName || contactName,
-      recipientPhoneText: parsedRemark.meta.recipientPhone || resolvedPhone || "",
+      recipientPhoneText: metaPhone || resolvedPhone || "",
       carrierCompanyText: parsedRemark.meta.carrierCompany,
       paymentTermText: parsedRemark.meta.paymentTerm,
       generatedAtText: parsedRemark.meta.generatedAt,
