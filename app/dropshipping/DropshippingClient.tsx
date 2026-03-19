@@ -702,6 +702,7 @@ export function DropshippingClient({
   const [customerFilter, setCustomerFilter] = useState("all");
   const [inventoryCustomerFilter, setInventoryCustomerFilter] = useState("all");
   const [inventoryPage, setInventoryPage] = useState(1);
+  const [orderPage, setOrderPage] = useState(1);
   const [shippedAtSortDirection, setShippedAtSortDirection] = useState<"asc" | "desc">("asc");
   const [expandedTrackingNos, setExpandedTrackingNos] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "shipped" | "cancelled">("all");
@@ -747,6 +748,7 @@ export function DropshippingClient({
   const proofInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const financePreviewPageSize = 10;
   const inventoryPageSize = 11;
+  const orderPageSize = 10;
 
   useEffect(() => {
     setLang(getClientLang());
@@ -1193,6 +1195,21 @@ export function DropshippingClient({
       return true;
     });
   }, [sortedOrders]);
+
+  const orderTotalPages = Math.max(1, Math.ceil(visibleSortedOrders.length / orderPageSize));
+  const orderCurrentPage = Math.min(orderPage, orderTotalPages);
+  const pagedVisibleOrders = visibleSortedOrders.slice(
+    (orderCurrentPage - 1) * orderPageSize,
+    orderCurrentPage * orderPageSize,
+  );
+
+  useEffect(() => {
+    setOrderPage(1);
+  }, [keyword, customerFilter, statusFilter, settlementFilter, shippedAtSortDirection]);
+
+  useEffect(() => {
+    setOrderPage((prev) => Math.min(prev, orderTotalPages));
+  }, [orderTotalPages]);
 
   const orderGroupedOrders = useMemo(() => {
     const grouped = new Map<string, DsOrderRow[]>();
@@ -3227,7 +3244,8 @@ export function DropshippingClient({
               }
             />
           ) : (
-              <div className="max-h-[calc(100vh-250px)] overflow-auto">
+            <>
+              <div className="overflow-x-auto">
               <table className="min-w-full table-auto border-separate border-spacing-0">
                 <thead className="sticky top-0 z-20 bg-slate-50 shadow-[0_1px_0_0_rgba(148,163,184,0.18)]">
                   <tr className="bg-slate-50 text-left text-sm text-slate-700">
@@ -3259,7 +3277,7 @@ export function DropshippingClient({
                   </tr>
                 </thead>
                 <tbody className="text-[13px] text-slate-700">
-                  {visibleSortedOrders.map((row) => {
+                  {pagedVisibleOrders.map((row) => {
                     const meta = visibleTrackingDisplayMeta.get(row.id);
                     const tracking = row.trackingNo.trim();
                     const groupKey = row.trackingGroupId?.trim().toLowerCase() || "";
@@ -3477,7 +3495,52 @@ export function DropshippingClient({
                   })}
                 </tbody>
               </table>
-            </div>
+              </div>
+              <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-xs text-slate-500">
+                <span>
+                  {lang === "zh"
+                    ? `共 ${filteredOrderCount} 条订单记录`
+                    : `${filteredOrderCount} registros`}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOrderPage(1)}
+                    disabled={orderCurrentPage <= 1}
+                    className="inline-flex h-7 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {lang === "zh" ? "第一页" : "Primera"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOrderPage((prev) => Math.max(1, prev - 1))}
+                    disabled={orderCurrentPage <= 1}
+                    className="inline-flex h-7 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {lang === "zh" ? "上一页" : "Anterior"}
+                  </button>
+                  <span className="inline-flex h-7 min-w-[72px] items-center justify-center rounded-lg bg-primary px-3 font-medium text-white">
+                    {orderCurrentPage} / {orderTotalPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setOrderPage((prev) => Math.min(orderTotalPages, prev + 1))}
+                    disabled={orderCurrentPage >= orderTotalPages}
+                    className="inline-flex h-7 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {lang === "zh" ? "下一页" : "Siguiente"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOrderPage(orderTotalPages)}
+                    disabled={orderCurrentPage >= orderTotalPages}
+                    className="inline-flex h-7 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {lang === "zh" ? "最后一页" : "Ultima"}
+                  </button>
+                </div>
+              </div>
+            </>
           )}
         </TableCard>
       ) : null}
