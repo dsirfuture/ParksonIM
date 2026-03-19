@@ -721,6 +721,7 @@ export function DropshippingClient({
   const [inventoryKeyword, setInventoryKeyword] = useState("");
   const [customerFilter, setCustomerFilter] = useState("all");
   const [inventoryCustomerFilter, setInventoryCustomerFilter] = useState("all");
+  const [inventoryStockFilter, setInventoryStockFilter] = useState<"all" | "stocked" | "unstocked">("all");
   const [inventoryPage, setInventoryPage] = useState(1);
   const [orderPage, setOrderPage] = useState(1);
   const [shippedAtSortDirection, setShippedAtSortDirection] = useState<"asc" | "desc">("asc");
@@ -1232,15 +1233,19 @@ export function DropshippingClient({
     const normalized = inventoryKeyword.trim().toLowerCase();
     return inventory.filter((row) => {
       const customerHit = inventoryCustomerFilter === "all" || row.customerName === inventoryCustomerFilter;
+      const stockHit =
+        inventoryStockFilter === "all"
+        || (inventoryStockFilter === "stocked" && row.isStocked)
+        || (inventoryStockFilter === "unstocked" && !row.isStocked);
       const keywordHit =
         !normalized ||
         [row.customerName, row.sku, row.productNameZh, row.productNameEs]
           .join(" ")
           .toLowerCase()
           .includes(normalized);
-      return customerHit && keywordHit;
+      return customerHit && stockHit && keywordHit;
     });
-  }, [inventory, inventoryCustomerFilter, inventoryKeyword]);
+  }, [inventory, inventoryCustomerFilter, inventoryKeyword, inventoryStockFilter]);
 
   const inventoryTotalPages = Math.max(1, Math.ceil(filteredInventory.length / inventoryPageSize));
   const inventoryCurrentPage = Math.min(inventoryPage, inventoryTotalPages);
@@ -3635,9 +3640,18 @@ export function DropshippingClient({
                   value={inventoryKeyword}
                   onChange={(event) => setInventoryKeyword(event.target.value)}
                   placeholder={lang === "zh" ? "搜索编码 / 中文名" : "Buscar codigo / nombre"}
-                  className="h-10 w-full rounded-xl bg-transparent pl-3 pr-32 text-sm text-slate-700 outline-none"
+                  className="h-10 w-full rounded-xl bg-transparent pl-3 pr-56 text-sm text-slate-700 outline-none"
                 />
                 <div className="absolute inset-y-1 right-1 flex items-center border-l border-slate-200 pl-1.5">
+                  <select
+                    value={inventoryStockFilter}
+                    onChange={(event) => setInventoryStockFilter(event.target.value as "all" | "stocked" | "unstocked")}
+                    className="h-8 min-w-[96px] appearance-none rounded-lg bg-transparent px-3 pr-8 text-sm text-slate-700 outline-none transition"
+                  >
+                    <option value="all">{lang === "zh" ? "备货" : "Stock"}</option>
+                    <option value="stocked">{lang === "zh" ? "已备货" : "Con stock"}</option>
+                    <option value="unstocked">{lang === "zh" ? "无备货" : "Sin stock"}</option>
+                  </select>
                   <select
                     value={inventoryCustomerFilter}
                     onChange={(event) => setInventoryCustomerFilter(event.target.value)}
