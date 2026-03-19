@@ -55,26 +55,6 @@ function isExcludedCustomerName(value: string | null | undefined) {
   return normalizeText(value) === "百盛供应链 Parkson";
 }
 
-function buildVisibleCustomerSignature(input: {
-  registeredPhone: string;
-  companyName: string;
-  relationName: string;
-  regionName: string;
-  lastVisitedAtText: string;
-  lastOrderAtText: string;
-}) {
-  return [
-    input.registeredPhone,
-    input.companyName,
-    input.relationName,
-    input.regionName,
-    input.lastVisitedAtText,
-    input.lastOrderAtText,
-  ]
-    .map((value) => normalizeText(value).toLowerCase())
-    .join("::");
-}
-
 export default async function YgCustomersPage() {
   const session = await getSession();
   if (!session) {
@@ -209,41 +189,7 @@ export default async function YgCustomersPage() {
     };
   });
 
-  const dedupedRows = Array.from(
-    rows.reduce((map, row) => {
-      const signature = buildVisibleCustomerSignature({
-        registeredPhone: row.registeredPhone,
-        companyName: row.companyName,
-        relationName: row.relationName,
-        regionName: row.regionName,
-        lastVisitedAtText: row.lastVisitedAtText,
-        lastOrderAtText: row.lastOrderAtText,
-      });
-      const existing = map.get(signature);
-      if (!existing) {
-        map.set(signature, row);
-        return map;
-      }
-
-      const mergedDetailRows = Array.from(
-        [...existing.detailRows, ...row.detailRows].reduce((detailMap, detail) => {
-          detailMap.set(`${detail.orderNo}::${detail.orderDateText}`, detail);
-          return detailMap;
-        }, new Map<string, (typeof row.detailRows)[number]>()),
-      ).map(([, detail]) => detail);
-
-      const mergedAmount = mergedDetailRows.reduce((sum, detail) => sum + Number(detail.orderAmountText || 0), 0);
-      map.set(signature, {
-        ...existing,
-        detailRows: mergedDetailRows,
-        totalOrderCount: mergedDetailRows.length,
-        totalOrderAmountText: moneyText(mergedAmount),
-      });
-      return map;
-    }, new Map<string, (typeof rows)[number]>()),
-  ).map(([, row]) => row);
-
-  const sortedRows = dedupedRows.sort((left, right) => {
+  const sortedRows = rows.sort((left, right) => {
     return right.totalOrderCount - left.totalOrderCount || right.syncedAtText.localeCompare(left.syncedAtText);
   });
 

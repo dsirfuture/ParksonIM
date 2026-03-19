@@ -216,21 +216,6 @@ export async function POST(request: Request) {
       upsertedCount += 1;
     }
 
-    const currentSyncTime = rawCustomers
-      .map((item) => dateOrNull(item.synced_at) || dateOrNull(item.syncedAt))
-      .find(Boolean);
-    if (currentSyncTime) {
-      await prisma.ygCustomerImport.deleteMany({
-        where: {
-          tenant_id: tenantId,
-          company_id: companyId,
-          NOT: {
-            synced_at: currentSyncTime,
-          },
-        },
-      });
-    }
-
     return NextResponse.json({
       ok: true,
       summary: {
