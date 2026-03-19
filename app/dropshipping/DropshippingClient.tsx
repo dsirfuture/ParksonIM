@@ -3520,7 +3520,7 @@ export function DropshippingClient({
                     {lang === "zh" ? "上一页" : "Anterior"}
                   </button>
                   <span className="inline-flex h-7 min-w-[72px] items-center justify-center rounded-lg bg-primary px-3 font-medium text-white">
-                    {orderCurrentPage} / {orderTotalPages}
+                    {orderCurrentPage}/{orderTotalPages}
                   </span>
                   <button
                     type="button"
