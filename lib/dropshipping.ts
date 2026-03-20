@@ -1217,6 +1217,12 @@ export async function getInventoryRows(session: Session) {
   const assignedInventoryIds = new Set<string>();
   const assignedOrderByInventoryId = new Map<string, string>();
   const assignedShippedQtyByInventoryId = new Map<string, number>();
+  const totalShippedQtyByPair = new Map<string, number>();
+
+  for (const row of shippedOrders) {
+    const pairKey = `${row.customer_id}::${row.product_id}`;
+    totalShippedQtyByPair.set(pairKey, (totalShippedQtyByPair.get(pairKey) || 0) + row.quantity);
+  }
 
   for (const row of shippedOrders) {
     const pairKey = `${row.customer_id}::${row.product_id}`;
@@ -1263,6 +1269,13 @@ export async function getInventoryRows(session: Session) {
   return shippedOrders.map((row): DsInventoryRow => {
     const pairKey = `${row.customer_id}::${row.product_id}`;
     const pairInventories = inventoriesByPair.get(pairKey) || [];
+    const totalStockedQtyForPair = pairInventories
+      .filter((entry) => entry.is_stocked)
+      .reduce((sum, entry) => sum + entry.stocked_qty, 0);
+    const aggregateRemainingQty = Math.max(
+      totalStockedQtyForPair - (totalShippedQtyByPair.get(pairKey) || 0),
+      0,
+    );
     const linkedInventory = pairInventories.find((entry) => entry.linked_order_id === row.id) || null;
     const assignedInventory =
       linkedInventory
@@ -1277,7 +1290,7 @@ export async function getInventoryRows(session: Session) {
       || null;
     const remainingQty = assignedInventory
       ? assignedInventory.stocked_qty - (assignedShippedQtyByInventoryId.get(assignedInventory.id) || 0)
-      : 0;
+      : aggregateRemainingQty;
     const normalizedSku = normalizeProductCode(row.product.sku);
     const catalog = catalogBySku.get(normalizedSku);
     const yogoSource = yogoSourceBySku.get(normalizedSku);
@@ -1320,7 +1333,7 @@ export async function getInventoryRows(session: Session) {
       unitPrice,
       discountRate,
       stockAmount: showsStockDetails ? computeStockAmount(unitPrice, assignedInventory?.stocked_qty ?? 0, discountRate) : 0,
-      status: deriveInventoryStatus(remainingQty),
+      status: deriveInventoryStatus(Math.max(remainingQty, 0)),
     };
   });
 }
