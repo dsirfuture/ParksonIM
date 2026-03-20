@@ -841,6 +841,8 @@ export function DropshippingClient({
   const [importProgress, setImportProgress] = useState<number | null>(null);
   const [importSummary, setImportSummary] = useState<string>("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [recentSavedInventorySku, setRecentSavedInventorySku] = useState("");
   const [previewImage, setPreviewImage] = useState<{ src: string; title: string; fallbackSources?: string[] } | null>(null);
   const [failedInventoryImages, setFailedInventoryImages] = useState<string[]>([]);
   const [failedFinanceImages, setFailedFinanceImages] = useState<string[]>([]);
@@ -926,6 +928,15 @@ export function DropshippingClient({
   useEffect(() => {
     setInventoryPage(1);
   }, [inventoryCustomerFilter, inventoryKeyword]);
+
+  useEffect(() => {
+    if (!success && !recentSavedInventorySku) return;
+    const timer = window.setTimeout(() => {
+      setSuccess("");
+      setRecentSavedInventorySku("");
+    }, 5000);
+    return () => window.clearTimeout(timer);
+  }, [recentSavedInventorySku, success]);
 
   useEffect(() => {
     if (!inventoryEdit || inventoryEdit.mode !== "create") return;
@@ -2786,10 +2797,13 @@ export function DropshippingClient({
     try {
       setSaving(true);
       setError("");
+      setSuccess("");
       const stockedQty = inventoryEdit.isStocked ? Number(inventoryEdit.stockedQty || 0) : 0;
       const unitPrice = inventoryEdit.unitPrice.trim();
       const discountRate = inventoryEdit.discountRate.trim();
       const stockedAt = inventoryEdit.stockedAt.trim();
+      const savedSku = inventoryEdit.sku;
+      const savedQtyText = inventoryEdit.isStocked ? `${stockedQty}` : "0";
       if (inventoryEdit.mode === "create") {
         if (!inventoryEdit.customerId && !inventoryEdit.sku) {
           throw new Error(lang === "zh" ? "请选择客户和产品" : "Selecciona cliente y producto");
@@ -2832,6 +2846,14 @@ export function DropshippingClient({
       setInventoryEdit(null);
       setInventoryProductQuery("");
       setInventoryProductOptions([]);
+      setInventoryKeyword(savedSku);
+      setInventoryPage(1);
+      setRecentSavedInventorySku(savedSku);
+      setSuccess(
+        lang === "zh"
+          ? `备货已保存：${savedSku} × ${savedQtyText}`
+          : `Stock guardado: ${savedSku} × ${savedQtyText}`,
+      );
       await refreshData(["inventory", "overview"]);
     } catch (editError) {
       setError(editError instanceof Error ? editError.message : "save_failed");
@@ -3007,6 +3029,9 @@ export function DropshippingClient({
     <section className="-mt-[2px] space-y-4">
       {error ? (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">{error}</div>
+      ) : null}
+      {success ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div>
       ) : null}
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -4132,7 +4157,12 @@ export function DropshippingClient({
                 </thead>
                 <tbody>
                   {pagedInventory.map((row) => (
-                    <tr key={row.rowKey} className="border-t border-slate-100">
+                    <tr
+                      key={row.rowKey}
+                      className={`border-t border-slate-100 ${
+                        recentSavedInventorySku && row.sku === recentSavedInventorySku ? "bg-emerald-50/70" : ""
+                      }`}
+                    >
                       <td className="px-4 py-2 text-sm text-slate-700">
                         <div className="flex min-h-8 items-center justify-start">
                           {row.productImageUrl && !failedInventoryImages.includes(row.rowKey) ? (
