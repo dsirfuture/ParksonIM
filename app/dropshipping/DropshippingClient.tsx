@@ -4518,17 +4518,14 @@ export function DropshippingClient({
 
               <label className="hidden space-y-1 md:col-span-1 md:order-4">
                 <span className="whitespace-nowrap text-xs text-slate-500">{text.form.sku}</span>
-                <input
-                  type="text"
-                  value={form.sku}
-                  onChange={(event) => {
-                    setProductFieldsLocked(false);
-                    setForm((prev) => ({ ...prev, sku: event.target.value }));
-                  }}
-                  disabled={productFieldsLocked}
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
-                />
-              </label>
+                  <input
+                    type="text"
+                    value={form.sku}
+                    onChange={(event) => handleOrderSkuChange(event.target.value)}
+                    disabled={productFieldsLocked}
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                  />
+                </label>
 
               <label className="hidden space-y-1 md:col-span-4 md:order-5">
                 <span className="whitespace-nowrap text-xs text-slate-500">{lang === "zh" ? "中文名" : text.form.productZh}</span>
