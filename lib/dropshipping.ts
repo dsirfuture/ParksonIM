@@ -1226,7 +1226,6 @@ export async function getInventoryRows(session: Session) {
   const assignedShippedQtyByInventoryId = new Map<string, number>();
   const remainingCapacityByInventoryId = new Map<string, number>();
   const totalShippedQtyByPair = new Map<string, number>();
-  const totalShippedOrderCountByPair = new Map<string, number>();
 
   for (const inventory of inventories) {
     remainingCapacityByInventoryId.set(inventory.id, inventory.is_stocked ? inventory.stocked_qty : 0);
@@ -1238,7 +1237,6 @@ export async function getInventoryRows(session: Session) {
   for (const row of shippedOrders) {
     const pairKey = `${row.customer_id}::${row.product_id}`;
     totalShippedQtyByPair.set(pairKey, (totalShippedQtyByPair.get(pairKey) || 0) + row.quantity);
-    totalShippedOrderCountByPair.set(pairKey, (totalShippedOrderCountByPair.get(pairKey) || 0) + 1);
   }
 
   for (const row of shippedOrders) {
@@ -1300,9 +1298,9 @@ export async function getInventoryRows(session: Session) {
     const pairKey = `${row.customer_id}::${row.product_id}`;
     const pairInventories = inventoriesByPair.get(pairKey) || [];
     const totalStockedQtyForPair = pairInventories
-      .filter((entry) => entry.is_stocked && entry.stocked_qty > 0)
+      .filter((entry) => entry.is_stocked)
       .reduce((sum, entry) => sum + entry.stocked_qty, 0);
-    const stockedInventoriesForPair = pairInventories.filter((entry) => entry.is_stocked && entry.stocked_qty > 0);
+    const stockedInventoriesForPair = pairInventories.filter((entry) => entry.is_stocked);
     const aggregateRemainingQty = Math.max(
       totalStockedQtyForPair - (totalShippedQtyByPair.get(pairKey) || 0),
       0,
@@ -1339,28 +1337,7 @@ export async function getInventoryRows(session: Session) {
     const stockedAt = assignedInventory?.stocked_at?.toISOString() || null;
     const shippedAt = row.shipped_at?.toISOString() || null;
     const assignedOrderId = assignedInventory ? assignedOrderByInventoryId.get(assignedInventory.id) : null;
-    const pooledDisplay = (totalShippedOrderCountByPair.get(pairKey) || 0) === 1 && stockedInventoriesForPair.length > 0;
-    const aggregateStockAmount = stockedInventoriesForPair.reduce((sum, entry) => {
-      const entryUnitPrice = pickPreferredNumber(
-        toOptionalNumber(entry.locked_unit_price),
-        unitPrice,
-      );
-      const entryRawDiscountRate = pickPreferredNumber(
-        toOptionalNumber(entry.locked_discount_rate),
-        rawDiscountRate,
-      );
-      const entryDiscountRate = Math.abs(entryRawDiscountRate) <= 1 ? entryRawDiscountRate : entryRawDiscountRate / 100;
-      return sum + computeStockAmount(entryUnitPrice, entry.stocked_qty, entryDiscountRate);
-    }, 0);
-    const pooledStockedAt = stockedInventoriesForPair[0]?.stocked_at?.toISOString() || null;
-    const showsStockDetails = pooledDisplay || (Boolean(assignedInventory?.is_stocked) && assignedOrderId === row.id);
-    const displayStockedQty = pooledDisplay
-      ? totalStockedQtyForPair
-      : (assignedInventory?.stocked_qty ?? editableInventory?.stocked_qty ?? 0);
-    const displayStockAmount = pooledDisplay
-      ? aggregateStockAmount
-      : computeStockAmount(unitPrice, assignedInventory?.stocked_qty ?? 0, discountRate);
-    const displayStockedAt = pooledDisplay ? pooledStockedAt : stockedAt;
+    const showsStockDetails = Boolean(assignedInventory?.is_stocked) && assignedOrderId === row.id;
     return {
       orderId: row.id,
       inventoryId: editableInventory?.id || null,
@@ -1371,17 +1348,17 @@ export async function getInventoryRows(session: Session) {
       productNameZh: stripTrailingUnitPrice(catalog?.name_zh?.trim() || row.product.name_zh),
       productNameEs: catalog?.name_es?.trim() || row.product.name_es || "",
       productImageUrl: row.product.image_url || buildProductImageUrl(matchedSku, "jpg"),
-      stockedAt: showsStockDetails ? displayStockedAt : null,
+      stockedAt: showsStockDetails ? stockedAt : null,
       shippedAt,
       trackingNo: row.tracking_no || "",
       warehouse: editableInventory?.warehouse || row.warehouse || row.product.default_warehouse || "",
       isStocked: showsStockDetails,
-      stockedQty: displayStockedQty,
+      stockedQty: assignedInventory?.stocked_qty ?? editableInventory?.stocked_qty ?? 0,
       shippedQty: row.quantity,
       remainingQty,
       unitPrice,
       discountRate,
-      stockAmount: showsStockDetails ? displayStockAmount : 0,
+      stockAmount: showsStockDetails ? computeStockAmount(unitPrice, assignedInventory?.stocked_qty ?? 0, discountRate) : 0,
       status: deriveInventoryStatus(Math.max(aggregateRemainingQty, 0)),
     };
   });
