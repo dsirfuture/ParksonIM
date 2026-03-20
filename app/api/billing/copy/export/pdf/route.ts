@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import {
-  buildBillingExportBaseName,
-  buildBillingXlsx,
+  buildBillingPdf,
+  buildBillingPdfFileName,
   type BillingExportData,
   type BillingExportItem,
 } from "@/lib/billing-export";
@@ -110,14 +110,13 @@ export async function POST(request: Request) {
       generatedAtText: "",
     };
 
-    const buffer = await buildBillingXlsx(data);
-    const fileName = `${buildBillingExportBaseName(data)}.xlsx`;
+    const buffer = await buildBillingPdf(data);
+    const fileName = `${buildBillingPdfFileName(data)}.pdf`;
 
     return new NextResponse(Buffer.from(buffer), {
       status: 200,
       headers: {
-        "Content-Type":
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename=\"${encodeURIComponent(fileName)}\"`,
       },
     });

@@ -433,7 +433,7 @@ export function BillingClient({
     });
   }
 
-  async function exportCopyXlsx() {
+  async function exportCopy(kind: "xlsx" | "pdf") {
     if (!copyState) return;
     setCopyingExport(true);
     setCopyExportError("");
@@ -448,7 +448,7 @@ export function BillingClient({
         normalDiscount: item.normalDiscount,
         vipDiscount: item.vipDiscount,
       }));
-      const res = await fetch("/api/billing/copy/export/xlsx", {
+      const res = await fetch(`/api/billing/copy/export/${kind}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -472,7 +472,7 @@ export function BillingClient({
         }),
       });
       if (!res.ok) {
-        let message = "导出复制账单失败";
+        let message = kind === "pdf" ? "导出复制账单 PDF 失败" : "导出复制账单 XLSX 失败";
         try {
           const data = await res.json();
           if (data?.error) message = data.error;
@@ -482,7 +482,7 @@ export function BillingClient({
       const blob = await res.blob();
       const contentDisposition = res.headers.get("Content-Disposition") || "";
       const matchedName = contentDisposition.match(/filename=\"?([^\";]+)\"?/i)?.[1];
-      const fileName = matchedName ? decodeURIComponent(matchedName) : `${copyState.orderNo}-copy.xlsx`;
+      const fileName = matchedName ? decodeURIComponent(matchedName) : `${copyState.orderNo}.${kind}`;
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -492,7 +492,13 @@ export function BillingClient({
       anchor.remove();
       URL.revokeObjectURL(url);
     } catch (error) {
-      setCopyExportError(error instanceof Error ? error.message : "导出复制账单失败");
+      setCopyExportError(
+        error instanceof Error
+          ? error.message
+          : kind === "pdf"
+            ? "导出复制账单 PDF 失败"
+            : "导出复制账单 XLSX 失败",
+      );
     } finally {
       setCopyingExport(false);
     }
@@ -992,7 +998,8 @@ export function BillingClient({
             </div>
             <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-4">
               <button type="button" onClick={() => setCopyState(null)} className="h-10 rounded-xl border border-slate-200 px-4 text-sm text-slate-600 hover:bg-slate-50">取消</button>
-              <button type="button" onClick={exportCopyXlsx} disabled={copyingExport} className="h-10 rounded-xl bg-primary px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{copyingExport ? "导出中..." : "导出复制账单 XLSX"}</button>
+              <button type="button" onClick={() => exportCopy("xlsx")} disabled={copyingExport} className="h-10 rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60">导出复制账单 XLSX</button>
+              <button type="button" onClick={() => exportCopy("pdf")} disabled={copyingExport} className="h-10 rounded-xl bg-primary px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{copyingExport ? "导出中..." : "导出复制账单 PDF"}</button>
             </div>
           </div>
         </div>
