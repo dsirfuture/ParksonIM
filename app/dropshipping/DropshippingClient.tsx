@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type ReactNode, type SetStateAction } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { ProductImage } from "@/components/product-image";
@@ -404,6 +404,20 @@ function attachmentDisplayName(fileName?: string | null, lang?: "zh" | "es") {
   return dotIndex > 0 ? normalized.slice(dotIndex + 1).toUpperCase() : normalized;
 }
 
+function extractDroppedAttachmentFile(dataTransfer: DataTransfer | null) {
+  if (!dataTransfer) return null;
+  const itemFiles = Array.from(dataTransfer.items || [])
+    .filter((item) => item.kind === "file")
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => Boolean(file));
+  const files = itemFiles.length > 0 ? itemFiles : Array.from(dataTransfer.files || []);
+  return files.find((file) => {
+    const mime = String(file.type || "").toLowerCase();
+    const name = String(file.name || "").toLowerCase();
+    return mime.startsWith("image/") || mime.includes("pdf") || name.endsWith(".pdf");
+  }) || null;
+}
+
 function buildAttachmentSlotsFromExisting(attachments: DsOrderAttachment[]) {
   const slots = attachments
     .slice(0, ATTACHMENT_SLOT_COUNT)
@@ -745,6 +759,7 @@ export function DropshippingClient({
   const [proofFiles, setProofFiles] = useState<File[]>([]);
   const [labelSlots, setLabelSlots] = useState<AttachmentSlotState[]>(() => createEmptyAttachmentSlots());
   const [proofSlots, setProofSlots] = useState<AttachmentSlotState[]>(() => createEmptyAttachmentSlots());
+  const [draggingAttachmentSlot, setDraggingAttachmentSlot] = useState<string | null>(null);
   const [labelSlotsDirty, setLabelSlotsDirty] = useState(false);
   const [proofSlotsDirty, setProofSlotsDirty] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -1421,6 +1436,24 @@ export function DropshippingClient({
       return next;
     });
     setProofSlotsDirty(true);
+  }
+
+  function handleAttachmentDragOver(event: DragEvent<HTMLDivElement>, type: "label" | "proof", slotIndex: number) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setDraggingAttachmentSlot(`${type}-${slotIndex}`);
+  }
+
+  function handleAttachmentDragLeave(type: "label" | "proof", slotIndex: number) {
+    setDraggingAttachmentSlot((prev) => (prev === `${type}-${slotIndex}` ? null : prev));
+  }
+
+  function handleAttachmentDrop(event: DragEvent<HTMLDivElement>, type: "label" | "proof", slotIndex: number) {
+    event.preventDefault();
+    setDraggingAttachmentSlot(null);
+    const file = extractDroppedAttachmentFile(event.dataTransfer);
+    if (!file) return;
+    updateAttachmentSlot(type, slotIndex, file);
   }
 
   function previewAttachmentSlot(slot: AttachmentSlotState, type: "label" | "proof", slotIndex: number) {
@@ -2221,6 +2254,8 @@ export function DropshippingClient({
   }
 
   function renderAttachmentSlot(slot: AttachmentSlotState, type: "label" | "proof", slotIndex: number) {
+    const slotKey = `${type}-${slotIndex}`;
+    const isDragActive = draggingAttachmentSlot === slotKey;
     const isEmpty = slot.kind === "empty";
     const previewUrl = slot.kind === "existing"
       ? slot.attachment.fileUrl
@@ -2250,7 +2285,13 @@ export function DropshippingClient({
     return (
       <div
         key={`${type}-${slotIndex}`}
-        className={`relative rounded-xl border border-slate-200 bg-white ${isEmpty ? "p-0" : "p-2.5"}`}
+        onDragOver={(event) => handleAttachmentDragOver(event, type, slotIndex)}
+        onDragEnter={(event) => handleAttachmentDragOver(event, type, slotIndex)}
+        onDragLeave={() => handleAttachmentDragLeave(type, slotIndex)}
+        onDrop={(event) => handleAttachmentDrop(event, type, slotIndex)}
+        className={`relative rounded-xl border bg-white transition ${
+          isDragActive ? "border-primary ring-2 ring-primary/15" : "border-slate-200"
+        } ${isEmpty ? "p-0" : "p-2.5"}`}
       >
         <button
           type="button"
@@ -2262,7 +2303,11 @@ export function DropshippingClient({
           {isEmpty ? (
             <>
               <span className="text-lg leading-none">+</span>
-              <span className="text-[11px] font-medium">{lang === "zh" ? "添加附件" : "Agregar"}</span>
+              <span className="text-[11px] font-medium">
+                {isDragActive
+                  ? (lang === "zh" ? "松开上传" : "Soltar para subir")
+                  : (lang === "zh" ? "添加附件" : "Agregar")}
+              </span>
             </>
           ) : isImage ? (
             <span className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-lg">
