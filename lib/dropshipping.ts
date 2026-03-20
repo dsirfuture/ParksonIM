@@ -1272,6 +1272,7 @@ export async function getInventoryRows(session: Session) {
     const totalStockedQtyForPair = pairInventories
       .filter((entry) => entry.is_stocked)
       .reduce((sum, entry) => sum + entry.stocked_qty, 0);
+    const stockedInventoriesForPair = pairInventories.filter((entry) => entry.is_stocked);
     const aggregateRemainingQty = Math.max(
       totalStockedQtyForPair - (totalShippedQtyByPair.get(pairKey) || 0),
       0,
@@ -1288,7 +1289,11 @@ export async function getInventoryRows(session: Session) {
       || pairInventories[0]
       || null;
     const remainingQty = assignedInventory
-      ? assignedInventory.stocked_qty - (assignedShippedQtyByInventoryId.get(assignedInventory.id) || 0)
+      ? (
+        stockedInventoriesForPair.length === 1
+          ? aggregateRemainingQty
+          : assignedInventory.stocked_qty - (assignedShippedQtyByInventoryId.get(assignedInventory.id) || 0)
+      )
       : aggregateRemainingQty;
     const normalizedSku = normalizeProductCode(row.product.sku);
     const catalog = catalogBySku.get(normalizedSku);
