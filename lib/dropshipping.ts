@@ -1308,13 +1308,7 @@ export async function getInventoryRows(session: Session) {
       || pairInventories.find((entry) => !entry.linked_order_id)
       || pairInventories[0]
       || null;
-    const remainingQty = assignedInventory
-      ? (
-        stockedInventoriesForPair.length === 1
-          ? aggregateRemainingQty
-          : assignedInventory.stocked_qty - (assignedShippedQtyByInventoryId.get(assignedInventory.id) || 0)
-      )
-      : aggregateRemainingQty;
+    const remainingQty = aggregateRemainingQty;
     const normalizedSku = normalizeProductCode(row.product.sku);
     const catalog = catalogBySku.get(normalizedSku);
     const yogoSource = yogoSourceBySku.get(normalizedSku);
@@ -1357,7 +1351,7 @@ export async function getInventoryRows(session: Session) {
       unitPrice,
       discountRate,
       stockAmount: showsStockDetails ? computeStockAmount(unitPrice, assignedInventory?.stocked_qty ?? 0, discountRate) : 0,
-      status: deriveInventoryStatus(Math.max(remainingQty, 0)),
+      status: deriveInventoryStatus(Math.max(aggregateRemainingQty, 0)),
     };
   });
 }
