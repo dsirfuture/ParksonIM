@@ -5163,11 +5163,20 @@ export function DropshippingClient({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
           <div className="w-full max-w-[920px] rounded-xl bg-white shadow-2xl">
             <div className="border-b border-slate-200 px-5 py-4">
-              <h3 className="text-base font-semibold text-slate-900">
-                {inventoryShippedPreview.mode === "related"
-                  ? (lang === "zh" ? "相关发货记录" : "Pedidos enviados relacionados")
-                  : (lang === "zh" ? "已发记录" : "Registros enviados")}
-              </h3>
+              <div className="flex items-center justify-between gap-4">
+                <h3 className="text-base font-semibold text-slate-900">
+                  {inventoryShippedPreview.mode === "related"
+                    ? (lang === "zh" ? "相关发货记录" : "Pedidos enviados relacionados")
+                    : (lang === "zh" ? "已发记录" : "Registros enviados")}
+                </h3>
+                {inventoryShippedPreview.mode === "related" ? (
+                  <p className="text-xs text-slate-500">
+                    {lang === "zh" ? "共：" : "Total: "}
+                    <span className="font-semibold text-slate-700">{shippedOrdersForInventoryPreview.length}</span>
+                    {lang === "zh" ? "次发货" : " envios"}
+                  </p>
+                ) : null}
+              </div>
               <p className="mt-1 text-xs text-slate-500">
                 {inventoryShippedPreview.customerName} / {inventoryShippedPreview.sku} / {inventoryShippedPreview.productNameZh || "-"}
               </p>
