@@ -315,9 +315,10 @@ function fmtYuanMoney(value: number, lang: "zh" | "es") {
 
 function fmtDualCurrencyFromCny(value: number, rateValue: number | null | undefined, lang: "zh" | "es") {
   const mxnValue = rateValue && Number.isFinite(rateValue) && rateValue > 0 ? value / rateValue : null;
-  const mxnText = mxnValue === null ? "-" : `$ ${fmtMoney(mxnValue, lang)}`;
-  const cnyText = `￥ ${fmtMoney(value, lang)}`;
-  return `${mxnText} | ${cnyText}`;
+  return {
+    mxnText: mxnValue === null ? "-" : `$ ${fmtMoney(mxnValue, lang)}`,
+    cnyText: `￥ ${fmtMoney(value, lang)}`,
+  };
 }
 
 function fmtPercent(value: number, lang: "zh" | "es") {
@@ -801,6 +802,7 @@ export function DropshippingClient({
   const [exchangeRate, setExchangeRate] = useState(initialExchangeRate);
   const [now, setNow] = useState(() => new Date());
   const [overviewRange, setOverviewRange] = useState<OverviewRange>("month");
+  const [overviewCustomerFilter, setOverviewCustomerFilter] = useState("all");
   const [keyword, setKeyword] = useState("");
   const [inventoryKeyword, setInventoryKeyword] = useState("");
   const [customerFilter, setCustomerFilter] = useState("all");
@@ -858,6 +860,15 @@ export function DropshippingClient({
   const financePreviewPageSize = 10;
   const inventoryPageSize = 11;
   const orderPageSize = 10;
+
+  const overviewCustomerOptions = useMemo(() => {
+    const customerMap = new Map<string, string>();
+    for (const row of orders) {
+      if (!row.customerId || !row.customerName) continue;
+      customerMap.set(row.customerId, row.customerName);
+    }
+    return [{ id: "all", name: lang === "zh" ? "全部客户" : "Todos los clientes" }, ...Array.from(customerMap.entries()).map(([id, name]) => ({ id, name }))];
+  }, [lang, orders]);
 
   useEffect(() => {
     setLang(getClientLang());
@@ -1931,6 +1942,7 @@ export function DropshippingClient({
     const seriesMap = new Map(series.map((item) => [item.date, item]));
     const rangedOrders = orders.filter((row) => {
       if (!row.shippedAt) return false;
+      if (overviewCustomerFilter !== "all" && row.customerId !== overviewCustomerFilter) return false;
       const shippedAt = new Date(row.shippedAt);
       return shippedAt >= rangeStart && shippedAt < rangeEnd;
     });
@@ -2103,7 +2115,7 @@ export function DropshippingClient({
         { type: "customer_unsettled" as const, count: unsettledCustomers },
       ],
     };
-  }, [exchangeRate.rateValue, inventory, lang, now, orders, overviewRange]);
+  }, [exchangeRate.rateValue, inventory, lang, now, orders, overviewCustomerFilter, overviewRange]);
   function openCreateModal() {
     setForm({
       ...EMPTY_ORDER_FORM,
@@ -2894,7 +2906,19 @@ export function DropshippingClient({
               <div className="flex items-center justify-between gap-3 border-b border-white/60 px-3.5 py-2.5">
                 <div>
                   <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">{lang === "zh" ? "总览仪表板" : "Dashboard"}</div>
-                  <div className="mt-1 text-xs text-slate-500">{`${overviewDashboard.title} · ${overviewDashboard.summaryLabel}`}</div>
+                  <div className="mt-1">
+                    <select
+                      value={overviewCustomerFilter}
+                      onChange={(event) => setOverviewCustomerFilter(event.target.value)}
+                      className="min-w-0 bg-transparent text-xs text-slate-500 outline-none"
+                    >
+                      {overviewCustomerOptions.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white/90 p-1 text-[10px] font-medium">
                   {([
@@ -2922,23 +2946,42 @@ export function DropshippingClient({
               <div className="grid gap-3 px-3.5 py-3 lg:grid-cols-[minmax(0,1.3fr)_minmax(200px,0.68fr)]">
                 <div className="min-w-0">
                   <div className="text-[1.75rem] font-semibold tracking-tight text-slate-900 sm:text-[1.95rem]">{fmtMoney(overviewDashboard.receivable, lang)}</div>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {lang === "zh"
-                      ? "按所选时间范围查看订单、已发、平台与结算的核心数据。"
-                      : "Consulta pedidos, envios, plataformas y liquidacion segun el rango seleccionado."}
-                  </p>
                   <div className="mt-2.5 grid gap-2 sm:grid-cols-3">
                     <div className="rounded-[18px] border border-white/70 bg-white/85 px-3 py-2">
                       <div className="text-xs text-slate-500">{lang === "zh" ? "客户订单总额" : "Monto total"}</div>
-                      <div className="mt-1 text-lg font-semibold text-slate-900">{fmtDualCurrencyFromCny(overviewDashboard.receivable, exchangeRate.rateValue, lang)}</div>
+                      {(() => {
+                        const amount = fmtDualCurrencyFromCny(overviewDashboard.receivable, exchangeRate.rateValue, lang);
+                        return (
+                          <div className="mt-1">
+                            <div className="text-lg font-semibold text-slate-900">{amount.mxnText}</div>
+                            <div className="text-base font-medium text-slate-400">{amount.cnyText}</div>
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div className="rounded-[18px] border border-white/70 bg-white/85 px-3 py-2">
                       <div className="text-xs text-slate-500">{lang === "zh" ? "结款总额" : "Liquidado"}</div>
-                      <div className="mt-1 text-lg font-semibold text-emerald-600">{fmtDualCurrencyFromCny(overviewDashboard.paid, exchangeRate.rateValue, lang)}</div>
+                      {(() => {
+                        const amount = fmtDualCurrencyFromCny(overviewDashboard.paid, exchangeRate.rateValue, lang);
+                        return (
+                          <div className="mt-1">
+                            <div className="text-lg font-semibold text-emerald-600">{amount.mxnText}</div>
+                            <div className="text-base font-medium text-slate-400">{amount.cnyText}</div>
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div className="rounded-[18px] border border-white/70 bg-white/85 px-3 py-2">
                       <div className="text-xs text-slate-500">{lang === "zh" ? "未结总额" : "Pendiente"}</div>
-                      <div className="mt-1 text-lg font-semibold text-rose-600">{fmtDualCurrencyFromCny(overviewDashboard.pending, exchangeRate.rateValue, lang)}</div>
+                      {(() => {
+                        const amount = fmtDualCurrencyFromCny(overviewDashboard.pending, exchangeRate.rateValue, lang);
+                        return (
+                          <div className="mt-1">
+                            <div className="text-lg font-semibold text-rose-600">{amount.mxnText}</div>
+                            <div className="text-base font-medium text-slate-400">{amount.cnyText}</div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                   <div className="mt-2.5 rounded-[18px] border border-white/70 bg-white/80 p-3">
@@ -3157,15 +3200,39 @@ export function DropshippingClient({
                   <div className="mt-6 grid gap-3 sm:grid-cols-3">
                     <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4 backdrop-blur">
                       <div className="text-xs text-slate-500">{lang === "zh" ? "客户订单总额" : "Monto total"}</div>
-                      <div className="mt-2 text-2xl font-semibold text-slate-900">{fmtDualCurrencyFromCny(overview.stats.totalReceivable, exchangeRate.rateValue, lang)}</div>
+                      {(() => {
+                        const amount = fmtDualCurrencyFromCny(overview.stats.totalReceivable, exchangeRate.rateValue, lang);
+                        return (
+                          <div className="mt-2">
+                            <div className="text-2xl font-semibold text-slate-900">{amount.mxnText}</div>
+                            <div className="text-lg font-medium text-slate-400">{amount.cnyText}</div>
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4 backdrop-blur">
                       <div className="text-xs text-slate-500">{lang === "zh" ? "结款总额" : "Liquidado"}</div>
-                      <div className="mt-2 text-2xl font-semibold text-emerald-600">{fmtDualCurrencyFromCny(overview.stats.totalPaid, exchangeRate.rateValue, lang)}</div>
+                      {(() => {
+                        const amount = fmtDualCurrencyFromCny(overview.stats.totalPaid, exchangeRate.rateValue, lang);
+                        return (
+                          <div className="mt-2">
+                            <div className="text-2xl font-semibold text-emerald-600">{amount.mxnText}</div>
+                            <div className="text-lg font-medium text-slate-400">{amount.cnyText}</div>
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4 backdrop-blur">
                       <div className="text-xs text-slate-500">{lang === "zh" ? "未结总额" : "Pendiente"}</div>
-                      <div className="mt-2 text-2xl font-semibold text-rose-600">{fmtDualCurrencyFromCny(overview.stats.totalUnpaid, exchangeRate.rateValue, lang)}</div>
+                      {(() => {
+                        const amount = fmtDualCurrencyFromCny(overview.stats.totalUnpaid, exchangeRate.rateValue, lang);
+                        return (
+                          <div className="mt-2">
+                            <div className="text-2xl font-semibold text-rose-600">{amount.mxnText}</div>
+                            <div className="text-lg font-medium text-slate-400">{amount.cnyText}</div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                   <div className="mt-6 rounded-[28px] border border-white/70 bg-white/75 p-4 backdrop-blur">
