@@ -42,6 +42,9 @@ type SummaryState = {
 type TextMap = {
   back: string;
   uploadEvidence: string;
+  finishInspection: string;
+  finishingInspection: string;
+  finishInspectionFailed: string;
   supplier: string;
   uploadedAt: string;
   inspectedAt: string;
@@ -91,6 +94,8 @@ type TextMap = {
 type ScanClientProps = {
   receiptId: string;
   receiptNo: string;
+  receiptStatus: ItemStatus;
+  receiptLocked: boolean;
   supplierName: string;
   uploadedAtText: string;
   inspectedAtText: string;
@@ -397,6 +402,8 @@ function getEvidenceSaveEmptyText(text: TextMap) {
 export function ScanClient({
   receiptId,
   receiptNo,
+  receiptStatus,
+  receiptLocked,
   supplierName,
   uploadedAtText,
   inspectedAtText,
@@ -414,6 +421,7 @@ export function ScanClient({
   );
   const [pinnedItemId, setPinnedItemId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [lightbox, setLightbox] = useState<LightboxState>({
     open: false,
     src: "",
@@ -502,6 +510,18 @@ export function ScanClient({
     () => items.some((row) => hasRowScanData(row)),
     [items],
   );
+
+  const canFinishInspection = useMemo(() => {
+    if (receiptLocked || receiptStatus === "completed") return false;
+    if (summary.progress < 80) return false;
+    return summary.diffQtyTotal > 0 || summary.uncheckedQtyTotal > 0;
+  }, [
+    receiptLocked,
+    receiptStatus,
+    summary.diffQtyTotal,
+    summary.progress,
+    summary.uncheckedQtyTotal,
+  ]);
 
   useEffect(() => {
     const value = scanInput.trim();
@@ -1018,6 +1038,32 @@ export function ScanClient({
     }
   }
 
+  async function finishInspection() {
+    try {
+      setCompleting(true);
+
+      const response = await fetch(`/api/receipts/${receiptId}/complete`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      const result = await readJsonSafe(response);
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result?.error || text.finishInspectionFailed);
+      }
+
+      window.location.assign(result?.billingHref || "/billing");
+    } catch (error) {
+      window.alert(
+        error instanceof Error ? error.message : text.finishInspectionFailed,
+      );
+      setCompleting(false);
+    }
+  }
+
   return (
     <div className="space-y-5">
       <section className="rounded-[20px] bg-white p-6 shadow-soft">
@@ -1040,6 +1086,16 @@ export function ScanClient({
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            {canFinishInspection ? (
+              <button
+                type="button"
+                onClick={finishInspection}
+                disabled={completing}
+                className="inline-flex h-10 items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 px-5 text-sm font-semibold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {completing ? text.finishingInspection : text.finishInspection}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={openEvidenceModal}

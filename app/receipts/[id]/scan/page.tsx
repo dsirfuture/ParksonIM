@@ -136,6 +136,9 @@ export default async function ReceiptScanPage({ params }: ScanPageProps) {
       ? {
           back: "返回详情页",
           uploadEvidence: "上传证据",
+          finishInspection: "验货完毕",
+          finishingInspection: "处理中...",
+          finishInspectionFailed: "暂时无法完成验货",
           supplier: "供应商",
           uploadedAt: "文件上传时间",
           inspectedAt: "验货时间",
@@ -186,6 +189,9 @@ export default async function ReceiptScanPage({ params }: ScanPageProps) {
       : {
           back: "Volver al detalle",
           uploadEvidence: "Subir evidencia",
+          finishInspection: "Finalizar inspección",
+          finishingInspection: "Procesando...",
+          finishInspectionFailed: "No se pudo finalizar la inspección",
           supplier: "Proveedor",
           uploadedAt: "Hora de carga del archivo",
           inspectedAt: "Hora de inspección",
@@ -321,6 +327,8 @@ export default async function ReceiptScanPage({ params }: ScanPageProps) {
       <ScanClient
         receiptId={receipt.id}
         receiptNo={receipt.receipt_no}
+        receiptStatus={receipt.status}
+        receiptLocked={receipt.locked}
         supplierName={receipt.supplier_name || text.noSupplier}
         uploadedAtText={formatTime(receipt.created_at, lang)}
         inspectedAtText={formatTime(inspectedAt, lang)}
