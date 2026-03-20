@@ -531,6 +531,13 @@ function OverviewLineChart({
   lineColor?: string;
   fillColor?: string;
 }) {
+  const [hoveredPoint, setHoveredPoint] = useState<{
+    x: number;
+    y: number;
+    label: string;
+    orderCount: number;
+    shippedCount: number;
+  } | null>(null);
   const width = 600;
   const height = 148;
   const paddingX = 16;
@@ -550,7 +557,7 @@ function OverviewLineChart({
   const areaPoints = `${paddingX},${height - paddingY} ${orderPoints} ${paddingX + innerWidth},${height - paddingY}`;
 
   return (
-    <div className="w-full">
+    <div className="relative w-full">
       <svg viewBox={`0 0 ${width} ${height}`} className="h-32 w-full" aria-hidden="true">
         <defs>
           <linearGradient id="ds-overview-area" x1="0" x2="0" y1="0" y2="1">
@@ -560,11 +567,9 @@ function OverviewLineChart({
         </defs>
         {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
           const y = paddingY + innerHeight - innerHeight * ratio;
-          const label = Math.round(maxValue * ratio);
           return (
             <g key={ratio}>
               <line x1={paddingX} y1={y} x2={width - paddingX} y2={y} stroke="rgba(148,163,184,0.18)" strokeDasharray="4 6" />
-              <text x={4} y={y + 4} className="fill-slate-400 text-[11px]">{label}</text>
             </g>
           );
         })}
@@ -572,10 +577,21 @@ function OverviewLineChart({
         <polyline points={orderPoints} fill="none" stroke={lineColor} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
         <polyline points={shippedPoints} fill="none" stroke="#10b981" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" strokeDasharray="5 5" />
         {data.map((item, index) => {
-          const [x, y] = getPoint(index, item.orderCount).split(",");
+          const [xText, yText] = getPoint(index, item.orderCount).split(",");
+          const x = Number(xText);
+          const y = Number(yText);
           return (
             <g key={item.date}>
-              <circle cx={x} cy={y} r="3.5" fill={lineColor} />
+              <circle
+                cx={x}
+                cy={y}
+                r="5"
+                fill="transparent"
+                className="cursor-pointer"
+                onMouseEnter={() => setHoveredPoint({ x, y, label: item.label, orderCount: item.orderCount, shippedCount: item.shippedCount })}
+                onMouseLeave={() => setHoveredPoint((current) => (current?.label === item.label ? null : current))}
+              />
+              <circle cx={x} cy={y} r="3.5" fill={lineColor} className="pointer-events-none" />
               <text x={x} y={height - 2} textAnchor="middle" className="fill-slate-400 text-[11px]">
                 {item.label}
               </text>
@@ -583,6 +599,20 @@ function OverviewLineChart({
           );
         })}
       </svg>
+      {hoveredPoint ? (
+        <div
+          className="pointer-events-none absolute z-10 rounded-lg border border-slate-200 bg-white/95 px-2.5 py-1.5 text-[11px] text-slate-700 shadow-sm"
+          style={{
+            left: `${(hoveredPoint.x / width) * 100}%`,
+            top: `${Math.max(2, (hoveredPoint.y / height) * 100 - 16)}%`,
+            transform: "translate(-50%, -100%)",
+          }}
+        >
+          <div className="font-medium text-slate-900">{hoveredPoint.label}</div>
+          <div>订单数: {hoveredPoint.orderCount}</div>
+          <div>已发数: {hoveredPoint.shippedCount}</div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -2885,7 +2915,7 @@ export function DropshippingClient({
                     </div>
                   </div>
                   <div className="mt-2.5 rounded-[18px] border border-white/70 bg-white/80 p-3">
-                    <div className="mb-2 flex items-center gap-3 text-xs text-slate-500">
+                    <div className="mb-2 flex items-center justify-start gap-3 text-xs text-slate-500">
                       <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-indigo-600" />{lang === "zh" ? "订单数" : "Pedidos"}</span>
                       <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />{lang === "zh" ? "已发数" : "Enviados"}</span>
                     </div>
@@ -3112,7 +3142,7 @@ export function DropshippingClient({
                     </div>
                   </div>
                   <div className="mt-6 rounded-[28px] border border-white/70 bg-white/75 p-4 backdrop-blur">
-                    <div className="mb-4 flex flex-wrap items-center gap-4 text-xs text-slate-500">
+                    <div className="mb-4 flex flex-wrap items-center justify-start gap-4 text-xs text-slate-500">
                       <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-indigo-600" />{lang === "zh" ? "订单数" : "Pedidos"}</span>
                       <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-fuchsia-500" />{lang === "zh" ? "已发货" : "Enviados"}</span>
                     </div>
@@ -5290,32 +5320,58 @@ export function DropshippingClient({
             <div className="grid gap-4 px-5 py-5 md:grid-cols-2">
               <div className="space-y-1">
                 <p className="text-xs text-slate-500">{lang === "zh" ? "已备货" : "Stock"}</p>
-                <select
-                  value={inventoryExport.stocked}
-                  onChange={(event) =>
-                    setInventoryExport((prev) => prev ? { ...prev, stocked: event.target.value as "all" | "stocked" | "unstocked" } : prev)
-                  }
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none"
-                >
-                  <option value="all">{lang === "zh" ? "全部" : "Todos"}</option>
-                  <option value="stocked">{lang === "zh" ? "已备货" : "Con stock"}</option>
-                  <option value="unstocked">{lang === "zh" ? "未备货" : "Sin stock"}</option>
-                </select>
+                <div className="space-y-2 rounded-xl border border-slate-200 px-4 py-3">
+                  {[
+                    { value: "all", label: lang === "zh" ? "全部" : "Todos" },
+                    { value: "stocked", label: lang === "zh" ? "已备货" : "Con stock" },
+                    { value: "unstocked", label: lang === "zh" ? "未备货" : "Sin stock" },
+                  ].map((option) => {
+                    const checked = inventoryExport.stocked === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() =>
+                          setInventoryExport((prev) => prev ? { ...prev, stocked: option.value as "all" | "stocked" | "unstocked" } : prev)
+                        }
+                        className="flex w-full items-center gap-3 text-left text-sm text-slate-700"
+                      >
+                        <span className={`flex h-4 w-4 items-center justify-center rounded-full border ${checked ? "border-primary" : "border-slate-300"}`}>
+                          <span className={`h-2 w-2 rounded-full ${checked ? "bg-primary" : "bg-transparent"}`} />
+                        </span>
+                        <span>{option.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               <div className="space-y-1">
                 <p className="text-xs text-slate-500">{lang === "zh" ? "备货状态" : "Estado stock"}</p>
-                <select
-                  value={inventoryExport.status}
-                  onChange={(event) =>
-                    setInventoryExport((prev) => prev ? { ...prev, status: event.target.value as "all" | DsInventoryStatus } : prev)
-                  }
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none"
-                >
-                  <option value="all">{lang === "zh" ? "全部" : "Todos"}</option>
-                  <option value="healthy">{lang === "zh" ? "充足" : "Suficiente"}</option>
-                  <option value="low">{lang === "zh" ? "偏低" : "Bajo"}</option>
-                  <option value="empty">{lang === "zh" ? "售罄" : "Agotado"}</option>
-                </select>
+                <div className="space-y-2 rounded-xl border border-slate-200 px-4 py-3">
+                  {[
+                    { value: "all", label: lang === "zh" ? "全部" : "Todos" },
+                    { value: "healthy", label: lang === "zh" ? "充足" : "Suficiente" },
+                    { value: "low", label: lang === "zh" ? "偏低" : "Bajo" },
+                    { value: "empty", label: lang === "zh" ? "售罄" : "Agotado" },
+                  ].map((option) => {
+                    const checked = inventoryExport.status === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() =>
+                          setInventoryExport((prev) => prev ? { ...prev, status: option.value as "all" | DsInventoryStatus } : prev)
+                        }
+                        className="flex w-full items-center gap-3 text-left text-sm text-slate-700"
+                      >
+                        <span className={`flex h-4 w-4 items-center justify-center rounded-full border ${checked ? "border-primary" : "border-slate-300"}`}>
+                          <span className={`h-2 w-2 rounded-full ${checked ? "bg-primary" : "bg-transparent"}`} />
+                        </span>
+                        <span>{option.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               <div className="space-y-1 md:col-span-2">
                 <p className="text-xs text-slate-500">{lang === "zh" ? "商品编码" : "SKU"}</p>
