@@ -1061,9 +1061,11 @@ export async function listOrders(session: Session) {
       stocked_qty: true,
     },
   });
-  const inventoryMap = new Map<string, number>(
-    inventoryRows.map((row) => [`${row.customer_id}::${row.product_id}`, row.stocked_qty]),
-  );
+  const inventoryMap = new Map<string, number>();
+  for (const row of inventoryRows) {
+    const key = `${row.customer_id}::${row.product_id}`;
+    inventoryMap.set(key, (inventoryMap.get(key) || 0) + row.stocked_qty);
+  }
   const catalogBySku = new Map(
     catalogRows.map((row) => [normalizeProductCode(row.sku), row]),
   );
@@ -1193,33 +1195,49 @@ export async function getInventoryRows(session: Session) {
       customer_id: true,
       product_id: true,
       stocked_at: true,
+      created_at: true,
       warehouse: true,
       is_stocked: true,
       stocked_qty: true,
       locked_unit_price: true,
       locked_discount_rate: true,
     },
+    orderBy: [{ stocked_at: "desc" }, { created_at: "desc" }],
   });
 
-  const inventoryByPair = new Map(
-    inventories.map((row) => [`${row.customer_id}::${row.product_id}`, row]),
-  );
-  const inventoryAssignedOrderByPair = new Map<string, string>();
-  for (const [pairKey, inventory] of inventoryByPair.entries()) {
-    const stockedAt = inventory.stocked_at?.toISOString()?.slice(0, 10);
-    if (!inventory.is_stocked || !stockedAt) continue;
-    const matchedOrder = shippedOrders.find((row) => {
-      if (`${row.customer_id}::${row.product_id}` !== pairKey) return false;
-      return row.shipped_at?.toISOString()?.slice(0, 10) === stockedAt;
-    });
-    if (matchedOrder) {
-      inventoryAssignedOrderByPair.set(pairKey, matchedOrder.id);
-    }
+  const inventoriesByPair = new Map<string, typeof inventories>();
+  for (const inventory of inventories) {
+    const key = `${inventory.customer_id}::${inventory.product_id}`;
+    const current = inventoriesByPair.get(key) || [];
+    current.push(inventory);
+    inventoriesByPair.set(key, current);
   }
-  const shippedTotals = new Map<string, number>();
+
+  const assignedInventoryIds = new Set<string>();
+  const assignedOrderByInventoryId = new Map<string, string>();
+  const assignedShippedQtyByInventoryId = new Map<string, number>();
+
   for (const row of shippedOrders) {
-    const key = `${row.customer_id}::${row.product_id}`;
-    shippedTotals.set(key, (shippedTotals.get(key) || 0) + row.quantity);
+    const pairKey = `${row.customer_id}::${row.product_id}`;
+    const candidates = inventoriesByPair.get(pairKey) || [];
+    const shippedDate = row.shipped_at?.toISOString()?.slice(0, 10) || "";
+    const matchedInventory =
+      candidates.find((inventory) => {
+        if (assignedInventoryIds.has(inventory.id) || !inventory.is_stocked) return false;
+        const stockedDate = inventory.stocked_at?.toISOString()?.slice(0, 10) || "";
+        return Boolean(stockedDate) && stockedDate === shippedDate;
+      })
+      || candidates.find((inventory) => !assignedInventoryIds.has(inventory.id) && inventory.is_stocked)
+      || null;
+
+    if (matchedInventory) {
+      assignedInventoryIds.add(matchedInventory.id);
+      assignedOrderByInventoryId.set(matchedInventory.id, row.id);
+      assignedShippedQtyByInventoryId.set(
+        matchedInventory.id,
+        (assignedShippedQtyByInventoryId.get(matchedInventory.id) || 0) + row.quantity,
+      );
+    }
   }
 
   const catalogBySku = new Map(
@@ -1241,9 +1259,12 @@ export async function getInventoryRows(session: Session) {
 
   return shippedOrders.map((row): DsInventoryRow => {
     const pairKey = `${row.customer_id}::${row.product_id}`;
-    const inventory = inventoryByPair.get(pairKey);
-    const totalShippedQty = shippedTotals.get(pairKey) || 0;
-    const remainingQty = inventory ? inventory.stocked_qty - totalShippedQty : 0;
+    const inventory =
+      (inventoriesByPair.get(pairKey) || []).find((entry) => assignedOrderByInventoryId.get(entry.id) === row.id)
+      || null;
+    const remainingQty = inventory
+      ? inventory.stocked_qty - (assignedShippedQtyByInventoryId.get(inventory.id) || 0)
+      : 0;
     const normalizedSku = normalizeProductCode(row.product.sku);
     const catalog = catalogBySku.get(normalizedSku);
     const yogoSource = yogoSourceBySku.get(normalizedSku);
@@ -1268,7 +1289,7 @@ export async function getInventoryRows(session: Session) {
       && Boolean(stockedAt)
       && Boolean(shippedAt)
       && stockedAt?.slice(0, 10) === shippedAt?.slice(0, 10);
-    const assignedOrderId = inventoryAssignedOrderByPair.get(pairKey);
+    const assignedOrderId = inventory ? assignedOrderByInventoryId.get(inventory.id) : null;
     const showsStockDetails = matchesStockDate && assignedOrderId === row.id;
     return {
       orderId: row.id,
@@ -1417,20 +1438,6 @@ export async function createInventory(
     nameEs: payload.productNameEs?.trim() || catalog?.name_es || yogoSource?.name_es || undefined,
     warehouse: payload.warehouse?.trim() || undefined,
   });
-
-  const existing = await prisma.dropshippingCustomerInventory.findFirst({
-    where: {
-      tenant_id: session.tenantId,
-      company_id: session.companyId,
-      customer_id: payload.customerId,
-      product_id: product.id,
-    },
-    select: { id: true },
-  });
-
-  if (existing) {
-    throw new Error("inventory_exists");
-  }
 
   return prisma.dropshippingCustomerInventory.create({
     data: {

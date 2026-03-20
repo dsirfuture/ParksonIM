@@ -390,7 +390,6 @@ model DropshippingCustomerInventory {
   customer DropshippingCustomer @relation(fields: [customer_id], references: [id], onDelete: Cascade)
   product  DropshippingProduct  @relation(fields: [product_id], references: [id], onDelete: Cascade)
 
-  @@unique([tenant_id, company_id, customer_id, product_id])
   @@index([tenant_id, company_id])
   @@index([customer_id])
   @@index([product_id])
