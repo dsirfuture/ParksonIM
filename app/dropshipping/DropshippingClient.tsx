@@ -1045,6 +1045,26 @@ export function DropshippingClient({
     };
   }, [form.id, form.sku, lang, modalOpen]);
 
+  const handleOrderSkuChange = (value: string) => {
+    const nextSku = value;
+    const normalizedNextSku = normalizeProductCode(nextSku);
+
+    setProductFieldsLocked(false);
+    setForm((prev) => {
+      const normalizedPrevSku = normalizeProductCode(prev.sku);
+      const shouldResetMatchedProduct =
+        !nextSku.trim() ||
+        (normalizedPrevSku !== "" && normalizedNextSku !== normalizedPrevSku);
+
+      return {
+        ...prev,
+        sku: nextSku,
+        productNameZh: shouldResetMatchedProduct ? "" : prev.productNameZh,
+        productNameEs: shouldResetMatchedProduct ? "" : prev.productNameEs,
+      };
+    });
+  };
+
   useEffect(() => {
     financePreviewScrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
   }, [financePreviewPage]);
@@ -4890,10 +4910,7 @@ export function DropshippingClient({
                     <input
                       type="text"
                       value={form.sku}
-                      onChange={(event) => {
-                        setProductFieldsLocked(false);
-                        setForm((prev) => ({ ...prev, sku: event.target.value }));
-                      }}
+                      onChange={(event) => handleOrderSkuChange(event.target.value)}
                       className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
                     />
                   </label>
