@@ -75,6 +75,37 @@ type RevokeState = {
   error: string;
 };
 
+type CopyItemState = {
+  sku: string;
+  barcode: string;
+  nameZh: string;
+  nameEs: string;
+  qty: string;
+  unitPrice: number;
+  normalDiscount: number | null;
+  vipDiscount: number | null;
+};
+
+type CopyState = {
+  orderNo: string;
+  companyName: string;
+  contactPhone: string;
+  addressText: string;
+  remarkText: string;
+  storeLabelText: string;
+  issueDateText: string;
+  boxCountText: string;
+  shipDateText: string;
+  warehouseText: string;
+  shippingMethodText: string;
+  recipientNameText: string;
+  recipientPhoneText: string;
+  carrierCompanyText: string;
+  paymentTermText: string;
+  vipDiscountEnabled: boolean;
+  items: CopyItemState[];
+};
+
 const PAGE_SIZE = 8;
 
 function EyeIcon() {
@@ -202,6 +233,9 @@ export function BillingClient({
   const [editState, setEditState] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [copyState, setCopyState] = useState<CopyState | null>(null);
+  const [copyingExport, setCopyingExport] = useState(false);
+  const [copyExportError, setCopyExportError] = useState("");
   const [statusActionLoading, setStatusActionLoading] = useState<"generate" | "revoke" | "">("");
   const [statusActionError, setStatusActionError] = useState("");
   const [revokeState, setRevokeState] = useState<RevokeState | null>(null);
@@ -366,6 +400,104 @@ export function BillingClient({
     }
   }
 
+  function openCopyState() {
+    if (!detailRow) return;
+    setCopyExportError("");
+    setCopyState({
+      orderNo: detailRow.orderNo,
+      companyName: detailRow.companyName === "-" ? "" : detailRow.companyName,
+      contactPhone: detailRow.contactPhone === "-" ? "" : detailRow.contactPhone,
+      addressText: detailRow.addressText || "",
+      remarkText: detailRow.remarkText || "",
+      storeLabelText: detailRow.storeLabelText || "",
+      issueDateText: detailRow.issueDateText || "",
+      boxCountText: detailRow.boxCountText || "",
+      shipDateText: detailRow.shipDateText || "",
+      warehouseText: detailRow.warehouseText || "",
+      shippingMethodText: detailRow.shippingMethodText || "",
+      recipientNameText: detailRow.recipientNameText || "",
+      recipientPhoneText: detailRow.recipientPhoneText || "",
+      carrierCompanyText: detailRow.carrierCompanyText || "",
+      paymentTermText: detailRow.paymentTermText || "",
+      vipDiscountEnabled,
+      items: detailItems.map((item) => ({
+        sku: item.sku,
+        barcode: item.barcode,
+        nameZh: item.nameZh,
+        nameEs: item.nameEs,
+        qty: String(item.qty ?? 0),
+        unitPrice: Number(item.unitPrice || 0),
+        normalDiscount: item.normalDiscount,
+        vipDiscount: item.vipDiscount,
+      })),
+    });
+  }
+
+  async function exportCopyXlsx() {
+    if (!copyState) return;
+    setCopyingExport(true);
+    setCopyExportError("");
+    try {
+      const items = copyState.items.map((item) => ({
+        sku: item.sku,
+        barcode: item.barcode,
+        nameZh: item.nameZh,
+        nameEs: item.nameEs,
+        qty: Number(item.qty || 0),
+        unitPrice: Number(item.unitPrice || 0),
+        normalDiscount: item.normalDiscount,
+        vipDiscount: item.vipDiscount,
+      }));
+      const res = await fetch("/api/billing/copy/export/xlsx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderNo: copyState.orderNo,
+          companyName: copyState.companyName,
+          contactPhone: copyState.contactPhone,
+          addressText: copyState.addressText,
+          remarkText: copyState.remarkText,
+          storeLabelText: copyState.storeLabelText,
+          issueDateText: copyState.issueDateText,
+          boxCountText: copyState.boxCountText,
+          shipDateText: copyState.shipDateText,
+          warehouseText: copyState.warehouseText,
+          shippingMethodText: copyState.shippingMethodText,
+          recipientNameText: copyState.recipientNameText,
+          recipientPhoneText: copyState.recipientPhoneText,
+          carrierCompanyText: copyState.carrierCompanyText,
+          paymentTermText: copyState.paymentTermText,
+          vipDiscountEnabled: copyState.vipDiscountEnabled,
+          items,
+        }),
+      });
+      if (!res.ok) {
+        let message = "导出复制账单失败";
+        try {
+          const data = await res.json();
+          if (data?.error) message = data.error;
+        } catch {}
+        throw new Error(message);
+      }
+      const blob = await res.blob();
+      const contentDisposition = res.headers.get("Content-Disposition") || "";
+      const matchedName = contentDisposition.match(/filename=\"?([^\";]+)\"?/i)?.[1];
+      const fileName = matchedName ? decodeURIComponent(matchedName) : `${copyState.orderNo}-copy.xlsx`;
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setCopyExportError(error instanceof Error ? error.message : "导出复制账单失败");
+    } finally {
+      setCopyingExport(false);
+    }
+  }
+
   return (
     <section className={`mt-0 ${theme.panel}`}>
       <div className="relative px-4 pt-5">
@@ -477,6 +609,15 @@ export function BillingClient({
                 {statusActionError ? <div className="mt-2 text-sm text-red-600">{statusActionError}</div> : null}
               </div>
               <div className="flex flex-wrap items-center gap-3">
+                {detailRow ? (
+                  <button
+                    type="button"
+                    className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                    onClick={openCopyState}
+                  >
+                    复制账单
+                  </button>
+                ) : null}
                 {exportLinks ? (
                   <>
                     <button
@@ -776,6 +917,82 @@ export function BillingClient({
             <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-4">
               <button type="button" onClick={() => setEditState(null)} className="h-10 rounded-xl border border-slate-200 px-4 text-sm text-slate-600 hover:bg-slate-50">取消</button>
               <button type="button" onClick={saveEdit} disabled={saving} className="h-10 rounded-xl bg-primary px-5 text-sm font-semibold text-white disabled:opacity-60">{saving ? "保存中..." : "保存"}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {copyState ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 p-4" onClick={() => setCopyState(null)}>
+          <div className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="border-b border-slate-200 px-6 py-4">
+              <h3 className="text-xl font-semibold text-slate-900">复制账单</h3>
+              <p className="mt-1 text-sm text-slate-500">可编辑表头和商品数量，然后导出新的 XLSX 账单</p>
+            </div>
+            <div className="flex-1 overflow-auto p-6">
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div className="space-y-4">
+                  <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">表头信息</div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div><label className="mb-1 block text-sm text-slate-600">订单号</label><input value={copyState.orderNo} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none" /></div>
+                    <div><label className="mb-1 block text-sm text-slate-600">出账日期</label><input value={copyState.issueDateText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, issueDateText: e.target.value } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
+                    <div className="md:col-span-2"><label className="mb-1 block text-sm text-slate-600">公司名称</label><input value={copyState.companyName} onChange={(e) => setCopyState((prev) => prev ? { ...prev, companyName: e.target.value } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
+                    <div><label className="mb-1 block text-sm text-slate-600">门店标记</label><input value={copyState.storeLabelText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, storeLabelText: normalizeStoreLabelInput(e.target.value) } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
+                    <div><label className="mb-1 block text-sm text-slate-600">账期</label><input value={copyState.paymentTermText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, paymentTermText: e.target.value.replace(/[^\d]/g, "") } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
+                    <div><label className="mb-1 block text-sm text-slate-600">装箱件数</label><input value={copyState.boxCountText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, boxCountText: e.target.value } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
+                    <div><label className="mb-1 block text-sm text-slate-600">发货日期</label><input type="date" value={copyState.shipDateText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, shipDateText: e.target.value } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
+                    <div><label className="mb-1 block text-sm text-slate-600">发货仓</label><input value={copyState.warehouseText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, warehouseText: e.target.value } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
+                    <div><label className="mb-1 block text-sm text-slate-600">发货方式</label><input value={copyState.shippingMethodText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, shippingMethodText: e.target.value } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
+                    <div><label className="mb-1 block text-sm text-slate-600">收货人</label><input value={copyState.recipientNameText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, recipientNameText: e.target.value } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
+                    <div><label className="mb-1 block text-sm text-slate-600">收货电话</label><input value={copyState.recipientPhoneText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, recipientPhoneText: e.target.value } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
+                    <div><label className="mb-1 block text-sm text-slate-600">联系电话</label><input value={copyState.contactPhone} onChange={(e) => setCopyState((prev) => prev ? { ...prev, contactPhone: e.target.value } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
+                    <div><label className="mb-1 block text-sm text-slate-600">托运公司</label><input value={copyState.carrierCompanyText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, carrierCompanyText: e.target.value } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
+                    <div className="md:col-span-2"><label className="mb-1 block text-sm text-slate-600">收货地址</label><textarea value={copyState.addressText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, addressText: e.target.value } : prev)} className="min-h-[96px] w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-primary/40" /></div>
+                  </div>
+                  <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-sm text-slate-600">
+                    <input type="checkbox" className="h-4 w-4 rounded border-slate-300" checked={copyState.vipDiscountEnabled} onChange={(e) => setCopyState((prev) => prev ? { ...prev, vipDiscountEnabled: e.target.checked } : prev)} />
+                    启用 VIP 折扣
+                  </label>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">商品数量</div>
+                  <div className="overflow-hidden rounded-2xl border border-slate-200">
+                    <div className="grid grid-cols-[140px_1fr_96px] gap-0 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600">
+                      <div>编号</div>
+                      <div>商品</div>
+                      <div className="text-center">数量</div>
+                    </div>
+                    <div className="max-h-[520px] overflow-auto">
+                      {copyState.items.map((item, index) => (
+                        <div key={`${item.sku}-${item.barcode}-${index}`} className="grid grid-cols-[140px_1fr_96px] gap-0 border-t border-slate-200 px-4 py-3">
+                          <div className="pr-3 text-sm text-slate-700">{item.sku || "-"}</div>
+                          <div className="pr-3 text-sm text-slate-700">
+                            <div>{item.nameZh || "-"}</div>
+                            <div className="mt-1 text-xs text-slate-400">{item.nameEs || item.barcode || "-"}</div>
+                          </div>
+                          <div>
+                            <input
+                              inputMode="numeric"
+                              value={item.qty}
+                              onChange={(e) => setCopyState((prev) => prev ? {
+                                ...prev,
+                                items: prev.items.map((entry, entryIndex) => entryIndex === index ? { ...entry, qty: e.target.value.replace(/[^\d]/g, "") } : entry),
+                              } : prev)}
+                              className="h-10 w-full rounded-lg border border-slate-200 px-3 text-center text-sm outline-none focus:border-primary/40"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {copyExportError ? <div className="mt-4 text-sm text-red-600">{copyExportError}</div> : null}
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-4">
+              <button type="button" onClick={() => setCopyState(null)} className="h-10 rounded-xl border border-slate-200 px-4 text-sm text-slate-600 hover:bg-slate-50">取消</button>
+              <button type="button" onClick={exportCopyXlsx} disabled={copyingExport} className="h-10 rounded-xl bg-primary px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{copyingExport ? "导出中..." : "导出复制账单 XLSX"}</button>
             </div>
           </div>
         </div>
