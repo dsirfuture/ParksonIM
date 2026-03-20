@@ -105,6 +105,29 @@ export function buildBillingPdfFileName(data: Pick<BillingExportData, "orderNo" 
   return `${data.orderNo}_${safeCompanyName}_INVOICE`;
 }
 
+export function buildBillingCopyExportBaseName(
+  data: Pick<BillingExportData, "orderNo" | "companyName" | "vipDiscountEnabled" | "storeLabelText">,
+) {
+  const baseName = buildBillingExportBaseName(data);
+  const storeLabel = normalizeStoreLabelInput(data.storeLabelText);
+  return storeLabel ? `${baseName}-${storeLabel}店` : baseName;
+}
+
+export function buildBillingCopyPdfFileName(
+  data: Pick<BillingExportData, "orderNo" | "companyName" | "storeLabelText">,
+) {
+  const companyName = String(data.companyName || "")
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const safeCompanyName = companyName || "NoCompany";
+  const storeLabel = normalizeStoreLabelInput(data.storeLabelText);
+  return storeLabel
+    ? `${data.orderNo}-${safeCompanyName}-${storeLabel}店`
+    : `${data.orderNo}-${safeCompanyName}`;
+}
+
 function hasChineseGlyph(value: string) {
   return /[\u3400-\u9FFF\uF900-\uFAFF]/.test(String(value || ""));
 }

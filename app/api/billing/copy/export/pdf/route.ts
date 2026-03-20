@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   buildBillingPdf,
-  buildBillingPdfFileName,
+  buildBillingCopyPdfFileName,
   type BillingExportData,
   type BillingExportItem,
 } from "@/lib/billing-export";
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
     };
 
     const buffer = await buildBillingPdf(data);
-    const fileName = `${buildBillingPdfFileName(data)}.pdf`;
+    const fileName = `${buildBillingCopyPdfFileName(data)}.pdf`;
 
     await writeBillingActionLog({
       tenantId: session.tenantId,

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import {
-  buildBillingExportBaseName,
+  buildBillingCopyExportBaseName,
   buildBillingXlsx,
   type BillingExportData,
   type BillingExportItem,
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
     };
 
     const buffer = await buildBillingXlsx(data);
-    const fileName = `${buildBillingExportBaseName(data)}.xlsx`;
+    const fileName = `${buildBillingCopyExportBaseName(data)}.xlsx`;
 
     await writeBillingActionLog({
       tenantId: session.tenantId,
