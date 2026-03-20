@@ -1194,6 +1194,7 @@ export async function getInventoryRows(session: Session) {
       id: true,
       customer_id: true,
       product_id: true,
+      linked_order_id: true,
       stocked_at: true,
       created_at: true,
       warehouse: true,
@@ -1220,14 +1221,16 @@ export async function getInventoryRows(session: Session) {
   for (const row of shippedOrders) {
     const pairKey = `${row.customer_id}::${row.product_id}`;
     const candidates = inventoriesByPair.get(pairKey) || [];
+    const linkedInventory = candidates.find((inventory) => inventory.linked_order_id === row.id) || null;
     const shippedDate = row.shipped_at?.toISOString()?.slice(0, 10) || "";
     const matchedInventory =
-      candidates.find((inventory) => {
-        if (assignedInventoryIds.has(inventory.id) || !inventory.is_stocked) return false;
+      linkedInventory
+      || candidates.find((inventory) => {
+        if (assignedInventoryIds.has(inventory.id) || !inventory.is_stocked || inventory.linked_order_id) return false;
         const stockedDate = inventory.stocked_at?.toISOString()?.slice(0, 10) || "";
         return Boolean(stockedDate) && stockedDate === shippedDate;
       })
-      || candidates.find((inventory) => !assignedInventoryIds.has(inventory.id) && inventory.is_stocked)
+      || candidates.find((inventory) => !assignedInventoryIds.has(inventory.id) && inventory.is_stocked && !inventory.linked_order_id)
       || null;
 
     if (matchedInventory) {
@@ -1260,10 +1263,18 @@ export async function getInventoryRows(session: Session) {
   return shippedOrders.map((row): DsInventoryRow => {
     const pairKey = `${row.customer_id}::${row.product_id}`;
     const pairInventories = inventoriesByPair.get(pairKey) || [];
+    const linkedInventory = pairInventories.find((entry) => entry.linked_order_id === row.id) || null;
     const assignedInventory =
+      linkedInventory
+      || 
       pairInventories.find((entry) => assignedOrderByInventoryId.get(entry.id) === row.id)
       || null;
-    const editableInventory = assignedInventory || pairInventories[0] || null;
+    const editableInventory =
+      linkedInventory
+      || assignedInventory
+      || pairInventories.find((entry) => !entry.linked_order_id)
+      || pairInventories[0]
+      || null;
     const remainingQty = assignedInventory
       ? assignedInventory.stocked_qty - (assignedShippedQtyByInventoryId.get(assignedInventory.id) || 0)
       : 0;
@@ -1336,6 +1347,7 @@ export async function getDropshippingCustomerOptions(session: Session) {
 export async function createInventory(
   session: Session,
   payload: {
+    orderId?: string | null;
     customerId: string;
     productCatalogId?: string | null;
     sku: string;
@@ -1442,6 +1454,7 @@ export async function createInventory(
       company_id: session.companyId,
       customer_id: payload.customerId,
       product_id: product.id,
+      linked_order_id: payload.orderId?.trim() || null,
       stocked_at: payload.stockedAt ? new Date(`${payload.stockedAt}T12:00:00Z`) : null,
       is_stocked: Boolean(payload.isStocked),
       stocked_qty: payload.stockedQty,
@@ -1464,6 +1477,7 @@ export async function updateInventory(
   session: Session,
   payload: {
     id: string;
+    orderId?: string | null;
     isStocked?: boolean;
     stockedAt?: string | null;
     stockedQty: number;
@@ -1478,23 +1492,65 @@ export async function updateInventory(
       tenant_id: session.tenantId,
       company_id: session.companyId,
     },
-    select: { id: true },
+    select: {
+      id: true,
+      customer_id: true,
+      product_id: true,
+      linked_order_id: true,
+      warehouse: true,
+    },
   });
 
   if (!inventory) {
     throw new Error("inventory_not_found");
   }
 
-  return prisma.dropshippingCustomerInventory.update({
-    where: { id: inventory.id },
-    data: {
-      is_stocked: Boolean(payload.isStocked),
-      stocked_at: payload.stockedAt ? new Date(`${payload.stockedAt}T12:00:00Z`) : null,
-      stocked_qty: payload.stockedQty,
-      locked_unit_price: payload.unitPrice ?? null,
-      locked_discount_rate: payload.discountRate ?? null,
-      warehouse: payload.warehouse?.trim() || null,
-    },
+  const linkedOrderId = payload.orderId?.trim() || inventory.linked_order_id || null;
+
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.dropshippingCustomerInventory.update({
+      where: { id: inventory.id },
+      data: {
+        linked_order_id: linkedOrderId,
+        is_stocked: Boolean(payload.isStocked),
+        stocked_at: payload.stockedAt ? new Date(`${payload.stockedAt}T12:00:00Z`) : null,
+        stocked_qty: payload.stockedQty,
+        locked_unit_price: payload.unitPrice ?? null,
+        locked_discount_rate: payload.discountRate ?? null,
+        warehouse: payload.warehouse?.trim() || null,
+      },
+    });
+
+    if (payload.orderId?.trim() && !inventory.linked_order_id) {
+      const remainingBase = await tx.dropshippingCustomerInventory.findFirst({
+        where: {
+          tenant_id: session.tenantId,
+          company_id: session.companyId,
+          customer_id: inventory.customer_id,
+          product_id: inventory.product_id,
+          linked_order_id: null,
+          id: { not: inventory.id },
+        },
+        select: { id: true },
+      });
+
+      if (!remainingBase) {
+        await tx.dropshippingCustomerInventory.create({
+          data: {
+            tenant_id: session.tenantId,
+            company_id: session.companyId,
+            customer_id: inventory.customer_id,
+            product_id: inventory.product_id,
+            linked_order_id: null,
+            stocked_qty: 0,
+            is_stocked: false,
+            warehouse: payload.warehouse?.trim() || inventory.warehouse || null,
+          },
+        });
+      }
+    }
+
+    return updated;
   });
 }
 

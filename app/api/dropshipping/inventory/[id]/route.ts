@@ -16,6 +16,7 @@ export async function PATCH(
 
     const { id } = await context.params;
     const body = (await request.json()) as Record<string, unknown>;
+    const orderId = String(body.orderId || "").trim() || null;
     const isStocked = Boolean(body.isStocked);
     const stockedAt = String(body.stockedAt || "").trim() || null;
     const stockedQty = Number(body.stockedQty ?? 0);
@@ -29,6 +30,7 @@ export async function PATCH(
 
     await updateInventory(session, {
       id,
+      orderId,
       isStocked,
       stockedAt,
       stockedQty,

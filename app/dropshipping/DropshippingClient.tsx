@@ -66,6 +66,7 @@ type InventoryShippedPreviewState = {
 type InventoryEditState = {
   mode: "create" | "edit";
   id: string;
+  orderId: string;
   customerId: string;
   customerName: string;
   productCatalogId: string;
@@ -2366,6 +2367,7 @@ export function DropshippingClient({
     setInventoryEdit({
       mode: row.inventoryId ? "edit" : "create",
       id: row.inventoryId || "",
+      orderId: row.orderId,
       customerId: row.customerId,
       customerName: row.customerName,
       productCatalogId: "",
@@ -2405,6 +2407,7 @@ export function DropshippingClient({
       setInventoryEdit({
         mode: "create",
         id: "",
+        orderId: "",
         customerId: "",
         customerName: "",
         productCatalogId: "",
@@ -2474,6 +2477,7 @@ export function DropshippingClient({
           method: inventoryEdit.mode === "create" ? "POST" : "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            orderId: inventoryEdit.orderId || null,
             customerId: inventoryEdit.customerId,
             productCatalogId: inventoryEdit.productCatalogId || null,
             sku: inventoryEdit.sku,

@@ -33,6 +33,7 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as Record<string, unknown>;
+    const orderId = String(body.orderId || "").trim() || null;
     const customerId = String(body.customerId || "").trim();
     const productCatalogId = String(body.productCatalogId || "").trim() || null;
     const sku = String(body.sku || "").trim();
@@ -50,6 +51,7 @@ export async function POST(request: Request) {
     }
 
     await createInventory(session, {
+      orderId,
       customerId,
       productCatalogId,
       sku,

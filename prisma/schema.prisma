@@ -373,6 +373,7 @@ model DropshippingCustomerInventory {
 
   customer_id String @db.Uuid
   product_id  String @db.Uuid
+  linked_order_id String? @db.Uuid
 
   stocked_at            DateTime?
   is_stocked            Boolean  @default(false)
@@ -393,6 +394,7 @@ model DropshippingCustomerInventory {
   @@index([tenant_id, company_id])
   @@index([customer_id])
   @@index([product_id])
+  @@index([linked_order_id])
   @@map("ds_customer_inventories")
 }
 
