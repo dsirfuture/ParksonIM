@@ -123,6 +123,7 @@ export type DsOrderAttachment = {
 };
 
 export type DsInventoryRow = {
+  rowKey: string;
   orderId: string;
   inventoryId: string | null;
   customerId: string;

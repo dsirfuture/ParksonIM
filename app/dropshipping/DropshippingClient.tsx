@@ -4069,10 +4069,10 @@ export function DropshippingClient({
                 </thead>
                 <tbody>
                   {pagedInventory.map((row) => (
-                    <tr key={row.orderId} className="border-t border-slate-100">
+                    <tr key={row.rowKey} className="border-t border-slate-100">
                       <td className="px-4 py-2 text-sm text-slate-700">
                         <div className="flex min-h-8 items-center justify-start">
-                          {row.productImageUrl && !failedInventoryImages.includes(row.orderId) ? (
+                          {row.productImageUrl && !failedInventoryImages.includes(row.rowKey) ? (
                             <button
                               type="button"
                               onClick={() =>
@@ -4090,7 +4090,7 @@ export function DropshippingClient({
                                 className="h-8 w-8 object-cover"
                                 onError={() =>
                                   setFailedInventoryImages((prev) =>
-                                    prev.includes(row.orderId) ? prev : [...prev, row.orderId],
+                                    prev.includes(row.rowKey) ? prev : [...prev, row.rowKey],
                                   )
                                 }
                               />
@@ -4174,7 +4174,7 @@ export function DropshippingClient({
                         <div className="inline-flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => void removeShippedItemRow(row)}
+                            onClick={() => void (row.inventoryId ? removeInventoryRow(row) : removeShippedItemRow(row))}
                             title={lang === "zh" ? "删除" : "Eliminar"}
                             aria-label={lang === "zh" ? "删除" : "Eliminar"}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-500 transition hover:border-rose-300 hover:text-rose-600"

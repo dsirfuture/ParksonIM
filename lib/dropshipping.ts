@@ -1222,6 +1222,14 @@ export async function getInventoryRows(session: Session) {
     inventoriesByPair.set(key, current);
   }
 
+  const shippedOrdersByPair = new Map<string, typeof shippedOrders>();
+  for (const row of shippedOrders) {
+    const key = `${row.customer_id}::${row.product_id}`;
+    const current = shippedOrdersByPair.get(key) || [];
+    current.push(row);
+    shippedOrdersByPair.set(key, current);
+  }
+
   const assignedOrderByInventoryId = new Map<string, string>();
   const assignedShippedQtyByInventoryId = new Map<string, number>();
   const remainingCapacityByInventoryId = new Map<string, number>();
@@ -1294,13 +1302,14 @@ export async function getInventoryRows(session: Session) {
     return 0;
   }
 
-  return shippedOrders.map((row): DsInventoryRow => {
+  const representedStockedInventoryIds = new Set<string>();
+
+  const baseRows = shippedOrders.map((row): DsInventoryRow => {
     const pairKey = `${row.customer_id}::${row.product_id}`;
     const pairInventories = inventoriesByPair.get(pairKey) || [];
-    const totalStockedQtyForPair = pairInventories
-      .filter((entry) => entry.is_stocked)
+    const stockedInventoriesForPair = pairInventories.filter((entry) => entry.is_stocked && entry.stocked_qty > 0);
+    const totalStockedQtyForPair = stockedInventoriesForPair
       .reduce((sum, entry) => sum + entry.stocked_qty, 0);
-    const stockedInventoriesForPair = pairInventories.filter((entry) => entry.is_stocked);
     const aggregateRemainingQty = Math.max(
       totalStockedQtyForPair - (totalShippedQtyByPair.get(pairKey) || 0),
       0,
@@ -1338,7 +1347,11 @@ export async function getInventoryRows(session: Session) {
     const shippedAt = row.shipped_at?.toISOString() || null;
     const assignedOrderId = assignedInventory ? assignedOrderByInventoryId.get(assignedInventory.id) : null;
     const showsStockDetails = Boolean(assignedInventory?.is_stocked) && assignedOrderId === row.id;
+    if (showsStockDetails && assignedInventory?.id) {
+      representedStockedInventoryIds.add(assignedInventory.id);
+    }
     return {
+      rowKey: `order:${row.id}:inventory:${assignedInventory?.id || editableInventory?.id || "none"}`,
       orderId: row.id,
       inventoryId: editableInventory?.id || null,
       customerId: row.customer_id,
@@ -1362,6 +1375,76 @@ export async function getInventoryRows(session: Session) {
       status: deriveInventoryStatus(Math.max(aggregateRemainingQty, 0)),
     };
   });
+
+  const extraStockRows: DsInventoryRow[] = [];
+
+  for (const [pairKey, pairInventories] of inventoriesByPair.entries()) {
+    const pairOrders = shippedOrdersByPair.get(pairKey) || [];
+    if (pairOrders.length === 0) continue;
+
+    const stockedInventoriesForPair = pairInventories.filter((entry) => entry.is_stocked && entry.stocked_qty > 0);
+    if (stockedInventoriesForPair.length === 0) continue;
+
+    const totalStockedQtyForPair = stockedInventoriesForPair.reduce((sum, entry) => sum + entry.stocked_qty, 0);
+    const aggregateRemainingQty = Math.max(
+      totalStockedQtyForPair - (totalShippedQtyByPair.get(pairKey) || 0),
+      0,
+    );
+
+    for (const inventory of stockedInventoriesForPair) {
+      if (representedStockedInventoryIds.has(inventory.id)) continue;
+
+      const anchorOrder =
+        pairOrders.find((row) => row.id === inventory.linked_order_id)
+        || pairOrders[0];
+      if (!anchorOrder) continue;
+
+      const normalizedSku = normalizeProductCode(anchorOrder.product.sku);
+      const catalog = catalogBySku.get(normalizedSku);
+      const yogoSource = yogoSourceBySku.get(normalizedSku);
+      const matchedSku = catalog?.sku?.trim() || yogoSource?.product_code?.trim() || anchorOrder.product.sku;
+      const unitPrice = pickPreferredNumber(
+        toOptionalNumber(inventory.locked_unit_price),
+        toOptionalNumber(yogoSource?.source_price),
+        toOptionalNumber(catalog?.price),
+        toOptionalNumber(anchorOrder.product.unit_price),
+      );
+      const rawDiscountRate = pickPreferredNumber(
+        toOptionalNumber(inventory.locked_discount_rate),
+        toOptionalNumber(yogoSource?.source_discount),
+        toOptionalNumber(catalog?.normal_discount),
+        toOptionalNumber(anchorOrder.product.discount_rate),
+      );
+      const discountRate = Math.abs(rawDiscountRate) <= 1 ? rawDiscountRate : rawDiscountRate / 100;
+
+      extraStockRows.push({
+        rowKey: `inventory:${inventory.id}`,
+        orderId: anchorOrder.id,
+        inventoryId: inventory.id,
+        customerId: anchorOrder.customer_id,
+        customerName: anchorOrder.customer.name,
+        productId: anchorOrder.product_id,
+        sku: anchorOrder.product.sku,
+        productNameZh: stripTrailingUnitPrice(catalog?.name_zh?.trim() || anchorOrder.product.name_zh),
+        productNameEs: catalog?.name_es?.trim() || anchorOrder.product.name_es || "",
+        productImageUrl: anchorOrder.product.image_url || buildProductImageUrl(matchedSku, "jpg"),
+        stockedAt: inventory.stocked_at?.toISOString() || null,
+        shippedAt: anchorOrder.shipped_at?.toISOString() || null,
+        trackingNo: anchorOrder.tracking_no || "",
+        warehouse: inventory.warehouse || anchorOrder.warehouse || anchorOrder.product.default_warehouse || "",
+        isStocked: true,
+        stockedQty: inventory.stocked_qty,
+        shippedQty: anchorOrder.quantity,
+        remainingQty: aggregateRemainingQty,
+        unitPrice,
+        discountRate,
+        stockAmount: computeStockAmount(unitPrice, inventory.stocked_qty, discountRate),
+        status: deriveInventoryStatus(Math.max(aggregateRemainingQty, 0)),
+      });
+    }
+  }
+
+  return [...baseRows, ...extraStockRows];
 }
 
 export async function getDropshippingCustomerOptions(session: Session) {
