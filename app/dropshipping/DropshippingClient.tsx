@@ -892,15 +892,15 @@ export function DropshippingClient({
       const year = new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", year: "numeric" }).format(rangeStart);
       const month = new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", month: "numeric" }).format(rangeStart);
       const day = new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", day: "numeric" }).format(rangeStart);
-      if (overviewRange === "day") return `${year}年${month}月${day}号`;
-      if (overviewRange === "month") return `${year}年${month}月`;
-      if (overviewRange === "year") return `${year}年`;
+      if (overviewRange === "day") return `${month}月${day}日`;
+      if (overviewRange === "month") return `${year}/${month}`;
+      if (overviewRange === "year") return year;
       const weekEnd = new Date(rangeEndExclusive.getTime() - 24 * 60 * 60 * 1000);
       const startMonth = new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", month: "numeric" }).format(rangeStart);
       const startDay = new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", day: "numeric" }).format(rangeStart);
       const endMonth = new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", month: "numeric" }).format(weekEnd);
       const endDay = new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", day: "numeric" }).format(weekEnd);
-      return `${startMonth}月${startDay}号-${endMonth}月${endDay}号`;
+      return `${startMonth}/${startDay}-${endMonth}/${endDay}`;
     }
 
     if (overviewRange === "day") return fmtDateOnly(rangeStart.toISOString(), lang);
