@@ -81,6 +81,7 @@ type CopyItemState = {
   nameZh: string;
   nameEs: string;
   qty: string;
+  maxQty: number;
   unitPrice: number;
   normalDiscount: number | null;
   vipDiscount: number | null;
@@ -426,6 +427,7 @@ export function BillingClient({
         nameZh: item.nameZh,
         nameEs: item.nameEs,
         qty: String(item.qty ?? 0),
+        maxQty: Number(item.qty || 0),
         unitPrice: Number(item.unitPrice || 0),
         normalDiscount: item.normalDiscount,
         vipDiscount: item.vipDiscount,
@@ -438,12 +440,17 @@ export function BillingClient({
     setCopyingExport(true);
     setCopyExportError("");
     try {
+      const invalidItem = copyState.items.find((item) => Number(item.qty || 0) > Number(item.maxQty || 0));
+      if (invalidItem) {
+        throw new Error(`商品 ${invalidItem.sku || invalidItem.barcode || invalidItem.nameZh || invalidItem.nameEs || ""} 的数量不能超过验货总数量 ${invalidItem.maxQty}`);
+      }
       const items = copyState.items.map((item) => ({
         sku: item.sku,
         barcode: item.barcode,
         nameZh: item.nameZh,
         nameEs: item.nameEs,
         qty: Number(item.qty || 0),
+        maxQty: Number(item.maxQty || 0),
         unitPrice: Number(item.unitPrice || 0),
         normalDiscount: item.normalDiscount,
         vipDiscount: item.vipDiscount,
@@ -976,14 +983,19 @@ export function BillingClient({
                           <div className="pr-3 text-sm text-slate-700">
                             <div>{item.nameZh || "-"}</div>
                             <div className="mt-1 text-xs text-slate-400">{item.nameEs || item.barcode || "-"}</div>
+                            <div className="mt-1 text-xs text-slate-400">最多 {item.maxQty}</div>
                           </div>
                           <div>
                             <input
                               inputMode="numeric"
+                              max={item.maxQty}
                               value={item.qty}
                               onChange={(e) => setCopyState((prev) => prev ? {
                                 ...prev,
-                                items: prev.items.map((entry, entryIndex) => entryIndex === index ? { ...entry, qty: e.target.value.replace(/[^\d]/g, "") } : entry),
+                                items: prev.items.map((entry, entryIndex) => entryIndex === index ? {
+                                  ...entry,
+                                  qty: String(Math.min(Number(e.target.value.replace(/[^\d]/g, "") || 0), Number(entry.maxQty || 0))),
+                                } : entry),
                               } : prev)}
                               className="h-10 w-full rounded-lg border border-slate-200 px-3 text-center text-sm outline-none focus:border-primary/40"
                             />

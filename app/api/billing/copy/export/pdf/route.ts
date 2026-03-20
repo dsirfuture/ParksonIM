@@ -55,6 +55,7 @@ export async function POST(request: Request) {
         nameZh?: string;
         nameEs?: string;
         qty?: number;
+        maxQty?: number;
         unitPrice?: number;
         normalDiscount?: number | null;
         vipDiscount?: number | null;
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
           barcode: String(item?.barcode || "").trim(),
           nameZh: String(item?.nameZh || "").trim(),
           nameEs: String(item?.nameEs || "").trim(),
-          qty: Number(item?.qty || 0),
+          qty: Math.min(Number(item?.qty || 0), Number(item?.maxQty || 0)),
           unitPrice: Number(item?.unitPrice || 0),
           normalDiscount:
             item?.normalDiscount === null || item?.normalDiscount === undefined ? null : Number(item.normalDiscount),
