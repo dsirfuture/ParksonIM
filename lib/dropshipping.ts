@@ -1259,11 +1259,13 @@ export async function getInventoryRows(session: Session) {
 
   return shippedOrders.map((row): DsInventoryRow => {
     const pairKey = `${row.customer_id}::${row.product_id}`;
-    const inventory =
-      (inventoriesByPair.get(pairKey) || []).find((entry) => assignedOrderByInventoryId.get(entry.id) === row.id)
+    const pairInventories = inventoriesByPair.get(pairKey) || [];
+    const assignedInventory =
+      pairInventories.find((entry) => assignedOrderByInventoryId.get(entry.id) === row.id)
       || null;
-    const remainingQty = inventory
-      ? inventory.stocked_qty - (assignedShippedQtyByInventoryId.get(inventory.id) || 0)
+    const editableInventory = assignedInventory || pairInventories[0] || null;
+    const remainingQty = assignedInventory
+      ? assignedInventory.stocked_qty - (assignedShippedQtyByInventoryId.get(assignedInventory.id) || 0)
       : 0;
     const normalizedSku = normalizeProductCode(row.product.sku);
     const catalog = catalogBySku.get(normalizedSku);
@@ -1273,22 +1275,22 @@ export async function getInventoryRows(session: Session) {
       toOptionalNumber(yogoSource?.source_price),
       toOptionalNumber(catalog?.price),
       toOptionalNumber(row.product.unit_price),
-      toOptionalNumber(inventory?.locked_unit_price),
+      toOptionalNumber(assignedInventory?.locked_unit_price),
     );
     const rawDiscountRate = pickPreferredNumber(
       toOptionalNumber(yogoSource?.source_discount),
       toOptionalNumber(catalog?.normal_discount),
       toOptionalNumber(row.product.discount_rate),
-      toOptionalNumber(inventory?.locked_discount_rate),
+      toOptionalNumber(assignedInventory?.locked_discount_rate),
     );
     const discountRate = Math.abs(rawDiscountRate) <= 1 ? rawDiscountRate : rawDiscountRate / 100;
-    const stockedAt = inventory?.stocked_at?.toISOString() || null;
+    const stockedAt = assignedInventory?.stocked_at?.toISOString() || null;
     const shippedAt = row.shipped_at?.toISOString() || null;
-    const assignedOrderId = inventory ? assignedOrderByInventoryId.get(inventory.id) : null;
-    const showsStockDetails = Boolean(inventory?.is_stocked) && assignedOrderId === row.id;
+    const assignedOrderId = assignedInventory ? assignedOrderByInventoryId.get(assignedInventory.id) : null;
+    const showsStockDetails = Boolean(assignedInventory?.is_stocked) && assignedOrderId === row.id;
     return {
       orderId: row.id,
-      inventoryId: inventory?.id || null,
+      inventoryId: editableInventory?.id || null,
       customerId: row.customer_id,
       customerName: row.customer.name,
       productId: row.product_id,
@@ -1299,14 +1301,14 @@ export async function getInventoryRows(session: Session) {
       stockedAt: showsStockDetails ? stockedAt : null,
       shippedAt,
       trackingNo: row.tracking_no || "",
-      warehouse: inventory?.warehouse || row.warehouse || row.product.default_warehouse || "",
+      warehouse: editableInventory?.warehouse || row.warehouse || row.product.default_warehouse || "",
       isStocked: showsStockDetails,
-      stockedQty: inventory?.stocked_qty ?? 0,
+      stockedQty: assignedInventory?.stocked_qty ?? editableInventory?.stocked_qty ?? 0,
       shippedQty: row.quantity,
       remainingQty,
       unitPrice,
       discountRate,
-      stockAmount: showsStockDetails ? computeStockAmount(unitPrice, inventory?.stocked_qty ?? 0, discountRate) : 0,
+      stockAmount: showsStockDetails ? computeStockAmount(unitPrice, assignedInventory?.stocked_qty ?? 0, discountRate) : 0,
       status: deriveInventoryStatus(remainingQty),
     };
   });
