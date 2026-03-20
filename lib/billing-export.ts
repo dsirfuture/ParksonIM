@@ -63,6 +63,7 @@ type InvoiceItem = {
   qty: number;
   unitPrice: number;
   discount: string;
+  vipDiscount: string;
   amount: number;
 };
 
@@ -719,38 +720,112 @@ export async function buildBillingXlsx(data: BillingExportData) {
     qty: Number(item.qty || 0),
     unitPrice: Number(item.unitPrice || 0),
     discount: toPercentText(item.normalDiscount),
+    vipDiscount: toPercentText(item.vipDiscount),
     amount: Number(toMoney(item.lineTotal)),
   }));
 
+  const vipColumnEnabled = Boolean(data.vipDiscountEnabled);
+  const amountColumnLetter = vipColumnEnabled ? "J" : "I";
+  const trailingPadColumnLetter = vipColumnEnabled ? "K" : "J";
+  const totalDataColumns = vipColumnEnabled ? 10 : 9;
+
   worksheet.properties.defaultRowHeight = 22;
-  worksheet.columns = [
-    { key: "image", width: 12 },
-    { key: "sku", width: 18 },
-    { key: "barcode", width: 22 },
-    { key: "nameCn", width: 24 },
-    { key: "nameEs", width: 30 },
-    { key: "qty", width: 10 },
-    { key: "unitPrice", width: 12 },
-    { key: "discount", width: 13 },
-    { key: "amount", width: 14 },
-  ];
+  worksheet.pageSetup = {
+    ...worksheet.pageSetup,
+    orientation: "landscape",
+  };
+  worksheet.columns = vipColumnEnabled
+    ? [
+        { key: "image", width: 14 },
+        { key: "sku", width: 22 },
+        { key: "barcode", width: 26 },
+        { key: "nameCn", width: 18 },
+        { key: "nameEs", width: 30 },
+        { key: "qty", width: 10 },
+        { key: "unitPrice", width: 13 },
+        { key: "discount", width: 15 },
+        { key: "vipDiscount", width: 15 },
+        { key: "amount", width: 16 },
+        { key: "padK", width: 2 },
+      ]
+    : [
+        { key: "image", width: 14 },
+        { key: "sku", width: 22 },
+        { key: "barcode", width: 26 },
+        { key: "nameCn", width: 18 },
+        { key: "nameEs", width: 30 },
+        { key: "qty", width: 10 },
+        { key: "unitPrice", width: 13 },
+        { key: "discount", width: 15 },
+        { key: "amount", width: 16 },
+        { key: "padJ", width: 2 },
+      ];
 
   const brandColor = "FF2F3C7E";
-  const brandMuted = "FF8FA0BC";
-  const labelColor = "FF94A3B8";
-  const valueColor = "FF0F172A";
-  const subtleText = "FF64748B";
-  const borderColor = "FFE2E8F0";
-  const softFill = "FFF8FAFC";
-  const summaryFill = "FFF3F6FB";
-  const tableHeaderFill = "FFEFF4FA";
-
-  const allColumns = ["A", "B", "C", "D", "E", "F", "G", "H", "I"] as const;
+  const titleColor = "FF000000";
+  const labelColor = "FF000000";
+  const valueColor = "FF000000";
+  const emphasisColor = "FF000000";
+  const productBlack = "FF000000";
+  const mutedGray = "FF777777";
+  const borderColor = "FFDDDDDD";
+  const contentColumns = vipColumnEnabled
+    ? (["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"] as const)
+    : (["A", "B", "C", "D", "E", "F", "G", "H", "I"] as const);
+  const allColumns = vipColumnEnabled
+    ? ([...contentColumns, "K"] as const)
+    : ([...contentColumns, "J"] as const);
+  const chineseFontName = "Noto Sans SC";
+  const latinFontName = "Inter";
+  const excelFontName = (text: string) =>
+    hasChineseGlyph(text) ? chineseFontName : latinFontName;
+  const buildBilingualRichText = (
+    zh: string,
+    es: string,
+    options?: {
+      zhSize?: number;
+      esSize?: number;
+      zhBold?: boolean;
+      esBold?: boolean;
+      zhColor?: string;
+      esColor?: string;
+    },
+  ): ExcelJS.RichText[] => [
+    {
+      text: zh,
+      font: {
+        name: chineseFontName,
+        size: options?.zhSize ?? 11,
+        bold: options?.zhBold ?? false,
+        color: { argb: options?.zhColor ?? valueColor },
+      },
+    },
+    {
+      text: " / ",
+      font: {
+        name: latinFontName,
+        size: options?.esSize ?? options?.zhSize ?? 11,
+        bold: options?.esBold ?? options?.zhBold ?? false,
+        color: { argb: options?.esColor ?? options?.zhColor ?? valueColor },
+      },
+    },
+    {
+      text: es,
+      font: {
+        name: latinFontName,
+        size: options?.esSize ?? options?.zhSize ?? 11,
+        bold: options?.esBold ?? false,
+        color: { argb: options?.esColor ?? options?.zhColor ?? valueColor },
+      },
+    },
+  ];
 
   const applyCellStyle = (
     cellRef: string,
     options?: {
       value?: string | number;
+      richText?: ExcelJS.RichText[];
+      baseFontName?: string;
       fontSize?: number;
       bold?: boolean;
       color?: string;
@@ -764,15 +839,27 @@ export async function buildBillingXlsx(data: BillingExportData) {
     },
   ) => {
     const cell = worksheet.getCell(cellRef);
-    if (options && "value" in options) cell.value = options.value ?? "";
-    cell.font = {
-      name: getDocumentFontName(String(options?.value ?? cell.value ?? ""), {
-        chineseBold: options?.bold,
-      }),
-      size: options?.fontSize ?? 10,
-      bold: options?.bold ?? false,
-      color: { argb: options?.color ?? valueColor },
-    };
+    if (options?.richText) {
+      cell.value = { richText: options.richText };
+    } else if (options && "value" in options) {
+      cell.value = options.value ?? "";
+    }
+    if (options?.richText) {
+      const firstRunFont = options.richText[0]?.font;
+      cell.font = {
+        name: options.baseFontName ?? firstRunFont?.name ?? chineseFontName,
+        size: options?.fontSize ?? firstRunFont?.size ?? 10,
+        bold: options?.bold ?? firstRunFont?.bold ?? false,
+        color: { argb: options?.color ?? firstRunFont?.color?.argb ?? valueColor },
+      };
+    } else {
+      cell.font = {
+        name: options?.baseFontName ?? excelFontName(String(options?.value ?? cell.text ?? cell.value ?? "")),
+        size: options?.fontSize ?? 10,
+        bold: options?.bold ?? false,
+        color: { argb: options?.color ?? valueColor },
+      };
+    }
     cell.alignment = {
       vertical: options?.vertical ?? "middle",
       horizontal: options?.horizontal ?? "left",
@@ -804,6 +891,17 @@ export async function buildBillingXlsx(data: BillingExportData) {
     return cell;
   };
 
+  const clearRow = (rowNumber: number) => {
+    for (const column of allColumns) {
+      const cell = worksheet.getCell(`${column}${rowNumber}`);
+      cell.value = null;
+      cell.fill = undefined;
+      cell.border = {};
+      cell.font = undefined;
+      cell.alignment = undefined;
+    }
+  };
+
   const styleRowCells = (
     rowNumber: number,
     columns: readonly string[],
@@ -814,57 +912,38 @@ export async function buildBillingXlsx(data: BillingExportData) {
     }
   };
 
+  const setOuterBorder = (
+    columns: readonly string[],
+    startRow: number,
+    endRow: number,
+    fill?: string,
+  ) => {
+    for (let row = startRow; row <= endRow; row += 1) {
+      for (let index = 0; index < columns.length; index += 1) {
+        const column = columns[index]!;
+        applyCellStyle(`${column}${row}`, {
+          fill,
+          border: {
+            top: row === startRow,
+            bottom: row === endRow,
+            left: index === 0,
+            right: index === columns.length - 1,
+          },
+        });
+      }
+    }
+  };
+
   const writeSummaryPair = (
     labelCell: string,
     valueCell: string,
     label: string,
     value: string,
-    options?: { emphasize?: boolean },
   ) => {
     applyCellStyle(labelCell, {
+      baseFontName: chineseFontName,
       value: label,
-      fontSize: 8.5,
-      bold: true,
-      color: brandMuted,
-      horizontal: "left",
-      vertical: "middle",
-      shrinkToFit: true,
-    });
-    applyCellStyle(valueCell, {
-      value,
-      fontSize: options?.emphasize ? 17 : 11.5,
-      bold: true,
-      color: valueColor,
-      horizontal: "right",
-      vertical: "middle",
-    });
-  };
-
-  const paintSection = (startCol: string, endCol: string, startRow: number, endRow: number) => {
-    const startIndex = allColumns.indexOf(startCol as (typeof allColumns)[number]);
-    const endIndex = allColumns.indexOf(endCol as (typeof allColumns)[number]);
-    const blockColumns = allColumns.slice(startIndex, endIndex + 1);
-    for (let row = startRow; row <= endRow; row += 1) {
-      for (const column of blockColumns) {
-        applyCellStyle(`${column}${row}`, {
-          fill: softFill,
-          border: true,
-        });
-      }
-    }
-    return blockColumns;
-  };
-
-  const writeSectionField = (
-    labelCell: string,
-    valueCell: string,
-    label: string,
-    value: string,
-    options?: { wrapText?: boolean; valueAlign?: ExcelJS.Alignment["horizontal"] },
-  ) => {
-    applyCellStyle(labelCell, {
-      value: label,
-      fontSize: 8.4,
+      fontSize: 10,
       bold: true,
       color: labelColor,
       horizontal: "left",
@@ -874,12 +953,37 @@ export async function buildBillingXlsx(data: BillingExportData) {
     applyCellStyle(valueCell, {
       value,
       fontSize: 11,
-      bold: true,
+      bold: false,
       color: valueColor,
-      horizontal: options?.valueAlign ?? "left",
+      horizontal: "left",
       vertical: "middle",
-      wrapText: options?.wrapText ?? false,
     });
+  };
+
+  const normalizeAddressText = (value: string) => {
+    const text = String(value || "").trim();
+    if (!text) return "-";
+    if (text.includes(",")) {
+      return text
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .join("\n");
+    }
+    const tokens = text.replace(/\s{2,}/g, " ").split(" ").filter(Boolean);
+    const lines: string[] = [];
+    let current = "";
+    for (const token of tokens) {
+      const next = current ? `${current} ${token}` : token;
+      if (next.length > 28 && current) {
+        lines.push(current);
+        current = token;
+      } else {
+        current = next;
+      }
+    }
+    if (current) lines.push(current);
+    return lines.slice(0, 3).join("\n");
   };
 
   const styleTableCell = (
@@ -896,8 +1000,8 @@ export async function buildBillingXlsx(data: BillingExportData) {
   ) => {
     const text = String(cell.value ?? "");
     cell.font = {
-      name: getDocumentFontName(text, { chineseBold: options?.bold }),
-      size: options?.fontSize ?? 10.5,
+      name: excelFontName(text),
+      size: options?.fontSize ?? 12,
       bold: options?.bold ?? false,
       color: { argb: options?.color ?? valueColor },
     };
@@ -924,243 +1028,177 @@ export async function buildBillingXlsx(data: BillingExportData) {
     };
   };
 
-  worksheet.getRow(1).height = 12;
-  worksheet.getRow(2).height = 24;
-  worksheet.getRow(3).height = 36;
-  worksheet.getRow(4).height = 20;
-  worksheet.getRow(5).height = 8;
-  worksheet.getRow(6).height = 22;
-  worksheet.getRow(7).height = 26;
-  worksheet.getRow(8).height = 22;
-  worksheet.getRow(9).height = 26;
-  worksheet.getRow(10).height = 22;
-  worksheet.getRow(11).height = 26;
-  worksheet.getRow(12).height = 22;
-  worksheet.getRow(13).height = 42;
-  worksheet.getRow(14).height = 12;
-  worksheet.getRow(15).height = 22;
-  worksheet.getRow(16).height = 26;
+  worksheet.getRow(1).height = 15;
+  worksheet.getRow(2).height = 20;
+  worksheet.getRow(3).height = 20;
+  worksheet.getRow(4).height = 36;
+  worksheet.getRow(5).height = 20;
+  worksheet.getRow(6).height = 20;
+  worksheet.getRow(7).height = 20;
+  worksheet.getRow(8).height = 20;
+  worksheet.getRow(9).height = 20;
+  worksheet.getRow(10).height = 20;
+  worksheet.getRow(11).height = 20;
+  worksheet.getRow(12).height = 20;
+  worksheet.getRow(13).height = 44;
 
-  styleRowCells(2, allColumns, { fill: "FFFFFFFF" });
-  styleRowCells(3, allColumns, { fill: "FFFFFFFF" });
-  styleRowCells(4, allColumns, { fill: "FFFFFFFF" });
+  for (let row = 1; row <= 22; row += 1) clearRow(row);
 
-  if (logoBuffer) {
-    const imageId = workbook.addImage({
-      base64: "data:image/png;base64," + logoBuffer.toString("base64"),
-      extension: "png",
-    });
-    worksheet.addImage(imageId, {
-      tl: { col: 0.15, row: 1.15 },
-      ext: { width: 30, height: 30 },
-      editAs: "oneCell",
-    });
-  }
-
-  applyCellStyle("B2", {
+  applyCellStyle("A2", {
     value: "\u767e\u76db\u4f9b\u5e94\u94fe",
-    fontSize: 12.5,
+    baseFontName: chineseFontName,
+    fontSize: 15,
     bold: true,
     color: brandColor,
     horizontal: "left",
+    border: { top: false, left: false, bottom: false, right: false },
   });
-  applyCellStyle("B3", {
+  applyCellStyle("A4", {
     value: "INVOICE",
-    fontSize: 24,
+    baseFontName: latinFontName,
+    fontSize: 34,
     bold: true,
-    color: valueColor,
+    color: titleColor,
     horizontal: "left",
+    border: { top: false, left: false, bottom: false, right: false },
   });
-  applyCellStyle("B4", {
-    value: "M\u00c1S QUE PRODUCTOS, ENTREGAMOS SOLUCIONES",
-    fontSize: 8.5,
-    color: subtleText,
-    horizontal: "left",
-  });
-
-  styleRowCells(2, ["F", "G", "H", "I"], { fill: summaryFill });
-  styleRowCells(3, ["F", "G", "H", "I"], { fill: summaryFill });
-  styleRowCells(4, ["F", "G"], { fill: summaryFill });
-  styleRowCells(4, ["H", "I"], { fill: "FFFFFFFF" });
-  for (const cellRef of ["F2", "G2", "H2", "I2", "F3", "G3", "H3", "I3", "F4", "G4"]) {
-    applyCellStyle(cellRef, { border: true, fill: summaryFill });
-  }
-  writeSummaryPair("F2", "G2", "\u8ba2\u5355\u53f7 / No. Ped.", header.orderNo);
-  writeSummaryPair("H2", "I2", "\u51fa\u8d26\u65e5\u671f / F. Fact.", header.invoiceDate);
-  writeSummaryPair("F3", "G3", "\u5408\u8ba1\u91d1\u989d / Mto. Total", `$${toMoney(header.totalAmount)}`, {
-    emphasize: true,
-  });
-  applyCellStyle("F4", {
-    value: data.vipDiscountEnabled ? "VIP" : "STANDARD",
-    fontSize: 8,
-    bold: true,
-    color: data.vipDiscountEnabled ? brandColor : subtleText,
-    horizontal: "center",
-    fill: summaryFill,
-    border: true,
-  });
-  applyCellStyle("G4", {
-    value: data.vipDiscountEnabled ? "Cliente VIP" : "Cliente Est\u00e1ndar",
-    fontSize: 9,
-    bold: true,
-    color: valueColor,
-    horizontal: "left",
-    fill: summaryFill,
-    border: true,
-  });
-
-  const customerColumns = paintSection("A", "C", 6, 13);
-  const billingColumns = paintSection("D", "F", 6, 13);
-  const shippingColumns = paintSection("G", "I", 6, 13);
-
   applyCellStyle("A6", {
-    value: "\u5ba2\u6237\u4fe1\u606f / CLIENTE",
-    fontSize: 10.5,
-    bold: true,
-    color: brandColor,
-    fill: softFill,
-    border: true,
-  });
-  applyCellStyle("D6", {
-    value: "\u8d26\u5355\u4fe1\u606f / FACT.",
-    fontSize: 10.5,
-    bold: true,
-    color: brandColor,
-    fill: softFill,
-    border: true,
-  });
-  applyCellStyle("G6", {
-    value: "\u7269\u6d41\u4fe1\u606f / ENV\u00cdO",
-    fontSize: 10.5,
-    bold: true,
-    color: brandColor,
-    fill: softFill,
-    border: true,
-  });
-  for (const cellRef of ["B6", "C6", "E6", "F6", "H6", "I6"]) {
-    applyCellStyle(cellRef, { fill: softFill, border: true });
-  }
-
-  writeSectionField("A7", "B7", "\u5ba2\u6237\u540d\u79f0 / Nom. Clte.", header.customerName);
-  applyCellStyle("C7", { fill: softFill, border: true });
-  writeSectionField("A8", "B8", "\u6536\u8d27\u4eba / Dest.", header.receiver);
-  applyCellStyle("C8", { fill: softFill, border: true });
-  writeSectionField("A9", "B9", "\u7535\u8bdd / Tel. Dest.", header.receiverPhone);
-  applyCellStyle("C9", { fill: softFill, border: true });
-  writeSectionField("A10", "B10", "\u9001\u8d27\u5730\u5740 / Dir. Ent.", header.receiverAddress, {
-    wrapText: true,
-  });
-  applyCellStyle("C10", { fill: softFill, border: true });
-  styleRowCells(11, customerColumns, { fill: softFill, border: true });
-  styleRowCells(12, customerColumns, { fill: softFill, border: true });
-  styleRowCells(13, customerColumns, { fill: softFill, border: true });
-
-  writeSectionField("D7", "E7", "\u53d1\u8d26\u65e5\u671f / F. Env.", header.shipDate);
-  applyCellStyle("F7", { fill: softFill, border: true });
-  writeSectionField("D8", "E8", "\u95e8\u5e97\u6807\u8bb0 / Etiq. Tda.", header.storeTag);
-  applyCellStyle("F8", { fill: softFill, border: true });
-  writeSectionField("D9", "E9", "\u8d26\u671f / Plazo", header.paymentTerm);
-  applyCellStyle("F9", { fill: softFill, border: true });
-  if (data.vipDiscountEnabled) {
-    writeSectionField("D10", "E10", "VIP / Tipo", "VIP\u5ba2\u6237");
-    applyCellStyle("F10", { fill: softFill, border: true });
-  } else {
-    styleRowCells(10, billingColumns, { fill: softFill, border: true });
-  }
-  styleRowCells(11, billingColumns, { fill: softFill, border: true });
-  styleRowCells(12, billingColumns, { fill: softFill, border: true });
-  styleRowCells(13, billingColumns, { fill: softFill, border: true });
-
-  writeSectionField("G7", "H7", "\u53d1\u8d27\u4ed3 / Dep. Env.", header.warehouse);
-  applyCellStyle("I7", { fill: softFill, border: true });
-  writeSectionField("G8", "H8", "\u53d1\u8d27\u65b9\u5f0f / Met. Env.", header.shippingMethod);
-  applyCellStyle("I8", { fill: softFill, border: true });
-  writeSectionField("G9", "H9", "\u6258\u8fd0\u516c\u53f8 / Emp. Transp.", header.carrier);
-  applyCellStyle("I9", { fill: softFill, border: true });
-  writeSectionField("G10", "H10", "\u88c5\u7bb1\u4ef6\u6570 / Cant. Cajas", String(header.totalBoxes || 0));
-  applyCellStyle("I10", { fill: softFill, border: true });
-  writeSectionField("G11", "H11", "\u5546\u54c1\u603b\u6570\u91cf / Tot. Prod.", String(header.totalProducts || 0));
-  applyCellStyle("I11", { fill: softFill, border: true });
-  styleRowCells(12, shippingColumns, { fill: softFill, border: true });
-  styleRowCells(13, shippingColumns, { fill: softFill, border: true });
-
-  applyCellStyle("A15", {
-    value: "\u5546\u54c1\u660e\u7ec6 / DETALLE",
-    fontSize: 10.5,
-    bold: true,
-    color: brandColor,
+    value: "M\u00c1S QUE PRODUCTOS, ENTREGAMOS SOLUCIONES",
+    baseFontName: latinFontName,
+    fontSize: 12,
+    bold: false,
+    color: productBlack,
     horizontal: "left",
-  });
-  for (const column of allColumns.slice(1)) {
-    applyCellStyle(`${column}15`, {
-      border: { bottom: true },
-    });
-  }
-  applyCellStyle("A15", {
-    value: "\u5546\u54c1\u660e\u7ec6 / DETALLE",
-    fontSize: 10.5,
-    bold: true,
-    color: brandColor,
-    border: { bottom: true },
+    border: { top: false, left: false, bottom: false, right: false },
   });
 
-  const tableHeaderRow = 16;
-  const tableHeaderValues = [
-    "\u56fe\u7247",
-    "\u7f16\u53f7",
-    "\u6761\u5f62\u7801",
-    "\u4e2d\u6587\u540d",
-    "\u897f\u6587\u540d",
-    "\u6570\u91cf",
-    "\u5355\u4ef7",
-    "\u666e\u901a\u6298\u6263",
-    "\u91d1\u989d",
-  ];
-  const tableHeader = worksheet.getRow(tableHeaderRow);
-  tableHeader.values = tableHeaderValues;
-  tableHeader.eachCell((cell) => {
-    styleTableCell(cell, {
-      fill: tableHeaderFill,
-      bold: true,
-      fontSize: 10.5,
-      color: "FF334155",
+  for (const ref of ["A8", "B8", "A9", "B9", "A10", "B10"]) {
+    const cell = worksheet.getCell(ref);
+    cell.value = null;
+    cell.fill = undefined;
+    cell.border = {};
+    cell.font = undefined;
+    cell.alignment = undefined;
+  }
+  writeSummaryPair("A8", "B8", "\u8ba2\u5355\u53f7", header.orderNo);
+  writeSummaryPair("A9", "B9", "\u51fa\u8d26\u65e5\u671f", header.invoiceDate);
+  writeSummaryPair("A10", "B10", "\u5408\u8ba1", `$${toMoney(header.totalAmount)}`);
+  worksheet.getCell("A10").font = {
+    name: chineseFontName,
+    size: 10,
+    bold: true,
+    color: { argb: labelColor },
+  };
+  worksheet.getCell("B8").font = {
+    name: latinFontName,
+    size: 11,
+    bold: false,
+    color: { argb: emphasisColor },
+  };
+  worksheet.getCell("B9").font = {
+    name: latinFontName,
+    size: 11,
+    bold: false,
+    color: { argb: emphasisColor },
+  };
+  worksheet.getCell("B10").font = {
+    name: latinFontName,
+    size: 11,
+    bold: false,
+    color: { argb: emphasisColor },
+  };
+
+  const headerCells = [
+    { cell: "A12", zh: "\u56fe\u7247", es: "IMG." },
+    { cell: "B12", zh: "\u7f16\u53f7", es: "COD." },
+    { cell: "C12", zh: "\u6761\u5f62\u7801", es: "COD. BARR." },
+    { cell: "D12", zh: "\u4e2d\u6587\u540d", es: "NOM. CH." },
+    { cell: "E12", zh: "\u897f\u6587\u540d", es: "NOM. ESP." },
+    { cell: "F12", zh: "\u6570\u91cf", es: "CANT." },
+    { cell: "G12", zh: "\u5355\u4ef7", es: "P. UNIT." },
+    { cell: "H12", zh: "\u666e\u901a\u6298\u6263", es: "DESC. NORM." },
+    ...(vipColumnEnabled
+      ? ([{ cell: "I12", zh: "VIP\u6298\u6263", es: "VIP DESC." }, { cell: "J12", zh: "\u91d1\u989d", es: "IMP." }] as const)
+      : ([{ cell: "I12", zh: "\u91d1\u989d", es: "IMP." }] as const)),
+  ] as const;
+  for (const entry of headerCells) {
+    applyCellStyle(entry.cell, {
+      richText: [
+        {
+          text: `${entry.zh}\n`,
+          font: {
+            name: chineseFontName,
+            size: 11,
+            bold: true,
+            color: { argb: productBlack },
+          },
+        },
+        {
+          text: entry.es,
+          font: {
+            name: latinFontName,
+            size: 10,
+            bold: false,
+            color: { argb: mutedGray },
+          },
+        },
+      ],
+      baseFontName: chineseFontName,
+      border: true,
       horizontal: "center",
+      vertical: "middle",
+      wrapText: true,
+      fontSize: 11,
+      bold: true,
+      color: productBlack,
     });
-  });
+  }
 
   for (let index = 0; index < items.length; index += 1) {
     const item = items[index]!;
-    const rowNumber = tableHeaderRow + 1 + index;
+    const rowNumber = 13 + index;
     const row = worksheet.getRow(rowNumber);
-    row.height = 48;
-    row.values = [
-      "",
-      item.sku,
-      item.barcode,
-      item.nameCn,
-      item.nameEs,
-      item.qty,
-      item.unitPrice,
-      item.discount,
-      item.amount,
-    ];
+    row.height = 44;
+    row.getCell(2).value = item.sku;
+    row.getCell(3).value = item.barcode;
+    row.getCell(4).value = item.nameCn;
+    row.getCell(5).value = item.nameEs;
+    row.getCell(6).value = item.qty;
+    row.getCell(7).value = item.unitPrice;
+    row.getCell(8).value = item.discount;
+    if (vipColumnEnabled) {
+      row.getCell(9).value = item.vipDiscount;
+      row.getCell(10).value = item.amount;
+    } else {
+      row.getCell(9).value = item.amount;
+    }
 
-    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+    for (let colNumber = 1; colNumber <= totalDataColumns; colNumber += 1) {
+      const cell = row.getCell(colNumber);
       const horizontal =
-        colNumber === 4 || colNumber === 5
+        colNumber >= 2 && colNumber <= 5
           ? "left"
-          : colNumber >= 6
-            ? "center"
-            : "left";
+          : colNumber >= 6 && colNumber <= totalDataColumns
+              ? "center"
+              : "left";
       styleTableCell(cell, {
-        horizontal,
-        wrapText: colNumber === 4 || colNumber === 5,
+        horizontal: colNumber === 1 ? "center" : horizontal,
+        wrapText: colNumber === 5,
         numFmt:
-          colNumber === 7 || colNumber === 9
+          colNumber === 7 || colNumber === (vipColumnEnabled ? 10 : 9)
             ? '"$"#,##0.00'
             : undefined,
+        bold: false,
+        fontSize: 11,
+        color: productBlack,
       });
-    });
+    }
+    const trailingCell = row.getCell(totalDataColumns + 1);
+    trailingCell.value = null;
+    trailingCell.fill = undefined;
+    trailingCell.border = {};
+    trailingCell.font = undefined;
+    trailingCell.alignment = undefined;
 
     const image = await loadProductImageBuffer(item.sku, item.barcode);
     if (image) {
@@ -1169,8 +1207,8 @@ export async function buildBillingXlsx(data: BillingExportData) {
         extension: image.extension,
       });
       worksheet.addImage(imageId, {
-        tl: { col: 0.18, row: rowNumber - 0.86 },
-        ext: { width: 38, height: 38 },
+        tl: { col: 0.24, row: rowNumber - 0.97 },
+        ext: { width: 54, height: 54 },
         editAs: "oneCell",
       });
     } else {
@@ -1178,34 +1216,6 @@ export async function buildBillingXlsx(data: BillingExportData) {
       row.getCell(1).alignment = { vertical: "middle", horizontal: "center" };
     }
   }
-
-  const totalRowNumber = tableHeaderRow + items.length + 1;
-  worksheet.getRow(totalRowNumber).height = 24;
-  for (const column of allColumns) {
-    applyCellStyle(`${column}${totalRowNumber}`, {
-      fill: summaryFill,
-      border: true,
-    });
-  }
-  applyCellStyle(`H${totalRowNumber}`, {
-    value: "\u5408\u8ba1 / TOTAL",
-    fontSize: 10,
-    bold: true,
-    color: brandColor,
-    horizontal: "center",
-    fill: summaryFill,
-    border: true,
-  });
-  applyCellStyle(`I${totalRowNumber}`, {
-    value: header.totalAmount,
-    fontSize: 11,
-    bold: true,
-    color: valueColor,
-    horizontal: "right",
-    numFmt: '"$"#,##0.00',
-    fill: summaryFill,
-    border: true,
-  });
 
   return workbook.xlsx.writeBuffer();
 }
