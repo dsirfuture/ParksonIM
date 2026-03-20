@@ -889,17 +889,18 @@ export function DropshippingClient({
             : new Date(rangeStart.getUTCFullYear(), rangeStart.getUTCMonth() + 1, 1, 6, 0, 0, 0);
 
     if (lang === "zh") {
-      const year = new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", year: "numeric" }).format(rangeStart);
-      const month = new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", month: "numeric" }).format(rangeStart);
-      const day = new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", day: "numeric" }).format(rangeStart);
+      const extractDigits = (value: string) => value.replace(/[^\d]/g, "");
+      const year = extractDigits(new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", year: "numeric" }).format(rangeStart));
+      const month = extractDigits(new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", month: "numeric" }).format(rangeStart));
+      const day = extractDigits(new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", day: "numeric" }).format(rangeStart));
       if (overviewRange === "day") return `${month}月${day}日`;
       if (overviewRange === "month") return `${year}/${month}`;
       if (overviewRange === "year") return year;
       const weekEnd = new Date(rangeEndExclusive.getTime() - 24 * 60 * 60 * 1000);
-      const startMonth = new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", month: "numeric" }).format(rangeStart);
-      const startDay = new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", day: "numeric" }).format(rangeStart);
-      const endMonth = new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", month: "numeric" }).format(weekEnd);
-      const endDay = new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", day: "numeric" }).format(weekEnd);
+      const startMonth = extractDigits(new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", month: "numeric" }).format(rangeStart));
+      const startDay = extractDigits(new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", day: "numeric" }).format(rangeStart));
+      const endMonth = extractDigits(new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", month: "numeric" }).format(weekEnd));
+      const endDay = extractDigits(new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", day: "numeric" }).format(weekEnd));
       return `${startMonth}/${startDay}-${endMonth}/${endDay}`;
     }
 
