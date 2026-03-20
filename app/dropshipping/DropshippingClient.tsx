@@ -2364,6 +2364,9 @@ export function DropshippingClient({
   }
 
   function beginInventoryEdit(row: DsInventoryRow) {
+    const initialQty = row.inventoryId
+      ? Math.max(row.stockedQty, 0)
+      : Math.max(row.shippedQty, 1);
     setInventoryEdit({
       mode: row.inventoryId ? "edit" : "create",
       id: row.inventoryId || "",
@@ -2375,12 +2378,12 @@ export function DropshippingClient({
       sku: row.sku,
       productNameZh: row.productNameZh,
       productNameEs: row.productNameEs || "",
-      isStocked: row.isStocked || true,
-      stockedAt: toDateInputValue(row.stockedAt || row.shippedAt),
-      stockedQty: String(row.stockedQty > 0 ? row.stockedQty : Math.max(row.shippedQty, 1)),
+      isStocked: row.inventoryId ? row.isStocked : true,
+      stockedAt: toDateInputValue(row.inventoryId ? row.stockedAt : (row.stockedAt || row.shippedAt)),
+      stockedQty: String(initialQty),
       stockAmount: computeInventoryAmount(
         String(row.unitPrice ?? ""),
-        String(row.stockedQty > 0 ? row.stockedQty : Math.max(row.shippedQty, 1)),
+        String(initialQty),
         formatDiscountPercentInput(row.discountRate),
       ),
       unitPrice: String(row.unitPrice ?? ""),
@@ -2461,7 +2464,7 @@ export function DropshippingClient({
     try {
       setSaving(true);
       setError("");
-      const stockedQty = Number(inventoryEdit.stockedQty || 0);
+      const stockedQty = inventoryEdit.isStocked ? Number(inventoryEdit.stockedQty || 0) : 0;
       const unitPrice = inventoryEdit.unitPrice.trim();
       const discountRate = inventoryEdit.discountRate.trim();
       const stockedAt = inventoryEdit.stockedAt.trim();
@@ -5055,7 +5058,21 @@ export function DropshippingClient({
                 <p className="text-xs text-slate-500">{lang === "zh" ? "备货" : "Stock"}</p>
                 <button
                   type="button"
-                  onClick={() => setInventoryEdit((prev) => (prev ? { ...prev, isStocked: !prev.isStocked } : prev))}
+                  onClick={() =>
+                    setInventoryEdit((prev) => {
+                      if (!prev) return prev;
+                      const nextIsStocked = !prev.isStocked;
+                      const nextQty = nextIsStocked ? (Number(prev.stockedQty || 0) > 0 ? prev.stockedQty : "1") : "0";
+                      return {
+                        ...prev,
+                        isStocked: nextIsStocked,
+                        stockedQty: nextQty,
+                        stockAmount: nextIsStocked
+                          ? (computeInventoryAmount(prev.unitPrice, nextQty, prev.discountRate) || prev.stockAmount)
+                          : "0",
+                      };
+                    })
+                  }
                   className={`inline-flex h-11 w-full items-center justify-between rounded-xl border px-3 text-sm transition ${
                     inventoryEdit.isStocked
                       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
