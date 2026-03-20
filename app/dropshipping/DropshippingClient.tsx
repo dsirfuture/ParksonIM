@@ -86,6 +86,13 @@ type InventoryEditState = {
   status: DsInventoryStatus | null;
 } | null;
 
+type InventoryExportState = {
+  stocked: "all" | "stocked" | "unstocked";
+  status: "all" | DsInventoryStatus;
+  skuKeyword: string;
+  includeAllShipped: boolean;
+} | null;
+
 type InventoryCustomerOption = {
   id: string;
   name: string;
@@ -329,6 +336,15 @@ function getMexicoDateParts(date: Date) {
   const weekday = parts.find((part) => part.type === "weekday")?.value || "";
   const hour = Number(parts.find((part) => part.type === "hour")?.value || "0");
   return { weekday, hour };
+}
+
+function triggerBrowserDownload(url: string) {
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
 }
 
 function shouldShowSaturdaySettlementReminder(date: Date) {
@@ -787,6 +803,7 @@ export function DropshippingClient({
   const [inventoryPreview, setInventoryPreview] = useState<InventoryPreviewState>(null);
   const [inventoryShippedPreview, setInventoryShippedPreview] = useState<InventoryShippedPreviewState>(null);
   const [inventoryEdit, setInventoryEdit] = useState<InventoryEditState>(null);
+  const [inventoryExport, setInventoryExport] = useState<InventoryExportState>(null);
   const [inventoryCustomers, setInventoryCustomers] = useState<InventoryCustomerOption[]>([]);
   const [inventoryProductQuery, setInventoryProductQuery] = useState("");
   const [inventoryProductOptions, setInventoryProductOptions] = useState<InventoryProductOption[]>([]);
@@ -2544,6 +2561,25 @@ export function DropshippingClient({
     }
   }
 
+  function openInventoryExport() {
+    setInventoryExport({
+      stocked: inventoryStockFilter,
+      status: "all",
+      skuKeyword: inventoryKeyword,
+      includeAllShipped: true,
+    });
+  }
+
+  function exportFilteredInventory(kind: "xlsx" | "pdf") {
+    if (!inventoryExport) return;
+    const searchParams = new URLSearchParams();
+    if (inventoryExport.stocked !== "all") searchParams.set("stocked", inventoryExport.stocked);
+    if (inventoryExport.status !== "all") searchParams.set("status", inventoryExport.status);
+    if (inventoryExport.skuKeyword.trim()) searchParams.set("sku", inventoryExport.skuKeyword.trim());
+    if (!inventoryExport.includeAllShipped) searchParams.set("allShipped", "0");
+    triggerBrowserDownload(`/api/dropshipping/inventory/export/${kind}?${searchParams.toString()}`);
+  }
+
   function pickInventoryProduct(option: InventoryProductOption) {
     const qty = Number(inventoryEdit?.stockedQty || 0);
     const pickedUnitPrice = Number(option.unitPrice || 0);
@@ -3727,6 +3763,13 @@ export function DropshippingClient({
           }
           right={
             <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-end lg:w-auto">
+              <button
+                type="button"
+                onClick={openInventoryExport}
+                className="inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                <span className="whitespace-nowrap">{lang === "zh" ? "筛选导出" : "Exportar filtro"}</span>
+              </button>
               <button
                 type="button"
                 onClick={() => void beginInventoryCreate()}
@@ -5233,6 +5276,91 @@ export function DropshippingClient({
                 className="h-10 rounded-xl bg-primary px-5 text-sm font-semibold text-white disabled:opacity-60"
               >
                 {saving ? (lang === "zh" ? "保存中..." : "Guardando...") : (lang === "zh" ? "保存" : "Guardar")}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {inventoryExport ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <h3 className="text-lg font-semibold text-slate-900">{lang === "zh" ? "筛选导出" : "Exportar filtro"}</h3>
+            </div>
+            <div className="grid gap-4 px-5 py-5 md:grid-cols-2">
+              <div className="space-y-1">
+                <p className="text-xs text-slate-500">{lang === "zh" ? "已备货" : "Stock"}</p>
+                <select
+                  value={inventoryExport.stocked}
+                  onChange={(event) =>
+                    setInventoryExport((prev) => prev ? { ...prev, stocked: event.target.value as "all" | "stocked" | "unstocked" } : prev)
+                  }
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none"
+                >
+                  <option value="all">{lang === "zh" ? "全部" : "Todos"}</option>
+                  <option value="stocked">{lang === "zh" ? "已备货" : "Con stock"}</option>
+                  <option value="unstocked">{lang === "zh" ? "未备货" : "Sin stock"}</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-slate-500">{lang === "zh" ? "备货状态" : "Estado stock"}</p>
+                <select
+                  value={inventoryExport.status}
+                  onChange={(event) =>
+                    setInventoryExport((prev) => prev ? { ...prev, status: event.target.value as "all" | DsInventoryStatus } : prev)
+                  }
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none"
+                >
+                  <option value="all">{lang === "zh" ? "全部" : "Todos"}</option>
+                  <option value="healthy">{lang === "zh" ? "充足" : "Suficiente"}</option>
+                  <option value="low">{lang === "zh" ? "偏低" : "Bajo"}</option>
+                  <option value="empty">{lang === "zh" ? "售罄" : "Agotado"}</option>
+                </select>
+              </div>
+              <div className="space-y-1 md:col-span-2">
+                <p className="text-xs text-slate-500">{lang === "zh" ? "商品编码" : "SKU"}</p>
+                <input
+                  value={inventoryExport.skuKeyword}
+                  onChange={(event) =>
+                    setInventoryExport((prev) => prev ? { ...prev, skuKeyword: event.target.value } : prev)
+                  }
+                  placeholder={lang === "zh" ? "输入商品编码" : "Escribe SKU"}
+                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm text-slate-700 outline-none"
+                />
+              </div>
+              <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3">
+                <input
+                  type="checkbox"
+                  checked={inventoryExport.includeAllShipped}
+                  onChange={(event) =>
+                    setInventoryExport((prev) => prev ? { ...prev, includeAllShipped: event.target.checked } : prev)
+                  }
+                  className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/20"
+                />
+                <span className="text-sm text-slate-700">{lang === "zh" ? "全部发货记录" : "Todos los envios"}</span>
+              </label>
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setInventoryExport(null)}
+                className="h-10 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-600"
+              >
+                {lang === "zh" ? "取消" : "Cancelar"}
+              </button>
+              <button
+                type="button"
+                onClick={() => exportFilteredInventory("xlsx")}
+                className="h-10 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700"
+              >
+                XLSX
+              </button>
+              <button
+                type="button"
+                onClick={() => exportFilteredInventory("pdf")}
+                className="h-10 rounded-xl bg-primary px-4 text-sm font-semibold text-white"
+              >
+                PDF
               </button>
             </div>
           </div>
