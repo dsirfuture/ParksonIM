@@ -1278,9 +1278,8 @@ export async function getInventoryRows(session: Session) {
     );
     const linkedInventory = pairInventories.find((entry) => entry.linked_order_id === row.id) || null;
     const assignedInventory =
-      linkedInventory
-      || 
-      pairInventories.find((entry) => assignedOrderByInventoryId.get(entry.id) === row.id)
+      (linkedInventory?.is_stocked ? linkedInventory : null)
+      || pairInventories.find((entry) => entry.is_stocked && assignedOrderByInventoryId.get(entry.id) === row.id)
       || null;
     const editableInventory =
       linkedInventory
