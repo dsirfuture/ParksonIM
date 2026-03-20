@@ -230,6 +230,14 @@ function fmtDate(value: string | null | undefined, lang: "zh" | "es") {
   }).format(new Date(value));
 }
 
+function buildInventoryProductDisplay(sku: string, nameZh?: string | null, nameEs?: string | null) {
+  return `${sku} / ${nameZh || nameEs || ""}`.trim();
+}
+
+function extractInventoryProductKeyword(query: string) {
+  return query.split("/")[0]?.trim() || query.trim();
+}
+
 function parseDateOnlyParts(value: string) {
   const trimmed = String(value || "").trim();
   const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/);
@@ -806,7 +814,7 @@ export function DropshippingClient({
     const timer = window.setTimeout(async () => {
       try {
         setInventoryProductLoading(true);
-        const keyword = inventoryProductQuery.trim();
+        const keyword = extractInventoryProductKeyword(inventoryProductQuery);
         const response = await fetch(`/api/dropshipping/product-search${keyword ? `?keyword=${encodeURIComponent(keyword)}` : ""}`, {
           signal: controller.signal,
         });
@@ -828,6 +836,37 @@ export function DropshippingClient({
       window.clearTimeout(timer);
     };
   }, [inventoryEdit, inventoryProductQuery]);
+
+  useEffect(() => {
+    if (!inventoryEdit || inventoryEdit.mode !== "create") return;
+    const keyword = extractInventoryProductKeyword(inventoryProductQuery);
+    if (!keyword) return;
+
+    const normalizedKeyword = normalizeProductCode(keyword).toLowerCase();
+    if (!normalizedKeyword) return;
+
+    const exactMatch = inventoryProductOptions.find(
+      (option) => normalizeProductCode(option.sku).toLowerCase() === normalizedKeyword,
+    );
+    const uniquePrefixMatch = exactMatch
+      || (inventoryProductOptions.length > 0
+        ? inventoryProductOptions.filter((option) =>
+            normalizeProductCode(option.sku).toLowerCase().startsWith(normalizedKeyword),
+          )[0]
+        : undefined);
+
+    if (!uniquePrefixMatch) return;
+
+    const prefixMatches = inventoryProductOptions.filter((option) =>
+      normalizeProductCode(option.sku).toLowerCase().startsWith(normalizedKeyword),
+    );
+
+    if (!exactMatch && prefixMatches.length !== 1) return;
+    if (inventoryEdit.productCatalogId === uniquePrefixMatch.id) return;
+
+    pickInventoryProduct(uniquePrefixMatch);
+    setInventoryProductOptions([]);
+  }, [inventoryEdit, inventoryProductOptions, inventoryProductQuery]);
 
   useEffect(() => {
     setFinancePreviewPage(1);
@@ -2438,7 +2477,7 @@ export function DropshippingClient({
       remainingQty: row.remainingQty,
       status: row.status,
     });
-    setInventoryProductQuery(`${row.sku} / ${row.productNameZh || ""}`.trim());
+    setInventoryProductQuery(buildInventoryProductDisplay(row.sku, row.productNameZh, row.productNameEs));
   }
 
   async function beginInventoryCreate() {
@@ -2501,7 +2540,8 @@ export function DropshippingClient({
         : prev.discountRate,
       stockAmount: nextAmount > 0 ? String(nextAmount) : prev.stockAmount,
     } : prev));
-    setInventoryProductQuery(`${option.sku} / ${option.nameZh || option.nameEs || ""}`.trim());
+    setInventoryProductQuery(buildInventoryProductDisplay(option.sku, option.nameZh, option.nameEs));
+    setInventoryProductOptions([]);
   }
 
   async function saveInventoryEdit() {
@@ -4975,7 +5015,7 @@ export function DropshippingClient({
                   value={inventoryEdit.mode === "create" ? inventoryProductQuery : `${inventoryEdit.sku} / ${inventoryEdit.productNameZh || "-"}`}
                   disabled={inventoryEdit.mode !== "create"}
                   onChange={(event) => setInventoryProductQuery(event.target.value)}
-                  placeholder={lang === "zh" ? "搜索编码 / 中文名" : "Buscar codigo / nombre"}
+                  placeholder={lang === "zh" ? "输入产品编码" : "Escribe el codigo del producto"}
                   className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40 disabled:bg-slate-50 disabled:text-slate-500"
                 />
                 {inventoryEdit.mode === "create" && inventoryProductQuery.trim().length > 0 ? (
@@ -5008,13 +5048,11 @@ export function DropshippingClient({
                           </span>
                         </button>
                       ))
-                    ) : (
+                    ) : inventoryProductLoading ? (
                       <div className="px-3 py-2 text-xs text-slate-500">
-                        {inventoryProductLoading
-                          ? (lang === "zh" ? "正在查找产品..." : "Buscando productos...")
-                          : (lang === "zh" ? "请输入编码或中文名查找产品" : "Escribe para buscar productos")}
+                        {lang === "zh" ? "正在查找产品..." : "Buscando productos..."}
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 ) : null}
               </div>
