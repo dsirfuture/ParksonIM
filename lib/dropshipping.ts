@@ -1214,10 +1214,17 @@ export async function getInventoryRows(session: Session) {
     inventoriesByPair.set(key, current);
   }
 
-  const assignedInventoryIds = new Set<string>();
   const assignedOrderByInventoryId = new Map<string, string>();
   const assignedShippedQtyByInventoryId = new Map<string, number>();
+  const remainingCapacityByInventoryId = new Map<string, number>();
   const totalShippedQtyByPair = new Map<string, number>();
+
+  for (const inventory of inventories) {
+    remainingCapacityByInventoryId.set(inventory.id, inventory.is_stocked ? inventory.stocked_qty : 0);
+    if (inventory.is_stocked && inventory.linked_order_id) {
+      assignedOrderByInventoryId.set(inventory.id, inventory.linked_order_id);
+    }
+  }
 
   for (const row of shippedOrders) {
     const pairKey = `${row.customer_id}::${row.product_id}`;
@@ -1230,21 +1237,34 @@ export async function getInventoryRows(session: Session) {
     const linkedInventory = candidates.find((inventory) => inventory.linked_order_id === row.id) || null;
     const shippedDate = row.shipped_at?.toISOString()?.slice(0, 10) || "";
     const matchedInventory =
-      linkedInventory
+      (linkedInventory && linkedInventory.is_stocked && (remainingCapacityByInventoryId.get(linkedInventory.id) || 0) >= row.quantity
+        ? linkedInventory
+        : null)
       || candidates.find((inventory) => {
-        if (assignedInventoryIds.has(inventory.id) || !inventory.is_stocked || inventory.linked_order_id) return false;
+        if (!inventory.is_stocked) return false;
+        const remainingCapacity = remainingCapacityByInventoryId.get(inventory.id) || 0;
+        if (remainingCapacity < row.quantity) return false;
         const stockedDate = inventory.stocked_at?.toISOString()?.slice(0, 10) || "";
         return Boolean(stockedDate) && stockedDate === shippedDate;
       })
-      || candidates.find((inventory) => !assignedInventoryIds.has(inventory.id) && inventory.is_stocked && !inventory.linked_order_id)
+      || candidates.find((inventory) => {
+        if (!inventory.is_stocked) return false;
+        const remainingCapacity = remainingCapacityByInventoryId.get(inventory.id) || 0;
+        return remainingCapacity >= row.quantity;
+      })
       || null;
 
     if (matchedInventory) {
-      assignedInventoryIds.add(matchedInventory.id);
-      assignedOrderByInventoryId.set(matchedInventory.id, row.id);
+      if (!assignedOrderByInventoryId.has(matchedInventory.id)) {
+        assignedOrderByInventoryId.set(matchedInventory.id, row.id);
+      }
       assignedShippedQtyByInventoryId.set(
         matchedInventory.id,
         (assignedShippedQtyByInventoryId.get(matchedInventory.id) || 0) + row.quantity,
+      );
+      remainingCapacityByInventoryId.set(
+        matchedInventory.id,
+        Math.max((remainingCapacityByInventoryId.get(matchedInventory.id) || 0) - row.quantity, 0),
       );
     }
   }
