@@ -1887,6 +1887,11 @@ export function DropshippingClient({
     );
   }, [inventoryShippedPreview, orders]);
 
+  const shippedQtyForInventoryPreview = useMemo(
+    () => shippedOrdersForInventoryPreview.reduce((sum, row) => sum + row.quantity, 0),
+    [shippedOrdersForInventoryPreview],
+  );
+
   const financePreviewTotalPages = financePreview
     ? Math.max(1, Math.ceil(financePreview.settledOrders.length / financePreviewPageSize))
     : 1;
@@ -5714,11 +5719,18 @@ export function DropshippingClient({
                     : (lang === "zh" ? "已发记录" : "Registros enviados")}
                 </h3>
                 {inventoryShippedPreview.mode === "related" ? (
-                  <p className="text-xs text-slate-500">
-                    {lang === "zh" ? "共：" : "Total:"}
-                    <span className="px-1 font-semibold text-rose-600">{shippedOrdersForInventoryPreview.length}</span>
-                    {lang === "zh" ? "次发货" : " envios"}
-                  </p>
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <p>
+                      {lang === "zh" ? "共：" : "Total:"}
+                      <span className="px-1 font-semibold text-rose-600">{shippedOrdersForInventoryPreview.length}</span>
+                      {lang === "zh" ? "次发货" : " envios"}
+                    </p>
+                    <p>
+                      {lang === "zh" ? "此商品销量：" : "Cantidad vendida:"}
+                      <span className="px-1 font-semibold text-rose-600">{shippedQtyForInventoryPreview}</span>
+                      {lang === "zh" ? "个" : ""}
+                    </p>
+                  </div>
                 ) : null}
               </div>
               <p className="mt-1 text-xs text-slate-500">
