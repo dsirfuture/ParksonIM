@@ -3,6 +3,10 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
+const SYNC_CUSTOMERS_LOCK_CLASS = 24032026;
+const SYNC_CUSTOMERS_LOCK_ID = 1;
+const SYNC_CUSTOMERS_COOLDOWN_MS = 15_000;
+
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -55,6 +59,20 @@ type RawCustomer = {
   synced_at?: unknown;
   syncedAt?: unknown;
 };
+
+type CustomerSyncState = {
+  lastFinishedAt: number;
+};
+
+function getCustomerSyncState() {
+  const scope = globalThis as typeof globalThis & {
+    __parksonimCustomerSyncState?: CustomerSyncState;
+  };
+  if (!scope.__parksonimCustomerSyncState) {
+    scope.__parksonimCustomerSyncState = { lastFinishedAt: 0 };
+  }
+  return scope.__parksonimCustomerSyncState;
+}
 
 function readApiKey(request: Request) {
   const direct = request.headers.get("x-api-key")?.trim();
@@ -135,6 +153,37 @@ export async function POST(request: Request) {
   const apiKey = readApiKey(request);
   if (!apiKey || apiKey !== expectedApiKey) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  const syncState = getCustomerSyncState();
+  const now = Date.now();
+  if (
+    syncState.lastFinishedAt > 0 &&
+    now - syncState.lastFinishedAt < SYNC_CUSTOMERS_COOLDOWN_MS
+  ) {
+    return NextResponse.json(
+      {
+        ok: true,
+        skipped: true,
+        reason: "customers_sync_cooldown",
+      },
+      { status: 202 },
+    );
+  }
+
+  const lockRows = await prisma.$queryRaw<Array<{ locked: boolean }>>`
+    SELECT pg_try_advisory_lock(${SYNC_CUSTOMERS_LOCK_CLASS}, ${SYNC_CUSTOMERS_LOCK_ID}) AS locked
+  `;
+  const hasLock = lockRows[0]?.locked === true;
+  if (!hasLock) {
+    return NextResponse.json(
+      {
+        ok: true,
+        skipped: true,
+        reason: "customers_sync_running",
+      },
+      { status: 202 },
+    );
   }
 
   try {
@@ -228,5 +277,10 @@ export async function POST(request: Request) {
       { ok: false, error: error instanceof Error ? error.message : "同步友购客户失败" },
       { status: 500 },
     );
+  } finally {
+    syncState.lastFinishedAt = Date.now();
+    await prisma.$executeRaw`
+      SELECT pg_advisory_unlock(${SYNC_CUSTOMERS_LOCK_CLASS}, ${SYNC_CUSTOMERS_LOCK_ID})
+    `;
   }
 }
