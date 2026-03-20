@@ -531,16 +531,16 @@ export function BillingClient({
             <div className="overflow-x-auto">
               <table className="min-w-full border-separate border-spacing-0">
                 <thead>
-                  <tr className="border-b border-stone-200 text-left text-sm text-stone-500">
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold">账单名称</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold">公司名称</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold">联系人</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold">联系电话</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold">原金额</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold">折扣后金额</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold">账单汇总时间</th>
-                    <th className="whitespace-nowrap px-4 py-3 font-semibold">账单生成</th>
-                    <th className="whitespace-nowrap px-4 py-3 text-right font-semibold"></th>
+                  <tr className="border-b border-stone-200 text-left text-sm text-black">
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-black">账单名称</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-black">公司名称</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-black">联系人</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-black">联系电话</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-black">原金额</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-black">折扣后金额</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-black">账单汇总时间</th>
+                    <th className="whitespace-nowrap px-4 py-3 font-semibold text-black">账单生成</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-right font-semibold text-black"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -947,11 +947,11 @@ export function BillingClient({
                     <div><label className="mb-1 block text-sm text-slate-600">账期</label><input value={copyState.paymentTermText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, paymentTermText: e.target.value.replace(/[^\d]/g, "") } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
                     <div><label className="mb-1 block text-sm text-slate-600">装箱件数</label><input value={copyState.boxCountText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, boxCountText: e.target.value } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
                     <div><label className="mb-1 block text-sm text-slate-600">发货日期</label><input type="date" value={copyState.shipDateText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, shipDateText: e.target.value } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
-                    <div><label className="mb-1 block text-sm text-slate-600">发货仓</label><input value={copyState.warehouseText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, warehouseText: e.target.value } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
+                    <div><label className="mb-1 block text-sm text-slate-600">发货仓</label><input value={copyState.warehouseText} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none" /></div>
                     <div><label className="mb-1 block text-sm text-slate-600">发货方式</label><input value={copyState.shippingMethodText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, shippingMethodText: e.target.value } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
                     <div><label className="mb-1 block text-sm text-slate-600">收货人</label><input value={copyState.recipientNameText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, recipientNameText: e.target.value } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
                     <div><label className="mb-1 block text-sm text-slate-600">收货电话</label><input value={copyState.recipientPhoneText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, recipientPhoneText: e.target.value } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
-                    <div><label className="mb-1 block text-sm text-slate-600">联系电话</label><input value={copyState.contactPhone} onChange={(e) => setCopyState((prev) => prev ? { ...prev, contactPhone: e.target.value } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
+                    <div><label className="mb-1 block text-sm text-slate-600">联系电话</label><input value={copyState.contactPhone} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none" /></div>
                     <div><label className="mb-1 block text-sm text-slate-600">托运公司</label><input value={copyState.carrierCompanyText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, carrierCompanyText: e.target.value } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
                     <div className="md:col-span-2"><label className="mb-1 block text-sm text-slate-600">收货地址</label><textarea value={copyState.addressText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, addressText: e.target.value } : prev)} className="min-h-[96px] w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-primary/40" /></div>
                   </div>
