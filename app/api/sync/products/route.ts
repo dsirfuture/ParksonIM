@@ -150,6 +150,14 @@ function normalizeProduct(input: YogoPayload, index: number): NormalizedProduct 
   };
 }
 
+function chunkArray<T>(items: T[], size: number) {
+  const result: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    result.push(items.slice(index, index + size));
+  }
+  return result;
+}
+
 export async function POST(request: Request) {
   const expectedApiKey = process.env.YOGO_SYNC_API_KEY?.trim() || "";
   const tenantId = process.env.YOGO_SYNC_TENANT_ID?.trim() || "";
@@ -204,105 +212,110 @@ export async function POST(request: Request) {
     const createdCount = items.filter((item) => !existingSet.has(item.product_code)).length;
     const updatedCount = items.length - createdCount;
 
-    await prisma.$transaction([
-      ...items.map((item) =>
-        prisma.yogoProductSource.upsert({
-          where: {
-            tenant_id_company_id_product_code: {
+    const receivedAt = new Date();
+    for (const chunk of chunkArray(items, 200)) {
+      await prisma.$transaction(
+        chunk.map((item) =>
+          prisma.yogoProductSource.upsert({
+            where: {
+              tenant_id_company_id_product_code: {
+                tenant_id: tenantId,
+                company_id: companyId,
+                product_code: item.product_code,
+              },
+            },
+            create: {
               tenant_id: tenantId,
               company_id: companyId,
+              source: item.source,
               product_code: item.product_code,
+              product_no: item.product_no,
+              name_cn: item.name_cn,
+              name_es: item.name_es,
+              category_id: item.category_id,
+              category_name: item.category_name,
+              subcategory_id: item.subcategory_id,
+              subcategory_name: item.subcategory_name,
+              supplier: item.supplier,
+              case_pack: item.case_pack,
+              carton_pack: item.carton_pack,
+              source_price: item.source_price,
+              source_discount: item.source_discount,
+              source_disabled: item.source_disabled,
+              source_updated_at: item.source_updated_at,
+              synced_at: item.synced_at,
+              last_received_at: receivedAt,
             },
+            update: {
+              source: item.source,
+              product_no: item.product_no,
+              name_cn: item.name_cn,
+              name_es: item.name_es,
+              category_id: item.category_id,
+              category_name: item.category_name,
+              subcategory_id: item.subcategory_id,
+              subcategory_name: item.subcategory_name,
+              supplier: item.supplier,
+              case_pack: item.case_pack,
+              carton_pack: item.carton_pack,
+              source_price: item.source_price,
+              source_discount: item.source_discount,
+              source_disabled: item.source_disabled,
+              source_updated_at: item.source_updated_at,
+              synced_at: item.synced_at,
+              last_received_at: receivedAt,
+            },
+          }),
+        ),
+      );
+    }
+
+    // Only disable explicit placeholder/test products kept from historical syncs.
+    // This is intentionally narrow and does NOT disable all missing SKUs.
+    await prisma.yogoProductSource.updateMany({
+      where: {
+        tenant_id: tenantId,
+        company_id: companyId,
+        source: "yogo",
+        source_disabled: false,
+        product_no: null,
+        name_cn: null,
+        name_es: null,
+        AND: [
+          {
+            OR: [{ case_pack: null }, { case_pack: { equals: 0 } }],
           },
-          create: {
-            tenant_id: tenantId,
-            company_id: companyId,
-            source: item.source,
-            product_code: item.product_code,
-            product_no: item.product_no,
-            name_cn: item.name_cn,
-            name_es: item.name_es,
-            category_id: item.category_id,
-            category_name: item.category_name,
-            subcategory_id: item.subcategory_id,
-            subcategory_name: item.subcategory_name,
-            supplier: item.supplier,
-            case_pack: item.case_pack,
-            carton_pack: item.carton_pack,
-            source_price: item.source_price,
-            source_discount: item.source_discount,
-            source_disabled: item.source_disabled,
-            source_updated_at: item.source_updated_at,
-            synced_at: item.synced_at,
-            last_received_at: new Date(),
+          {
+            OR: [{ carton_pack: null }, { carton_pack: { equals: 0 } }],
           },
-          update: {
-            source: item.source,
-            product_no: item.product_no,
-            name_cn: item.name_cn,
-            name_es: item.name_es,
-            category_id: item.category_id,
-            category_name: item.category_name,
-            subcategory_id: item.subcategory_id,
-            subcategory_name: item.subcategory_name,
-            supplier: item.supplier,
-            case_pack: item.case_pack,
-            carton_pack: item.carton_pack,
-            source_price: item.source_price,
-            source_discount: item.source_discount,
-            source_disabled: item.source_disabled,
-            source_updated_at: item.source_updated_at,
-            synced_at: item.synced_at,
-            last_received_at: new Date(),
+          {
+            OR: [{ source_discount: null }, { source_discount: { equals: 0 } }],
           },
-        }),
-      ),
-      // Only disable explicit placeholder/test products kept from historical syncs.
-      // This is intentionally narrow and does NOT disable all missing SKUs.
-      prisma.yogoProductSource.updateMany({
-        where: {
-          tenant_id: tenantId,
-          company_id: companyId,
-          source: "yogo",
-          source_disabled: false,
-          product_no: null,
-          name_cn: null,
-          name_es: null,
-          AND: [
-            {
-              OR: [{ case_pack: null }, { case_pack: { equals: 0 } }],
-            },
-            {
-              OR: [{ carton_pack: null }, { carton_pack: { equals: 0 } }],
-            },
-            {
-              OR: [{ source_discount: null }, { source_discount: { equals: 0 } }],
-            },
-          ],
-          OR: [
-            { source_price: null },
-            { source_price: { equals: 0 } },
-          ],
-        },
-        data: {
-          source_disabled: true,
-        },
-      }),
-      prisma.yogoProductSyncLog.create({
-        data: {
-          tenant_id: tenantId,
-          company_id: companyId,
-          source: firstSource,
-          request_id: requestId,
-          total_count: items.length,
-          created_count: createdCount,
-          updated_count: updatedCount,
-          failed_count: 0,
-          status: "success",
-          error_message: null,
-        },
-      }),
-    ]);
+        ],
+        OR: [
+          { source_price: null },
+          { source_price: { equals: 0 } },
+        ],
+      },
+      data: {
+        source_disabled: true,
+      },
+    });
+
+    await prisma.yogoProductSyncLog.create({
+      data: {
+        tenant_id: tenantId,
+        company_id: companyId,
+        source: firstSource,
+        request_id: requestId,
+        total_count: items.length,
+        created_count: createdCount,
+        updated_count: updatedCount,
+        failed_count: 0,
+        status: "success",
+        error_message: null,
+      },
+    });
 
     return NextResponse.json({
       ok: true,

@@ -41,6 +41,7 @@ type Props = {
   initialInventory: DsInventoryRow[];
   initialFinance: DsFinanceRow[];
   initialExchangeRate: DsExchangeRatePayload;
+  initialLoadedTabs: Record<"overview" | "orders" | "inventory" | "finance" | "rate", boolean>;
 };
 
 type TabKey = "overview" | "orders" | "inventory" | "finance";
@@ -792,6 +793,7 @@ export function DropshippingClient({
   initialInventory,
   initialFinance,
   initialExchangeRate,
+  initialLoadedTabs,
 }: Props) {
   const [lang, setLang] = useState<"zh" | "es">(initialLang);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
@@ -800,6 +802,7 @@ export function DropshippingClient({
   const [inventory, setInventory] = useState(initialInventory);
   const [finance, setFinance] = useState(initialFinance);
   const [exchangeRate, setExchangeRate] = useState(initialExchangeRate);
+  const [loadedTabs, setLoadedTabs] = useState(initialLoadedTabs);
   const [now, setNow] = useState(() => new Date());
   const [overviewRange, setOverviewRange] = useState<OverviewRange>("month");
   const [overviewCustomerFilter, setOverviewCustomerFilter] = useState("all");
@@ -1311,38 +1314,94 @@ export function DropshippingClient({
         importing: "Importando...",
       };
 
-  async function refreshAll() {
+  async function refreshData(
+    sections: Array<"overview" | "orders" | "inventory" | "finance" | "rate"> = [
+      "overview",
+      "orders",
+      "inventory",
+      "finance",
+      "rate",
+    ],
+  ) {
     try {
       setError("");
-      const [overviewRes, ordersRes, inventoryRes, financeRes, rateRes] = await Promise.all([
-        fetch("/api/dropshipping/overview"),
-        fetch("/api/dropshipping/orders"),
-        fetch("/api/dropshipping/inventory"),
-        fetch("/api/dropshipping/finance"),
-        fetch("/api/dropshipping/exchange-rate"),
-      ]);
-      const [overviewJson, ordersJson, inventoryJson, financeJson, rateJson] = await Promise.all([
-        overviewRes.json(),
-        ordersRes.json(),
-        inventoryRes.json(),
-        financeRes.json(),
-        rateRes.json(),
-      ]);
-      if (!overviewRes.ok || !overviewJson?.ok) throw new Error(overviewJson?.error || "overview");
-      if (!ordersRes.ok || !ordersJson?.ok) throw new Error(ordersJson?.error || "orders");
-      if (!inventoryRes.ok || !inventoryJson?.ok) throw new Error(inventoryJson?.error || "inventory");
-      if (!financeRes.ok || !financeJson?.ok) throw new Error(financeJson?.error || "finance");
-      if (!rateRes.ok || !rateJson?.ok) throw new Error(rateJson?.error || "rate");
-      setOverview(overviewJson.data);
-      setOrders(ordersJson.items || []);
-      setInventory(inventoryJson.items || []);
-      setInventoryCustomers(inventoryJson.customers || []);
-      setFinance(financeJson.items || []);
-      setExchangeRate(rateJson.item);
+      const uniqueSections = Array.from(new Set(sections));
+      await Promise.all(
+        uniqueSections.map(async (section) => {
+          const endpoint =
+            section === "overview"
+              ? "/api/dropshipping/overview"
+              : section === "orders"
+                ? "/api/dropshipping/orders"
+                : section === "inventory"
+                  ? "/api/dropshipping/inventory"
+                  : section === "finance"
+                    ? "/api/dropshipping/finance"
+                    : "/api/dropshipping/exchange-rate";
+
+          const response = await fetch(endpoint);
+          const json = await response.json();
+          if (!response.ok || !json?.ok) {
+            throw new Error(json?.error || section);
+          }
+
+          if (section === "overview") {
+            setOverview(json.data);
+          } else if (section === "orders") {
+            setOrders(json.items || []);
+          } else if (section === "inventory") {
+            setInventory(json.items || []);
+            setInventoryCustomers(json.customers || []);
+          } else if (section === "finance") {
+            setFinance(json.items || []);
+          } else {
+            setExchangeRate(json.item);
+          }
+        }),
+      );
+      setLoadedTabs((prev) => {
+        const next = { ...prev };
+        for (const section of uniqueSections) {
+          next[section] = true;
+        }
+        return next;
+      });
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : "Load failed");
     }
   }
+
+  useEffect(() => {
+    if (activeTab === "overview") {
+      const missing: Array<"overview" | "orders" | "rate"> = [];
+      if (!loadedTabs.overview) missing.push("overview");
+      if (!loadedTabs.orders) missing.push("orders");
+      if (!loadedTabs.rate) missing.push("rate");
+      if (missing.length > 0) {
+        void refreshData(missing);
+      }
+      return;
+    }
+
+    if (activeTab === "orders" && !loadedTabs.orders) {
+      void refreshData(["orders"]);
+      return;
+    }
+
+    if (activeTab === "inventory" && !loadedTabs.inventory) {
+      void refreshData(["inventory"]);
+      return;
+    }
+
+    if (activeTab === "finance") {
+      const missing: Array<"finance" | "rate"> = [];
+      if (!loadedTabs.finance) missing.push("finance");
+      if (!loadedTabs.rate) missing.push("rate");
+      if (missing.length > 0) {
+        void refreshData(missing);
+      }
+    }
+  }, [activeTab, loadedTabs]);
 
   const customerOptions = useMemo(() => {
     return [...new Set(orders.map((row) => row.customerName.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh"));
@@ -2348,7 +2407,7 @@ export function DropshippingClient({
       setGroupProductSearchKeyword("");
       setGroupProductOptions([]);
       setActiveGroupSlotKey(null);
-      await refreshAll();
+      await refreshData(["orders", "inventory", "finance", "overview", "rate"]);
       const freshOrders = await fetchOrdersOnly();
       setOrders(freshOrders);
       const refreshedCurrent = freshOrders.find((row) => row.id === orderId);
@@ -2382,7 +2441,7 @@ export function DropshippingClient({
       if (!response.ok || !json?.ok) {
         throw new Error(json?.error || "delete_failed");
       }
-      await refreshAll();
+      await refreshData(["orders", "inventory", "finance", "overview", "rate"]);
       const freshOrders = await fetchOrdersOnly();
       setOrders(freshOrders);
       const currentOrderId = form.id || modalPrimaryOrderId;
@@ -2559,7 +2618,7 @@ export function DropshippingClient({
       setGroupProductSearchKeyword("");
       setGroupProductOptions([]);
       setActiveGroupSlotKey(null);
-      await refreshAll();
+      await refreshData(["orders", "inventory", "finance", "overview", "rate"]);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "save_failed");
     } finally {
@@ -2773,7 +2832,7 @@ export function DropshippingClient({
       setInventoryEdit(null);
       setInventoryProductQuery("");
       setInventoryProductOptions([]);
-      await refreshAll();
+      await refreshData(["inventory", "overview"]);
     } catch (editError) {
       setError(editError instanceof Error ? editError.message : "save_failed");
     } finally {
@@ -2806,7 +2865,11 @@ export function DropshippingClient({
         throw new Error(json?.error || "delete_failed");
       }
       setInventoryDeleteTarget(null);
-      await refreshAll();
+      await refreshData(
+        inventoryDeleteTarget.kind === "inventory"
+          ? ["inventory", "overview"]
+          : ["orders", "inventory", "finance", "overview", "rate"],
+      );
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "delete_failed");
     } finally {
@@ -2838,7 +2901,7 @@ export function DropshippingClient({
       }
       setDeleteTarget(null);
       setDeleteTrackingInput("");
-      await refreshAll();
+      await refreshData(["orders", "inventory", "finance", "overview", "rate"]);
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "delete_failed");
     } finally {
@@ -2917,7 +2980,7 @@ export function DropshippingClient({
           ? `已导入 ${summary.totalRows || 0} 行，新增订单 ${summary.createdOrders || 0}，更新订单 ${summary.updatedOrders || 0}，同步客户 ${summary.touchedCustomers || 0}，同步商品 ${summary.touchedProducts || 0}，付款快照 ${summary.seededPayments || 0}，面单 ${summary.uploadedLabels || 0}，凭据 ${summary.uploadedProofs || 0}。`
           : `Importadas ${summary.totalRows || 0} filas, pedidos nuevos ${summary.createdOrders || 0}, pedidos actualizados ${summary.updatedOrders || 0}, clientes ${summary.touchedCustomers || 0}, productos ${summary.touchedProducts || 0}, pagos ${summary.seededPayments || 0}, guias ${summary.uploadedLabels || 0}, pruebas ${summary.uploadedProofs || 0}.`,
       );
-      await refreshAll();
+      await refreshData(["orders", "inventory", "finance", "overview", "rate"]);
     } catch (importError) {
       const message = importError instanceof Error ? importError.message : "import_failed";
       if (message.includes("Request Entity Too Large") || message.includes("request entity too large")) {

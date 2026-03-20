@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
-import { getExchangeRatePayload, getFinanceRows, getInventoryRows, getOverview, listOrders } from "@/lib/dropshipping";
+import { getExchangeRatePayload, getOverview } from "@/lib/dropshipping";
 import { hasPermission } from "@/lib/permissions";
 import { getLang } from "@/lib/i18n-server";
 import { getSession } from "@/lib/tenant";
@@ -14,11 +14,8 @@ export default async function DropshippingPage() {
   if (!(await hasPermission(session, "viewReports"))) redirect("/dashboard");
 
   try {
-    const [overview, orders, inventory, finance, exchangeRate] = await Promise.all([
+    const [overview, exchangeRate] = await Promise.all([
       getOverview(session),
-      listOrders(session),
-      getInventoryRows(session),
-      getFinanceRows(session),
       getExchangeRatePayload(session),
     ]);
 
@@ -27,10 +24,17 @@ export default async function DropshippingPage() {
         <DropshippingClient
           initialLang={lang}
           initialOverview={overview}
-          initialOrders={orders}
-          initialInventory={inventory}
-          initialFinance={finance}
+          initialOrders={[]}
+          initialInventory={[]}
+          initialFinance={[]}
           initialExchangeRate={exchangeRate}
+          initialLoadedTabs={{
+            overview: true,
+            orders: false,
+            inventory: false,
+            finance: false,
+            rate: true,
+          }}
         />
       </AppShell>
     );
