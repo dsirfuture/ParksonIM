@@ -751,6 +751,8 @@ export function DropshippingClient({
   const [customerFilter, setCustomerFilter] = useState("all");
   const [inventoryCustomerFilter, setInventoryCustomerFilter] = useState("all");
   const [inventoryStockFilter, setInventoryStockFilter] = useState<"all" | "stocked" | "unstocked">("all");
+  const [inventorySortKey, setInventorySortKey] = useState<"stockedAt" | "shippedAt" | null>(null);
+  const [inventorySortDirection, setInventorySortDirection] = useState<"asc" | "desc">("desc");
   const [inventoryPage, setInventoryPage] = useState(1);
   const [orderPage, setOrderPage] = useState(1);
   const [shippedAtSortDirection, setShippedAtSortDirection] = useState<"asc" | "desc">("asc");
@@ -1293,7 +1295,7 @@ export function DropshippingClient({
 
   const filteredInventory = useMemo(() => {
     const normalized = inventoryKeyword.trim().toLowerCase();
-    return inventory.filter((row) => {
+    const rows = inventory.filter((row) => {
       const customerHit = inventoryCustomerFilter === "all" || row.customerName === inventoryCustomerFilter;
       const stockHit =
         inventoryStockFilter === "all"
@@ -1307,7 +1309,23 @@ export function DropshippingClient({
           .includes(normalized);
       return customerHit && stockHit && keywordHit;
     });
-  }, [inventory, inventoryCustomerFilter, inventoryKeyword, inventoryStockFilter]);
+
+    if (!inventorySortKey) return rows;
+
+    return [...rows].sort((a, b) => {
+      const aValue = inventorySortKey === "stockedAt" ? a.stockedAt : a.shippedAt;
+      const bValue = inventorySortKey === "stockedAt" ? b.stockedAt : b.shippedAt;
+      const aTime = aValue ? new Date(aValue).getTime() : Number.POSITIVE_INFINITY;
+      const bTime = bValue ? new Date(bValue).getTime() : Number.POSITIVE_INFINITY;
+
+      if (aTime === bTime) {
+        return a.sku.localeCompare(b.sku, "en");
+      }
+      if (!Number.isFinite(aTime)) return 1;
+      if (!Number.isFinite(bTime)) return -1;
+      return inventorySortDirection === "asc" ? aTime - bTime : bTime - aTime;
+    });
+  }, [inventory, inventoryCustomerFilter, inventoryKeyword, inventorySortDirection, inventorySortKey, inventoryStockFilter]);
 
   const inventoryTotalPages = Math.max(1, Math.ceil(filteredInventory.length / inventoryPageSize));
   const inventoryCurrentPage = Math.min(inventoryPage, inventoryTotalPages);
@@ -3784,11 +3802,41 @@ export function DropshippingClient({
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "普通折扣" : "Dsc"}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "备货数量" : "Cant. stock"}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "备货金额" : "Monto stock"}</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "备货时间" : "Fecha stock"}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setInventorySortDirection((prev) =>
+                            inventorySortKey === "stockedAt" ? (prev === "asc" ? "desc" : "asc") : "desc",
+                          );
+                          setInventorySortKey("stockedAt");
+                        }}
+                        className="inline-flex items-center gap-1 text-slate-700"
+                        title={lang === "zh" ? "按备货时间排序" : "Ordenar por fecha stock"}
+                      >
+                        <span>{lang === "zh" ? "备货时间" : "Fecha stock"}</span>
+                        <SortDirectionIcon direction={inventorySortKey === "stockedAt" ? inventorySortDirection : "desc"} />
+                      </button>
+                    </th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "备货剩余" : "Restante stock"}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "备货状态" : "Estado stock"}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{text.fields.shipped}</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "发货时间" : "Fecha envio"}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setInventorySortDirection((prev) =>
+                            inventorySortKey === "shippedAt" ? (prev === "asc" ? "desc" : "asc") : "desc",
+                          );
+                          setInventorySortKey("shippedAt");
+                        }}
+                        className="inline-flex items-center gap-1 text-slate-700"
+                        title={lang === "zh" ? "按发货时间排序" : "Ordenar por fecha envio"}
+                      >
+                        <span>{lang === "zh" ? "发货时间" : "Fecha envio"}</span>
+                        <SortDirectionIcon direction={inventorySortKey === "shippedAt" ? inventorySortDirection : "desc"} />
+                      </button>
+                    </th>
                     <th className="whitespace-nowrap px-4 py-2.5 text-right font-semibold"></th>
                   </tr>
                 </thead>
