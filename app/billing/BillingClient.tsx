@@ -107,6 +107,16 @@ type CopyState = {
   items: CopyItemState[];
 };
 
+type BillingHistoryEntry = {
+  id: string;
+  createdAtText: string;
+  actionText: string;
+  formatText: string;
+  detailText: string;
+  reasonText: string;
+  operatorName: string;
+};
+
 const PAGE_SIZE = 8;
 
 function EyeIcon() {
@@ -115,6 +125,10 @@ function EyeIcon() {
 
 function PencilIcon() {
   return <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8"><path d="M3.5 13.75V16.5h2.75L15 7.75 12.25 5 3.5 13.75Z" /><path d="M10.75 6.5 13.5 9.25" /><path d="M11.5 3.75 16.25 8.5" /></svg>;
+}
+
+function NotebookIcon() {
+  return <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8"><path d="M5.25 2.5h8a1.75 1.75 0 0 1 1.75 1.75v11.5a1.75 1.75 0 0 1-1.75 1.75h-8A1.75 1.75 0 0 1 3.5 15.75V4.25A1.75 1.75 0 0 1 5.25 2.5Z" /><path d="M6.75 2.5v15" /><path d="M8.75 6.5h4.5" /><path d="M8.75 10h4.5" /><path d="M8.75 13.5h3" /></svg>;
 }
 
 function MapPinIcon() {
@@ -240,6 +254,10 @@ export function BillingClient({
   const [statusActionLoading, setStatusActionLoading] = useState<"generate" | "revoke" | "">("");
   const [statusActionError, setStatusActionError] = useState("");
   const [revokeState, setRevokeState] = useState<RevokeState | null>(null);
+  const [historyOrderNo, setHistoryOrderNo] = useState<string | null>(null);
+  const [historyEntries, setHistoryEntries] = useState<BillingHistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
 
   useEffect(() => {
     setCurrentTab(activeTab);
@@ -304,6 +322,25 @@ export function BillingClient({
   function handleExport(kind: "xlsx" | "pdf") {
     if (!detailGenerated || !exportLinks) return;
     window.location.assign(exportLinks[kind]);
+  }
+
+  async function openHistory(orderNo: string) {
+    setHistoryOrderNo(orderNo);
+    setHistoryEntries([]);
+    setHistoryError("");
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`/api/billing/${encodeURIComponent(orderNo)}/history`);
+      const data = await res.json();
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || "获取账单记录失败");
+      }
+      setHistoryEntries(Array.isArray(data.entries) ? data.entries : []);
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : "获取账单记录失败");
+    } finally {
+      setHistoryLoading(false);
+    }
   }
 
   async function updateGeneratedState(action: "generate" | "revoke", options?: { confirmOrderNo?: string; revokeReason?: string }) {
@@ -569,6 +606,7 @@ export function BillingClient({
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex items-center justify-end gap-2">
+                          <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-stone-300 hover:text-slate-900" title="查看记录" onClick={() => openHistory(row.orderNo)}><NotebookIcon /></button>
                           <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-stone-300 hover:text-slate-900" title="查看账单" onClick={() => setDetailOrderNo(row.orderNo)}><EyeIcon /></button>
                           <button type="button" disabled={Boolean(row.generatedAtText)} className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-stone-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-300" title={row.generatedAtText ? "账单已生成，需先撤销生成" : "编辑客户信息"} onClick={() => setEditState({
                             id: row.id,
@@ -1012,6 +1050,53 @@ export function BillingClient({
               <button type="button" onClick={() => setCopyState(null)} className="h-10 rounded-xl border border-slate-200 px-4 text-sm text-slate-600 hover:bg-slate-50">取消</button>
               <button type="button" onClick={() => exportCopy("xlsx")} disabled={copyingExport} className="h-10 rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60">导出复制账单 XLSX</button>
               <button type="button" onClick={() => exportCopy("pdf")} disabled={copyingExport} className="h-10 rounded-xl bg-primary px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{copyingExport ? "导出中..." : "导出复制账单 PDF"}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {historyOrderNo ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 p-4" onClick={() => setHistoryOrderNo(null)}>
+          <div className="flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="border-b border-slate-200 px-6 py-4">
+              <h3 className="text-xl font-semibold text-slate-900">账单记录</h3>
+              <p className="mt-1 text-sm text-slate-500">账单号：{historyOrderNo}</p>
+            </div>
+            <div className="flex-1 overflow-auto p-6">
+              {historyLoading ? (
+                <div className="py-16 text-center text-sm text-slate-500">正在加载记录...</div>
+              ) : historyError ? (
+                <div className="py-16 text-center text-sm text-red-600">{historyError}</div>
+              ) : historyEntries.length === 0 ? (
+                <div className="py-16 text-center text-sm text-slate-500">当前账单还没有记录</div>
+              ) : (
+                <div className="overflow-hidden rounded-2xl border border-slate-200">
+                  <div className="grid grid-cols-[180px_120px_96px_1fr_140px] gap-0 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600">
+                    <div>时间</div>
+                    <div>操作</div>
+                    <div>格式</div>
+                    <div>说明 / 原因</div>
+                    <div>操作人</div>
+                  </div>
+                  <div className="divide-y divide-slate-200">
+                    {historyEntries.map((entry) => (
+                      <div key={entry.id} className="grid grid-cols-[180px_120px_96px_1fr_140px] gap-0 px-4 py-4 text-sm text-slate-700">
+                        <div>{entry.createdAtText || "-"}</div>
+                        <div>{entry.actionText || "-"}</div>
+                        <div>{entry.formatText || "-"}</div>
+                        <div className="pr-4">
+                          <div>{entry.detailText || "-"}</div>
+                          {entry.reasonText ? <div className="mt-1 text-xs text-rose-600">原因：{entry.reasonText}</div> : null}
+                        </div>
+                        <div>{entry.operatorName || "-"}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-end border-t border-slate-200 px-6 py-4">
+              <button type="button" onClick={() => setHistoryOrderNo(null)} className="h-10 rounded-xl border border-slate-200 px-4 text-sm text-slate-600 hover:bg-slate-50">关闭</button>
             </div>
           </div>
         </div>

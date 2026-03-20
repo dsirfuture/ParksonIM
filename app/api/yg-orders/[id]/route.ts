@@ -7,6 +7,7 @@ import {
   toBillingBooleanFlag,
   type BillingHeaderMeta,
 } from "@/lib/billing-meta";
+import { writeBillingActionLog } from "@/lib/billing-action-log";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
 
@@ -145,6 +146,29 @@ export async function PATCH(
       },
     });
     const parsedRemark = parseBillingRemark(updated.order_remark);
+
+    if (action === "generate") {
+      await writeBillingActionLog({
+        tenantId: session.tenantId,
+        companyId: session.companyId,
+        orderNo: target.order_no,
+        actionType: "generate",
+        detailText: Boolean(body.generatedVipEnabled) ? "生成账单（启用VIP折扣）" : "生成账单",
+        operatorId: session.userId,
+        operatorName: session.name,
+      });
+    } else if (action === "revoke") {
+      await writeBillingActionLog({
+        tenantId: session.tenantId,
+        companyId: session.companyId,
+        orderNo: target.order_no,
+        actionType: "revoke",
+        reasonText: normalizeString(body.revokeReason),
+        detailText: "撤销生成",
+        operatorId: session.userId,
+        operatorName: session.name,
+      });
+    }
 
     return NextResponse.json({
       ok: true,

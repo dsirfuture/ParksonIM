@@ -5,6 +5,7 @@ import {
   type BillingExportData,
   type BillingExportItem,
 } from "@/lib/billing-export";
+import { writeBillingActionLog } from "@/lib/billing-action-log";
 import { getSession } from "@/lib/tenant";
 
 function toDiscountFactor(value: number | null) {
@@ -113,6 +114,17 @@ export async function POST(request: Request) {
 
     const buffer = await buildBillingPdf(data);
     const fileName = `${buildBillingPdfFileName(data)}.pdf`;
+
+    await writeBillingActionLog({
+      tenantId: session.tenantId,
+      companyId: session.companyId,
+      orderNo: data.orderNo,
+      actionType: "copy_export",
+      formatType: "pdf",
+      detailText: "导出复制账单",
+      operatorId: session.userId,
+      operatorName: session.name,
+    });
 
     return new NextResponse(Buffer.from(buffer), {
       status: 200,

@@ -4,6 +4,7 @@ import {
   buildBillingPdf,
   getBillingExportData,
 } from "@/lib/billing-export";
+import { writeBillingActionLog } from "@/lib/billing-action-log";
 import { getSession } from "@/lib/tenant";
 
 export const runtime = "nodejs";
@@ -31,6 +32,17 @@ export async function GET(
 
     const buffer = await buildBillingPdf(data);
     const fileName = `${buildBillingPdfFileName(data)}.pdf`;
+
+    await writeBillingActionLog({
+      tenantId: session.tenantId,
+      companyId: session.companyId,
+      orderNo: data.orderNo,
+      actionType: "export",
+      formatType: "pdf",
+      detailText: "导出正式账单",
+      operatorId: session.userId,
+      operatorName: session.name,
+    });
 
     return new NextResponse(Buffer.from(buffer), {
       status: 200,

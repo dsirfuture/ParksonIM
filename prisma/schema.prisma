@@ -84,6 +84,7 @@ model Tenant {
   dsPayments           DropshippingPayment[]
   dsExchangeRates      DropshippingExchangeRate[]
   dsOrderAttachments   DropshippingOrderAttachment[]
+  billingActionLogs    BillingActionLog[]
 }
 
 model Company {
@@ -127,6 +128,7 @@ model Company {
   dsPayments           DropshippingPayment[]
   dsExchangeRates      DropshippingExchangeRate[]
   dsOrderAttachments   DropshippingOrderAttachment[]
+  billingActionLogs    BillingActionLog[]
 
   @@index([tenant_id])
 }
@@ -842,6 +844,31 @@ model YgOrderImport {
   @@index([tenant_id, company_id])
   @@index([created_at])
   @@map("yg_order_imports")
+}
+
+model BillingActionLog {
+  id         String @id @default(uuid()) @db.Uuid
+  tenant_id  String @db.Uuid
+  company_id String @db.Uuid
+
+  order_no       String
+  action_type    String
+  format_type    String?
+  reason_text    String?
+  detail_text    String?
+  operator_id    String?
+  operator_name  String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, company_id])
+  @@index([order_no, created_at])
+  @@index([action_type, created_at])
+  @@map("billing_action_logs")
 }
 
 model YgCustomerImport {
