@@ -95,6 +95,14 @@ function toNumber(value: unknown) {
   return 0;
 }
 
+function stripTrailingUnitPrice(name: string | null | undefined) {
+  const text = String(name || "").trim();
+  if (!text) return "";
+  return text
+    .replace(/\s+\$?\d[\d,]*(?:\.\d{1,2})?\s*$/u, "")
+    .trim();
+}
+
 function legacyGroupKeyOf(row: Pick<DsLegacyImportRow, "customerName" | "platform" | "platformOrderNo">) {
   return [
     String(row.customerName || "").trim().toLowerCase(),
@@ -1089,7 +1097,7 @@ export async function listOrders(session: Session) {
           : "unpaid",
       catalogMatched: Boolean(catalog),
       sku: row.product.sku,
-      productNameZh: catalog?.name_zh?.trim() || row.product.name_zh,
+      productNameZh: stripTrailingUnitPrice(catalog?.name_zh?.trim() || row.product.name_zh),
       productNameEs: catalog?.name_es?.trim() || row.product.name_es || "",
       productImageUrl: row.product.image_url || buildProductImageUrl(matchedSku, "jpg"),
       platform: row.platform,
@@ -1337,7 +1345,7 @@ export async function getInventoryRows(session: Session) {
       customerName: row.customer.name,
       productId: row.product_id,
       sku: row.product.sku,
-      productNameZh: catalog?.name_zh?.trim() || row.product.name_zh,
+      productNameZh: stripTrailingUnitPrice(catalog?.name_zh?.trim() || row.product.name_zh),
       productNameEs: catalog?.name_es?.trim() || row.product.name_es || "",
       productImageUrl: row.product.image_url || buildProductImageUrl(matchedSku, "jpg"),
       stockedAt: showsStockDetails ? stockedAt : null,
@@ -1735,7 +1743,7 @@ export async function getFinanceRows(session: Session) {
       orderId: row.id,
       platformOrderNo: row.platform_order_no,
       sku: row.product.sku,
-      productNameZh: catalog?.name_zh?.trim() || row.product.name_zh,
+      productNameZh: stripTrailingUnitPrice(catalog?.name_zh?.trim() || row.product.name_zh),
       productImageUrl: row.product.image_url || buildProductImageUrl(matchedSku, "jpg"),
       trackingNo: row.tracking_no || "",
       shippedAt: row.shipped_at?.toISOString() || null,
