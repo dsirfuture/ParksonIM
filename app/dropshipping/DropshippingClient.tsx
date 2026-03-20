@@ -2616,20 +2616,28 @@ export function DropshippingClient({
   async function beginInventoryCreate() {
     try {
       setError("");
-      if (inventoryCustomers.length === 0) {
+      let customerOptions = inventoryCustomers;
+      if (customerOptions.length === 0) {
         const response = await fetch("/api/dropshipping/inventory/options");
         const json = await response.json();
         if (!response.ok || !json?.ok) {
           throw new Error(json?.error || "inventory_options_failed");
         }
-        setInventoryCustomers(json.customers || []);
+        customerOptions = Array.isArray(json.customers) ? json.customers : [];
+        setInventoryCustomers(customerOptions);
       }
+      const defaultCustomer =
+        inventoryCustomerFilter !== "all"
+          ? customerOptions.find((row) => row.name === inventoryCustomerFilter) || null
+          : customerOptions.length === 1
+            ? customerOptions[0]
+            : null;
       setInventoryEdit({
         mode: "create",
         id: "",
         orderId: "",
-        customerId: "",
-        customerName: "",
+        customerId: defaultCustomer?.id || "",
+        customerName: defaultCustomer?.name || "",
         productCatalogId: "",
         productId: "",
         sku: "",
@@ -2723,8 +2731,16 @@ export function DropshippingClient({
       const unitPrice = inventoryEdit.unitPrice.trim();
       const discountRate = inventoryEdit.discountRate.trim();
       const stockedAt = inventoryEdit.stockedAt.trim();
-      if (inventoryEdit.mode === "create" && (!inventoryEdit.customerId || !inventoryEdit.sku)) {
-        throw new Error(lang === "zh" ? "请选择客户和产品" : "Selecciona cliente y producto");
+      if (inventoryEdit.mode === "create") {
+        if (!inventoryEdit.customerId && !inventoryEdit.sku) {
+          throw new Error(lang === "zh" ? "请选择客户和产品" : "Selecciona cliente y producto");
+        }
+        if (!inventoryEdit.customerId) {
+          throw new Error(lang === "zh" ? "请选择客户" : "Selecciona cliente");
+        }
+        if (!inventoryEdit.sku) {
+          throw new Error(lang === "zh" ? "请选择产品" : "Selecciona producto");
+        }
       }
       const discountRateValue = discountRate === "" ? null : Number(discountRate) / 100;
       const unitPriceValue = unitPrice === "" ? null : Number(unitPrice);
