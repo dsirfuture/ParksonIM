@@ -1284,13 +1284,8 @@ export async function getInventoryRows(session: Session) {
     const discountRate = Math.abs(rawDiscountRate) <= 1 ? rawDiscountRate : rawDiscountRate / 100;
     const stockedAt = inventory?.stocked_at?.toISOString() || null;
     const shippedAt = row.shipped_at?.toISOString() || null;
-    const matchesStockDate =
-      Boolean(inventory?.is_stocked)
-      && Boolean(stockedAt)
-      && Boolean(shippedAt)
-      && stockedAt?.slice(0, 10) === shippedAt?.slice(0, 10);
     const assignedOrderId = inventory ? assignedOrderByInventoryId.get(inventory.id) : null;
-    const showsStockDetails = matchesStockDate && assignedOrderId === row.id;
+    const showsStockDetails = Boolean(inventory?.is_stocked) && assignedOrderId === row.id;
     return {
       orderId: row.id,
       inventoryId: inventory?.id || null,
