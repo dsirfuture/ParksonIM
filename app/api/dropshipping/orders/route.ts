@@ -33,13 +33,13 @@ export async function POST(request: Request) {
 
     const body = (await request.json()) as Record<string, unknown>;
     const customerName = String(body.customerName || "").trim();
-    const platform = String(body.platform || "").trim();
+    const platform = String(body.platform || "无").trim() || "无";
     const platformOrderNo = String(body.platformOrderNo || "").trim();
     const sku = String(body.sku || "").trim();
     const productNameZh = String(body.productNameZh || "").trim();
     const quantity = Number(body.quantity || 0);
 
-    if (!customerName || !platform || !platformOrderNo || !sku || !productNameZh || quantity <= 0) {
+    if (!customerName || !platformOrderNo || !sku || !productNameZh || quantity <= 0) {
       return NextResponse.json({ ok: false, error: "缺少必填字段或数量非法" }, { status: 400 });
     }
 

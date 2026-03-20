@@ -703,7 +703,7 @@ export async function saveOrder(
   const data = {
     customer_id: customer.id,
     product_id: product.id,
-    platform: payload.platform.trim(),
+    platform: payload.platform.trim() || "无",
     platform_order_no: payload.platformOrderNo.trim(),
     tracking_group_id:
       payload.trackingGroupId === undefined

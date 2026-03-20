@@ -54,7 +54,7 @@ export async function PATCH(
         ? existing.customer.name
         : String(body.customerName || "").trim();
     const platform =
-      body.platform === undefined ? existing.platform : String(body.platform || "").trim();
+      body.platform === undefined ? existing.platform : String(body.platform || "无").trim() || "无";
     const platformOrderNo =
       body.platformOrderNo === undefined
         ? existing.platform_order_no
@@ -70,7 +70,7 @@ export async function PATCH(
         ? existing.quantity
         : Number(body.quantity);
 
-    if (!customerName || !platform || !platformOrderNo || !sku || !productNameZh || quantity < 0) {
+    if (!customerName || !platformOrderNo || !sku || !productNameZh || quantity < 0) {
       return NextResponse.json({ ok: false, error: "参数不完整" }, { status: 400 });
     }
 
