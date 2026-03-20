@@ -870,6 +870,46 @@ export function DropshippingClient({
     return [{ id: "all", name: lang === "zh" ? "全部客户" : "Todos los clientes" }, ...Array.from(customerMap.entries()).map(([id, name]) => ({ id, name }))];
   }, [lang, orders]);
 
+  const overviewRangeLabel = useMemo(() => {
+    const rangeStart =
+      overviewRange === "day"
+        ? startOfMexicoDayClient(now)
+        : overviewRange === "week"
+          ? startOfMexicoWeekClient(now)
+          : overviewRange === "year"
+            ? startOfMexicoYearClient(now)
+            : startOfMexicoMonthClient(now);
+    const rangeEndExclusive =
+      overviewRange === "day"
+        ? endOfMexicoDayClient(rangeStart)
+        : overviewRange === "week"
+          ? new Date(rangeStart.getTime() + 7 * 24 * 60 * 60 * 1000)
+          : overviewRange === "year"
+            ? new Date(rangeStart.getUTCFullYear() + 1, 0, 1, 6, 0, 0, 0)
+            : new Date(rangeStart.getUTCFullYear(), rangeStart.getUTCMonth() + 1, 1, 6, 0, 0, 0);
+
+    if (lang === "zh") {
+      const year = new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", year: "numeric" }).format(rangeStart);
+      const month = new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", month: "numeric" }).format(rangeStart);
+      const day = new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", day: "numeric" }).format(rangeStart);
+      if (overviewRange === "day") return `${year}年${month}月${day}号`;
+      if (overviewRange === "month") return `${year}年${month}月`;
+      if (overviewRange === "year") return `${year}年`;
+      const weekEnd = new Date(rangeEndExclusive.getTime() - 24 * 60 * 60 * 1000);
+      const startMonth = new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", month: "numeric" }).format(rangeStart);
+      const startDay = new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", day: "numeric" }).format(rangeStart);
+      const endMonth = new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", month: "numeric" }).format(weekEnd);
+      const endDay = new Intl.DateTimeFormat("zh-CN", { timeZone: "America/Mexico_City", day: "numeric" }).format(weekEnd);
+      return `${startMonth}月${startDay}号-${endMonth}月${endDay}号`;
+    }
+
+    if (overviewRange === "day") return fmtDateOnly(rangeStart.toISOString(), lang);
+    if (overviewRange === "month") return new Intl.DateTimeFormat("es-MX", { timeZone: "America/Mexico_City", year: "numeric", month: "long" }).format(rangeStart);
+    if (overviewRange === "year") return new Intl.DateTimeFormat("es-MX", { timeZone: "America/Mexico_City", year: "numeric" }).format(rangeStart);
+    const weekEnd = new Date(rangeEndExclusive.getTime() - 24 * 60 * 60 * 1000);
+    return `${fmtDateOnly(rangeStart.toISOString(), lang)} - ${fmtDateOnly(weekEnd.toISOString(), lang)}`;
+  }, [lang, now, overviewRange]);
+
   useEffect(() => {
     setLang(getClientLang());
   }, []);
@@ -2920,7 +2960,9 @@ export function DropshippingClient({
                     </select>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white/90 p-1 text-[10px] font-medium">
+                <div className="flex items-center gap-3">
+                  <div className="text-xs text-slate-500">{overviewRangeLabel}</div>
+                  <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white/90 p-1 text-[10px] font-medium">
                   {([
                     { key: "day", zh: "天", es: "Dia" },
                     { key: "week", zh: "周", es: "Semana" },
@@ -2940,6 +2982,7 @@ export function DropshippingClient({
                       {lang === "zh" ? item.zh : item.es}
                     </button>
                   ))}
+                  </div>
                 </div>
               </div>
 
