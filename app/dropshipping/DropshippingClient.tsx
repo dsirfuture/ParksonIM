@@ -885,7 +885,7 @@ export function DropshippingClient({
             })
             .map<GroupProductOption>((row) => ({
               source: "inventory",
-              sourceId: row.inventoryId,
+              sourceId: row.inventoryId || row.orderId,
               productId: row.productId,
               sku: row.sku,
               nameZh: row.productNameZh || row.sku,
@@ -2363,6 +2363,37 @@ export function DropshippingClient({
   }
 
   function beginInventoryEdit(row: DsInventoryRow) {
+    if (!row.inventoryId || !row.isStocked) {
+      setInventoryEdit({
+        mode: "create",
+        id: "",
+        customerId: row.customerId,
+        customerName: row.customerName,
+        productCatalogId: "",
+        productId: row.productId,
+        sku: row.sku,
+        productNameZh: row.productNameZh,
+        productNameEs: row.productNameEs || "",
+        isStocked: true,
+        stockedAt: toDateInputValue(row.shippedAt) || "",
+        stockedQty: String(Math.max(row.shippedQty, 1)),
+        stockAmount: computeInventoryAmount(
+          String(row.unitPrice ?? ""),
+          String(Math.max(row.shippedQty, 1)),
+          formatDiscountPercentInput(row.discountRate),
+        ),
+        unitPrice: String(row.unitPrice ?? ""),
+        unitPriceLocked: true,
+        discountRate: formatDiscountPercentInput(row.discountRate),
+        warehouse: FIXED_WAREHOUSE,
+        remainingQty: null,
+        status: null,
+      });
+      setInventoryProductQuery(`${row.sku} / ${row.productNameZh || ""}`.trim());
+      setInventoryProductOptions([]);
+      return;
+    }
+
     setInventoryEdit({
       mode: "edit",
       id: row.inventoryId,

@@ -124,7 +124,7 @@ export type DsOrderAttachment = {
 
 export type DsInventoryRow = {
   orderId: string;
-  inventoryId: string;
+  inventoryId: string | null;
   customerId: string;
   customerName: string;
   productId: string;

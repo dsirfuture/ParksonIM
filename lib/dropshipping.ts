@@ -1293,7 +1293,7 @@ export async function getInventoryRows(session: Session) {
     const showsStockDetails = matchesStockDate && assignedOrderId === row.id;
     return {
       orderId: row.id,
-      inventoryId: inventory?.id || row.id,
+      inventoryId: inventory?.id || null,
       customerId: row.customer_id,
       customerName: row.customer.name,
       productId: row.product_id,
