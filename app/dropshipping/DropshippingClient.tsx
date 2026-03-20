@@ -109,6 +109,11 @@ type DeleteOrderState = {
   trackingNo: string;
 } | null;
 
+type InventoryDeleteTargetState = {
+  row: DsInventoryRow;
+  kind: "inventory" | "shipped";
+} | null;
+
 type GroupProductOption = {
   source: "inventory" | "catalog";
   sourceId: string;
@@ -308,9 +313,9 @@ function fmtPercent(value: number, lang: "zh" | "es") {
 }
 
 function getInventoryStatusClass(status: DsInventoryStatus) {
-  if (status === "healthy") return "text-violet-600";
+  if (status === "healthy") return "text-emerald-600";
   if (status === "empty") return "text-rose-600";
-  return "text-emerald-600";
+  return "text-amber-500";
 }
 
 function getMexicoDateParts(date: Date) {
@@ -788,6 +793,7 @@ export function DropshippingClient({
   const [financePreviewPage, setFinancePreviewPage] = useState(1);
   const [deleteTarget, setDeleteTarget] = useState<DeleteOrderState>(null);
   const [deleteTrackingInput, setDeleteTrackingInput] = useState("");
+  const [inventoryDeleteTarget, setInventoryDeleteTarget] = useState<InventoryDeleteTargetState>(null);
   const financePreviewScrollRef = useRef<HTMLDivElement | null>(null);
   const labelInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const proofInputRefs = useRef<Array<HTMLInputElement | null>>([]);
@@ -2596,49 +2602,30 @@ export function DropshippingClient({
   }
 
   async function removeInventoryRow(row: DsInventoryRow) {
-    const confirmed = window.confirm(
-      lang === "zh"
-        ? `确认删除这条备货记录？\n${row.customerName} / ${row.sku}`
-        : `Eliminar este registro de stock?\n${row.customerName} / ${row.sku}`,
-    );
-    if (!confirmed) return;
-
-    try {
-      setSaving(true);
-      setError("");
-      const response = await fetch(`/api/dropshipping/inventory/${row.inventoryId}`, {
-        method: "DELETE",
-      });
-      const json = await response.json();
-      if (!response.ok || !json?.ok) {
-        throw new Error(json?.error || "delete_failed");
-      }
-      await refreshAll();
-    } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "delete_failed");
-    } finally {
-      setSaving(false);
-    }
+    setInventoryDeleteTarget({ row, kind: "inventory" });
   }
 
   async function removeShippedItemRow(row: DsInventoryRow) {
-    const confirmed = window.confirm(
-      lang === "zh"
-        ? `确认删除这条已发商品记录？\n${row.sku} / ${row.productNameZh || "-"}`
-        : `Eliminar este registro enviado?\n${row.sku} / ${row.productNameZh || "-"}`,
-    );
-    if (!confirmed) return;
+    setInventoryDeleteTarget({ row, kind: "shipped" });
+  }
 
+  async function confirmInventoryDelete() {
+    if (!inventoryDeleteTarget) return;
     try {
       setSaving(true);
       setError("");
-      const response = await fetch(`/api/dropshipping/orders/${row.orderId}`, {
-        method: "DELETE",
-      });
+      const response = inventoryDeleteTarget.kind === "inventory"
+        ? await fetch(`/api/dropshipping/inventory/${inventoryDeleteTarget.row.inventoryId}`, {
+            method: "DELETE",
+          })
+        : await fetch(`/api/dropshipping/orders/${inventoryDeleteTarget.row.orderId}`, {
+            method: "DELETE",
+          });
       const json = await response.json();
       if (!response.ok || !json?.ok) {
         throw new Error(json?.error || "delete_failed");
       }
+      setInventoryDeleteTarget(null);
       await refreshAll();
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "delete_failed");
@@ -3801,7 +3788,8 @@ export function DropshippingClient({
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "备货剩余" : "Restante stock"}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "备货状态" : "Estado stock"}</th>
                     <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{text.fields.shipped}</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 text-right font-semibold">{lang === "zh" ? "操作" : "Acciones"}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 font-semibold">{lang === "zh" ? "发货时间" : "Fecha envio"}</th>
+                    <th className="whitespace-nowrap px-4 py-2.5 text-right font-semibold"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3878,7 +3866,7 @@ export function DropshippingClient({
                       <td className="px-4 py-2 text-sm text-slate-700">
                         {row.isStocked ? row.remainingQty : "-"}
                       </td>
-                      <td className="px-4 py-2 text-sm text-slate-700">
+                      <td className={`px-4 py-2 text-sm ${row.isStocked ? getInventoryStatusClass(row.status) : "text-slate-700"}`}>
                         {row.isStocked ? text.status[row.status] : "-"}
                       </td>
                       <td className="px-4 py-2 text-sm text-slate-700">
@@ -3903,6 +3891,9 @@ export function DropshippingClient({
                         ) : (
                           row.shippedQty
                         )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2 text-sm text-slate-700">
+                        {row.shippedAt ? fmtDateOnly(row.shippedAt, lang) : "-"}
                       </td>
                       <td className="px-4 py-2 text-right">
                         <div className="inline-flex items-center gap-2">
@@ -5134,7 +5125,9 @@ export function DropshippingClient({
                 <input
                   value={inventoryEdit.status ? text.status[inventoryEdit.status] : "-"}
                   disabled
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none"
+                  className={`h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none ${
+                    inventoryEdit.status ? getInventoryStatusClass(inventoryEdit.status) : "text-slate-500"
+                  }`}
                 />
               </div>
               <div className="space-y-1">
@@ -5499,6 +5492,41 @@ export function DropshippingClient({
                 className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white"
               >
                 {lang === "zh" ? "\u786e\u5b9a" : "Confirmar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {inventoryDeleteTarget ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/45 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+            <div className="px-5 pb-5 pt-6">
+              <p className="text-base font-semibold text-slate-900">
+                {lang === "zh" ? "确认删除" : "Confirmar eliminacion"}
+              </p>
+              <p className="mt-3 text-sm text-slate-700">
+                {inventoryDeleteTarget.kind === "inventory"
+                  ? (lang === "zh" ? "确认删除这条备货记录？" : "Eliminar este registro de stock?")
+                  : (lang === "zh" ? "确认删除这条已发商品记录？" : "Eliminar este registro enviado?")}
+              </p>
+              <p className="mt-1 text-sm text-slate-700">
+                {inventoryDeleteTarget.row.sku} / {inventoryDeleteTarget.row.productNameZh || "-"}
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setInventoryDeleteTarget(null)}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
+              >
+                {lang === "zh" ? "取消" : "Cancelar"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmInventoryDelete()}
+                className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white"
+              >
+                {lang === "zh" ? "确定" : "Confirmar"}
               </button>
             </div>
           </div>
