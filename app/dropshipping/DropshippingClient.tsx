@@ -108,6 +108,8 @@ type InventoryProductOption = {
   discountRate: string;
 };
 
+type InventoryExportMode = "stocked" | "status" | "sku" | "allShipped" | null;
+
 type FinancePreviewState = DsFinanceRow | null;
 type OverviewRange = "day" | "week" | "month" | "year";
 
@@ -309,6 +311,13 @@ function formatDiscountPercentInput(value: string | number | null | undefined) {
 
 function fmtYuanMoney(value: number, lang: "zh" | "es") {
   return `￥${fmtMoney(value, lang)}`;
+}
+
+function fmtDualCurrencyFromCny(value: number, rateValue: number | null | undefined, lang: "zh" | "es") {
+  const mxnValue = rateValue && Number.isFinite(rateValue) && rateValue > 0 ? value / rateValue : null;
+  const mxnText = mxnValue === null ? "-" : `$ ${fmtMoney(mxnValue, lang)}`;
+  const cnyText = `￥ ${fmtMoney(value, lang)}`;
+  return `${mxnText} | ${cnyText}`;
 }
 
 function fmtPercent(value: number, lang: "zh" | "es") {
@@ -2593,11 +2602,29 @@ export function DropshippingClient({
 
   function openInventoryExport() {
     setInventoryExport({
-      stocked: inventoryStockFilter,
+      stocked: "all",
       status: "all",
-      skuKeyword: inventoryKeyword,
-      includeAllShipped: true,
+      skuKeyword: "",
+      includeAllShipped: false,
     });
+  }
+
+  function getInventoryExportMode(state: InventoryExportState): InventoryExportMode {
+    if (!state) return null;
+    if (state.stocked !== "all") return "stocked";
+    if (state.status !== "all") return "status";
+    if (state.skuKeyword.trim()) return "sku";
+    if (state.includeAllShipped) return "allShipped";
+    return null;
+  }
+
+  function resetInventoryExportState(): NonNullable<InventoryExportState> {
+    return {
+      stocked: "all",
+      status: "all",
+      skuKeyword: "",
+      includeAllShipped: false,
+    };
   }
 
   function exportFilteredInventory(kind: "xlsx" | "pdf") {
@@ -2903,15 +2930,15 @@ export function DropshippingClient({
                   <div className="mt-2.5 grid gap-2 sm:grid-cols-3">
                     <div className="rounded-[18px] border border-white/70 bg-white/85 px-3 py-2">
                       <div className="text-xs text-slate-500">{lang === "zh" ? "客户订单总额" : "Monto total"}</div>
-                      <div className="mt-1 text-lg font-semibold text-slate-900">{fmtMoney(overviewDashboard.receivable, lang)}</div>
+                      <div className="mt-1 text-lg font-semibold text-slate-900">{fmtDualCurrencyFromCny(overviewDashboard.receivable, exchangeRate.rateValue, lang)}</div>
                     </div>
                     <div className="rounded-[18px] border border-white/70 bg-white/85 px-3 py-2">
                       <div className="text-xs text-slate-500">{lang === "zh" ? "结款总额" : "Liquidado"}</div>
-                      <div className="mt-1 text-lg font-semibold text-emerald-600">{fmtMoney(overviewDashboard.paid, lang)}</div>
+                      <div className="mt-1 text-lg font-semibold text-emerald-600">{fmtDualCurrencyFromCny(overviewDashboard.paid, exchangeRate.rateValue, lang)}</div>
                     </div>
                     <div className="rounded-[18px] border border-white/70 bg-white/85 px-3 py-2">
                       <div className="text-xs text-slate-500">{lang === "zh" ? "未结总额" : "Pendiente"}</div>
-                      <div className="mt-1 text-lg font-semibold text-rose-600">{fmtMoney(overviewDashboard.pending, lang)}</div>
+                      <div className="mt-1 text-lg font-semibold text-rose-600">{fmtDualCurrencyFromCny(overviewDashboard.pending, exchangeRate.rateValue, lang)}</div>
                     </div>
                   </div>
                   <div className="mt-2.5 rounded-[18px] border border-white/70 bg-white/80 p-3">
@@ -3130,15 +3157,15 @@ export function DropshippingClient({
                   <div className="mt-6 grid gap-3 sm:grid-cols-3">
                     <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4 backdrop-blur">
                       <div className="text-xs text-slate-500">{lang === "zh" ? "客户订单总额" : "Monto total"}</div>
-                      <div className="mt-2 text-2xl font-semibold text-slate-900">{fmtMoney(overview.stats.totalReceivable, lang)}</div>
+                      <div className="mt-2 text-2xl font-semibold text-slate-900">{fmtDualCurrencyFromCny(overview.stats.totalReceivable, exchangeRate.rateValue, lang)}</div>
                     </div>
                     <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4 backdrop-blur">
                       <div className="text-xs text-slate-500">{lang === "zh" ? "结款总额" : "Liquidado"}</div>
-                      <div className="mt-2 text-2xl font-semibold text-emerald-600">{fmtMoney(overview.stats.totalPaid, lang)}</div>
+                      <div className="mt-2 text-2xl font-semibold text-emerald-600">{fmtDualCurrencyFromCny(overview.stats.totalPaid, exchangeRate.rateValue, lang)}</div>
                     </div>
                     <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4 backdrop-blur">
                       <div className="text-xs text-slate-500">{lang === "zh" ? "未结总额" : "Pendiente"}</div>
-                      <div className="mt-2 text-2xl font-semibold text-rose-600">{fmtMoney(overview.stats.totalUnpaid, lang)}</div>
+                      <div className="mt-2 text-2xl font-semibold text-rose-600">{fmtDualCurrencyFromCny(overview.stats.totalUnpaid, exchangeRate.rateValue, lang)}</div>
                     </div>
                   </div>
                   <div className="mt-6 rounded-[28px] border border-white/70 bg-white/75 p-4 backdrop-blur">
@@ -5314,13 +5341,21 @@ export function DropshippingClient({
       {inventoryExport ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
           <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+            {(() => {
+              const exportMode = getInventoryExportMode(inventoryExport);
+              const stockedDisabled = exportMode !== null && exportMode !== "stocked";
+              const statusDisabled = exportMode !== null && exportMode !== "status";
+              const skuDisabled = exportMode !== null && exportMode !== "sku";
+              const allShippedDisabled = exportMode !== null && exportMode !== "allShipped";
+              return (
+                <>
             <div className="border-b border-slate-200 px-5 py-4">
               <h3 className="text-lg font-semibold text-slate-900">{lang === "zh" ? "筛选导出" : "Exportar filtro"}</h3>
             </div>
             <div className="grid gap-4 px-5 py-5 md:grid-cols-2">
               <div className="space-y-1">
                 <p className="text-xs text-slate-500">{lang === "zh" ? "已备货" : "Stock"}</p>
-                <div className="space-y-2 rounded-xl border border-slate-200 px-4 py-3">
+                <div className={`space-y-2 rounded-xl border px-4 py-3 ${stockedDisabled ? "border-slate-100 bg-slate-50" : "border-slate-200"}`}>
                   {[
                     { value: "all", label: lang === "zh" ? "全部" : "Todos" },
                     { value: "stocked", label: lang === "zh" ? "已备货" : "Con stock" },
@@ -5331,12 +5366,16 @@ export function DropshippingClient({
                       <button
                         key={option.value}
                         type="button"
+                        disabled={stockedDisabled}
                         onClick={() =>
-                          setInventoryExport((prev) => prev ? { ...prev, stocked: option.value as "all" | "stocked" | "unstocked" } : prev)
+                          setInventoryExport((prev) => prev ? {
+                            ...resetInventoryExportState(),
+                            stocked: option.value as "all" | "stocked" | "unstocked",
+                          } : prev)
                         }
-                        className="flex w-full items-center gap-3 text-left text-sm text-slate-700"
+                        className={`flex w-full items-center gap-3 text-left text-sm ${stockedDisabled ? "cursor-not-allowed text-slate-400" : "text-slate-700"}`}
                       >
-                        <span className={`flex h-4 w-4 items-center justify-center rounded-full border ${checked ? "border-primary" : "border-slate-300"}`}>
+                        <span className={`flex h-4 w-4 items-center justify-center rounded-full border ${checked ? "border-primary" : stockedDisabled ? "border-slate-200" : "border-slate-300"}`}>
                           <span className={`h-2 w-2 rounded-full ${checked ? "bg-primary" : "bg-transparent"}`} />
                         </span>
                         <span>{option.label}</span>
@@ -5347,7 +5386,7 @@ export function DropshippingClient({
               </div>
               <div className="space-y-1">
                 <p className="text-xs text-slate-500">{lang === "zh" ? "备货状态" : "Estado stock"}</p>
-                <div className="space-y-2 rounded-xl border border-slate-200 px-4 py-3">
+                <div className={`space-y-2 rounded-xl border px-4 py-3 ${statusDisabled ? "border-slate-100 bg-slate-50" : "border-slate-200"}`}>
                   {[
                     { value: "all", label: lang === "zh" ? "全部" : "Todos" },
                     { value: "healthy", label: lang === "zh" ? "充足" : "Suficiente" },
@@ -5359,12 +5398,16 @@ export function DropshippingClient({
                       <button
                         key={option.value}
                         type="button"
+                        disabled={statusDisabled}
                         onClick={() =>
-                          setInventoryExport((prev) => prev ? { ...prev, status: option.value as "all" | DsInventoryStatus } : prev)
+                          setInventoryExport((prev) => prev ? {
+                            ...resetInventoryExportState(),
+                            status: option.value as "all" | DsInventoryStatus,
+                          } : prev)
                         }
-                        className="flex w-full items-center gap-3 text-left text-sm text-slate-700"
+                        className={`flex w-full items-center gap-3 text-left text-sm ${statusDisabled ? "cursor-not-allowed text-slate-400" : "text-slate-700"}`}
                       >
-                        <span className={`flex h-4 w-4 items-center justify-center rounded-full border ${checked ? "border-primary" : "border-slate-300"}`}>
+                        <span className={`flex h-4 w-4 items-center justify-center rounded-full border ${checked ? "border-primary" : statusDisabled ? "border-slate-200" : "border-slate-300"}`}>
                           <span className={`h-2 w-2 rounded-full ${checked ? "bg-primary" : "bg-transparent"}`} />
                         </span>
                         <span>{option.label}</span>
@@ -5378,25 +5421,40 @@ export function DropshippingClient({
                 <input
                   value={inventoryExport.skuKeyword}
                   onChange={(event) =>
-                    setInventoryExport((prev) => prev ? { ...prev, skuKeyword: event.target.value } : prev)
+                    setInventoryExport((prev) => prev ? {
+                      ...resetInventoryExportState(),
+                      skuKeyword: event.target.value,
+                    } : prev)
                   }
                   placeholder={lang === "zh" ? "输入商品编码" : "Escribe SKU"}
-                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm text-slate-700 outline-none"
+                  disabled={skuDisabled}
+                  className={`h-11 w-full rounded-xl border px-3 text-sm outline-none ${skuDisabled ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400" : "border-slate-200 text-slate-700"}`}
                 />
               </div>
-              <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3">
+              <label className={`md:col-span-2 flex items-center gap-3 rounded-xl border px-4 py-3 ${allShippedDisabled ? "cursor-not-allowed border-slate-100 bg-slate-50" : "border-slate-200"}`}>
                 <input
                   type="checkbox"
                   checked={inventoryExport.includeAllShipped}
+                  disabled={allShippedDisabled}
                   onChange={(event) =>
-                    setInventoryExport((prev) => prev ? { ...prev, includeAllShipped: event.target.checked } : prev)
+                    setInventoryExport((prev) => prev ? {
+                      ...resetInventoryExportState(),
+                      includeAllShipped: event.target.checked,
+                    } : prev)
                   }
                   className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/20"
                 />
-                <span className="text-sm text-slate-700">{lang === "zh" ? "全部发货记录" : "Todos los envios"}</span>
+                <span className={`text-sm ${allShippedDisabled ? "text-slate-400" : "text-slate-700"}`}>{lang === "zh" ? "全部发货记录" : "Todos los envios"}</span>
               </label>
             </div>
             <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setInventoryExport(resetInventoryExportState())}
+                className="h-10 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-600"
+              >
+                {lang === "zh" ? "清空选项" : "Limpiar"}
+              </button>
               <button
                 type="button"
                 onClick={() => setInventoryExport(null)}
@@ -5419,6 +5477,9 @@ export function DropshippingClient({
                 PDF
               </button>
             </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       ) : null}
