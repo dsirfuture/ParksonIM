@@ -3645,32 +3645,41 @@ export function DropshippingClient({
                   className="h-10 w-full rounded-xl bg-transparent pl-3 pr-56 text-sm text-slate-700 outline-none"
                 />
                 <div className="absolute inset-y-1 right-1 flex items-center border-l border-slate-200 pl-1.5">
-                  <select
-                    value={inventoryStockFilter}
-                    onChange={(event) => setInventoryStockFilter(event.target.value as "all" | "stocked" | "unstocked")}
-                    className="h-8 min-w-[96px] appearance-none rounded-lg bg-transparent px-3 pr-8 text-sm text-slate-700 outline-none transition"
-                  >
-                    <option value="all">{lang === "zh" ? "备货" : "Stock"}</option>
-                    <option value="stocked">{lang === "zh" ? "已备货" : "Con stock"}</option>
-                    <option value="unstocked">{lang === "zh" ? "无备货" : "Sin stock"}</option>
-                  </select>
-                  <select
-                    value={inventoryCustomerFilter}
-                    onChange={(event) => setInventoryCustomerFilter(event.target.value)}
-                    className="h-8 min-w-[116px] appearance-none rounded-lg bg-transparent px-3 pr-8 text-sm text-slate-700 outline-none transition"
-                  >
-                    <option value="all">{lang === "zh" ? "全部客户" : "Todos"}</option>
-                    {inventoryCustomerOptions.map((customer) => (
-                      <option key={customer} value={customer}>
-                        {customer}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">
-                    <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="m4 6 4 4 4-4" />
-                    </svg>
-                  </span>
+                  <div className="relative">
+                    <select
+                      value={inventoryStockFilter}
+                      onChange={(event) => setInventoryStockFilter(event.target.value as "all" | "stocked" | "unstocked")}
+                      className="h-8 min-w-[96px] appearance-none rounded-lg bg-transparent px-3 pr-8 text-sm text-slate-700 outline-none transition"
+                    >
+                      <option value="all">{lang === "zh" ? "备货" : "Stock"}</option>
+                      <option value="stocked">{lang === "zh" ? "已备货" : "Con stock"}</option>
+                      <option value="unstocked">{lang === "zh" ? "无备货" : "Sin stock"}</option>
+                    </select>
+                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">
+                      <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="m4 6 4 4 4-4" />
+                      </svg>
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <select
+                      value={inventoryCustomerFilter}
+                      onChange={(event) => setInventoryCustomerFilter(event.target.value)}
+                      className="h-8 min-w-[116px] appearance-none rounded-lg bg-transparent px-3 pr-8 text-sm text-slate-700 outline-none transition"
+                    >
+                      <option value="all">{lang === "zh" ? "全部客户" : "Todos"}</option>
+                      {inventoryCustomerOptions.map((customer) => (
+                        <option key={customer} value={customer}>
+                          {customer}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">
+                      <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="m4 6 4 4 4-4" />
+                      </svg>
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
