@@ -5720,16 +5720,16 @@ export function DropshippingClient({
                 </h3>
                 {inventoryShippedPreview.mode === "related" ? (
                   <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <p>
+                    <span>
                       {lang === "zh" ? "共：" : "Total:"}
                       <span className="px-1 font-semibold text-rose-600">{shippedOrdersForInventoryPreview.length}</span>
                       {lang === "zh" ? "次发货" : " envios"}
-                    </p>
-                    <p>
+                    </span>
+                    <span>
                       {lang === "zh" ? "此商品销量：" : "Cantidad vendida:"}
                       <span className="px-1 font-semibold text-rose-600">{shippedQtyForInventoryPreview}</span>
                       {lang === "zh" ? "个" : ""}
-                    </p>
+                    </span>
                   </div>
                 ) : null}
               </div>
