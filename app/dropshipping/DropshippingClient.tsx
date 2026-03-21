@@ -68,6 +68,7 @@ type InventoryEditState = {
   mode: "create" | "edit";
   id: string;
   orderId: string;
+  trackingNo: string;
   customerId: string;
   customerName: string;
   productCatalogId: string;
@@ -2716,6 +2717,7 @@ export function DropshippingClient({
       mode: row.inventoryId ? "edit" : "create",
       id: row.inventoryId || "",
       orderId: row.orderId,
+      trackingNo: row.trackingNo || "",
       customerId: row.customerId,
       customerName: row.customerName,
       productCatalogId: "",
@@ -2764,6 +2766,7 @@ export function DropshippingClient({
         mode: "create",
         id: "",
         orderId: "",
+        trackingNo: "",
         customerId: defaultCustomer?.id || "",
         customerName: defaultCustomer?.name || "",
         productCatalogId: "",
@@ -5389,11 +5392,19 @@ export function DropshippingClient({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4" onClick={() => setInventoryEdit(null)}>
           <div className="w-full max-w-2xl rounded-[28px] bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="mb-5">
-              <h3 className="text-xl font-semibold text-slate-900">
-                {inventoryEdit.mode === "create"
-                  ? (lang === "zh" ? "新增备货记录" : "Nuevo stock")
-                  : (lang === "zh" ? "编辑备货记录" : "Editar stock")}
-              </h3>
+              <div className="flex items-center gap-3">
+                <h3 className="text-xl font-semibold text-slate-900">
+                  {inventoryEdit.mode === "create"
+                    ? (lang === "zh" ? "新增备货记录" : "Nuevo stock")
+                    : (lang === "zh" ? "编辑备货记录" : "Editar stock")}
+                </h3>
+                {inventoryEdit.mode === "edit" && inventoryEdit.trackingNo ? (
+                  <span className="text-xs text-slate-500">
+                    {lang === "zh" ? "物流号：" : "Guia: "}
+                    {inventoryEdit.trackingNo}
+                  </span>
+                ) : null}
+              </div>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-1">
