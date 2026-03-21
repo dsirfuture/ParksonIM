@@ -281,6 +281,32 @@ function fmtDateOnly(value: string | null | undefined, lang: "zh" | "es") {
   }).format(new Date(value));
 }
 
+function fmtFinanceRateDateLabel(value: string | null | undefined, lang: "zh" | "es") {
+  if (!value) return "-";
+  const parts = parseDateOnlyParts(value);
+  if (!parts) return fmtDateOnly(value, lang);
+
+  if (lang !== "zh") {
+    return `${parts.day}/${parts.month}/${parts.year}`;
+  }
+
+  const todayFormatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const todayParts = Object.fromEntries(
+    todayFormatter.formatToParts(new Date()).map((part) => [part.type, part.value]),
+  ) as Record<string, string>;
+  const isToday =
+    parts.year === todayParts.year &&
+    parts.month === todayParts.month &&
+    parts.day === todayParts.day;
+
+  return `${Number(parts.year)}年${Number(parts.month)}月${Number(parts.day)}日${isToday ? "（今天）" : ""}`;
+}
+
 function toDateInputValue(value: string | null | undefined) {
   const parts = parseDateOnlyParts(String(value || ""));
   if (!parts) return "";
@@ -4411,14 +4437,21 @@ export function DropshippingClient({
         <TableCard
           title={text.sections.finance}
           titleRight={
-            <div className="flex items-center gap-3 text-sm text-slate-500">
+            <a
+              href="https://wise.com/zh-cn/currency-converter/mxn-to-cny-rate"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-3 text-sm text-slate-500"
+            >
               <span className="whitespace-nowrap">
-                {lang === "zh" ? "当天汇率" : "Tipo de cambio"}: {financeDisplayRate?.toFixed(4) || "-"}
+                {lang === "zh"
+                  ? `${fmtFinanceRateDateLabel(financeRateDate, lang)}汇率`
+                  : "Tipo de cambio"}: {financeDisplayRate?.toFixed(4) || "-"}
               </span>
               <span className="whitespace-nowrap">
                 {lang === "zh" ? "来源" : "Fuente"}: {exchangeRate.sourceName || "-"}
               </span>
-            </div>
+            </a>
           }
         >
           {finance.length === 0 ? (
