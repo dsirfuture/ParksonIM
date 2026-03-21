@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ChangeEvent,
+  DragEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { ProductImage } from "@/components/product-image";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { buildProductImageUrl } from "@/lib/product-image-url";
@@ -328,11 +335,11 @@ async function readJsonSafe(response: Response) {
   } catch {
     if (response.status === 404) {
       throw new Error(
-        "扫码接口未找到，请检查 app/api/receipts/scan/[itemId]/route.ts 是否存在",
+        "\u626b\u7801\u63a5\u53e3\u672a\u627e\u5230\uff0c\u8bf7\u68c0\u67e5 app/api/receipts/scan/[itemId]/route.ts \u662f\u5426\u5b58\u5728",
       );
     }
 
-    throw new Error(raw || "接口返回格式不正确");
+    throw new Error(raw || "\u63a5\u53e3\u8fd4\u56de\u683c\u5f0f\u4e0d\u6b63\u786e");
   }
 }
 
@@ -357,6 +364,15 @@ function readFileAsDataUrl(file: File) {
   });
 }
 
+function extractDroppedImageFiles(dataTransfer: DataTransfer | null) {
+  if (!dataTransfer) return [];
+  const itemFiles = Array.from(dataTransfer.items || [])
+    .filter((item) => item.kind === "file")
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => Boolean(file));
+  return itemFiles.length > 0 ? itemFiles : Array.from(dataTransfer.files || []);
+}
+
 function isSpanish(text: TextMap) {
   return text.cancel === "Cancelar";
 }
@@ -366,16 +382,16 @@ function getDeleteText(text: TextMap) {
 }
 
 function getSavedText(text: TextMap) {
-  return isSpanish(text) ? "已保存图片" : "已保存图片";
+  return isSpanish(text) ? "Imágenes guardadas" : "已保存图片";
 }
 
 function getPendingText(text: TextMap) {
-  return isSpanish(text) ? "待保存图片" : "待保存图片";
+  return isSpanish(text) ? "Imágenes pendientes" : "待保存图片";
 }
 
 function getUploadingRuleText(text: TextMap) {
   return isSpanish(text)
-    ? "最多 20 张，仅支持图片，单张不超过 10MB"
+    ? "Máximo 20 imágenes, solo fotos, hasta 10MB cada una"
     : "最多 20 张，仅支持图片，单张不超过 10MB";
 }
 
@@ -384,7 +400,7 @@ function getEvidenceLoadErrorText(text: TextMap) {
 }
 
 function getEvidenceTooManyText(text: TextMap) {
-  return isSpanish(text) ? "最多只能上传 20 张图片" : "最多只能上传 20 张图片";
+  return isSpanish(text) ? "Solo puedes subir hasta 20 imágenes" : "最多只能上传 20 张图片";
 }
 
 function getEvidenceImageOnlyText(text: TextMap) {
@@ -458,6 +474,7 @@ export function ScanClient({
   const [pendingEvidenceImages, setPendingEvidenceImages] = useState<
     EvidenceItem[]
   >([]);
+  const [evidenceDragActive, setEvidenceDragActive] = useState(false);
 
   const scanInputRef = useRef<HTMLInputElement | null>(null);
   const locateTimerRef = useRef<number | null>(null);
@@ -637,54 +654,90 @@ export function ScanClient({
   function closeEvidenceModal() {
     setEvidenceOpen(false);
     setEvidenceError("");
+    setEvidenceDragActive(false);
+  }
+
+  async function queueEvidenceFiles(files: File[]) {
+    if (!files.length) return;
+
+    const totalCount =
+      savedEvidenceImages.length + pendingEvidenceImages.length + files.length;
+
+    if (totalCount > MAX_EVIDENCE_COUNT) {
+      throw new Error(getEvidenceTooManyText(text));
+    }
+
+    const nextImages: EvidenceItem[] = [];
+
+    for (const file of files) {
+      if (!file.type.startsWith("image/")) {
+        throw new Error(getEvidenceImageOnlyText(text));
+      }
+
+      if (file.size > MAX_EVIDENCE_SIZE) {
+        throw new Error(getEvidenceSizeText(text));
+      }
+
+      const dataUrl = await readFileAsDataUrl(file);
+
+      nextImages.push({
+        id: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
+        name: file.name,
+        url: dataUrl,
+        fileSize: file.size,
+        mimeType: file.type,
+        createdAt: new Date().toISOString(),
+        local: true,
+      });
+    }
+
+    setEvidenceError("");
+    setPendingEvidenceImages((prev) => [...prev, ...nextImages]);
   }
 
   async function handleEvidenceChoose(event: ChangeEvent<HTMLInputElement>) {
     try {
       const files = Array.from(event.target.files || []);
-      if (!files.length) return;
-
-      const totalCount =
-        savedEvidenceImages.length +
-        pendingEvidenceImages.length +
-        files.length;
-
-      if (totalCount > MAX_EVIDENCE_COUNT) {
-        throw new Error(getEvidenceTooManyText(text));
-      }
-
-      const nextImages: EvidenceItem[] = [];
-
-      for (const file of files) {
-        if (!file.type.startsWith("image/")) {
-          throw new Error(getEvidenceImageOnlyText(text));
-        }
-
-        if (file.size > MAX_EVIDENCE_SIZE) {
-          throw new Error(getEvidenceSizeText(text));
-        }
-
-        const dataUrl = await readFileAsDataUrl(file);
-
-        nextImages.push({
-          id: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
-          name: file.name,
-          url: dataUrl,
-          fileSize: file.size,
-          mimeType: file.type,
-          createdAt: new Date().toISOString(),
-          local: true,
-        });
-      }
-
-      setEvidenceError("");
-      setPendingEvidenceImages((prev) => [...prev, ...nextImages]);
+      await queueEvidenceFiles(files);
       event.target.value = "";
     } catch (error) {
+      setEvidenceError("");
       setEvidenceError(
         error instanceof Error ? error.message : getEvidenceLoadErrorText(text),
       );
       event.target.value = "";
+    }
+  }
+
+  function handleEvidenceDragOver(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setEvidenceDragActive(true);
+  }
+
+  function handleEvidenceDragEnter(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setEvidenceDragActive(true);
+  }
+
+  function handleEvidenceDragLeave(event: DragEvent<HTMLDivElement>) {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+      return;
+    }
+    setEvidenceDragActive(false);
+  }
+
+  async function handleEvidenceDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setEvidenceDragActive(false);
+    try {
+      const files = extractDroppedImageFiles(event.dataTransfer);
+      await queueEvidenceFiles(files);
+    } catch (error) {
+      setEvidenceError(
+        error instanceof Error ? error.message : getEvidenceLoadErrorText(text),
+      );
     }
   }
 
@@ -1345,7 +1398,7 @@ export function ScanClient({
                           <span>{row.sku || "-"}</span>
                           {row.unexpected ? (
                             <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[11px] font-semibold text-white">
-                              新
+                              \u65b0
                             </span>
                           ) : null}
                         </div>
@@ -1814,8 +1867,23 @@ export function ScanClient({
               {!evidenceLoading &&
               savedEvidenceImages.length === 0 &&
               pendingEvidenceImages.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 px-4 py-10 text-center text-sm text-slate-500">
-                  {text.noEvidence}
+                <div
+                  onDragOver={handleEvidenceDragOver}
+                  onDragEnter={handleEvidenceDragEnter}
+                  onDragLeave={handleEvidenceDragLeave}
+                  onDrop={handleEvidenceDrop}
+                  className={`rounded-xl border border-dashed px-4 py-10 text-center text-sm transition ${
+                    evidenceDragActive
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-slate-200 text-slate-500"
+                  }`}
+                >
+                  <div>{text.noEvidence}</div>
+                  <div className="mt-2 text-xs">
+                    {evidenceDragActive
+                      ? "\u677e\u5f00\u9f20\u6807\u4e0a\u4f20\u56fe\u7247"
+                      : "\u53ef\u4ee5\u62d6\u62fd\u56fe\u7247\u5230\u6b64"}
+                  </div>
                 </div>
               ) : null}
 
@@ -1930,3 +1998,4 @@ export function ScanClient({
     </div>
   );
 }
+
