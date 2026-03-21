@@ -1525,6 +1525,39 @@ export function DropshippingClient({
     });
   }, [inventory, inventoryCustomerFilter, inventoryKeyword, inventorySortDirection, inventorySortKey, inventoryStockFilter]);
 
+  const inventoryKeywordStockSummary = useMemo(() => {
+    const normalized = inventoryKeyword.trim().toLowerCase();
+    if (!normalized) return null;
+
+    const matchedRows = inventory.filter((row) => {
+      const customerHit =
+        inventoryCustomerFilter === "all" || row.customerName === inventoryCustomerFilter;
+      return customerHit && row.sku.toLowerCase().includes(normalized);
+    });
+
+    if (matchedRows.length === 0) return null;
+
+    const stockedQty = matchedRows.reduce((sum, row) => {
+      if (!row.isStocked) return sum;
+      return sum + Math.max(row.stockedQty, 0);
+    }, 0);
+
+    if (stockedQty > 0) {
+      return {
+        text:
+          lang === "zh"
+            ? `备货：${stockedQty}个`
+            : `Stock: ${stockedQty}`,
+        className: "text-emerald-600",
+      };
+    }
+
+    return {
+      text: lang === "zh" ? "无备货" : "Sin stock",
+      className: "text-rose-600",
+    };
+  }, [inventory, inventoryCustomerFilter, inventoryKeyword, lang]);
+
   const inventoryTotalPages = Math.max(1, Math.ceil(filteredInventory.length / inventoryPageSize));
   const inventoryCurrentPage = Math.min(inventoryPage, inventoryTotalPages);
   const pagedInventory = filteredInventory.slice(
@@ -4074,13 +4107,20 @@ export function DropshippingClient({
               >
                 <span className="whitespace-nowrap">{lang === "zh" ? "新增备货" : "Nuevo stock"}</span>
               </button>
-              <div className="relative w-full max-w-[420px] rounded-xl border border-slate-200 bg-white shadow-sm shadow-slate-100/60">
+              <div className="relative w-full max-w-[560px] rounded-xl border border-slate-200 bg-white shadow-sm shadow-slate-100/60">
                 <input
                   value={inventoryKeyword}
                   onChange={(event) => setInventoryKeyword(event.target.value)}
                   placeholder={lang === "zh" ? "搜索编码 / 中文名" : "Buscar codigo / nombre"}
-                  className="h-10 w-full rounded-xl bg-transparent pl-3 pr-56 text-sm text-slate-700 outline-none"
+                  className="h-10 w-full rounded-xl bg-transparent pl-3 pr-[340px] text-sm text-slate-700 outline-none"
                 />
+                {inventoryKeywordStockSummary ? (
+                  <div
+                    className={`pointer-events-none absolute inset-y-0 right-[236px] flex items-center whitespace-nowrap text-sm font-bold ${inventoryKeywordStockSummary.className}`}
+                  >
+                    {inventoryKeywordStockSummary.text}
+                  </div>
+                ) : null}
                 <div className="absolute inset-y-1 right-1 flex items-center border-l border-slate-200 pl-1.5">
                   <div className="relative">
                     <select
