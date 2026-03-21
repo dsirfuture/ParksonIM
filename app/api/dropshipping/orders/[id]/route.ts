@@ -127,6 +127,13 @@ export async function PATCH(
 
     return NextResponse.json({ ok: true, id: order.id });
   } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.message === "duplicate_platform_order_no" ||
+        error.message === "duplicate_tracking_no")
+    ) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: 409 });
+    }
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : "更新订单失败" },
       { status: 500 },

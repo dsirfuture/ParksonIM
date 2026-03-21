@@ -143,6 +143,53 @@ async function fetchWiseMxnToCnyRate() {
   };
 }
 
+async function ensureOrderUniqueness(
+  session: Session,
+  payload: {
+    id?: string;
+    platformOrderNo: string;
+    trackingNo?: string;
+  },
+) {
+  const normalizedOrderNo = String(payload.platformOrderNo || "").trim();
+  const normalizedTrackingNo = String(payload.trackingNo || "").trim();
+
+  if (!normalizedOrderNo && !normalizedTrackingNo) return;
+
+  const excludeId = String(payload.id || "").trim();
+  const baseWhere = {
+    tenant_id: session.tenantId,
+    company_id: session.companyId,
+    ...(excludeId ? { id: { not: excludeId } } : {}),
+  };
+
+  if (normalizedOrderNo) {
+    const duplicateOrder = await prisma.dropshippingOrder.findFirst({
+      where: {
+        ...baseWhere,
+        platform_order_no: normalizedOrderNo,
+      },
+      select: { id: true },
+    });
+    if (duplicateOrder) {
+      throw new Error("duplicate_platform_order_no");
+    }
+  }
+
+  if (normalizedTrackingNo) {
+    const duplicateTracking = await prisma.dropshippingOrder.findFirst({
+      where: {
+        ...baseWhere,
+        tracking_no: normalizedTrackingNo,
+      },
+      select: { id: true },
+    });
+    if (duplicateTracking) {
+      throw new Error("duplicate_tracking_no");
+    }
+  }
+}
+
 function toOptionalNumber(value: unknown) {
   const num = toNumber(value);
   return num === 0 && (value === null || value === undefined || value === "") ? null : num;
@@ -682,6 +729,12 @@ export async function saveOrder(
     notes?: string;
   },
 ) {
+  await ensureOrderUniqueness(session, {
+    id: payload.id,
+    platformOrderNo: payload.platformOrderNo,
+    trackingNo: payload.trackingNo,
+  });
+
   const customer = await ensureCustomer(session, payload.customerName);
   const product = await ensureProduct(session, {
     sku: payload.sku,

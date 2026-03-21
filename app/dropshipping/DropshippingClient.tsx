@@ -868,6 +868,7 @@ export function DropshippingClient({
   const [importProgress, setImportProgress] = useState<number | null>(null);
   const [importSummary, setImportSummary] = useState<string>("");
   const [error, setError] = useState("");
+  const [duplicateAlertMessage, setDuplicateAlertMessage] = useState("");
   const [success, setSuccess] = useState("");
   const [recentSavedInventorySku, setRecentSavedInventorySku] = useState("");
   const [previewImage, setPreviewImage] = useState<{ src: string; title: string; fallbackSources?: string[] } | null>(null);
@@ -2448,6 +2449,20 @@ export function DropshippingClient({
     return json.items as DsOrderRow[];
   }
 
+  function handleOrderSaveError(rawError: unknown) {
+    const message = rawError instanceof Error ? rawError.message : "save_failed";
+    if (message === "duplicate_platform_order_no" || message === "duplicate_tracking_no") {
+      setDuplicateAlertMessage(
+        lang === "zh"
+          ? "此订单号已存在，请检查"
+          : "Este numero de pedido ya existe. Revisalo.",
+      );
+      setError("");
+      return;
+    }
+    setError(message);
+  }
+
   function openGroupProductSearch(slotKey: string) {
     setActiveGroupSlotKey(slotKey);
     setGroupProductSearchKeyword("");
@@ -2459,6 +2474,7 @@ export function DropshippingClient({
     try {
       setSaving(true);
       setError("");
+      setDuplicateAlertMessage("");
       const normalizedSku = normalizeProductCode(product.sku);
       const duplicateOrder = groupedOrdersForModal.find((row) =>
         (product.productId && row.productId === product.productId)
@@ -2511,7 +2527,7 @@ export function DropshippingClient({
         openEditModal(refreshedCurrent, modalPrimaryOrderId || form.id || refreshedCurrent.id);
       }
     } catch (groupError) {
-      setError(groupError instanceof Error ? groupError.message : "save_failed");
+      handleOrderSaveError(groupError);
     } finally {
       setSaving(false);
     }
@@ -2701,6 +2717,7 @@ export function DropshippingClient({
     try {
       setSaving(true);
       setError("");
+      setDuplicateAlertMessage("");
       const { orderId } = await persistCurrentOrder();
       if (orderId) {
         await uploadOrderAttachments(orderId);
@@ -2716,7 +2733,7 @@ export function DropshippingClient({
       setActiveGroupSlotKey(null);
       await refreshData(["orders", "inventory", "finance", "overview", "rate"]);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "save_failed");
+      handleOrderSaveError(submitError);
     } finally {
       setSaving(false);
     }
@@ -6115,6 +6132,27 @@ export function DropshippingClient({
                 className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white"
               >
                 {lang === "zh" ? "\u786e\u5b9a" : "Confirmar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {duplicateAlertMessage ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/45 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+            <div className="px-5 pb-5 pt-6">
+              <p className="text-base font-semibold text-slate-900">
+                {lang === "zh" ? "提示" : "Aviso"}
+              </p>
+              <p className="mt-3 text-sm text-slate-700">{duplicateAlertMessage}</p>
+            </div>
+            <div className="flex justify-end border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setDuplicateAlertMessage("")}
+                className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white"
+              >
+                {lang === "zh" ? "确定" : "Confirmar"}
               </button>
             </div>
           </div>
