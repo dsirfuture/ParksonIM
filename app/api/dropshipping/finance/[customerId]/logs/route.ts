@@ -19,11 +19,10 @@ function extractStatementNumber(value: string | null | undefined) {
 function extractCycleText(value: string | null | undefined) {
   const text = String(value || "").trim();
   if (!text) return "";
-  const segment = text
-    .split(/\s\/\s/)
-    .find((part) => String(part || "").includes("周期："));
-  if (!segment) return "";
-  return segment.replace(/^.*?周期：/, "").trim();
+  const directRangeMatch = text.match(/(\d{4}\/\d{2}\/\d{2}\s-\s\d{2}\/\d{2})/);
+  if (directRangeMatch?.[1]) return directRangeMatch[1];
+  const cycleMatch = text.match(/周期[:：]\s*([^/]+(?:\/(?!\s)[^/]+)*)/);
+  return cycleMatch?.[1]?.trim() || "";
 }
 
 function formatDateTime(value: Date | null | undefined) {
@@ -62,6 +61,8 @@ function getActionLabel(actionType: string) {
       return "生成账单";
     case "finance_statement_revoke":
       return "撤销生成";
+    case "finance_statement_paid":
+      return "已付款确认";
     case "finance_export_weekly_statement":
       return "导出本周未结账单";
     case "finance_exclude_weekly_order":
@@ -72,6 +73,8 @@ function getActionLabel(actionType: string) {
       return "生成账单";
     case "revoke":
       return "撤销生成";
+    case "confirm_paid":
+      return "已付款确认";
     case "export":
       return "导出账单";
     case "copy_export":
@@ -104,6 +107,8 @@ function buildDefaultDetailText(
       return [base, extras, "生成本周未结账单"].filter(Boolean).join(" / ");
     case "revoke_statement":
       return [base, extras, "撤销本周未结账单生成"].filter(Boolean).join(" / ");
+    case "confirm_statement_paid":
+      return [base, extras, "已付款确认"].filter(Boolean).join(" / ");
     case "export_weekly_statement":
       return [base, extras, "导出本周未结账单"].filter(Boolean).join(" / ");
     case "exclude_weekly_order":
@@ -111,7 +116,7 @@ function buildDefaultDetailText(
     case "include_weekly_order":
       return [base, extras, "重新计入本周未结账单"].filter(Boolean).join(" / ");
     default:
-      return base || "客户账单动作";
+      return base || "客户账单操作";
   }
 }
 
@@ -172,39 +177,59 @@ export async function GET(
       detailText: log.detail_text || "-",
     }));
 
-    const statementRecordLogs = logs.filter((log) =>
-      log.order_no === logKey
-      && ["finance_statement_generate", "finance_statement_revoke", "finance_export_weekly_statement"].includes(String(log.action_type || "").trim()),
+    const statementActionTypes = [
+      "finance_statement_generate",
+      "finance_statement_revoke",
+      "finance_statement_paid",
+      "finance_export_weekly_statement",
+    ];
+    const statementRecordLogs = logs.filter(
+      (log) => log.order_no === logKey && statementActionTypes.includes(String(log.action_type || "").trim()),
     );
-    const statementRecordMap = new Map<string, {
-      statementNumber: string;
-      exportedAtText: string;
-      operatorName: string;
-      cycleText: string;
-      createdAt: number;
-    }>();
-    for (const log of statementRecordLogs) {
-      const statementNumberFromLog = extractStatementNumber(log.detail_text);
-      if (!statementNumberFromLog) continue;
-      const existing = statementRecordMap.get(statementNumberFromLog);
-      const createdAt = log.created_at instanceof Date ? log.created_at.getTime() : 0;
-      if (existing && existing.createdAt >= createdAt) continue;
-      statementRecordMap.set(statementNumberFromLog, {
-        statementNumber: statementNumberFromLog,
-        exportedAtText: formatDateTime(log.created_at),
-        operatorName: log.operator_name || "-",
-        cycleText: normalizeStatementCycleText(log.detail_text),
-        createdAt,
-      });
-    }
-    const statementEntries = Array.from(statementRecordMap.values())
+    const groupedStatementLogs = statementRecordLogs.reduce((map, log) => {
+      const statementNumber = extractStatementNumber(log.detail_text);
+      if (!statementNumber) return map;
+      const current = map.get(statementNumber) || [];
+      current.push(log);
+      map.set(statementNumber, current);
+      return map;
+    }, new Map<string, typeof statementRecordLogs>());
+
+    const statementEntries = Array.from(groupedStatementLogs.entries())
+      .map(([statementNumber, statementLogs]) => {
+        const latestLog = statementLogs[0];
+        const latestLifecycleLog = statementLogs.find((log) =>
+          [
+            "finance_statement_generate",
+            "finance_statement_revoke",
+            "finance_statement_paid",
+          ].includes(String(log.action_type || "").trim()),
+        ) || latestLog;
+        const latestLifecycleAction = String(latestLifecycleLog?.action_type || "").trim();
+        const isGenerated = latestLifecycleAction === "finance_statement_generate" || latestLifecycleAction === "finance_statement_paid";
+        if (!isGenerated) return null;
+        const generateLog =
+          statementLogs.find((log) => String(log.action_type || "").trim() === "finance_statement_generate")
+          || latestLifecycleLog
+          || latestLog;
+        const cycleText =
+          statementLogs
+            .map((log) => normalizeStatementCycleText(log.detail_text))
+            .find(Boolean) || "";
+        const paidLog = statementLogs.find((log) => String(log.action_type || "").trim() === "finance_statement_paid");
+        return {
+          statementNumber,
+          cycleText,
+          exportedAtText: formatDateTime(latestLog?.created_at),
+          generatedAtText: formatDateTime(generateLog?.created_at),
+          operatorName: (paidLog || latestLog)?.operator_name || "-",
+          isPaid: Boolean(paidLog),
+          createdAt: latestLog?.created_at instanceof Date ? latestLog.created_at.getTime() : 0,
+        };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
       .sort((a, b) => b.createdAt - a.createdAt)
-      .map(({ statementNumber: statementNo, exportedAtText, operatorName, cycleText }) => ({
-        statementNumber: statementNo,
-        cycleText,
-        exportedAtText,
-        operatorName,
-      }));
+      .map(({ createdAt: _createdAt, ...entry }) => entry);
 
     const requestUrl = new URL(request.url);
     const statementNumber = String(requestUrl.searchParams.get("statementNumber") || "").trim();
@@ -212,18 +237,23 @@ export async function GET(
       ? logs.filter((log) =>
           log.order_no === logKey
           && String(log.detail_text || "").includes(statementNumber)
-          && ["finance_statement_generate", "finance_statement_revoke"].includes(String(log.action_type || "").trim()),
+          && ["finance_statement_generate", "finance_statement_revoke", "finance_statement_paid"].includes(String(log.action_type || "").trim()),
         )
       : [];
-    const latestStatementLog = statementLogs[0] || null;
+    const latestPaidLog = statementLogs.find((log) => String(log.action_type || "").trim() === "finance_statement_paid") || null;
+    const generateLog = statementLogs.find((log) => String(log.action_type || "").trim() === "finance_statement_generate") || null;
+    const latestLifecycleLog = statementLogs[0] || null;
+    const latestLifecycleAction = String(latestLifecycleLog?.action_type || "").trim();
     const statementState = statementNumber
       ? {
           statementNumber,
-          isGenerated: latestStatementLog?.action_type === "finance_statement_generate",
-          actionText: latestStatementLog ? getActionLabel(latestStatementLog.action_type) : "",
-          createdAtText: latestStatementLog ? formatDateTime(latestStatementLog.created_at) : "",
-          operatorName: latestStatementLog?.operator_name || "",
-          noteText: latestStatementLog?.reason_text || "",
+          isGenerated: latestLifecycleAction === "finance_statement_generate" || latestLifecycleAction === "finance_statement_paid",
+          isPaid: Boolean(latestPaidLog),
+          actionText: latestLifecycleLog ? getActionLabel(latestLifecycleLog.action_type) : "",
+          createdAtText: latestLifecycleLog ? formatDateTime(latestLifecycleLog.created_at) : "",
+          generatedAtText: generateLog ? formatDateTime(generateLog.created_at) : "",
+          operatorName: latestLifecycleLog?.operator_name || "",
+          noteText: latestLifecycleLog?.reason_text || "",
         }
       : null;
 
@@ -297,6 +327,7 @@ export async function POST(
     const actionType = String(body?.actionType || "").trim();
     const customerName = String(body?.customerName || "").trim();
     const statementNumber = String(body?.statementNumber || "").trim();
+    const confirmStatementNumber = String(body?.confirmStatementNumber || "").trim();
     const cycleText = String(body?.cycleText || "").trim();
     const noteText = String(body?.note || "").trim();
     const orderId = String(body?.orderId || "").trim();
@@ -307,6 +338,7 @@ export async function POST(
       export_all: "finance_export_all",
       generate_statement: "finance_statement_generate",
       revoke_statement: "finance_statement_revoke",
+      confirm_statement_paid: "finance_statement_paid",
       export_weekly_statement: "finance_export_weekly_statement",
       exclude_weekly_order: "finance_exclude_weekly_order",
       include_weekly_order: "finance_include_weekly_order",
@@ -319,8 +351,16 @@ export async function POST(
     if ((actionType === "exclude_weekly_order" || actionType === "include_weekly_order") && !orderId) {
       return NextResponse.json({ ok: false, error: "缺少订单ID" }, { status: 400 });
     }
+    if (actionType === "revoke_statement") {
+      if (!confirmStatementNumber || confirmStatementNumber !== statementNumber) {
+        return NextResponse.json({ ok: false, error: "对账单号校验失败" }, { status: 400 });
+      }
+      if (!noteText) {
+        return NextResponse.json({ ok: false, error: "请填写备注" }, { status: 400 });
+      }
+    }
 
-    await prisma.billingActionLog.create({
+    const created = await prisma.billingActionLog.create({
       data: {
         tenant_id: session.tenantId,
         company_id: session.companyId,
@@ -342,7 +382,38 @@ export async function POST(
       },
     });
 
-    return NextResponse.json({ ok: true });
+    let generatedAtText = "";
+    if (statementNumber && actionType === "confirm_statement_paid") {
+      const existingGenerateLog = await prisma.billingActionLog.findFirst({
+        where: {
+          tenant_id: session.tenantId,
+          company_id: session.companyId,
+          order_no: buildFinanceCustomerLogKey(normalizedCustomerId),
+          action_type: "finance_statement_generate",
+          detail_text: { contains: statementNumber },
+        },
+        orderBy: { created_at: "desc" },
+      });
+      generatedAtText = existingGenerateLog ? formatDateTime(existingGenerateLog.created_at) : "";
+    }
+
+    const statementState = statementNumber
+      ? {
+          statementNumber,
+          isGenerated: actionType === "generate_statement" || actionType === "confirm_statement_paid",
+          isPaid: actionType === "confirm_statement_paid",
+          actionText: getActionLabel(mappedActionType),
+          createdAtText: formatDateTime(created.created_at),
+          generatedAtText:
+            actionType === "generate_statement"
+              ? formatDateTime(created.created_at)
+              : generatedAtText,
+          operatorName: created.operator_name || "",
+          noteText: created.reason_text || "",
+        }
+      : null;
+
+    return NextResponse.json({ ok: true, statementState });
   } catch (error) {
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : "记录账单动作失败" },

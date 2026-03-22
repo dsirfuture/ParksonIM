@@ -84,9 +84,9 @@ function buildStatementHtml(payload: WeeklyStatementPdfPayload) {
 
   const rows = payload.orders
     .map((item, index) => {
-      const textColor = item.highlightRed ? "#e11d48" : "#334155";
+      const textColor = !payload.hasUnpaid ? "#334155" : item.highlightRed ? "#e11d48" : "#334155";
       const rowBg = index % 2 === 1 ? "#f8fafc" : "#ffffff";
-      const totalColor = "#e11d48";
+      const totalColor = payload.hasUnpaid ? "#e11d48" : "#334155";
       return `
         <tr style="background:${rowBg}; color:${textColor};">
           <td>${escapeHtml(item.platformOrderNo)}</td>
@@ -228,6 +228,7 @@ function buildStatementHtml(payload: WeeklyStatementPdfPayload) {
     .info-label { color: #64748b; }
     .info-value { color: #334155; font-weight: 700; }
     .info-value.danger { color: #e11d48; }
+    .info-value.success { color: #059669; }
 
     .summary {
       margin-top: 20px;
@@ -251,6 +252,7 @@ function buildStatementHtml(payload: WeeklyStatementPdfPayload) {
       color: #020617;
     }
     .summary-value.danger { color: #e11d48; }
+    .summary-value.success { color: #334155; }
 
     .table-wrap {
       margin-top: 12px;
@@ -349,6 +351,7 @@ function buildStatementHtml(payload: WeeklyStatementPdfPayload) {
       font-weight: 900;
       color: #e11d48;
     }
+    .settle-total-value.success { color: #334155; }
   </style>
 </head>
 <body>
@@ -369,7 +372,7 @@ function buildStatementHtml(payload: WeeklyStatementPdfPayload) {
         <div class="info-row"><span class="info-label">对账单号</span><span class="info-value">${escapeHtml(payload.statementNumber)}</span></div>
         <div class="info-row"><span class="info-label">生成日期</span><span class="info-value">${escapeHtml(payload.generatedDateText)}</span></div>
         <div class="info-row"><span class="info-label">订单数</span><span class="info-value">${escapeHtml(String(payload.orderCount))}</span></div>
-        <div class="info-row"><span class="info-label">状态</span><span class="info-value${payload.hasUnpaid ? " danger" : ""}">${escapeHtml(payload.statusText)}</span></div>
+        <div class="info-row"><span class="info-label">状态</span><span class="info-value${payload.hasUnpaid ? " danger" : " success"}">${escapeHtml(payload.statusText)}</span></div>
       </div>
     </div>
 
@@ -377,7 +380,7 @@ function buildStatementHtml(payload: WeeklyStatementPdfPayload) {
       <div class="summary-item"><div class="summary-label">商品小计（比索）</div><div class="summary-value">${escapeHtml(payload.mxnSubtotalText)}</div></div>
       <div class="summary-item"><div class="summary-label">商品折算（人民币）</div><div class="summary-value">${escapeHtml(payload.cnySubtotalText)}</div></div>
       <div class="summary-item"><div class="summary-label">代发服务费（人民币）</div><div class="summary-value">${escapeHtml(payload.serviceFeeTotalText)}</div></div>
-      <div class="summary-item"><div class="summary-label">应付总额（人民币）</div><div class="summary-value danger">${escapeHtml(payload.payableTotalText)}</div></div>
+      <div class="summary-item"><div class="summary-label">应付总额（人民币）</div><div class="summary-value${payload.hasUnpaid ? " danger" : " success"}">${escapeHtml(payload.payableTotalText)}</div></div>
     </div>
 
     <div class="table-wrap">
@@ -416,7 +419,7 @@ function buildStatementHtml(payload: WeeklyStatementPdfPayload) {
         </div>
         <div class="settle-total">
           <span class="settle-total-label">应付总额</span>
-          <span class="settle-total-value">${escapeHtml(payload.payableTotalText)}</span>
+          <span class="settle-total-value${payload.hasUnpaid ? "" : " success"}">${escapeHtml(payload.payableTotalText)}</span>
         </div>
       </div>
     </div>

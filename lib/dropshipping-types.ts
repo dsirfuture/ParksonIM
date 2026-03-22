@@ -73,6 +73,7 @@ export type DsAlertItem = {
     | "pending_order"
     | "missing_shipping_proof"
     | "low_inventory"
+    | "missing_stock_record"
     | "duplicate_order"
     | "exchange_rate_failed"
     | "customer_unsettled";

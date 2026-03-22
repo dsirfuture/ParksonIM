@@ -126,13 +126,17 @@ type FinanceStatementRecordEntry = {
   statementNumber: string;
   cycleText: string;
   exportedAtText: string;
+  generatedAtText?: string;
   operatorName: string;
+  isPaid: boolean;
 };
 type FinanceStatementLockState = {
   statementNumber: string;
   isGenerated: boolean;
+  isPaid: boolean;
   actionText: string;
   createdAtText: string;
+  generatedAtText?: string;
   operatorName: string;
   noteText: string;
 } | null;
@@ -157,6 +161,27 @@ type InventoryDeleteTargetState = {
   row: DsInventoryRow;
   kind: "inventory" | "shipped";
 } | null;
+
+function collectPaidFinanceCycleTextSet(
+  entries: FinanceStatementRecordEntry[],
+  options?: {
+    includeCurrentPaidCycle?: boolean;
+    currentCycleText?: string | null;
+  },
+) {
+  const set = new Set<string>();
+  entries.forEach((entry) => {
+    if (entry.isPaid) {
+      const cycleKey = normalizeFinanceCycleText(entry.cycleText);
+      if (cycleKey) set.add(cycleKey);
+    }
+  });
+  if (options?.includeCurrentPaidCycle) {
+    const cycleKey = normalizeFinanceCycleText(options.currentCycleText);
+    if (cycleKey) set.add(cycleKey);
+  }
+  return set;
+}
 
 type GroupProductOption = {
   source: "inventory" | "catalog";
@@ -389,6 +414,13 @@ function getMexicoTodayDateValue() {
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
+function getDatePartFromDateTimeText(value: string | null | undefined) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const match = text.match(/(\d{4}\/\d{2}\/\d{2})/);
+  return match?.[1] || "";
+}
+
 function toDateInputValue(value: string | null | undefined) {
   const parts = parseDateOnlyParts(String(value || ""));
   if (!parts) return "";
@@ -513,7 +545,7 @@ async function loadExcelImageSource(url: string | null | undefined) {
 
 function shouldShowSaturdaySettlementReminder(date: Date) {
   const { weekday } = getMexicoDateParts(date);
-  return weekday === "Sat" || weekday === "Sun";
+  return weekday === "Sat";
 }
 
 function getMexicoDatePartsMap(date: Date) {
@@ -554,6 +586,45 @@ function startOfMexicoWeekClient(value: Date) {
   };
   const offset = weekdayMap[weekday] ?? 0;
   return new Date(start.getTime() - offset * 24 * 60 * 60 * 1000);
+}
+
+function getMexicoWeekSaturdayValue(value: string | null | undefined) {
+  const parts = parseDateOnlyParts(String(value || ""));
+  if (!parts) return null;
+  const referenceDate = new Date(`${parts.year}-${parts.month}-${parts.day}T12:00:00.000-06:00`);
+  const weekStart = startOfMexicoWeekClient(referenceDate);
+  return new Date(weekStart.getTime() + 5 * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function getMexicoWeekCycleText(value: string | null | undefined) {
+  const parts = parseDateOnlyParts(String(value || ""));
+  if (!parts) return "";
+  const referenceDate = new Date(`${parts.year}-${parts.month}-${parts.day}T12:00:00.000-06:00`);
+  const weekStart = startOfMexicoWeekClient(referenceDate);
+  const weekEnd = new Date(weekStart.getTime() + 5 * 24 * 60 * 60 * 1000);
+  const startParts = getMexicoDatePartsMap(weekStart);
+  const endParts = getMexicoDatePartsMap(weekEnd);
+  return `${startParts.year}/${startParts.month}/${startParts.day} - ${endParts.month}/${endParts.day}`;
+}
+
+function normalizeFinanceCycleText(value: string | null | undefined) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getFinanceCycleTextForRow(row: DsFinanceRow) {
+  const shippedDates = row.settledOrders
+    .map((item) => item.shippedAt)
+    .filter((value): value is string => Boolean(value))
+    .sort();
+  const unpaidShippedDates = row.settledOrders
+    .filter((item) => item.settlementStatus !== "paid")
+    .map((item) => item.shippedAt)
+    .filter((value): value is string => Boolean(value))
+    .sort();
+  const referenceDateValue = unpaidShippedDates[unpaidShippedDates.length - 1] || shippedDates[shippedDates.length - 1] || getMexicoTodayDateValue();
+  return getMexicoWeekCycleText(referenceDateValue);
 }
 
 function startOfMexicoMonthClient(value: Date) {
@@ -973,6 +1044,7 @@ export function DropshippingClient({
 }: Props) {
   const [lang, setLang] = useState<"zh" | "es">(initialLang);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  const [overviewAlertFilter, setOverviewAlertFilter] = useState<DsAlertItem["type"] | null>(null);
   const [overview, setOverview] = useState(initialOverview);
   const [orders, setOrders] = useState(initialOrders);
   const [inventory, setInventory] = useState(initialInventory);
@@ -1038,10 +1110,13 @@ export function DropshippingClient({
   const [financeLogError, setFinanceLogError] = useState("");
   const [financeStatementRecordTarget, setFinanceStatementRecordTarget] = useState<DsFinanceRow | null>(null);
   const [financeStatementRecordEntries, setFinanceStatementRecordEntries] = useState<FinanceStatementRecordEntry[]>([]);
+  const [financeStatementEntriesByCustomerId, setFinanceStatementEntriesByCustomerId] = useState<Record<string, FinanceStatementRecordEntry[]>>({});
   const [financeStatementRecordLoading, setFinanceStatementRecordLoading] = useState(false);
   const [financeStatementRecordError, setFinanceStatementRecordError] = useState("");
   const [financeStatementPreviewOpen, setFinanceStatementPreviewOpen] = useState(false);
   const [financeStatementPreviewStandalone, setFinanceStatementPreviewStandalone] = useState(false);
+  const [financeStatementPreviewRecord, setFinanceStatementPreviewRecord] = useState<FinanceStatementRecordEntry | null>(null);
+  const [financeStatementVipEnabled, setFinanceStatementVipEnabled] = useState(false);
   const [financeStatementLockState, setFinanceStatementLockState] = useState<FinanceStatementLockState>(null);
   const [financeSelectionState, setFinanceSelectionState] = useState<FinanceSelectionState>({
     excludedOrderIds: [],
@@ -1049,7 +1124,7 @@ export function DropshippingClient({
     reincludedOrderIds: [],
   });
   const [financeStatementLockLoading, setFinanceStatementLockLoading] = useState(false);
-  const [financeStatementActionLoading, setFinanceStatementActionLoading] = useState<"" | "generate" | "revoke" | "export">("");
+  const [financeStatementActionLoading, setFinanceStatementActionLoading] = useState<"" | "generate" | "revoke" | "export" | "confirm_paid">("");
   const [financeStatementActionError, setFinanceStatementActionError] = useState("");
   const [financeStatementRevokeState, setFinanceStatementRevokeState] = useState<FinanceStatementRevokeState>(null);
   const [selectedFinanceOrderIds, setSelectedFinanceOrderIds] = useState<string[]>([]);
@@ -1117,6 +1192,40 @@ export function DropshippingClient({
   useEffect(() => {
     setLang(getClientLang());
   }, []);
+
+  useEffect(() => {
+    if ((activeTab !== "finance" && activeTab !== "overview") || finance.length === 0) return;
+    const missingCustomerIds = finance
+      .map((row) => row.customerId)
+      .filter((customerId) => !financeStatementEntriesByCustomerId[customerId]);
+    if (missingCustomerIds.length === 0) return;
+
+    let cancelled = false;
+    void Promise.allSettled(
+      missingCustomerIds.map(async (customerId) => {
+        try {
+          const entries = await fetchFinanceStatementEntries(customerId);
+          return [customerId, entries] as const;
+        } catch {
+          return null;
+        }
+      }),
+    ).then((results) => {
+      if (cancelled) return;
+      const nextEntries: Record<string, FinanceStatementRecordEntry[]> = {};
+      for (const result of results) {
+        if (result.status !== "fulfilled" || !result.value) continue;
+        const [customerId, entries] = result.value;
+        nextEntries[customerId] = entries;
+      }
+      if (Object.keys(nextEntries).length === 0) return;
+      setFinanceStatementEntriesByCustomerId((prev) => ({ ...prev, ...nextEntries }));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, finance, financeStatementEntriesByCustomerId]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
@@ -1203,6 +1312,7 @@ export function DropshippingClient({
     setFinanceStatementRevokeState(null);
     if (!financePreview) {
       setFinanceStatementLockState(null);
+      setFinanceStatementPreviewRecord(null);
       setFinanceSelectionState({ excludedOrderIds: [], includedOrderIds: [], reincludedOrderIds: [] });
       setFinanceStatementPreviewOpen(false);
     }
@@ -1432,7 +1542,8 @@ export function DropshippingClient({
         alerts: {
           pending_order: "未发货订单",
           missing_shipping_proof: "已发货但缺少凭据",
-          low_inventory: "库存不足 SKU",
+          low_inventory: "库存告警 SKU",
+          missing_stock_record: "无备货记录 SKU",
           duplicate_order: "重复订单",
           exchange_rate_failed: "汇率抓取失败",
           customer_unsettled: "未结清客户",
@@ -1533,7 +1644,8 @@ export function DropshippingClient({
         alerts: {
           pending_order: "Pedidos pendientes",
           missing_shipping_proof: "Enviados sin comprobante",
-          low_inventory: "SKU con poco stock",
+          low_inventory: "SKU con alerta de stock",
+          missing_stock_record: "SKU sin registro de stock",
           duplicate_order: "Pedidos duplicados",
           exchange_rate_failed: "Fallo de tipo de cambio",
           customer_unsettled: "Clientes sin liquidar",
@@ -1617,10 +1729,12 @@ export function DropshippingClient({
 
   useEffect(() => {
     if (activeTab === "overview") {
-      const missing: Array<"overview" | "orders" | "rate"> = [];
+      const missing: Array<"overview" | "orders" | "rate" | "finance" | "inventory"> = [];
       if (!loadedTabs.overview) missing.push("overview");
       if (!loadedTabs.orders) missing.push("orders");
       if (!loadedTabs.rate) missing.push("rate");
+      if (!loadedTabs.finance) missing.push("finance");
+      if (!loadedTabs.inventory) missing.push("inventory");
       if (missing.length > 0) {
         void refreshData(missing);
       }
@@ -1638,9 +1752,10 @@ export function DropshippingClient({
     }
 
     if (activeTab === "finance") {
-      const missing: Array<"finance" | "rate"> = [];
+      const missing: Array<"finance" | "rate" | "inventory"> = [];
       if (!loadedTabs.finance) missing.push("finance");
       if (!loadedTabs.rate) missing.push("rate");
+      if (!loadedTabs.inventory) missing.push("inventory");
       if (missing.length > 0) {
         void refreshData(missing);
       }
@@ -1674,9 +1789,13 @@ export function DropshippingClient({
           .includes(normalized);
       const statusHit = statusFilter === "all" || row.shippingStatus === statusFilter;
       const settlementHit = settlementFilter === "all" || row.settlementStatus === settlementFilter;
-      return customerHit && hit && statusHit && settlementHit;
+      const alertHit =
+        !overviewAlertFilter
+        || (overviewAlertFilter === "pending_order" && row.shippingStatus === "pending")
+        || (overviewAlertFilter === "missing_shipping_proof" && row.warnings.includes("missing_shipping_proof"));
+      return customerHit && hit && statusHit && settlementHit && alertHit;
     });
-  }, [customerFilter, keyword, orders, settlementFilter, statusFilter]);
+  }, [customerFilter, keyword, orders, overviewAlertFilter, settlementFilter, statusFilter]);
 
   const filteredOrderCount = useMemo(() => {
     const seen = new Set<string>();
@@ -1718,8 +1837,12 @@ export function DropshippingClient({
           .join(" ")
           .toLowerCase()
           .includes(normalized);
-      return customerHit && stockHit && keywordHit;
-    });
+        const alertHit =
+          !overviewAlertFilter
+          || (overviewAlertFilter === "low_inventory" && row.isStocked && row.status !== "healthy")
+          || (overviewAlertFilter === "missing_stock_record" && !row.isStocked);
+        return customerHit && stockHit && keywordHit && alertHit;
+      });
 
     if (!inventorySortKey) return rows;
 
@@ -1736,7 +1859,14 @@ export function DropshippingClient({
       if (!Number.isFinite(bTime)) return -1;
       return inventorySortDirection === "asc" ? aTime - bTime : bTime - aTime;
     });
-  }, [inventory, inventoryCustomerFilter, inventoryKeyword, inventorySortDirection, inventorySortKey, inventoryStockFilter]);
+  }, [inventory, inventoryCustomerFilter, inventoryKeyword, inventorySortDirection, inventorySortKey, inventoryStockFilter, overviewAlertFilter]);
+
+  const filteredFinance = useMemo(() => {
+    return finance.filter((row) => {
+      if (overviewAlertFilter !== "customer_unsettled") return true;
+      return row.unpaidAmount > 0.0001;
+    });
+  }, [finance, overviewAlertFilter]);
 
   const inventoryKeywordStockSummary = useMemo(() => {
     const normalized = inventoryKeyword.trim().toLowerCase();
@@ -1795,6 +1925,30 @@ export function DropshippingClient({
     (orderCurrentPage - 1) * orderPageSize,
     orderCurrentPage * orderPageSize,
   );
+
+  function handleOverviewAlertClick(type: DsAlertItem["type"]) {
+    setOverviewAlertFilter(type);
+    if (type === "pending_order" || type === "missing_shipping_proof") {
+      setActiveTab("orders");
+      setOrderPage(1);
+      setKeyword("");
+      setCustomerFilter("all");
+      setSettlementFilter("all");
+      setStatusFilter(type === "pending_order" ? "pending" : "shipped");
+      return;
+    }
+    if (type === "low_inventory" || type === "missing_stock_record") {
+      setActiveTab("inventory");
+      setInventoryPage(1);
+      setInventoryKeyword("");
+      setInventoryCustomerFilter("all");
+      setInventoryStockFilter("all");
+      return;
+    }
+    if (type === "customer_unsettled") {
+      setActiveTab("finance");
+    }
+  }
 
   useEffect(() => {
     setOrderPage(1);
@@ -2231,10 +2385,9 @@ export function DropshippingClient({
     ? Math.max(1, Math.ceil(financePreviewDetailOrders.length / financePreviewPageSize))
     : 1;
   const financePreviewCurrentPage = Math.min(financePreviewPage, financePreviewTotalPages);
-  const financePreviewPreparedOrders = useMemo(() => {
-    if (!financePreview) return [];
+  const prepareFinanceOrders = (sourceOrders: DsFinanceRow["settledOrders"]) => {
     const seenTracking = new Set<string>();
-    return financePreviewDetailOrders.map((item) => {
+    return sourceOrders.map((item) => {
       const trackingKey = String(item.trackingNo || "").trim().toLowerCase() || `order:${item.orderId}`;
       const shouldCountShipping = !seenTracking.has(trackingKey);
       if (shouldCountShipping) {
@@ -2247,7 +2400,15 @@ export function DropshippingClient({
         cnyTotalAmount: item.productAmount + shippingFee,
       };
     });
-  }, [financePreview, financePreviewDetailOrders]);
+  };
+  const financePreviewPreparedOrders = useMemo(
+    () => prepareFinanceOrders(financePreviewDetailOrders),
+    [financePreviewDetailOrders],
+  );
+  const financePreviewAllPreparedOrders = useMemo(
+    () => prepareFinanceOrders(financePreview?.settledOrders || []),
+    [financePreview?.settledOrders],
+  );
   const financeDefaultSelectedOrderIds = useMemo(() => {
     return financePreviewPreparedOrders
       .filter((item) => {
@@ -2269,22 +2430,41 @@ export function DropshippingClient({
     financePreviewCurrentPage * financePreviewPageSize,
   );
   const financePreviewSelectableVisibleOrders = financePreviewVisibleOrders.filter((item) => item.settlementStatus !== "paid");
+  const financeSelectionLocked = Boolean(financeStatementLockState?.isGenerated);
   const areAllVisibleFinanceOrdersSelected =
     financePreviewSelectableVisibleOrders.length > 0 &&
     financePreviewSelectableVisibleOrders.every((item) => selectedFinanceOrderIds.includes(item.orderId));
+  const financePaidCycleTextSet = useMemo(() => {
+    return collectPaidFinanceCycleTextSet(financeStatementRecordEntries, {
+      includeCurrentPaidCycle: Boolean(financeStatementLockState?.isPaid),
+      currentCycleText: financeStatementPreviewRecord?.cycleText,
+    });
+  }, [financeStatementLockState?.isPaid, financeStatementPreviewRecord?.cycleText, financeStatementRecordEntries]);
   const financeStatementPreparedData = useMemo(
-    () => buildFinanceStatementData(inventory),
-    [exchangeRate.rateValue, financePreview, financePreviewPreparedOrders, inventory, selectedFinanceOrderIds, financeSelectionReincludedIdSet],
+    () => buildFinanceStatementData(inventory, "weekly_unpaid", financePaidCycleTextSet, financeStatementVipEnabled),
+    [exchangeRate.rateValue, financePaidCycleTextSet, financePreview, financePreviewPreparedOrders, inventory, selectedFinanceOrderIds, financeSelectionReincludedIdSet, financeStatementVipEnabled],
   );
   const financeExportSummaryByCustomerId = useMemo(
     () =>
       new Map(
-        finance.map((row) => [
-          row.customerId,
-          buildFinanceCustomerExportSummary(row, inventory),
-        ]),
+        finance.map((row) => {
+          const cachedEntries = financeStatementEntriesByCustomerId[row.customerId] || [];
+          const paidCycleTextSet = collectPaidFinanceCycleTextSet(cachedEntries, {
+            includeCurrentPaidCycle:
+              financeStatementLockState?.isPaid === true
+              && financePreview?.customerId === row.customerId,
+            currentCycleText:
+              financePreview?.customerId === row.customerId
+                ? financeStatementPreviewRecord?.cycleText
+                : null,
+          });
+          return [
+            row.customerId,
+            buildFinanceCustomerExportSummary(row, inventory, paidCycleTextSet),
+          ];
+        }),
       ),
-    [finance, inventory, exchangeRate.rateValue],
+    [finance, financePreview?.customerId, financeStatementEntriesByCustomerId, financeStatementLockState?.isPaid, financeStatementPreviewRecord?.cycleText, inventory, exchangeRate.rateValue],
   );
   const financeStatementSummary = useMemo(() => {
     if (!financePreview) return null;
@@ -2314,9 +2494,19 @@ export function DropshippingClient({
     if (!start || !end) return "";
     return `${start.year}/${start.month}/${start.day} - ${end.month}/${end.day}`;
   }, [financeStatementSummary]);
+  const financeCurrentStatementNumber = financeStatementPreviewRecord?.statementNumber || financeStatementSummary?.statementNumber || "";
+  const financeCurrentCycleText = financeStatementPreviewRecord?.cycleText || financeStatementCycleText;
+  const financeStatementIsPaid = Boolean(financeStatementLockState?.isPaid);
+  const financeStatementHasUnpaid = financeStatementIsPaid ? false : Boolean(financeStatementSummary?.hasUnpaid);
+  const financeStatementLockedDateValue =
+    getDatePartFromDateTimeText(financeStatementPreviewRecord?.generatedAtText)
+    || getDatePartFromDateTimeText(financeStatementLockState?.generatedAtText)
+    || (financeStatementLockState?.isGenerated ? getDatePartFromDateTimeText(financeStatementLockState?.createdAtText) : "")
+    || "";
+  const financeStatementDisplayDateValue = financeStatementLockedDateValue || getMexicoTodayDateValue();
 
   useEffect(() => {
-    if (!financePreview || !financeStatementSummary?.statementNumber) {
+    if (!financePreview || !financeCurrentStatementNumber) {
       setFinanceStatementLockState(null);
       return;
     }
@@ -2325,7 +2515,7 @@ export function DropshippingClient({
       setFinanceStatementLockLoading(true);
       try {
         const response = await fetch(
-          `/api/dropshipping/finance/${encodeURIComponent(financePreview.customerId)}/logs?statementNumber=${encodeURIComponent(financeStatementSummary.statementNumber)}`,
+          `/api/dropshipping/finance/${encodeURIComponent(financePreview.customerId)}/logs?statementNumber=${encodeURIComponent(financeCurrentStatementNumber)}`,
         );
         const result = await response.json();
         if (!response.ok || !result?.ok) {
@@ -2338,8 +2528,9 @@ export function DropshippingClient({
             reincludedOrderIds: [],
           });
           setFinanceStatementLockState(result.statementState || {
-            statementNumber: financeStatementSummary.statementNumber,
+            statementNumber: financeCurrentStatementNumber,
             isGenerated: false,
+            isPaid: false,
             actionText: "",
             createdAtText: "",
             operatorName: "",
@@ -2350,8 +2541,9 @@ export function DropshippingClient({
         if (!cancelled) {
           setFinanceSelectionState({ excludedOrderIds: [], includedOrderIds: [], reincludedOrderIds: [] });
           setFinanceStatementLockState({
-            statementNumber: financeStatementSummary.statementNumber,
+            statementNumber: financeCurrentStatementNumber,
             isGenerated: false,
+            isPaid: false,
             actionText: "",
             createdAtText: "",
             operatorName: "",
@@ -2367,7 +2559,13 @@ export function DropshippingClient({
     return () => {
       cancelled = true;
     };
-  }, [financePreview, financeStatementSummary?.statementNumber, lang]);
+  }, [financePreview, financeCurrentStatementNumber, lang]);
+
+  useEffect(() => {
+    if (financeStatementPreviewOpen) {
+      setFinanceStatementVipEnabled(false);
+    }
+  }, [financeStatementPreviewOpen, financeCurrentStatementNumber]);
 
   useEffect(() => {
     if (!financePreview) {
@@ -2393,6 +2591,7 @@ export function DropshippingClient({
       | "export_all"
       | "generate_statement"
       | "revoke_statement"
+      | "confirm_statement_paid"
       | "export_weekly_statement"
       | "exclude_weekly_order"
       | "include_weekly_order",
@@ -2446,17 +2645,27 @@ export function DropshippingClient({
     }
   };
 
+  const fetchFinanceStatementEntries = async (customerId: string) => {
+    const response = await fetch(`/api/dropshipping/finance/${encodeURIComponent(customerId)}/logs`);
+    const result = await response.json();
+    if (!response.ok || !result?.ok || !Array.isArray(result.statementEntries)) {
+      throw new Error(result?.error || (lang === "zh" ? "获取账单记录失败" : "No se pudo cargar las facturas"));
+    }
+    const entries = result.statementEntries as FinanceStatementRecordEntry[];
+    setFinanceStatementEntriesByCustomerId((prev) => ({
+      ...prev,
+      [customerId]: entries,
+    }));
+    return entries;
+  };
+
   const loadFinanceStatementRecords = async (row: DsFinanceRow) => {
     setFinanceStatementRecordTarget(row);
     setFinanceStatementRecordLoading(true);
     setFinanceStatementRecordError("");
     try {
-      const response = await fetch(`/api/dropshipping/finance/${encodeURIComponent(row.customerId)}/logs`);
-      const result = await response.json();
-      if (!response.ok || !result?.ok || !Array.isArray(result.statementEntries)) {
-        throw new Error(result?.error || (lang === "zh" ? "获取账单记录失败" : "No se pudo cargar las facturas"));
-      }
-      setFinanceStatementRecordEntries(result.statementEntries);
+      const entries = await fetchFinanceStatementEntries(row.customerId);
+      setFinanceStatementRecordEntries(entries);
     } catch (fetchError) {
       setFinanceStatementRecordEntries([]);
       setFinanceStatementRecordError(fetchError instanceof Error ? fetchError.message : (lang === "zh" ? "获取账单记录失败" : "No se pudo cargar las facturas"));
@@ -2467,7 +2676,7 @@ export function DropshippingClient({
 
   const updateFinanceStatementGeneratedState = async (
     action: "generate" | "revoke",
-    options?: { note?: string },
+    options?: { note?: string; confirmStatementNumber?: string },
   ) => {
     if (!financePreview || !financeStatementSummary) return;
     setFinanceStatementActionLoading(action);
@@ -2482,6 +2691,7 @@ export function DropshippingClient({
           statementNumber: financeStatementSummary.statementNumber,
           cycleText: financeStatementCycleText,
           note: options?.note || "",
+          confirmStatementNumber: options?.confirmStatementNumber || "",
         }),
       });
       const result = await response.json().catch(() => null);
@@ -2492,6 +2702,7 @@ export function DropshippingClient({
       setFinanceStatementLockState({
         statementNumber: financeStatementSummary.statementNumber,
         isGenerated: nextGenerated,
+        isPaid: false,
         actionText: nextGenerated ? (lang === "zh" ? "生成账单" : "Generado") : (lang === "zh" ? "撤销生成" : "Revocado"),
         createdAtText: fmtDate(new Date().toISOString(), lang),
         operatorName: "",
@@ -2499,6 +2710,12 @@ export function DropshippingClient({
       });
       if (action === "revoke") {
         setFinanceStatementRevokeState(null);
+      }
+      try {
+        const refreshedEntries = await fetchFinanceStatementEntries(financePreview.customerId);
+        setFinanceStatementRecordEntries(refreshedEntries);
+      } catch {
+        // Keep the local lock state when refreshing statement entries fails.
       }
       if (financeLogTarget?.customerId === financePreview.customerId) {
         void loadFinanceActionLogs(financePreview);
@@ -2514,6 +2731,7 @@ export function DropshippingClient({
     item: (typeof financePreviewPreparedOrders)[number],
     nextChecked: boolean,
   ) => {
+    if (financeSelectionLocked) return;
     if (!financePreview || !financeStatementSummary) return;
     setFinanceStatementActionError("");
     try {
@@ -2567,10 +2785,55 @@ export function DropshippingClient({
     }
   };
 
-  const openFinancePreview = (row: DsFinanceRow) => {
+  const openFinancePreview = async (row: DsFinanceRow) => {
     setFinanceStatementPreviewStandalone(false);
+    setFinanceStatementPreviewRecord(null);
     setFinancePreview(row);
+    try {
+      const statementEntries = await fetchFinanceStatementEntries(row.customerId);
+        const currentCycleText = normalizeFinanceCycleText(getFinanceCycleTextForRow(row));
+        const matchedEntry = statementEntries.find(
+          (entry: FinanceStatementRecordEntry) => normalizeFinanceCycleText(entry.cycleText) === currentCycleText,
+        );
+        if (matchedEntry) {
+          setFinanceStatementPreviewRecord(matchedEntry);
+        }
+    } catch {
+      // Fall back to the current-cycle preview when statement records cannot be loaded.
+    }
     void recordFinanceAction(row, "view_detail");
+  };
+
+  const openWeeklyFinancePreview = async (row: DsFinanceRow) => {
+    setFinanceStatementPreviewStandalone(false);
+    if (financeSelectionLocked && financeStatementPreviewRecord) {
+      setFinanceStatementPreviewOpen(true);
+      void recordFinanceAction(row, "statement_preview", {
+        statementNumber: financeStatementPreviewRecord.statementNumber,
+        cycleText: financeStatementPreviewRecord.cycleText,
+      });
+      return;
+    }
+    setFinanceStatementPreviewRecord(null);
+    setFinanceStatementPreviewOpen(true);
+    try {
+      const statementEntries = await fetchFinanceStatementEntries(row.customerId);
+        const currentCycleText = normalizeFinanceCycleText(getFinanceCycleTextForRow(row));
+        const matchedEntry = statementEntries.find(
+          (entry: FinanceStatementRecordEntry) => normalizeFinanceCycleText(entry.cycleText) === currentCycleText,
+        );
+        if (matchedEntry) {
+          setFinanceStatementPreviewRecord(matchedEntry);
+          void recordFinanceAction(row, "statement_preview", {
+            statementNumber: matchedEntry.statementNumber,
+            cycleText: matchedEntry.cycleText,
+          });
+          return;
+        }
+    } catch {
+      // Fall back to the current-cycle preview when statement records cannot be loaded.
+    }
+    void recordFinanceAction(row, "statement_preview");
   };
 
   const openFinanceStatementRecordPreview = (row: DsFinanceRow, entry: FinanceStatementRecordEntry) => {
@@ -2578,6 +2841,7 @@ export function DropshippingClient({
     setFinanceStatementRecordEntries([]);
     setFinanceStatementRecordError("");
     setFinanceStatementPreviewStandalone(true);
+    setFinanceStatementPreviewRecord(entry);
     setFinancePreview(row);
     setFinanceStatementPreviewOpen(true);
     setFinancePreviewPage(1);
@@ -2590,16 +2854,80 @@ export function DropshippingClient({
     });
   };
 
+  const confirmFinanceStatementPaid = async (row: DsFinanceRow, entry: FinanceStatementRecordEntry) => {
+    setFinanceStatementActionLoading("confirm_paid");
+    setFinanceStatementActionError("");
+    try {
+      const response = await fetch(`/api/dropshipping/finance/${encodeURIComponent(row.customerId)}/logs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          actionType: "confirm_statement_paid",
+          customerName: row.customerName,
+          statementNumber: entry.statementNumber,
+          cycleText: entry.cycleText,
+        }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.ok) {
+        throw new Error(result?.error || (lang === "zh" ? "确认已付款失败" : "No se pudo confirmar el pago"));
+      }
+      setFinanceStatementRecordEntries((prev) =>
+        prev.map((item) =>
+          item.statementNumber === entry.statementNumber
+            ? {
+                ...item,
+                isPaid: true,
+                exportedAtText: result.statementState?.createdAtText || item.exportedAtText,
+                operatorName: result.statementState?.operatorName || item.operatorName,
+              }
+            : item,
+        ),
+      );
+      try {
+        const refreshedEntries = await fetchFinanceStatementEntries(row.customerId);
+        setFinanceStatementRecordEntries(refreshedEntries);
+      } catch {
+        // Keep the optimistic paid-state update if the refresh request fails.
+      }
+      if (financeCurrentStatementNumber === entry.statementNumber) {
+        setFinanceStatementLockState(result.statementState || {
+          statementNumber: entry.statementNumber,
+          isGenerated: true,
+          isPaid: true,
+          actionText: lang === "zh" ? "已付款确认" : "Pago confirmado",
+          createdAtText: "",
+          operatorName: "",
+          noteText: "",
+        });
+      }
+      setFinanceStatementPreviewRecord((prev) =>
+        prev?.statementNumber === entry.statementNumber
+          ? { ...prev, isPaid: true }
+          : prev,
+      );
+      if (financeLogTarget?.customerId === row.customerId) {
+        void loadFinanceActionLogs(row);
+      }
+    } catch (confirmError) {
+      setFinanceStatementActionError(confirmError instanceof Error ? confirmError.message : (lang === "zh" ? "确认已付款失败" : "No se pudo confirmar el pago"));
+    } finally {
+      setFinanceStatementActionLoading("");
+    }
+  };
+
   function buildFinanceStatementData(
     sourceInventory: DsInventoryRow[],
     mode: "weekly_unpaid" | "all" = "weekly_unpaid",
+    paidCycleTextSet: ReadonlySet<string> = new Set<string>(),
+    vipEnabled = true,
   ) {
     if (!financePreview) return null;
     const getExportSkuKey = (value: string | null | undefined) =>
       normalizeProductCode(value || "") || String(value || "").trim().toLowerCase();
     const targetPreparedOrders =
       mode === "all"
-        ? financePreviewPreparedOrders
+        ? financePreviewAllPreparedOrders
         : financePreviewPreparedOrders.filter(
             (item) => item.settlementStatus !== "paid" && selectedFinanceOrderIds.includes(item.orderId),
           );
@@ -2747,8 +3075,13 @@ export function DropshippingClient({
           : item.isStocked && item.stockedQty > 0
             ? item.stockedQty
             : 0;
+      const cycleText = getMexicoWeekCycleText(item.shippedAt);
+      const effectiveSettlementStatus = paidCycleTextSet.has(normalizeFinanceCycleText(cycleText))
+        ? "paid"
+        : item.settlementStatus;
       return {
         ...item,
+        settlementStatus: effectiveSettlementStatus,
         exportIsStocked,
         exportStockedQty,
         exportStockedAt: matchedStockInfo?.stockedAt || null,
@@ -2758,6 +3091,7 @@ export function DropshippingClient({
         exportRemainingQty: remainingQtyBySku.get(getExportSkuKey(item.sku)),
         skuStockInfo: inventoryStockBySku.get(getExportSkuKey(item.sku)) || inventoryStockBySkuFallback.get(getExportSkuKey(item.sku)),
         skuKey: getExportSkuKey(item.sku),
+        statementCycleText: cycleText,
         displayReincluded:
           financeSelectionReincludedIdSet.has(item.orderId)
           && !financePreviewWeekUnpaidIdSet.has(item.orderId),
@@ -2770,10 +3104,12 @@ export function DropshippingClient({
         Math.max(Math.abs(item.normalDiscount) <= 1 ? item.normalDiscount : item.normalDiscount / 100, 0),
         1,
       );
-      const normalizedVipDiscount = Math.min(
-        Math.max(Math.abs(item.vipDiscount) <= 1 ? item.vipDiscount : item.vipDiscount / 100, 0),
-        1,
-      );
+      const normalizedVipDiscount = vipEnabled
+        ? Math.min(
+            Math.max(Math.abs(item.vipDiscount) <= 1 ? item.vipDiscount : item.vipDiscount / 100, 0),
+            1,
+          )
+        : 0;
       return item.unitPrice > 0 && effectiveQty > 0
         ? item.unitPrice * effectiveQty * (1 - normalizedNormalDiscount) * (1 - normalizedVipDiscount)
         : 0;
@@ -2859,7 +3195,11 @@ export function DropshippingClient({
     };
   }
 
-  function buildFinanceCustomerExportSummary(row: DsFinanceRow, sourceInventory: DsInventoryRow[]) {
+  function buildFinanceCustomerExportSummary(
+    row: DsFinanceRow,
+    sourceInventory: DsInventoryRow[],
+    paidCycleTextSet: ReadonlySet<string> = new Set<string>(),
+  ) {
     const getExportSkuKey = (value: string | null | undefined) =>
       normalizeProductCode(value || "") || String(value || "").trim().toLowerCase();
     const targetPreparedOrders = row.settledOrders.map((item) => {
@@ -2989,8 +3329,13 @@ export function DropshippingClient({
           : item.isStocked && item.stockedQty > 0
             ? item.stockedQty
             : 0;
+      const cycleText = getMexicoWeekCycleText(item.shippedAt);
+      const effectiveSettlementStatus = paidCycleTextSet.has(normalizeFinanceCycleText(cycleText))
+        ? "paid"
+        : item.settlementStatus;
       return {
         ...item,
+        settlementStatus: effectiveSettlementStatus,
         exportIsStocked,
         exportStockedQty,
         exportRemainingQty: remainingQtyBySku.get(getExportSkuKey(item.sku)),
@@ -3050,14 +3395,28 @@ export function DropshippingClient({
       };
     };
     const overallAmounts = computeSettlementGroupAmount(sortedPreparedOrders);
+    const ordersWithDisplayAmounts = sortedPreparedOrders.map((item) => {
+      const displayProductAmount = computeDisplayedProductAmount(item);
+      const displayConvertedAmount =
+        exchangeRate.rateValue && Number.isFinite(exchangeRate.rateValue)
+          ? displayProductAmount * exchangeRate.rateValue
+          : item.productAmount;
+      return {
+        ...item,
+        displayProductAmount,
+        displayConvertedAmount,
+        displayCnyTotalAmount: displayConvertedAmount + item.shippingFee,
+      };
+    });
     return {
+      orders: ordersWithDisplayAmounts,
       mxnSubtotal: overallAmounts.mxnAmount,
       cnySubtotal: overallAmounts.convertedAmount,
       serviceFeeTotal: overallAmounts.shippingAmount,
       payableTotal: overallAmounts.totalAmount,
       totalPaidAmount: computeSettlementGroupAmount(sortedPreparedOrders.filter((item) => item.settlementStatus === "paid")).totalAmount,
       totalUnpaidAmount: computeSettlementGroupAmount(sortedPreparedOrders.filter((item) => item.settlementStatus !== "paid")).totalAmount,
-      hasUnpaid: dedupedOrders.some((item) => item.settlementStatus !== "paid"),
+      hasUnpaid: sortedPreparedOrders.some((item) => item.settlementStatus !== "paid"),
     };
   }
 
@@ -3066,6 +3425,7 @@ export function DropshippingClient({
   ) => {
     if (!financePreview) return;
     let exportInventory = inventory;
+    let exportPaidCycleTextSet = financePaidCycleTextSet;
     try {
       const inventoryResponse = await fetch("/api/dropshipping/inventory");
       const inventoryJson = await inventoryResponse.json();
@@ -3075,12 +3435,28 @@ export function DropshippingClient({
     } catch {
       // Fallback to the current in-memory inventory state when the refresh request fails.
     }
+    try {
+      const logsResponse = await fetch(`/api/dropshipping/finance/${financePreview.customerId}/logs`);
+      const logsJson = await logsResponse.json();
+      if (logsResponse.ok && logsJson?.ok && Array.isArray(logsJson.statementEntries)) {
+        exportPaidCycleTextSet = new Set<string>(
+          logsJson.statementEntries
+            .filter((entry: { isPaid?: boolean; cycleText?: string | null }) => Boolean(entry?.isPaid))
+            .map((entry: { cycleText?: string | null }) => normalizeFinanceCycleText(entry?.cycleText))
+            .filter(Boolean),
+        );
+      }
+    } catch {
+      // Fallback to the in-memory statement records when the refresh request fails.
+    }
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet(lang === "zh" ? "结算详情" : "Detalle");
     const companyTitle = financePreview.customerName || (lang === "zh" ? "公司名" : "Empresa");
     const statementData = buildFinanceStatementData(
       exportInventory,
       actionType === "export_all" ? "all" : "weekly_unpaid",
+      exportPaidCycleTextSet,
+      actionType === "export_weekly_statement" ? financeStatementVipEnabled : true,
     );
     if (!statementData) return;
     const totalProductAmount = statementData.mxnSubtotal;
@@ -3129,25 +3505,20 @@ export function DropshippingClient({
         body: JSON.stringify({
           payload: {
             customerName: financePreview.customerName,
-            statementNumber: financeStatementSummary?.statementNumber || `BS-${exportDateCode}`,
-            generatedDateText: fmtDateOnly(getMexicoTodayDateValue(), lang),
+            statementNumber: financeCurrentStatementNumber || `BS-${exportDateCode}`,
+            generatedDateText: fmtDateOnly(financeStatementDisplayDateValue, lang),
             orderCount: statementData.orderCount,
-            statusText: statementData.hasUnpaid ? (lang === "zh" ? "未结" : "Con pendientes") : (lang === "zh" ? "已结" : "Liquidado"),
-            hasUnpaid: statementData.hasUnpaid,
+            statusText: financeStatementHasUnpaid ? (lang === "zh" ? "未结" : "Con pendientes") : (lang === "zh" ? "已结" : "Liquidado"),
+            hasUnpaid: financeStatementHasUnpaid,
             cycleText:
               lang === "zh"
                 ? (() => {
-                    const start = parseDateOnlyParts(financeStatementSummary?.minShippedAt || "");
-                    const end = parseDateOnlyParts(financeStatementSummary?.maxShippedAt || "");
-                    if (!start || !end) {
-                      return `结算周期：${fmtDateOnly(financeStatementSummary?.minShippedAt || "", lang)} - ${fmtDateOnly(financeStatementSummary?.maxShippedAt || "", lang)}`;
-                    }
-                    return `结算周期：${start.year}/${start.month}/${start.day} - ${end.month}/${end.day}`;
+                    return `结算周期：${financeCurrentCycleText}`;
                   })()
-                : `Periodo: ${fmtDateOnly(financeStatementSummary?.minShippedAt || "", lang)} - ${fmtDateOnly(financeStatementSummary?.maxShippedAt || "", lang)}`,
+                : `Periodo: ${financeCurrentCycleText}`,
             rateText:
               lang === "zh"
-                ? `结算汇率：1 MXN = ${exchangeRate.rateValue ? exchangeRate.rateValue.toFixed(4) : "-"} RMB    ${fmtDateOnly(getMexicoTodayDateValue(), lang)}汇率   来源：${exchangeRate.sourceName || "-"}`
+                ? `结算汇率：1 MXN = ${exchangeRate.rateValue ? exchangeRate.rateValue.toFixed(4) : "-"} RMB    ${fmtDateOnly(financeStatementDisplayDateValue, lang)}汇率   来源：${exchangeRate.sourceName || "-"}`
                 : `Tipo de cambio: 1 MXN = ${exchangeRate.rateValue ? exchangeRate.rateValue.toFixed(4) : "-"} RMB`,
             serviceFeeDisplay: financeStatementPreparedData?.serviceFeeDisplay || "￥0.00 / 单",
             mxnSubtotalText: `$${fmtMoney(totalProductAmount, lang)}`,
@@ -3159,13 +3530,17 @@ export function DropshippingClient({
               lang === "zh"
                 ? [
                     "1. 商品按墨西哥比索（MXN）计价。",
-                    "2. 产品金额按单价、发货数量、普通折扣和 VIP 折扣计算。",
+                    financeStatementVipEnabled
+                      ? "2. 产品金额按单价、发货数量、普通折扣和 VIP 折扣计算。"
+                      : "2. 产品金额按单价、发货数量和普通折扣计算。",
                     "3. 代发费按唯一物流单计入人民币费用。",
                     "4. 合计 = 折算 + 当行代发费。",
                   ]
                 : [
                     "1. Los productos se cotizan en MXN.",
-                    "2. El monto considera precio, cantidad y descuentos.",
+                    financeStatementVipEnabled
+                      ? "2. El monto considera precio, cantidad y descuentos."
+                      : "2. El monto considera precio, cantidad y descuento general.",
                     "3. El servicio se cobra una vez por guia unica.",
                     "4. Total RMB = conversion RMB + servicio por fila.",
                   ],
@@ -3177,7 +3552,7 @@ export function DropshippingClient({
               quantity: item.quantity,
               unitPriceText: item.unitPrice > 0 ? `$${fmtMoney(item.unitPrice, lang)}` : "-",
               normalDiscountText: item.normalDiscount > 0 ? `${fmtPercent(item.normalDiscount, lang)}%` : "-",
-              vipDiscountText: item.vipDiscount > 0 ? `${fmtPercent(item.vipDiscount, lang)}%` : "-",
+              vipDiscountText: financeStatementVipEnabled && item.vipDiscount > 0 ? `${fmtPercent(item.vipDiscount, lang)}%` : "-",
               productAmountText: item.displayProductAmount > 0 ? `$${fmtMoney(item.displayProductAmount, lang)}` : "-",
               convertedAmountText: item.displayConvertedAmount > 0 ? `￥${fmtMoney(item.displayConvertedAmount, lang)}` : "-",
               shippingFeeText: item.shippingFee > 0 ? `￥${fmtMoney(item.shippingFee, lang)}` : "-",
@@ -3198,14 +3573,16 @@ export function DropshippingClient({
       const disposition = response.headers.get("Content-Disposition") || "";
       const match = disposition.match(/filename="([^"]+)"/);
       anchor.href = url;
-      anchor.download = match?.[1] ? decodeURIComponent(match[1]) : `BS-${financePreview.customerName || "finance"}-本周未结账单-${exportDateCode}.pdf`;
+      anchor.download = match?.[1]
+        ? decodeURIComponent(match[1])
+        : `BS-${financePreview.customerName || "finance"}-${financeStatementIsPaid ? "本周已结账单" : "本周未结账单"}-${exportDateCode}.pdf`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
       void recordFinanceAction(financePreview, actionType, {
-        statementNumber: financeStatementSummary?.statementNumber,
-        cycleText: financeStatementCycleText,
+        statementNumber: financeCurrentStatementNumber,
+        cycleText: financeCurrentCycleText,
       });
       return;
     }
@@ -3388,7 +3765,7 @@ export function DropshippingClient({
         item.skuStockInfo?.isStocked && typeof item.exportRemainingQty === "number" ? String(item.exportRemainingQty) : "-",
         exportProductAmount > 0 ? `$${fmtMoney(exportProductAmount, lang)}` : "-",
         item.shippingFee > 0 ? `￥${fmtMoney(item.shippingFee, lang)}` : "-",
-        fmtDateOnly(item.settledAt, lang),
+        fmtDateOnly(getMexicoWeekSaturdayValue(item.shippedAt) || item.settledAt, lang),
         getSettlementStatusLabel(item.settlementStatus, lang),
       ]);
       row.height = 30;
@@ -3629,7 +4006,6 @@ export function DropshippingClient({
       const shippedAt = new Date(row.shippedAt);
       return shippedAt >= rangeStart && shippedAt < rangeEnd;
     });
-
     const productMap = new Map<string, { sku: string; productNameZh: string; quantity: number; orderCount: number }>();
     const customerMap = new Map<string, { customerId: string; customerName: string; orderCount: number; totalAmount: number; paidAmount: number; unpaidAmount: number }>();
     const platformMap = new Map<string, { platform: string; orderCount: number; quantity: number }>();
@@ -3703,12 +4079,60 @@ export function DropshippingClient({
       platformMap.set(platformKey, platform);
     }
 
+    const rangedCustomerIds = new Set(rangedOrders.map((row) => row.customerId).filter(Boolean));
+    receivable = 0;
+    paid = 0;
+    pending = 0;
+    const financeSummaryCustomerMap = new Map<string, { customerId: string; customerName: string; totalAmount: number; paidAmount: number; unpaidAmount: number }>();
+    for (const row of finance.filter((item) => rangedCustomerIds.has(item.customerId))) {
+      const exportSummary = financeExportSummaryByCustomerId.get(row.customerId);
+      const filteredOrders =
+        exportSummary?.orders.filter((item) => {
+          if (!item.shippedAt) return false;
+          const shippedAt = new Date(item.shippedAt);
+          return shippedAt >= rangeStart && shippedAt < rangeEnd;
+        }) || [];
+      const summary = filteredOrders.length > 0
+        ? {
+            totalAmount: filteredOrders.reduce((sum, item) => sum + item.displayCnyTotalAmount, 0),
+            paidAmount: filteredOrders
+              .filter((item) => item.settlementStatus === "paid")
+              .reduce((sum, item) => sum + item.displayCnyTotalAmount, 0),
+            unpaidAmount: filteredOrders
+              .filter((item) => item.settlementStatus !== "paid")
+              .reduce((sum, item) => sum + item.displayCnyTotalAmount, 0),
+          }
+        : null;
+      const totalAmount = summary?.totalAmount ?? 0;
+      const paidAmount = summary?.paidAmount ?? 0;
+      const unpaidAmount = summary?.unpaidAmount ?? 0;
+      receivable += totalAmount;
+      paid += paidAmount;
+      pending += unpaidAmount;
+      const existing = customerMap.get(row.customerId);
+      const currentCustomerName = existing?.customerName || row.customerName;
+      const currentOrderCount = existing?.orderCount || 0;
+      customerMap.set(row.customerId, {
+        customerId: row.customerId,
+        customerName: currentCustomerName,
+        orderCount: currentOrderCount,
+        totalAmount,
+        paidAmount,
+        unpaidAmount,
+      });
+      financeSummaryCustomerMap.set(row.customerId, {
+        customerId: row.customerId,
+        customerName: currentCustomerName,
+        totalAmount,
+        paidAmount,
+        unpaidAmount,
+      });
+    }
+
     const periodOrderCount = rangedOrders.length;
     const periodShippedCount = rangedOrders.filter((row) => row.shippingStatus === "shipped").length;
     const periodPendingCount = rangedOrders.filter((row) => row.shippingStatus !== "shipped").length;
-    const unsettledCustomers = new Set(
-      rangedOrders.filter((row) => row.settlementStatus !== "paid").map((row) => row.customerId),
-    ).size;
+    const unsettledCustomers = Array.from(financeSummaryCustomerMap.values()).filter((item) => item.unpaidAmount > 0.0001).length;
 
     return {
       title: formatRangeTitle(),
@@ -3794,11 +4218,12 @@ export function DropshippingClient({
       alerts: [
         { type: "pending_order" as const, count: orders.filter((row) => row.shippingStatus === "pending").length },
         { type: "missing_shipping_proof" as const, count: orders.filter((row) => row.warnings.includes("missing_shipping_proof")).length },
-        { type: "low_inventory" as const, count: inventory.filter((row) => row.status !== "healthy").length },
+        { type: "low_inventory" as const, count: inventory.filter((row) => row.isStocked && row.status !== "healthy").length },
+        { type: "missing_stock_record" as const, count: inventory.filter((row) => !row.isStocked).length },
         { type: "customer_unsettled" as const, count: unsettledCustomers },
       ],
     };
-  }, [exchangeRate.rateValue, inventory, lang, now, orders, overviewCustomerFilter, overviewRange]);
+  }, [exchangeRate.rateValue, finance, financeExportSummaryByCustomerId, inventory, lang, now, orders, overviewCustomerFilter, overviewRange]);
   function openCreateModal() {
     setForm({
       ...EMPTY_ORDER_FORM,
@@ -3901,7 +4326,7 @@ export function DropshippingClient({
           color: row.color,
           warehouse: row.warehouse || FIXED_WAREHOUSE,
           shippedAt: row.shippedAt ? row.shippedAt.slice(0, 10) : "",
-          shippingFee: row.shippingFee ? String(row.shippingFee) : "",
+          shippingFee: form.shippingFee,
           settlementStatus: row.settlementStatus,
           shippingStatus: row.shippingStatus,
           notes: row.notes,
@@ -4627,7 +5052,15 @@ export function DropshippingClient({
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
           {(["overview", "orders", "inventory", "finance"] as TabKey[]).map((tab) => (
-            <button key={tab} type="button" className={tabButtonClass(tab)} onClick={() => setActiveTab(tab)}>
+            <button
+              key={tab}
+              type="button"
+              className={tabButtonClass(tab)}
+              onClick={() => {
+                setOverviewAlertFilter(null);
+                setActiveTab(tab);
+              }}
+            >
               {text.tabs[tab]}
             </button>
           ))}
@@ -4888,13 +5321,18 @@ export function DropshippingClient({
             >
               <div className="space-y-2">
                 {overviewDashboard.alerts.map((item, index) => (
-                  <div key={item.type} className="flex items-start gap-3 rounded-[18px] border border-slate-100 bg-slate-50/80 px-3 py-2">
+                  <button
+                    key={item.type}
+                    type="button"
+                    onClick={() => handleOverviewAlertClick(item.type)}
+                    className="flex w-full items-start gap-3 rounded-[18px] border border-slate-100 bg-slate-50/80 px-3 py-2 text-left transition hover:border-slate-200 hover:bg-slate-50"
+                  >
                     <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-semibold text-slate-500">{index + 1}</span>
                     <div className="min-w-0">
                       <div className="text-xs font-medium text-slate-900">{text.alerts[item.type]}</div>
                       <div className="mt-1 text-xs text-slate-500">{lang === "zh" ? "当前数量" : "Conteo actual"} · {item.count}</div>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </OverviewWidgetShell>
@@ -5978,7 +6416,7 @@ export function DropshippingClient({
             ) : null
           }
         >
-          {finance.length === 0 ? (
+          {filteredFinance.length === 0 ? (
             <EmptyState title={text.empty.title} description={text.empty.desc} />
           ) : (
             <div>
@@ -5995,11 +6433,12 @@ export function DropshippingClient({
                       <th className="px-4 py-3 font-semibold">{lang === "zh" ? "未付金额" : "Monto pendiente"}</th>
                       <th className="px-4 py-3 font-semibold">{text.fields.status}</th>
                       <th className="w-[110px] px-3 py-3 text-center font-semibold">{lang === "zh" ? "账单记录" : "Facturas"}</th>
-                      <th className="w-[132px] px-3 py-3 text-center font-semibold">{lang === "zh" ? "\u8be6\u60c5" : "Detalle"}</th>
+                      <th className="w-[92px] px-3 py-3 text-center font-semibold">{lang === "zh" ? "\u8be6\u60c5" : "Detalle"}</th>
+                      <th className="w-[92px] px-3 py-3 text-center font-semibold">{lang === "zh" ? "日志" : "Historial"}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {finance.map((row) => (
+                    {filteredFinance.map((row) => (
                       <tr key={row.customerId} className="border-t border-slate-100">
                         {(() => {
                           const exportSummary = financeExportSummaryByCustomerId.get(row.customerId);
@@ -6032,27 +6471,27 @@ export function DropshippingClient({
                           </button>
                         </td>
                         <td className="px-3 py-3 text-center text-sm text-slate-700">
-                          <div className="flex items-center justify-center gap-3">
-                            <button
-                              type="button"
-                              onClick={() => openFinancePreview(row)}
-                              disabled={row.settledOrders.length === 0}
-                              title={lang === "zh" ? "\u67e5\u770b\u5df2\u7ed3\u7b97\u8be6\u60c5" : "Ver liquidaciones"}
-                              aria-label={lang === "zh" ? "\u67e5\u770b\u5df2\u7ed3\u7b97\u8be6\u60c5" : "Ver liquidaciones"}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300"
-                            >
-                              <EyeIcon />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void loadFinanceActionLogs(row)}
-                              title={lang === "zh" ? "查看账单动作记录" : "Ver historial"}
-                              aria-label={lang === "zh" ? "查看账单动作记录" : "Ver historial"}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
-                            >
-                              <NotebookIcon />
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => openFinancePreview(row)}
+                            disabled={row.settledOrders.length === 0}
+                            title={lang === "zh" ? "\u67e5\u770b\u5df2\u7ed3\u7b97\u8be6\u60c5" : "Ver liquidaciones"}
+                            aria-label={lang === "zh" ? "\u67e5\u770b\u5df2\u7ed3\u7b97\u8be6\u60c5" : "Ver liquidaciones"}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300"
+                          >
+                            <EyeIcon />
+                          </button>
+                        </td>
+                        <td className="px-3 py-3 text-center text-sm text-slate-700">
+                          <button
+                            type="button"
+                            onClick={() => void loadFinanceActionLogs(row)}
+                            title={lang === "zh" ? "查看账单动作记录" : "Ver historial"}
+                            aria-label={lang === "zh" ? "查看账单动作记录" : "Ver historial"}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+                          >
+                            <NotebookIcon />
+                          </button>
                         </td>
                             </>
                           );
@@ -7475,10 +7914,7 @@ export function DropshippingClient({
                 <div className="flex shrink-0 items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setFinanceStatementPreviewOpen(true);
-                      void recordFinanceAction(financePreview, "statement_preview");
-                    }}
+                    onClick={() => void openWeeklyFinancePreview(financePreview)}
                     className="inline-flex h-9 items-center justify-center rounded-xl border border-secondary-accent bg-secondary-accent px-3 text-sm font-semibold text-primary transition hover:brightness-95"
                   >
                     {lang === "zh" ? "本周 未结单 预览" : "Vista previa"}
@@ -7532,8 +7968,8 @@ export function DropshippingClient({
                           <th className="w-[2ch] whitespace-nowrap px-1 py-2.5 text-center">
                             <input
                               type="checkbox"
-                              checked={areAllVisibleFinanceOrdersSelected}
-                              disabled={Boolean(financeStatementLockState?.isGenerated) || financePreviewSelectableVisibleOrders.length === 0}
+                              checked={financeSelectionLocked ? financePreviewSelectableVisibleOrders.length > 0 : areAllVisibleFinanceOrdersSelected}
+                              disabled={financeSelectionLocked || financePreviewSelectableVisibleOrders.length === 0}
                               onChange={(event) => {
                                 const targetOrders = financePreviewSelectableVisibleOrders.filter(
                                   (item) => selectedFinanceOrderIds.includes(item.orderId) !== event.target.checked,
@@ -7542,7 +7978,7 @@ export function DropshippingClient({
                                   targetOrders.map((item) => updateFinanceOrderSelection(item, event.target.checked)),
                                 );
                               }}
-                              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-400 disabled:opacity-100"
                             />
                           </th>
                         </tr>
@@ -7586,15 +8022,15 @@ export function DropshippingClient({
                               </div>
                             </td>
                             <td className="whitespace-nowrap px-3 py-2.5 align-middle">{item.sku}</td>
-                            <td className="w-[18ch] whitespace-nowrap px-3 py-2.5 align-middle">
-                              <span className="inline-block max-w-[18ch] truncate align-middle" title={item.productNameZh || "-"}>
+                            <td className="px-3 py-2.5 align-middle">
+                              <span className="block max-w-full truncate align-middle" title={item.productNameZh || "-"}>
                                 {item.productNameZh || "-"}
                               </span>
                             </td>
                             <td className="whitespace-nowrap px-1.5 py-2.5 text-right text-slate-900 align-middle">{item.quantity}</td>
                             <td className="whitespace-nowrap px-1.5 py-2.5 text-right text-slate-900 align-middle">{item.rawProductAmount > 0 ? `$${fmtMoney(item.rawProductAmount, lang)}` : "-"}</td>
                             <td className="whitespace-nowrap px-1.5 py-2.5 text-right text-slate-900 align-middle">{item.shippingFee > 0 ? `\uffe5${fmtMoney(item.shippingFee, lang)}` : "-"}</td>
-                            <td className="whitespace-nowrap px-1.5 py-2.5 align-middle">{fmtDateOnly(item.settledAt, lang)}</td>
+                            <td className="whitespace-nowrap px-1.5 py-2.5 align-middle">{fmtDateOnly(getMexicoWeekSaturdayValue(item.shippedAt) || item.settledAt, lang)}</td>
                             <td className="px-1 py-2.5 text-center align-middle">
                               <span
                                 className={`inline-flex h-6 min-w-[38px] items-center justify-center whitespace-nowrap rounded-full px-1 text-[11px] font-normal ${
@@ -7609,10 +8045,10 @@ export function DropshippingClient({
                             <td className="px-1 py-2.5 text-center align-middle">
                               <input
                                 type="checkbox"
-                                checked={selectedFinanceOrderIds.includes(item.orderId)}
-                                disabled={Boolean(financeStatementLockState?.isGenerated) || item.settlementStatus === "paid"}
+                                checked={financeSelectionLocked ? item.settlementStatus !== "paid" : selectedFinanceOrderIds.includes(item.orderId)}
+                                disabled={financeSelectionLocked || item.settlementStatus === "paid"}
                                 onChange={(event) => void updateFinanceOrderSelection(item, event.target.checked)}
-                                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-400 disabled:opacity-100"
                               />
                             </td>
                           </tr>
@@ -7725,7 +8161,9 @@ export function DropshippingClient({
                         <th className="px-4 py-3 font-semibold">{lang === "zh" ? "对账单号" : "No. estado"}</th>
                         <th className="px-4 py-3 font-semibold">{lang === "zh" ? "对账周期" : "Periodo"}</th>
                         <th className="px-4 py-3 font-semibold">{lang === "zh" ? "导出日期" : "Fecha exportacion"}</th>
-                        <th className="px-4 py-3 font-semibold">{lang === "zh" ? "导出人" : "Usuario"}</th>
+                        <th className="px-4 py-3 font-semibold">{lang === "zh" ? "已付款确认" : "Pago confirmado"}</th>
+                        <th className="px-4 py-3 text-center font-semibold">{lang === "zh" ? "确认" : "Check"}</th>
+                        <th className="px-4 py-3 font-semibold">{lang === "zh" ? "操作人" : "Operador"}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -7738,6 +8176,37 @@ export function DropshippingClient({
                           <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-slate-900">{entry.statementNumber}</td>
                           <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{entry.cycleText || "-"}</td>
                           <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{entry.exportedAtText || "-"}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                if (entry.isPaid || financeStatementActionLoading) return;
+                                void confirmFinanceStatementPaid(financeStatementRecordTarget, entry);
+                              }}
+                              disabled={entry.isPaid || Boolean(financeStatementActionLoading)}
+                              className={`inline-flex h-8 items-center justify-center rounded-lg border px-3 text-xs font-medium transition ${
+                                entry.isPaid
+                                  ? "cursor-not-allowed border-emerald-200 bg-emerald-50 text-emerald-600"
+                                  : "border-primary/20 bg-primary/10 text-primary hover:bg-primary/15"
+                              }`}
+                            >
+                              {entry.isPaid ? (lang === "zh" ? "已确认" : "Confirmado") : (lang === "zh" ? "已付款确认" : "Confirmar pago")}
+                            </button>
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-center">
+                            <span
+                              className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-sm transition ${
+                                entry.isPaid
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-600"
+                                  : "border-slate-200 bg-slate-50 text-slate-400"
+                              }`}
+                              aria-label={entry.isPaid ? (lang === "zh" ? "已确认付款" : "Pago confirmado") : (lang === "zh" ? "未确认付款" : "Pago pendiente")}
+                              title={entry.isPaid ? (lang === "zh" ? "已确认付款" : "Pago confirmado") : (lang === "zh" ? "未确认付款" : "Pago pendiente")}
+                            >
+                              ✓
+                            </span>
+                          </td>
                           <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{entry.operatorName || "-"}</td>
                         </tr>
                       ))}
@@ -7840,7 +8309,7 @@ export function DropshippingClient({
                 </button>
                 <button
                   type="button"
-                  disabled={!financeStatementLockState?.isGenerated || financeStatementActionLoading === "revoke" || financeStatementLockLoading}
+                  disabled={!financeStatementLockState?.isGenerated || financeStatementLockState?.isPaid || financeStatementActionLoading === "revoke" || financeStatementLockLoading}
                   onClick={() => setFinanceStatementRevokeState({ confirmStatementNumber: "", note: "", error: "" })}
                   className="inline-flex h-9 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 px-3 text-sm font-semibold text-amber-900 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -7848,7 +8317,7 @@ export function DropshippingClient({
                 </button>
                 <button
                   type="button"
-                  disabled={financeStatementActionLoading === "export"}
+                  disabled={!financeStatementLockState?.isGenerated || financeStatementActionLoading === "export"}
                   onClick={async () => {
                     setFinanceStatementActionLoading("export");
                     setFinanceStatementActionError("");
@@ -7870,7 +8339,14 @@ export function DropshippingClient({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setFinanceStatementPreviewOpen(false)}
+                  onClick={() => {
+                    setFinanceStatementPreviewOpen(false);
+                    if (financeStatementPreviewStandalone) {
+                      setFinanceStatementPreviewRecord(null);
+                      setFinanceStatementPreviewStandalone(false);
+                      setFinancePreview(null);
+                    }
+                  }}
                   className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
                   aria-label={lang === "zh" ? "关闭" : "Cerrar"}
                   title={lang === "zh" ? "关闭" : "Cerrar"}
@@ -7919,9 +8395,20 @@ export function DropshippingClient({
                         {lang === "zh" ? "代发结算单" : "Estado de liquidacion"}
                       </h2>
                       <div className="mt-4 grid w-fit max-w-none grid-cols-[max-content_max-content] gap-x-[60px] gap-y-2.5 text-[14px]">
-                        <p className="font-normal text-slate-400">
-                          {lang === "zh" ? `客户：${financePreview.customerName}` : `Cliente: ${financePreview.customerName}`}
-                        </p>
+                        <div className="flex items-center gap-3">
+                          <p className="font-normal text-slate-400">
+                            {lang === "zh" ? `客户：${financePreview.customerName}` : `Cliente: ${financePreview.customerName}`}
+                          </p>
+                          <label className="inline-flex items-center gap-1.5 text-[12px] text-slate-500">
+                            <input
+                              type="checkbox"
+                              className="h-3.5 w-3.5 rounded border-slate-300 text-primary focus:ring-primary"
+                              checked={financeStatementVipEnabled}
+                              onChange={(event) => setFinanceStatementVipEnabled(event.target.checked)}
+                            />
+                            <span>VIP</span>
+                          </label>
+                        </div>
                         <p className="font-normal text-slate-400">
                           {lang === "zh"
                             ? (() => {
@@ -7930,20 +8417,20 @@ export function DropshippingClient({
                                 if (!start || !end) {
                                   return `结算周期：${fmtDateOnly(financeStatementSummary.minShippedAt, lang)} -- ${fmtDateOnly(financeStatementSummary.maxShippedAt, lang)}`;
                                 }
-                                return `结算周期：${start.year}/${start.month}/${start.day} - ${end.month}/${end.day}`;
+                                return `结算周期：${financeCurrentCycleText}`;
                               })()
-                            : `Periodo: ${fmtDateOnly(financeStatementSummary.minShippedAt, lang)} - ${fmtDateOnly(financeStatementSummary.maxShippedAt, lang)}`}
+                            : `Periodo: ${financeCurrentCycleText}`}
                         </p>
                         {lang === "zh" ? (
                           <p className="text-[12px] font-normal text-slate-400">
                             <span>{`结算汇率：1 MXN = ${exchangeRate.rateValue ? exchangeRate.rateValue.toFixed(4) : "-"} RMB`}</span>
-                            <span className="ml-[20px]">{`${fmtDateOnly(getMexicoTodayDateValue(), lang)}汇率`}</span>
+                            <span className="ml-[20px]">{`${fmtDateOnly(financeStatementDisplayDateValue, lang)}汇率`}</span>
                             <span className="ml-3">{`来源：${exchangeRate.sourceName || "-"}`}</span>
                           </p>
                         ) : (
                           <p className="text-[12px] font-normal text-slate-400">
                             <span>{`Tipo de cambio: 1 MXN = ${exchangeRate.rateValue ? exchangeRate.rateValue.toFixed(4) : "-"} RMB`}</span>
-                            <span className="ml-[20px]">{fmtDateOnly(getMexicoTodayDateValue(), lang)}</span>
+                            <span className="ml-[20px]">{fmtDateOnly(financeStatementDisplayDateValue, lang)}</span>
                             <span className="ml-3">{`fuente: ${exchangeRate.sourceName || "-"}`}</span>
                           </p>
                         )}
@@ -7957,12 +8444,12 @@ export function DropshippingClient({
                     <div className="w-full max-w-[280px] rounded-[24px] border border-slate-200/60 bg-slate-50/35 p-3.5">
                       <div className="space-y-2 text-[12px]">
                         {[
-                          [lang === "zh" ? "对账单号" : "Folio", financeStatementSummary.statementNumber],
-                          [lang === "zh" ? "生成日期" : "Fecha", fmtDateOnly(getMexicoTodayDateValue(), lang)],
+                          [lang === "zh" ? "对账单号" : "Folio", financeCurrentStatementNumber || financeStatementSummary.statementNumber],
+                          [lang === "zh" ? "生成日期" : "Fecha", fmtDateOnly(financeStatementDisplayDateValue, lang)],
                           [lang === "zh" ? "订单数" : "Pedidos", String(financeStatementSummary.orderCount)],
                           [
                             lang === "zh" ? "状态" : "Estado",
-                            financeStatementSummary.hasUnpaid
+                            financeStatementHasUnpaid
                               ? lang === "zh"
                                 ? "未结"
                                 : "Con pendientes"
@@ -7980,7 +8467,9 @@ export function DropshippingClient({
                               className={`text-right font-semibold ${
                                 index === 3 && value === (lang === "zh" ? "未结" : "Con pendientes")
                                   ? "text-rose-600"
-                                  : "text-slate-700"
+                                  : index === 3 && value === (lang === "zh" ? "已结" : "Liquidado")
+                                    ? "text-emerald-600"
+                                    : "text-slate-700"
                               }`}
                             >
                               {value}
@@ -8016,7 +8505,7 @@ export function DropshippingClient({
                       {
                         label: lang === "zh" ? "应付总额（人民币）" : "Total a pagar (RMB)",
                         value: `￥${fmtMoney(financeStatementSummary.payableTotal, lang)}`,
-                        valueClass: "text-rose-600",
+                        valueClass: financeStatementIsPaid ? "text-slate-950" : "text-rose-600",
                         cardClass: "bg-transparent",
                       },
                     ].map((card) => (
@@ -8048,21 +8537,21 @@ export function DropshippingClient({
                         </thead>
                         <tbody>
                           {(financeStatementPreparedData?.orders || []).map((item, index) => {
-                            const rowTextClass = item.displayReincluded ? "text-rose-600" : "text-slate-700";
+                            const rowTextClass = item.displayReincluded && !financeStatementIsPaid ? "text-rose-600" : "text-slate-700";
                             return (
                             <tr key={`statement-${item.orderId}`} className={`border-b border-slate-200/70 ${index % 2 === 0 ? "bg-white" : "bg-white"}`}>
-                              <td className={`whitespace-nowrap px-2 py-1.5 text-[12px] font-normal ${item.displayReincluded ? "text-rose-600" : "text-slate-900"}`}>{item.platformOrderNo}</td>
+                              <td className={`whitespace-nowrap px-2 py-1.5 text-[12px] font-normal ${item.displayReincluded && !financeStatementIsPaid ? "text-rose-600" : "text-slate-900"}`}>{item.platformOrderNo}</td>
                               <td className={`whitespace-nowrap px-2 py-1.5 text-[12px] ${rowTextClass}`}>{item.trackingNo || "-"}</td>
                               <td className={`whitespace-nowrap px-2 py-1.5 text-[12px] ${rowTextClass}`}>{fmtDateOnly(item.shippedAt, lang)}</td>
                               <td className={`whitespace-nowrap px-2 py-1.5 text-[12px] ${rowTextClass}`}>{item.sku}</td>
                               <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${rowTextClass}`}>{item.quantity}</td>
-                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${item.displayReincluded ? "text-rose-600" : "text-slate-900"}`}>{item.unitPrice > 0 ? `$${fmtMoney(item.unitPrice, lang)}` : "-"}</td>
+                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${item.displayReincluded && !financeStatementIsPaid ? "text-rose-600" : "text-slate-900"}`}>{item.unitPrice > 0 ? `$${fmtMoney(item.unitPrice, lang)}` : "-"}</td>
                               <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${rowTextClass}`}>{item.normalDiscount > 0 ? `${fmtPercent(item.normalDiscount, lang)}%` : "-"}</td>
-                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${rowTextClass}`}>{item.vipDiscount > 0 ? `${fmtPercent(item.vipDiscount, lang)}%` : "-"}</td>
-                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] font-normal ${item.displayReincluded ? "text-rose-600" : "text-slate-900"}`}>{item.displayProductAmount > 0 ? `$${fmtMoney(item.displayProductAmount, lang)}` : "-"}</td>
-                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${item.displayReincluded ? "text-rose-600" : "text-slate-900"}`}>{item.displayConvertedAmount > 0 ? `￥${fmtMoney(item.displayConvertedAmount, lang)}` : "-"}</td>
-                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${item.displayReincluded ? "text-rose-600" : "text-slate-900"}`}>{item.shippingFee > 0 ? `￥${fmtMoney(item.shippingFee, lang)}` : "-"}</td>
-                              <td className="whitespace-nowrap px-2 py-1.5 text-right text-[12px] font-normal text-rose-600">{`￥${fmtMoney(item.displayCnyTotalAmount, lang)}`}</td>
+                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${rowTextClass}`}>{financeStatementVipEnabled && item.vipDiscount > 0 ? `${fmtPercent(item.vipDiscount, lang)}%` : "-"}</td>
+                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] font-normal ${item.displayReincluded && !financeStatementIsPaid ? "text-rose-600" : "text-slate-900"}`}>{item.displayProductAmount > 0 ? `$${fmtMoney(item.displayProductAmount, lang)}` : "-"}</td>
+                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${item.displayReincluded && !financeStatementIsPaid ? "text-rose-600" : "text-slate-900"}`}>{item.displayConvertedAmount > 0 ? `￥${fmtMoney(item.displayConvertedAmount, lang)}` : "-"}</td>
+                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${item.displayReincluded && !financeStatementIsPaid ? "text-rose-600" : "text-slate-900"}`}>{item.shippingFee > 0 ? `￥${fmtMoney(item.shippingFee, lang)}` : "-"}</td>
+                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] font-normal ${financeStatementIsPaid ? "text-slate-950" : "text-rose-600"}`}>{`￥${fmtMoney(item.displayCnyTotalAmount, lang)}`}</td>
                             </tr>
                           );
                           })}
@@ -8076,7 +8565,15 @@ export function DropshippingClient({
                       <h4 className="text-[14px] font-black tracking-tight text-slate-400">{lang === "zh" ? "备注说明" : "Notas"}</h4>
                       <div className="mt-4 space-y-[13px] text-[12px] leading-[18px] text-slate-400">
                         <p>{lang === "zh" ? "1. 商品按墨西哥比索（MXN）计价。" : "1. Los productos se cotizan en MXN."}</p>
-                        <p>{lang === "zh" ? "2. 产品金额按单价、发货数量、普通折扣和 VIP 折扣计算。" : "2. El monto del producto considera precio, cantidad y descuentos."}</p>
+                        <p>
+                          {lang === "zh"
+                            ? financeStatementVipEnabled
+                              ? "2. 产品金额按单价、发货数量、普通折扣和 VIP 折扣计算。"
+                              : "2. 产品金额按单价、发货数量和普通折扣计算。"
+                            : financeStatementVipEnabled
+                              ? "2. El monto del producto considera precio, cantidad y descuentos."
+                              : "2. El monto del producto considera precio, cantidad y descuento general."}
+                        </p>
                         <p>{lang === "zh" ? "3. 代发费按唯一物流单计入人民币费用。" : "3. El servicio se cobra una vez por guia unica."}</p>
                         <p>{lang === "zh" ? "4. 合计 = 折算 + 当行代发费。" : "4. Total = conversion + servicio por fila."}</p>
                       </div>
@@ -8097,7 +8594,7 @@ export function DropshippingClient({
                       </div>
                       <div className="mt-[18px] mb-[18px] flex items-end justify-between gap-3">
                         <span className="text-[16px] font-black tracking-tight text-slate-400">{lang === "zh" ? "应付总额" : "Total"}</span>
-                        <span className="text-[16px] font-black tracking-tight text-rose-600">{`￥${fmtMoney(financeStatementSummary.payableTotal, lang)}`}</span>
+                        <span className={`text-[16px] font-black tracking-tight ${financeStatementIsPaid ? "text-slate-950" : "text-rose-600"}`}>{`￥${fmtMoney(financeStatementSummary.payableTotal, lang)}`}</span>
                       </div>
                     </div>
                   </div>
@@ -8154,7 +8651,10 @@ export function DropshippingClient({
                     setFinanceStatementRevokeState((prev) => prev ? { ...prev, error: lang === "zh" ? "请填写备注" : "Escribe una nota" } : prev);
                     return;
                   }
-                  void updateFinanceStatementGeneratedState("revoke", { note: financeStatementRevokeState.note.trim() });
+                  void updateFinanceStatementGeneratedState("revoke", {
+                    note: financeStatementRevokeState.note.trim(),
+                    confirmStatementNumber: financeStatementRevokeState.confirmStatementNumber.trim(),
+                  });
                 }}
                 className="h-10 rounded-xl bg-primary px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
               >

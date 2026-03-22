@@ -304,6 +304,280 @@ export function deriveFinanceStatus(totalAmount: number, paidAmount: number): Ds
   return "unpaid";
 }
 
+function buildFinanceCustomerLogKey(customerId: string) {
+  return `finance-customer:${customerId}`;
+}
+
+function formatMexicoSlashDate(value: Date | null | undefined) {
+  if (!value) return "";
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return formatter.format(value).replace(/-/g, "/");
+}
+
+function formatMexicoMonthDaySlash(value: Date | null | undefined) {
+  if (!value) return "";
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return formatter.format(value).replace(/-/g, "/");
+}
+
+function toMexicoDateKey(value: Date | string | null | undefined) {
+  if (!value) return "";
+  const dateValue = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(dateValue.getTime()) ? "" : formatMexicoSlashDate(dateValue);
+}
+
+function startOfMexicoWeek(value: Date | string | null | undefined) {
+  const start = startOfMexicoDay(value instanceof Date ? value : value ? new Date(value) : null);
+  const weekday = start.getUTCDay();
+  const diff = weekday === 0 ? -6 : 1 - weekday;
+  return new Date(start.getTime() + diff * 24 * 60 * 60 * 1000);
+}
+
+function getMexicoWeekCycleText(value: Date | string | null | undefined) {
+  if (!value) return "";
+  const weekStart = startOfMexicoWeek(value);
+  const weekSaturday = new Date(weekStart.getTime() + 5 * 24 * 60 * 60 * 1000);
+  return `${formatMexicoSlashDate(weekStart)} - ${formatMexicoMonthDaySlash(weekSaturday)}`;
+}
+
+function normalizeFinanceCycleText(value: string | null | undefined) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const directRangeMatch = text.match(/(\d{4}\/\d{2}\/\d{2}\s-\s\d{2}\/\d{2})/);
+  return directRangeMatch?.[1] || text;
+}
+
+function collectPaidFinanceCycleTextSet(
+  logs: Array<{ action_type?: string | null; detail_text?: string | null }>,
+) {
+  const paidCycleTextSet = new Set<string>();
+  for (const log of logs) {
+    if (String(log.action_type || "").trim() !== "finance_statement_paid") continue;
+    const cycleText = normalizeFinanceCycleText(log.detail_text);
+    if (cycleText) paidCycleTextSet.add(cycleText);
+  }
+  return paidCycleTextSet;
+}
+
+function buildOverviewFinanceCustomerSummary(
+  row: DsFinanceRow,
+  sourceInventory: DsInventoryRow[],
+  exchangeRateValue: number,
+  paidCycleTextSet: ReadonlySet<string> = new Set<string>(),
+) {
+  const getExportSkuKey = (value: string | null | undefined) =>
+    normalizeProductCode(value || "") || String(value || "").trim().toLowerCase();
+  const targetPreparedOrders = row.settledOrders.map((item) => {
+    const trackingKey = String(item.trackingNo || "").trim().toLowerCase() || `order:${item.orderId}`;
+    return {
+      ...item,
+      trackingKey,
+    };
+  });
+  const seenTracking = new Set<string>();
+  const dedupedOrders = targetPreparedOrders.map((item) => {
+    const shouldCountShipping = !seenTracking.has(item.trackingKey);
+    if (shouldCountShipping) seenTracking.add(item.trackingKey);
+    return {
+      ...item,
+      shippingFee: shouldCountShipping ? item.shippingFee : 0,
+    };
+  });
+  const financeOrderIds = new Set(dedupedOrders.map((item) => item.orderId).filter(Boolean));
+  const financeTrackingSkuKeys = new Set(
+    dedupedOrders.map((item) => `${String(item.trackingNo || "").trim().toLowerCase()}::${getExportSkuKey(item.sku)}`),
+  );
+  const financeSkuKeys = new Set(dedupedOrders.map((item) => getExportSkuKey(item.sku)).filter(Boolean));
+  const matchesFinanceCustomer = (inventoryRow: { customerId?: string | null; customerName?: string | null }) =>
+    (inventoryRow.customerId && row.customerId && inventoryRow.customerId === row.customerId)
+    || String(inventoryRow.customerName || "").trim() === String(row.customerName || "").trim();
+  const matchesFinanceInventoryRow = (inventoryRow: {
+    customerId?: string | null;
+    customerName?: string | null;
+    orderId?: string | null;
+    trackingNo?: string | null;
+    sku?: string | null;
+  }) => {
+    if (matchesFinanceCustomer(inventoryRow)) return true;
+    if (inventoryRow.orderId && financeOrderIds.has(inventoryRow.orderId)) return true;
+    const trackingSkuKey = `${String(inventoryRow.trackingNo || "").trim().toLowerCase()}::${normalizeProductCode(inventoryRow.sku || "")}`;
+    if (financeTrackingSkuKeys.has(trackingSkuKey)) return true;
+    return financeSkuKeys.has(normalizeProductCode(inventoryRow.sku || ""));
+  };
+  const inventoryStockBySku = sourceInventory.reduce((map, inventoryRow) => {
+    if (!matchesFinanceInventoryRow(inventoryRow)) return map;
+    const skuKey = getExportSkuKey(inventoryRow.sku);
+    if (!skuKey) return map;
+    const current = map.get(skuKey) || { isStocked: false, stockedQty: 0 };
+    map.set(skuKey, {
+      isStocked: current.isStocked || inventoryRow.isStocked,
+      stockedQty: current.stockedQty + (inventoryRow.isStocked ? Math.max(inventoryRow.stockedQty, 0) : 0),
+    });
+    return map;
+  }, new Map<string, { isStocked: boolean; stockedQty: number }>());
+  const inventoryStockBySkuFallback = sourceInventory.reduce((map, inventoryRow) => {
+    const skuKey = getExportSkuKey(inventoryRow.sku);
+    if (!skuKey || !inventoryRow.isStocked) return map;
+    const current = map.get(skuKey) || { isStocked: false, stockedQty: 0 };
+    map.set(skuKey, {
+      isStocked: true,
+      stockedQty: current.stockedQty + Math.max(inventoryRow.stockedQty, 0),
+    });
+    return map;
+  }, new Map<string, { isStocked: boolean; stockedQty: number }>());
+  const inventoryStockByOrderId = sourceInventory.reduce((map, inventoryRow) => {
+    if (!matchesFinanceInventoryRow(inventoryRow)) return map;
+    if (!inventoryRow.isStocked || !inventoryRow.orderId) return map;
+    map.set(inventoryRow.orderId, {
+      isStocked: true,
+      stockedQty: Math.max(inventoryRow.stockedQty, 0),
+    });
+    return map;
+  }, new Map<string, { isStocked: boolean; stockedQty: number }>());
+  const inventoryStockByTrackingSku = sourceInventory.reduce((map, inventoryRow) => {
+    if (!matchesFinanceInventoryRow(inventoryRow)) return map;
+    if (!inventoryRow.isStocked) return map;
+    const trackingKey = `${String(inventoryRow.trackingNo || "").trim().toLowerCase()}::${getExportSkuKey(inventoryRow.sku)}`;
+    if (!trackingKey || trackingKey.startsWith("::")) return map;
+    map.set(trackingKey, {
+      isStocked: true,
+      stockedQty: Math.max(inventoryRow.stockedQty, 0),
+    });
+    return map;
+  }, new Map<string, { isStocked: boolean; stockedQty: number }>());
+  const inventoryStockBySkuStockedDate = sourceInventory.reduce((map, inventoryRow) => {
+    if (!matchesFinanceInventoryRow(inventoryRow)) return map;
+    if (!inventoryRow.isStocked || !inventoryRow.stockedAt) return map;
+    const stockedDateKey = toMexicoDateKey(inventoryRow.stockedAt);
+    const skuStockedDateKey = `${getExportSkuKey(inventoryRow.sku)}::${stockedDateKey}`;
+    if (!stockedDateKey || skuStockedDateKey.startsWith("::")) return map;
+    map.set(skuStockedDateKey, {
+      isStocked: true,
+      stockedQty: Math.max(inventoryRow.stockedQty, 0),
+    });
+    return map;
+  }, new Map<string, { isStocked: boolean; stockedQty: number }>());
+  const getMatchedStockInfo = (item: (typeof dedupedOrders)[number]) => {
+    const directMatch = inventoryStockByOrderId.get(item.orderId);
+    if (directMatch) return directMatch;
+    const trackingSkuKey = `${String(item.trackingNo || "").trim().toLowerCase()}::${getExportSkuKey(item.sku)}`;
+    const trackingMatch = inventoryStockByTrackingSku.get(trackingSkuKey);
+    if (trackingMatch) return trackingMatch;
+    const shippedDateKey = toMexicoDateKey(item.shippedAt);
+    const skuStockedDateKey = `${getExportSkuKey(item.sku)}::${shippedDateKey}`;
+    const datedMatch = inventoryStockBySkuStockedDate.get(skuStockedDateKey);
+    if (datedMatch) return datedMatch;
+    return inventoryStockBySku.get(getExportSkuKey(item.sku)) || inventoryStockBySkuFallback.get(getExportSkuKey(item.sku)) || null;
+  };
+  const shippedQtyBySku = dedupedOrders.reduce((map, item) => {
+    const skuKey = getExportSkuKey(item.sku);
+    if (!skuKey) return map;
+    map.set(skuKey, (map.get(skuKey) || 0) + Math.max(item.quantity, 0));
+    return map;
+  }, new Map<string, number>());
+  const remainingQtyBySku = new Map<string, number>();
+  for (const skuKey of new Set([...inventoryStockBySku.keys(), ...inventoryStockBySkuFallback.keys(), ...shippedQtyBySku.keys()])) {
+    const stockedQty = inventoryStockBySku.get(skuKey)?.stockedQty || inventoryStockBySkuFallback.get(skuKey)?.stockedQty || 0;
+    remainingQtyBySku.set(skuKey, stockedQty - (shippedQtyBySku.get(skuKey) || 0));
+  }
+  const preparedOrders = dedupedOrders.map((item) => {
+    const matchedStockInfo = getMatchedStockInfo(item);
+    const exportIsStocked = matchedStockInfo?.isStocked ?? item.isStocked;
+    const exportStockedQty =
+      matchedStockInfo && matchedStockInfo.stockedQty > 0
+        ? matchedStockInfo.stockedQty
+        : item.isStocked && item.stockedQty > 0
+          ? item.stockedQty
+          : 0;
+    const cycleText = getMexicoWeekCycleText(item.shippedAt);
+    const effectiveSettlementStatus = paidCycleTextSet.has(normalizeFinanceCycleText(cycleText))
+      ? "paid"
+      : item.settlementStatus;
+    return {
+      ...item,
+      settlementStatus: effectiveSettlementStatus,
+      exportIsStocked,
+      exportStockedQty,
+      exportRemainingQty: remainingQtyBySku.get(getExportSkuKey(item.sku)),
+      skuKey: getExportSkuKey(item.sku),
+    };
+  });
+  const displayedProductAmountByOrderId = new Map<string, number>();
+  const activeStockRemainingBySku = new Map<string, number>();
+  const computeAmountWithQty = (item: (typeof preparedOrders)[number], effectiveQty: number) => {
+    const normalizedNormalDiscount = Math.min(
+      Math.max(Math.abs(item.normalDiscount) <= 1 ? item.normalDiscount : item.normalDiscount / 100, 0),
+      1,
+    );
+    const normalizedVipDiscount = Math.min(
+      Math.max(Math.abs(item.vipDiscount) <= 1 ? item.vipDiscount : item.vipDiscount / 100, 0),
+      1,
+    );
+    return item.unitPrice > 0 && effectiveQty > 0
+      ? item.unitPrice * effectiveQty * (1 - normalizedNormalDiscount) * (1 - normalizedVipDiscount)
+      : 0;
+  };
+  const sortedPreparedOrders = [...preparedOrders].sort((a, b) => {
+    const aTime = a.shippedAt ? new Date(a.shippedAt).getTime() : 0;
+    const bTime = b.shippedAt ? new Date(b.shippedAt).getTime() : 0;
+    return aTime - bTime;
+  });
+  for (const item of sortedPreparedOrders) {
+    const currentRemaining = activeStockRemainingBySku.get(item.skuKey) || 0;
+    const shippedQty = Math.max(item.quantity, 0);
+    let effectiveQty = 0;
+    if (item.exportIsStocked && item.exportStockedQty > 0 && currentRemaining <= 0) {
+      effectiveQty = item.exportStockedQty;
+      activeStockRemainingBySku.set(item.skuKey, Math.max(item.exportStockedQty - shippedQty, 0));
+    } else if (currentRemaining > 0) {
+      effectiveQty = 0;
+      activeStockRemainingBySku.set(item.skuKey, Math.max(currentRemaining - shippedQty, 0));
+    } else {
+      effectiveQty = shippedQty;
+      activeStockRemainingBySku.set(item.skuKey, 0);
+    }
+    displayedProductAmountByOrderId.set(item.orderId, computeAmountWithQty(item, effectiveQty));
+  }
+  const computeDisplayedProductAmount = (item: (typeof sortedPreparedOrders)[number]) =>
+    displayedProductAmountByOrderId.get(item.orderId) || 0;
+  const computeSettlementGroupAmount = (items: typeof sortedPreparedOrders) => {
+    const mxnAmount = items.reduce((sum, item) => sum + computeDisplayedProductAmount(item), 0);
+    const shippingAmount = items.reduce((sum, item) => sum + item.shippingFee, 0);
+    const convertedAmount =
+      exchangeRateValue && Number.isFinite(exchangeRateValue)
+        ? mxnAmount * exchangeRateValue
+        : items.reduce((sum, item) => sum + item.productAmount, 0);
+    return {
+      mxnAmount,
+      convertedAmount,
+      shippingAmount,
+      totalAmount: convertedAmount + shippingAmount,
+    };
+  };
+  const overallAmounts = computeSettlementGroupAmount(sortedPreparedOrders);
+  const totalPaidAmount = computeSettlementGroupAmount(
+    sortedPreparedOrders.filter((item) => item.settlementStatus === "paid"),
+  ).totalAmount;
+  const totalUnpaidAmount = computeSettlementGroupAmount(
+    sortedPreparedOrders.filter((item) => item.settlementStatus !== "paid"),
+  ).totalAmount;
+  return {
+    totalAmount: overallAmounts.totalAmount,
+    paidAmount: totalPaidAmount,
+    unpaidAmount: totalUnpaidAmount,
+    hasUnpaid: sortedPreparedOrders.some((item) => item.settlementStatus !== "paid"),
+  };
+}
+
 export function getOrderWarnings(input: {
   duplicate: boolean;
   shippingStatus: DsShippingStatus;
@@ -311,13 +585,18 @@ export function getOrderWarnings(input: {
   trackingNo: string;
   shippedAt: Date | null;
   shippingProofFile: string;
+  shippingProofAttachmentCount?: number;
   inventoryQty: number | null;
 }) {
   const warnings: string[] = [];
   if (input.duplicate) warnings.push("duplicate_order");
   if (input.quantity <= 0) warnings.push("invalid_quantity");
   if (input.shippingStatus === "shipped" && !input.shippedAt) warnings.push("missing_ship_date");
-  if (input.shippingStatus === "shipped" && !input.shippingProofFile) warnings.push("missing_shipping_proof");
+  if (
+    input.shippingStatus === "shipped"
+    && !input.shippingProofFile
+    && !(input.shippingProofAttachmentCount && input.shippingProofAttachmentCount > 0)
+  ) warnings.push("missing_shipping_proof");
   if (input.shippingStatus === "pending" && input.trackingNo) warnings.push("tracking_without_status");
   if (input.inventoryQty !== null && input.inventoryQty < input.quantity) warnings.push("inventory_shortage");
   return warnings;
@@ -1179,6 +1458,7 @@ export async function listOrders(session: Session) {
         trackingNo: row.tracking_no || "",
         shippedAt: row.shipped_at,
         shippingProofFile: row.shipping_proof_file || "",
+        shippingProofAttachmentCount: attachments.filter((item) => item.type === "proof").length,
         inventoryQty,
       }),
     };
@@ -1798,7 +2078,9 @@ export async function getFinanceRows(session: Session) {
         company_id: session.companyId,
       },
       select: {
+        id: true,
         customer_id: true,
+        tracking_no: true,
         settled_at: true,
         snapshot_stock_amount: true,
         snapshot_total_amount: true,
@@ -1820,25 +2102,20 @@ export async function getFinanceRows(session: Session) {
     orderBy: [{ settled_at: "desc" }, { updated_at: "desc" }],
   });
 
-  const shippingAgg = await prisma.dropshippingOrder.groupBy({
-    by: ["customer_id"],
-    where: {
-      tenant_id: session.tenantId,
-      company_id: session.companyId,
-    },
-    _sum: {
-      shipping_fee: true,
-    },
-  });
-
   const stockByCustomer = new Map<string, number>();
   for (const row of inventoryRows) {
     stockByCustomer.set(row.customerId, (stockByCustomer.get(row.customerId) || 0) + row.stockAmount);
   }
-
-  const shippingByCustomer = new Map<string, number>(
-    shippingAgg.map((row) => [row.customer_id, toNumber(row._sum.shipping_fee)]),
-  );
+  const getFinanceTrackingKey = (row: { id?: string | null; tracking_no?: string | null }) =>
+    String(row.tracking_no || "").trim().toLowerCase() || `order:${row.id || ""}`;
+  const shippingByCustomer = new Map<string, number>();
+  const seenShippingKeys = new Set<string>();
+  for (const row of financeOrders) {
+    const trackingKey = `${row.customer_id}::${getFinanceTrackingKey(row)}`;
+    if (seenShippingKeys.has(trackingKey)) continue;
+    seenShippingKeys.add(trackingKey);
+    shippingByCustomer.set(row.customer_id, (shippingByCustomer.get(row.customer_id) || 0) + toNumber(row.shipping_fee));
+  }
 
   const paidByCustomer = new Map<string, { amount: number; lastPaidAt: string | null }>();
   for (const row of paymentRows) {
@@ -1850,6 +2127,7 @@ export async function getFinanceRows(session: Session) {
   }
 
   const orderSettlementByCustomer = new Map<string, { totalAmount: number; paidAmount: number; unpaidAmount: number; lastPaidAt: string | null }>();
+  const seenSettlementTrackingKeys = new Set<string>();
   for (const row of financeOrders) {
     const current = orderSettlementByCustomer.get(row.customer_id) || {
       totalAmount: 0,
@@ -1857,16 +2135,19 @@ export async function getFinanceRows(session: Session) {
       unpaidAmount: 0,
       lastPaidAt: null,
     };
+    const trackingKey = `${row.customer_id}::${getFinanceTrackingKey(row)}`;
+    const shouldCountShipping = !seenSettlementTrackingKeys.has(trackingKey);
+    if (shouldCountShipping) {
+      seenSettlementTrackingKeys.add(trackingKey);
+    }
+    const shippingFee = shouldCountShipping ? toNumber(row.shipping_fee) : 0;
     const totalAmount =
       toNumber(row.snapshot_total_amount)
-      || (toNumber(row.snapshot_stock_amount) + toNumber(row.shipping_fee));
+      || (toNumber(row.snapshot_stock_amount) + shippingFee);
     const paidAmount =
       toNumber(row.snapshot_paid_amount)
       || (row.settled_at ? totalAmount : 0);
-    const unpaidAmount =
-      row.settled_at || toNumber(row.snapshot_unpaid_amount) <= 0
-        ? 0
-        : (toNumber(row.snapshot_unpaid_amount) || Math.max(totalAmount - paidAmount, 0));
+    const unpaidAmount = row.settled_at ? 0 : Math.max(totalAmount - paidAmount, 0);
 
     current.totalAmount += totalAmount;
     current.paidAmount += paidAmount;
@@ -1978,12 +2259,59 @@ export async function getFinanceRows(session: Session) {
 }
 
 export async function getOverview(session: Session) {
-  const [orders, financeRows, inventoryRows, rate] = await Promise.all([
+  const [orders, financeRows, inventoryRows, rate, financeStatementPaidLogs] = await Promise.all([
     listOrders(session),
     getFinanceRows(session),
     getInventoryRows(session),
     ensureTodayExchangeRate(session),
+    prisma.billingActionLog.findMany({
+      where: {
+        tenant_id: session.tenantId,
+        company_id: session.companyId,
+        action_type: "finance_statement_paid",
+        order_no: {
+          startsWith: "finance-customer:",
+        },
+      },
+      select: {
+        order_no: true,
+        action_type: true,
+        detail_text: true,
+      },
+      orderBy: { created_at: "desc" },
+    }),
   ]);
+
+  const paidCycleTextSetByCustomerId = financeStatementPaidLogs.reduce((map, log) => {
+    const orderNo = String(log.order_no || "").trim();
+    const customerId = orderNo.startsWith("finance-customer:")
+      ? orderNo.slice("finance-customer:".length)
+      : "";
+    if (!customerId) return map;
+    const current = map.get(customerId) || [];
+    current.push(log);
+    map.set(customerId, current);
+    return map;
+  }, new Map<string, typeof financeStatementPaidLogs>());
+
+  const overviewFinanceRows = financeRows.map((row) => {
+    const paidCycleTextSet = collectPaidFinanceCycleTextSet(
+      paidCycleTextSetByCustomerId.get(row.customerId) || [],
+    );
+    const summary = buildOverviewFinanceCustomerSummary(
+      row,
+      inventoryRows,
+      toNumber(rate.rate_value),
+      paidCycleTextSet,
+    );
+    return {
+      ...row,
+      totalAmount: summary.totalAmount,
+      paidAmount: summary.paidAmount,
+      unpaidAmount: summary.unpaidAmount,
+      status: deriveFinanceStatus(summary.totalAmount, summary.paidAmount),
+    };
+  });
 
   const todayStart = startOfTodayInMexico();
   const todayEnd = endOfMexicoDay(todayStart);
@@ -1996,10 +2324,10 @@ export async function getOverview(session: Session) {
     todayOrders: todayOrders.length,
     todayShippedOrders: todayOrders.filter((row) => row.shippingStatus === "shipped").length,
     todayPendingOrders: todayOrders.filter((row) => row.shippingStatus !== "shipped").length,
-    unsettledCustomers: financeRows.filter((row) => row.status !== "paid").length,
-    totalReceivable: financeRows.reduce((sum, row) => sum + row.totalAmount, 0),
-    totalPaid: financeRows.reduce((sum, row) => sum + row.paidAmount, 0),
-    totalUnpaid: financeRows.reduce((sum, row) => sum + row.unpaidAmount, 0),
+    unsettledCustomers: overviewFinanceRows.filter((row) => row.status !== "paid").length,
+    totalReceivable: overviewFinanceRows.reduce((sum, row) => sum + row.totalAmount, 0),
+    totalPaid: overviewFinanceRows.reduce((sum, row) => sum + row.paidAmount, 0),
+    totalUnpaid: overviewFinanceRows.reduce((sum, row) => sum + row.unpaidAmount, 0),
     currentRate: toNumber(rate.rate_value),
     rateUpdatedAt: rate.fetched_at?.toISOString() || rate.updated_at.toISOString(),
     rateFailed: rate.fetch_failed,
@@ -2009,10 +2337,11 @@ export async function getOverview(session: Session) {
   const alerts: DsAlertItem[] = [
     { type: "pending_order", count: orders.filter((row) => row.shippingStatus === "pending").length },
     { type: "missing_shipping_proof", count: orders.filter((row) => row.warnings.includes("missing_shipping_proof")).length },
-    { type: "low_inventory", count: inventoryRows.filter((row) => row.status !== "healthy").length },
+    { type: "low_inventory", count: inventoryRows.filter((row) => row.isStocked && row.status !== "healthy").length },
+    { type: "missing_stock_record", count: inventoryRows.filter((row) => !row.isStocked).length },
     { type: "duplicate_order", count: orders.filter((row) => row.warnings.includes("duplicate_order")).length },
     { type: "exchange_rate_failed", count: rate.fetch_failed ? 1 : 0 },
-    { type: "customer_unsettled", count: financeRows.filter((row) => row.status !== "paid").length },
+    { type: "customer_unsettled", count: overviewFinanceRows.filter((row) => row.status !== "paid").length },
   ];
 
   const recentOrders: DsOverviewOrder[] = orders.slice(0, 6).map((row) => ({
@@ -2099,7 +2428,7 @@ export async function getOverview(session: Session) {
     platformMap.set(platformKey, platformItem);
   }
 
-  for (const row of financeRows) {
+  for (const row of overviewFinanceRows) {
     const current = customerOrderMap.get(row.customerId);
     if (current) {
       current.totalAmount = row.totalAmount;
