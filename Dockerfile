@@ -1,7 +1,7 @@
 FROM node:20-bookworm-slim
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends postgresql-client ca-certificates openssl \
+  && apt-get install -y --no-install-recommends postgresql-client ca-certificates openssl chromium fonts-noto-cjk \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -11,6 +11,7 @@ ARG NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL
 
 ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
 ENV NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL=${NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL}
+ENV PARKSON_PDF_BROWSER=/usr/bin/chromium
 
 COPY package.json package-lock.json ./
 RUN npm ci --include=dev

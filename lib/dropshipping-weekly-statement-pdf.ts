@@ -443,6 +443,7 @@ export async function buildWeeklyUnpaidStatementPdf(payload: WeeklyStatementPdfP
     await execFileAsync(browser, [
       "--headless=new",
       "--disable-gpu",
+      "--no-sandbox",
       "--no-pdf-header-footer",
       `--print-to-pdf=${pdfPath}`,
       htmlUrl,
