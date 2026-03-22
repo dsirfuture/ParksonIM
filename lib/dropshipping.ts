@@ -26,6 +26,7 @@ import type {
 import { buildProductImageUrl } from "@/lib/product-image-url";
 import { normalizeProductCode } from "@/lib/product-code";
 import { uploadR2Object } from "@/lib/r2-upload";
+import { parseYogoDiscountNumbers } from "@/lib/yogo-product-utils";
 
 const DEFAULT_RATE_VALUE = 0.08;
 const LOW_STOCK_THRESHOLD = 5;
@@ -1749,7 +1750,7 @@ export async function deleteInventory(session: Session, id: string) {
 }
 
 export async function getFinanceRows(session: Session) {
-  const [customers, inventoryRows, paymentRows, currentRate, catalogRows, financeOrders] = await Promise.all([
+  const [customers, inventoryRows, paymentRows, currentRate, catalogRows, yogoSourceRows, financeOrders] = await Promise.all([
     prisma.dropshippingCustomer.findMany({
       where: {
         tenant_id: session.tenantId,
@@ -1774,6 +1775,21 @@ export async function getFinanceRows(session: Session) {
       select: {
         sku: true,
         name_zh: true,
+        price: true,
+        normal_discount: true,
+        vip_discount: true,
+      },
+    }),
+    prisma.yogoProductSource.findMany({
+      where: {
+        tenant_id: session.tenantId,
+        company_id: session.companyId,
+      },
+      select: {
+        product_code: true,
+        source_price: true,
+        source_discount: true,
+        category_name: true,
       },
     }),
     prisma.dropshippingOrder.findMany({
@@ -1797,10 +1813,6 @@ export async function getFinanceRows(session: Session) {
     where: {
       tenant_id: session.tenantId,
       company_id: session.companyId,
-      OR: [
-        { settled_at: { not: null } },
-        { snapshot_unpaid_amount: { lte: 0 } },
-      ],
     },
     include: {
       product: true,
@@ -1868,13 +1880,30 @@ export async function getFinanceRows(session: Session) {
   const catalogBySku = new Map(
     catalogRows.map((row) => [normalizeProductCode(row.sku), row]),
   );
+  const yogoSourceBySku = new Map(
+    yogoSourceRows.map((row) => [normalizeProductCode(row.product_code), row]),
+  );
 
   const settledOrdersByCustomer = new Map<string, DsFinanceRow["settledOrders"]>();
   for (const row of settledOrders) {
     const normalizedSku = normalizeProductCode(row.product.sku);
     const catalog = catalogBySku.get(normalizedSku);
+    const yogoSource = yogoSourceBySku.get(normalizedSku);
     const matchedSku = catalog?.sku?.trim() || row.product.sku;
     const items = settledOrdersByCustomer.get(row.customer_id) || [];
+    const yogoDiscount = parseYogoDiscountNumbers(yogoSource?.category_name || null, yogoSource?.source_discount);
+    const unitPrice = toNumber(yogoSource?.source_price) || toNumber(catalog?.price) || toNumber(row.product.unit_price);
+    const normalDiscount =
+      yogoDiscount.normal
+      ?? toNumber(catalog?.normal_discount)
+      ?? toNumber(row.product.discount_rate)
+      ?? 0;
+    const vipDiscount =
+      yogoDiscount.vip
+      ?? toNumber(catalog?.vip_discount)
+      ?? 0;
+    const normalizedNormalDiscount = Math.min(Math.max(Math.abs(normalDiscount) <= 1 ? normalDiscount : normalDiscount / 100, 0), 1);
+    const normalizedVipDiscount = Math.min(Math.max(Math.abs(vipDiscount) <= 1 ? vipDiscount : vipDiscount / 100, 0), 1);
     items.push({
       orderId: row.id,
       platformOrderNo: row.platform_order_no,
@@ -1882,8 +1911,38 @@ export async function getFinanceRows(session: Session) {
       productNameZh: stripTrailingUnitPrice(catalog?.name_zh?.trim() || row.product.name_zh),
       productImageUrl: row.product.image_url || buildProductImageUrl(matchedSku, "jpg"),
       trackingNo: row.tracking_no || "",
+      isStocked: (toNumber(row.snapshot_stocked_qty) || 0) > 0,
+      stockedQty: Math.max(toNumber(row.snapshot_stocked_qty), 0),
+      settlementStatus:
+        row.settled_at || toNumber(row.snapshot_unpaid_amount) <= 0
+          ? "paid"
+          : "unpaid",
+      quantity: row.quantity,
+      unitPrice,
+      normalDiscount,
+      vipDiscount,
+      rawProductAmount: unitPrice * row.quantity * (1 - normalizedNormalDiscount) * (1 - normalizedVipDiscount),
       shippedAt: row.shipped_at?.toISOString() || null,
       settledAt: row.settled_at?.toISOString() || null,
+      productAmount:
+        toNumber(row.snapshot_exchanged_amount)
+        || Math.max(
+          (toNumber(row.snapshot_total_amount) || 0)
+            - (toNumber(row.snapshot_shipping_amount) || toNumber(row.shipping_fee)),
+          0,
+        ),
+      shippingFee: toNumber(row.snapshot_shipping_amount) || toNumber(row.shipping_fee),
+      mxnAmount:
+        toNumber(row.snapshot_stock_amount)
+        || (
+          toNumber(row.snapshot_rate_value) > 0
+            ? (toNumber(row.snapshot_exchanged_amount) || Math.max(
+                (toNumber(row.snapshot_total_amount) || 0)
+                  - (toNumber(row.snapshot_shipping_amount) || toNumber(row.shipping_fee)),
+                0,
+              )) / toNumber(row.snapshot_rate_value)
+            : 0
+        ),
       paidAmount: toNumber(row.snapshot_paid_amount),
       totalAmount: toNumber(row.snapshot_total_amount),
     });

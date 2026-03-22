@@ -5,6 +5,11 @@ import {
   buildDropshippingSettlementPdf,
   buildDropshippingSettlementPdfName,
 } from "@/lib/dropshipping-settlement-export";
+import {
+  buildWeeklyUnpaidStatementPdf,
+  buildWeeklyUnpaidStatementPdfName,
+  type WeeklyStatementPdfPayload,
+} from "@/lib/dropshipping-weekly-statement-pdf";
 import { hasPermission } from "@/lib/permissions";
 import { getSession } from "@/lib/tenant";
 
@@ -51,6 +56,45 @@ export async function GET(
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "\u5bfc\u51fa PDF \u5931\u8d25" },
+      { status: 500 },
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const session = await getSession();
+    if (!session?.tenantId || !session?.companyId) {
+      return NextResponse.json({ error: "未登录" }, { status: 401 });
+    }
+
+    if (!(await hasPermission(session, "viewReports"))) {
+      return NextResponse.json({ error: "无权限" }, { status: 403 });
+    }
+
+    const body = (await request.json()) as {
+      payload?: WeeklyStatementPdfPayload & { exportDateCode?: string };
+    };
+    if (!body?.payload) {
+      return NextResponse.json({ error: "缺少导出数据" }, { status: 400 });
+    }
+
+    const bytes = await buildWeeklyUnpaidStatementPdf(body.payload);
+    const fileName = buildWeeklyUnpaidStatementPdfName(
+      body.payload.customerName,
+      body.payload.exportDateCode || "statement",
+    );
+
+    return new NextResponse(Buffer.from(bytes), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`,
+      },
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "导出 PDF 失败" },
       { status: 500 },
     );
   }

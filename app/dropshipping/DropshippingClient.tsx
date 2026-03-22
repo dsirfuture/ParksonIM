@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type ReactNode, type SetStateAction } from "react";
+import ExcelJS from "exceljs";
 import { EmptyState } from "@/components/empty-state";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { ProductImage } from "@/components/product-image";
@@ -13,6 +14,7 @@ import type {
   DsAlertItem,
   DsOrderAttachment,
   DsExchangeRatePayload,
+  DsFinanceStatus,
   DsFinanceRow,
   DsInventoryStatus,
   DsInventoryRow,
@@ -113,6 +115,37 @@ type InventoryProductOption = {
 type InventoryExportMode = "stocked" | "status" | "sku" | "allShipped" | null;
 
 type FinancePreviewState = DsFinanceRow | null;
+type FinanceActionLogEntry = {
+  id: string;
+  createdAtText: string;
+  actionText: string;
+  operatorName: string;
+  detailText: string;
+};
+type FinanceStatementRecordEntry = {
+  statementNumber: string;
+  cycleText: string;
+  exportedAtText: string;
+  operatorName: string;
+};
+type FinanceStatementLockState = {
+  statementNumber: string;
+  isGenerated: boolean;
+  actionText: string;
+  createdAtText: string;
+  operatorName: string;
+  noteText: string;
+} | null;
+type FinanceSelectionState = {
+  excludedOrderIds: string[];
+  includedOrderIds: string[];
+  reincludedOrderIds: string[];
+};
+type FinanceStatementRevokeState = {
+  confirmStatementNumber: string;
+  note: string;
+  error: string;
+} | null;
 type OverviewRange = "day" | "week" | "month" | "year";
 
 type DeleteOrderState = {
@@ -283,6 +316,35 @@ function fmtDateOnly(value: string | null | undefined, lang: "zh" | "es") {
 
 function fmtFinanceRateDateLabel(value: string | null | undefined, lang: "zh" | "es") {
   if (!value) return "-";
+  const raw = String(value).trim();
+  if (raw.includes("T") || /Z$|[+-]\d{2}:\d{2}$/.test(raw)) {
+    const formatter = new Intl.DateTimeFormat(lang === "zh" ? "zh-CN" : "es-MX", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      timeZone: "America/Mexico_City",
+    });
+    const parts = Object.fromEntries(
+      formatter.formatToParts(new Date(raw)).map((part) => [part.type, part.value]),
+    ) as Record<string, string>;
+    if (lang !== "zh") {
+      return `${parts.day}/${parts.month}/${parts.year}`;
+    }
+    const todayFormatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Mexico_City",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    const todayParts = Object.fromEntries(
+      todayFormatter.formatToParts(new Date()).map((part) => [part.type, part.value]),
+    ) as Record<string, string>;
+    const isToday =
+      parts.year === todayParts.year &&
+      parts.month === todayParts.month &&
+      parts.day === todayParts.day;
+    return `${Number(parts.year)}年${Number(parts.month)}月${Number(parts.day)}日${isToday ? "（今天）" : ""}`;
+  }
   const parts = parseDateOnlyParts(value);
   if (!parts) return fmtDateOnly(value, lang);
 
@@ -305,6 +367,26 @@ function fmtFinanceRateDateLabel(value: string | null | undefined, lang: "zh" | 
     parts.day === todayParts.day;
 
   return `${Number(parts.year)}年${Number(parts.month)}月${Number(parts.day)}日${isToday ? "（今天）" : ""}`;
+}
+
+function deriveFinanceSummaryStatus(totalAmount: number, paidAmount: number): DsFinanceStatus {
+  if (totalAmount <= 0) return "unpaid";
+  if (paidAmount >= totalAmount) return "paid";
+  if (paidAmount > 0) return "partial";
+  return "unpaid";
+}
+
+function getMexicoTodayDateValue() {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = Object.fromEntries(
+    formatter.formatToParts(new Date()).map((part) => [part.type, part.value]),
+  ) as Record<string, string>;
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 function toDateInputValue(value: string | null | undefined) {
@@ -350,6 +432,7 @@ function fmtDualCurrencyFromCny(value: number, rateValue: number | null | undefi
 }
 
 function fmtPercent(value: number, lang: "zh" | "es") {
+  if (!Number.isFinite(value)) return "0";
   const normalized = Math.abs(value) <= 1 ? value * 100 : value;
   return new Intl.NumberFormat(lang === "zh" ? "zh-CN" : "es-MX", {
     minimumFractionDigits: 0,
@@ -385,9 +468,52 @@ function triggerBrowserDownload(url: string) {
   anchor.remove();
 }
 
+function hasChineseGlyph(value: string) {
+  return /[\u3400-\u9FFF\uF900-\uFAFF]/.test(String(value || ""));
+}
+
+function getExcelFontName(value: string, bold = false) {
+  if (hasChineseGlyph(value)) {
+    return bold ? "Noto Sans SC Bold" : "Noto Sans SC";
+  }
+  return "Inter";
+}
+
+function blobToDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function loadExcelImageSource(url: string | null | undefined) {
+  if (!url) return null;
+  try {
+    const resolvedUrl =
+      typeof window !== "undefined" ? new URL(url, window.location.origin).toString() : url;
+    const response = await fetch(resolvedUrl);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    const mimeType = blob.type.toLowerCase();
+    const extension =
+      mimeType.includes("png")
+        ? "png"
+        : mimeType.includes("jpeg") || mimeType.includes("jpg")
+          ? "jpeg"
+          : null;
+    if (!extension) return null;
+    const base64 = await blobToDataUrl(blob);
+    return { base64, extension: extension as "png" | "jpeg" };
+  } catch {
+    return null;
+  }
+}
+
 function shouldShowSaturdaySettlementReminder(date: Date) {
-  const { weekday, hour } = getMexicoDateParts(date);
-  return weekday === "Sat" && hour >= 12;
+  const { weekday } = getMexicoDateParts(date);
+  return weekday === "Sat" || weekday === "Sun";
 }
 
 function getMexicoDatePartsMap(date: Date) {
@@ -512,6 +638,29 @@ function EyeIcon() {
     <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M1.75 10s3-5 8.25-5 8.25 5 8.25 5-3 5-8.25 5S1.75 10 1.75 10Z" />
       <circle cx="10" cy="10" r="2.5" />
+    </svg>
+  );
+}
+
+function NotebookIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6.25 3.75H14a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2H6.25a2 2 0 0 1-2-2v-8.5a2 2 0 0 1 2-2Z" />
+      <path d="M7.5 3.75v12.5" />
+      <path d="M10 7.25h3" />
+      <path d="M10 10h3" />
+    </svg>
+  );
+}
+
+function LedgerIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4.75 4.25h10.5a1.5 1.5 0 0 1 1.5 1.5v8.5a1.5 1.5 0 0 1-1.5 1.5H4.75a1.5 1.5 0 0 1-1.5-1.5v-8.5a1.5 1.5 0 0 1 1.5-1.5Z" />
+      <path d="M6.5 7.25h7" />
+      <path d="M6.5 10h7" />
+      <path d="M6.5 12.75H10" />
+      <path d="M13.75 12.75h.01" />
     </svg>
   );
 }
@@ -883,6 +1032,27 @@ export function DropshippingClient({
   const [inventoryProductOptions, setInventoryProductOptions] = useState<InventoryProductOption[]>([]);
   const [inventoryProductLoading, setInventoryProductLoading] = useState(false);
   const [financePreview, setFinancePreview] = useState<FinancePreviewState>(null);
+  const [financeLogTarget, setFinanceLogTarget] = useState<DsFinanceRow | null>(null);
+  const [financeLogEntries, setFinanceLogEntries] = useState<FinanceActionLogEntry[]>([]);
+  const [financeLogLoading, setFinanceLogLoading] = useState(false);
+  const [financeLogError, setFinanceLogError] = useState("");
+  const [financeStatementRecordTarget, setFinanceStatementRecordTarget] = useState<DsFinanceRow | null>(null);
+  const [financeStatementRecordEntries, setFinanceStatementRecordEntries] = useState<FinanceStatementRecordEntry[]>([]);
+  const [financeStatementRecordLoading, setFinanceStatementRecordLoading] = useState(false);
+  const [financeStatementRecordError, setFinanceStatementRecordError] = useState("");
+  const [financeStatementPreviewOpen, setFinanceStatementPreviewOpen] = useState(false);
+  const [financeStatementPreviewStandalone, setFinanceStatementPreviewStandalone] = useState(false);
+  const [financeStatementLockState, setFinanceStatementLockState] = useState<FinanceStatementLockState>(null);
+  const [financeSelectionState, setFinanceSelectionState] = useState<FinanceSelectionState>({
+    excludedOrderIds: [],
+    includedOrderIds: [],
+    reincludedOrderIds: [],
+  });
+  const [financeStatementLockLoading, setFinanceStatementLockLoading] = useState(false);
+  const [financeStatementActionLoading, setFinanceStatementActionLoading] = useState<"" | "generate" | "revoke" | "export">("");
+  const [financeStatementActionError, setFinanceStatementActionError] = useState("");
+  const [financeStatementRevokeState, setFinanceStatementRevokeState] = useState<FinanceStatementRevokeState>(null);
+  const [selectedFinanceOrderIds, setSelectedFinanceOrderIds] = useState<string[]>([]);
   const [financePreviewPage, setFinancePreviewPage] = useState(1);
   const [deleteTarget, setDeleteTarget] = useState<DeleteOrderState>(null);
   const [deleteTrackingInput, setDeleteTrackingInput] = useState("");
@@ -1028,6 +1198,14 @@ export function DropshippingClient({
 
   useEffect(() => {
     setFinancePreviewPage(1);
+    setSelectedFinanceOrderIds([]);
+    setFinanceStatementActionError("");
+    setFinanceStatementRevokeState(null);
+    if (!financePreview) {
+      setFinanceStatementLockState(null);
+      setFinanceSelectionState({ excludedOrderIds: [], includedOrderIds: [], reincludedOrderIds: [] });
+      setFinanceStatementPreviewOpen(false);
+    }
   }, [financePreview]);
 
   useEffect(() => {
@@ -1096,6 +1274,13 @@ export function DropshippingClient({
   useEffect(() => {
     financePreviewScrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
   }, [financePreviewPage]);
+
+  useEffect(() => {
+    if (!financePreview || !financeStatementPreviewOpen) return;
+    window.requestAnimationFrame(() => {
+      financePreviewScrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
+    });
+  }, [financePreview, financeStatementPreviewOpen]);
 
   useEffect(() => {
     if (!groupProductSearchOpen) return;
@@ -1973,16 +2158,1317 @@ export function DropshippingClient({
     [shippedOrdersForInventoryPreview],
   );
 
+  const financePreviewSettlementWeek = useMemo(() => {
+    if (!financePreview) return null;
+    const shippedDates = financePreview.settledOrders
+      .map((item) => item.shippedAt)
+      .filter((value): value is string => Boolean(value))
+      .sort();
+    const unpaidShippedDates = financePreview.settledOrders
+      .filter((item) => item.settlementStatus !== "paid")
+      .map((item) => item.shippedAt)
+      .filter((value): value is string => Boolean(value))
+      .sort();
+    const referenceDateValue =
+      unpaidShippedDates[unpaidShippedDates.length - 1]
+      || shippedDates[shippedDates.length - 1]
+      || getMexicoTodayDateValue();
+    const referenceParts = parseDateOnlyParts(referenceDateValue);
+    const referenceDate = referenceParts
+      ? new Date(`${referenceParts.year}-${referenceParts.month}-${referenceParts.day}T12:00:00.000-06:00`)
+      : now;
+    const weekStart = startOfMexicoWeekClient(referenceDate);
+    const weekEnd = new Date(weekStart.getTime() + 5 * 24 * 60 * 60 * 1000);
+    return {
+      weekStart,
+      weekEnd,
+      weekStartKey: toDateInputValue(weekStart.toISOString()),
+      weekEndKey: toDateInputValue(weekEnd.toISOString()),
+    };
+  }, [financePreview, now]);
+  const financePreviewWeekOrders = useMemo(() => {
+    if (!financePreview || !financePreviewSettlementWeek) return [];
+    const { weekStartKey, weekEndKey } = financePreviewSettlementWeek;
+    return financePreview.settledOrders.filter((item) => {
+      const shippedKey = toDateInputValue(item.shippedAt);
+      return Boolean(shippedKey) && shippedKey >= weekStartKey && shippedKey <= weekEndKey;
+    });
+  }, [financePreview, financePreviewSettlementWeek]);
+  const financeSelectionExcludedIdSet = useMemo(
+    () => new Set(financeSelectionState.excludedOrderIds),
+    [financeSelectionState.excludedOrderIds],
+  );
+  const financeSelectionIncludedIdSet = useMemo(
+    () => new Set(financeSelectionState.includedOrderIds),
+    [financeSelectionState.includedOrderIds],
+  );
+  const financeSelectionReincludedIdSet = useMemo(
+    () => new Set(financeSelectionState.reincludedOrderIds),
+    [financeSelectionState.reincludedOrderIds],
+  );
+  const financePreviewDetailOrders = useMemo(() => {
+    if (!financePreview) return [];
+    const currentWeekOrderIds = new Set(financePreviewWeekOrders.map((item) => item.orderId));
+    const touchedOrderIds = new Set([
+      ...financeSelectionState.excludedOrderIds,
+      ...financeSelectionState.includedOrderIds,
+    ]);
+    return financePreview.settledOrders.filter((item) => {
+      if (currentWeekOrderIds.has(item.orderId)) return true;
+      return item.settlementStatus !== "paid" && touchedOrderIds.has(item.orderId);
+    });
+  }, [financePreview, financePreviewWeekOrders, financeSelectionState.excludedOrderIds, financeSelectionState.includedOrderIds]);
+  const financePreviewWeekUnpaidIdSet = useMemo(
+    () =>
+      new Set(
+        financePreviewWeekOrders
+          .filter((item) => item.settlementStatus !== "paid")
+          .map((item) => item.orderId),
+      ),
+    [financePreviewWeekOrders],
+  );
   const financePreviewTotalPages = financePreview
-    ? Math.max(1, Math.ceil(financePreview.settledOrders.length / financePreviewPageSize))
+    ? Math.max(1, Math.ceil(financePreviewDetailOrders.length / financePreviewPageSize))
     : 1;
   const financePreviewCurrentPage = Math.min(financePreviewPage, financePreviewTotalPages);
-  const financePreviewVisibleOrders = financePreview
-    ? financePreview.settledOrders.slice(
-        (financePreviewCurrentPage - 1) * financePreviewPageSize,
-        financePreviewCurrentPage * financePreviewPageSize,
-      )
-    : [];
+  const financePreviewPreparedOrders = useMemo(() => {
+    if (!financePreview) return [];
+    const seenTracking = new Set<string>();
+    return financePreviewDetailOrders.map((item) => {
+      const trackingKey = String(item.trackingNo || "").trim().toLowerCase() || `order:${item.orderId}`;
+      const shouldCountShipping = !seenTracking.has(trackingKey);
+      if (shouldCountShipping) {
+        seenTracking.add(trackingKey);
+      }
+      const shippingFee = shouldCountShipping ? item.shippingFee : 0;
+      return {
+        ...item,
+        shippingFee,
+        cnyTotalAmount: item.productAmount + shippingFee,
+      };
+    });
+  }, [financePreview, financePreviewDetailOrders]);
+  const financeDefaultSelectedOrderIds = useMemo(() => {
+    return financePreviewPreparedOrders
+      .filter((item) => {
+        if (item.settlementStatus === "paid") return false;
+        if (financePreviewWeekUnpaidIdSet.has(item.orderId)) {
+          return !financeSelectionExcludedIdSet.has(item.orderId);
+        }
+        return financeSelectionIncludedIdSet.has(item.orderId);
+      })
+      .map((item) => item.orderId);
+  }, [
+    financePreviewPreparedOrders,
+    financePreviewWeekUnpaidIdSet,
+    financeSelectionExcludedIdSet,
+    financeSelectionIncludedIdSet,
+  ]);
+  const financePreviewVisibleOrders = financePreviewPreparedOrders.slice(
+    (financePreviewCurrentPage - 1) * financePreviewPageSize,
+    financePreviewCurrentPage * financePreviewPageSize,
+  );
+  const financePreviewSelectableVisibleOrders = financePreviewVisibleOrders.filter((item) => item.settlementStatus !== "paid");
+  const areAllVisibleFinanceOrdersSelected =
+    financePreviewSelectableVisibleOrders.length > 0 &&
+    financePreviewSelectableVisibleOrders.every((item) => selectedFinanceOrderIds.includes(item.orderId));
+  const financeStatementPreparedData = useMemo(
+    () => buildFinanceStatementData(inventory),
+    [exchangeRate.rateValue, financePreview, financePreviewPreparedOrders, inventory, selectedFinanceOrderIds, financeSelectionReincludedIdSet],
+  );
+  const financeExportSummaryByCustomerId = useMemo(
+    () =>
+      new Map(
+        finance.map((row) => [
+          row.customerId,
+          buildFinanceCustomerExportSummary(row, inventory),
+        ]),
+      ),
+    [finance, inventory, exchangeRate.rateValue],
+  );
+  const financeStatementSummary = useMemo(() => {
+    if (!financePreview) return null;
+    const minShippedAt = financePreviewSettlementWeek?.weekStart.toISOString() || now.toISOString();
+    const maxShippedAt = financePreviewSettlementWeek?.weekEnd.toISOString() || now.toISOString();
+    const todayParts = getMexicoDatePartsMap(new Date());
+    const statementNumber = `BS-${todayParts.year}${todayParts.month}${todayParts.day}`;
+
+    return {
+      mxnSubtotal: financeStatementPreparedData?.mxnSubtotal || 0,
+      cnySubtotal: financeStatementPreparedData?.cnySubtotal || 0,
+      serviceFeeTotal: financeStatementPreparedData?.serviceFeeTotal || 0,
+      payableTotal: financeStatementPreparedData?.payableTotal || 0,
+      minShippedAt,
+      maxShippedAt,
+      statementNumber,
+      hasUnpaid: financeStatementPreparedData?.hasUnpaid ?? false,
+      orderCount: financeStatementPreparedData?.orderCount || 0,
+      serviceFeePerOrder: financeStatementPreparedData?.serviceFeePerOrder || 0,
+    };
+  }, [financePreview, financePreviewSettlementWeek, financeStatementPreparedData, now]);
+
+  const financeStatementCycleText = useMemo(() => {
+    if (!financeStatementSummary) return "";
+    const start = parseDateOnlyParts(financeStatementSummary.minShippedAt || "");
+    const end = parseDateOnlyParts(financeStatementSummary.maxShippedAt || "");
+    if (!start || !end) return "";
+    return `${start.year}/${start.month}/${start.day} - ${end.month}/${end.day}`;
+  }, [financeStatementSummary]);
+
+  useEffect(() => {
+    if (!financePreview || !financeStatementSummary?.statementNumber) {
+      setFinanceStatementLockState(null);
+      return;
+    }
+    let cancelled = false;
+    const loadFinanceStatementState = async () => {
+      setFinanceStatementLockLoading(true);
+      try {
+        const response = await fetch(
+          `/api/dropshipping/finance/${encodeURIComponent(financePreview.customerId)}/logs?statementNumber=${encodeURIComponent(financeStatementSummary.statementNumber)}`,
+        );
+        const result = await response.json();
+        if (!response.ok || !result?.ok) {
+          throw new Error(result?.error || (lang === "zh" ? "获取账单状态失败" : "No se pudo cargar el estado"));
+        }
+        if (!cancelled) {
+          setFinanceSelectionState(result.selectionState || {
+            excludedOrderIds: [],
+            includedOrderIds: [],
+            reincludedOrderIds: [],
+          });
+          setFinanceStatementLockState(result.statementState || {
+            statementNumber: financeStatementSummary.statementNumber,
+            isGenerated: false,
+            actionText: "",
+            createdAtText: "",
+            operatorName: "",
+            noteText: "",
+          });
+        }
+      } catch (stateError) {
+        if (!cancelled) {
+          setFinanceSelectionState({ excludedOrderIds: [], includedOrderIds: [], reincludedOrderIds: [] });
+          setFinanceStatementLockState({
+            statementNumber: financeStatementSummary.statementNumber,
+            isGenerated: false,
+            actionText: "",
+            createdAtText: "",
+            operatorName: "",
+            noteText: "",
+          });
+          setFinanceStatementActionError(stateError instanceof Error ? stateError.message : (lang === "zh" ? "获取账单状态失败" : "No se pudo cargar el estado"));
+        }
+      } finally {
+        if (!cancelled) setFinanceStatementLockLoading(false);
+      }
+    };
+    void loadFinanceStatementState();
+    return () => {
+      cancelled = true;
+    };
+  }, [financePreview, financeStatementSummary?.statementNumber, lang]);
+
+  useEffect(() => {
+    if (!financePreview) {
+      setSelectedFinanceOrderIds([]);
+      return;
+    }
+    setSelectedFinanceOrderIds((prev) => {
+      if (
+        prev.length === financeDefaultSelectedOrderIds.length
+        && prev.every((value, index) => value === financeDefaultSelectedOrderIds[index])
+      ) {
+        return prev;
+      }
+      return financeDefaultSelectedOrderIds;
+    });
+  }, [financePreview, financeDefaultSelectedOrderIds]);
+
+  const recordFinanceAction = async (
+    row: DsFinanceRow,
+    actionType:
+      | "view_detail"
+      | "statement_preview"
+      | "export_all"
+      | "generate_statement"
+      | "revoke_statement"
+      | "export_weekly_statement"
+      | "exclude_weekly_order"
+      | "include_weekly_order",
+    options?: {
+      statementNumber?: string;
+      cycleText?: string;
+      note?: string;
+      orderId?: string;
+      orderNo?: string;
+    },
+  ) => {
+    try {
+      const response = await fetch(`/api/dropshipping/finance/${encodeURIComponent(row.customerId)}/logs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          actionType,
+          customerName: row.customerName,
+          statementNumber: options?.statementNumber || "",
+          cycleText: options?.cycleText || "",
+          note: options?.note || "",
+          orderId: options?.orderId || "",
+          orderNo: options?.orderNo || "",
+        }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || result?.ok === false) {
+        throw new Error(result?.error || (lang === "zh" ? "账单动作记录失败" : "No se pudo registrar la accion"));
+      }
+    } catch {
+      // Keep customer-settlement interactions responsive even when logging fails.
+    }
+  };
+
+  const loadFinanceActionLogs = async (row: DsFinanceRow) => {
+    setFinanceLogTarget(row);
+    setFinanceLogLoading(true);
+    setFinanceLogError("");
+    try {
+      const response = await fetch(`/api/dropshipping/finance/${encodeURIComponent(row.customerId)}/logs`);
+      const result = await response.json();
+      if (!response.ok || !result?.ok || !Array.isArray(result.entries)) {
+        throw new Error(result?.error || (lang === "zh" ? "获取账单动作记录失败" : "No se pudo cargar el historial"));
+      }
+      setFinanceLogEntries(result.entries);
+    } catch (fetchError) {
+      setFinanceLogEntries([]);
+      setFinanceLogError(fetchError instanceof Error ? fetchError.message : (lang === "zh" ? "获取账单动作记录失败" : "No se pudo cargar el historial"));
+    } finally {
+      setFinanceLogLoading(false);
+    }
+  };
+
+  const loadFinanceStatementRecords = async (row: DsFinanceRow) => {
+    setFinanceStatementRecordTarget(row);
+    setFinanceStatementRecordLoading(true);
+    setFinanceStatementRecordError("");
+    try {
+      const response = await fetch(`/api/dropshipping/finance/${encodeURIComponent(row.customerId)}/logs`);
+      const result = await response.json();
+      if (!response.ok || !result?.ok || !Array.isArray(result.statementEntries)) {
+        throw new Error(result?.error || (lang === "zh" ? "获取账单记录失败" : "No se pudo cargar las facturas"));
+      }
+      setFinanceStatementRecordEntries(result.statementEntries);
+    } catch (fetchError) {
+      setFinanceStatementRecordEntries([]);
+      setFinanceStatementRecordError(fetchError instanceof Error ? fetchError.message : (lang === "zh" ? "获取账单记录失败" : "No se pudo cargar las facturas"));
+    } finally {
+      setFinanceStatementRecordLoading(false);
+    }
+  };
+
+  const updateFinanceStatementGeneratedState = async (
+    action: "generate" | "revoke",
+    options?: { note?: string },
+  ) => {
+    if (!financePreview || !financeStatementSummary) return;
+    setFinanceStatementActionLoading(action);
+    setFinanceStatementActionError("");
+    try {
+      const response = await fetch(`/api/dropshipping/finance/${encodeURIComponent(financePreview.customerId)}/logs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          actionType: action === "generate" ? "generate_statement" : "revoke_statement",
+          customerName: financePreview.customerName,
+          statementNumber: financeStatementSummary.statementNumber,
+          cycleText: financeStatementCycleText,
+          note: options?.note || "",
+        }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.ok) {
+        throw new Error(result?.error || (lang === "zh" ? "更新账单状态失败" : "No se pudo actualizar el estado"));
+      }
+      const nextGenerated = action === "generate";
+      setFinanceStatementLockState({
+        statementNumber: financeStatementSummary.statementNumber,
+        isGenerated: nextGenerated,
+        actionText: nextGenerated ? (lang === "zh" ? "生成账单" : "Generado") : (lang === "zh" ? "撤销生成" : "Revocado"),
+        createdAtText: fmtDate(new Date().toISOString(), lang),
+        operatorName: "",
+        noteText: options?.note || "",
+      });
+      if (action === "revoke") {
+        setFinanceStatementRevokeState(null);
+      }
+      if (financeLogTarget?.customerId === financePreview.customerId) {
+        void loadFinanceActionLogs(financePreview);
+      }
+    } catch (actionError) {
+      setFinanceStatementActionError(actionError instanceof Error ? actionError.message : (lang === "zh" ? "更新账单状态失败" : "No se pudo actualizar el estado"));
+    } finally {
+      setFinanceStatementActionLoading("");
+    }
+  };
+
+  const updateFinanceOrderSelection = async (
+    item: (typeof financePreviewPreparedOrders)[number],
+    nextChecked: boolean,
+  ) => {
+    if (!financePreview || !financeStatementSummary) return;
+    setFinanceStatementActionError("");
+    try {
+      const response = await fetch(`/api/dropshipping/finance/${encodeURIComponent(financePreview.customerId)}/logs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          actionType: nextChecked ? "include_weekly_order" : "exclude_weekly_order",
+          customerName: financePreview.customerName,
+          statementNumber: financeStatementSummary.statementNumber,
+          cycleText: financeStatementCycleText,
+          orderId: item.orderId,
+          orderNo: item.platformOrderNo,
+        }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.ok) {
+        throw new Error(result?.error || (lang === "zh" ? "更新订单选择失败" : "No se pudo actualizar la seleccion"));
+      }
+      setFinanceSelectionState((prev) => {
+        const excludedSet = new Set(prev.excludedOrderIds);
+        const includedSet = new Set(prev.includedOrderIds);
+        const reincludedSet = new Set(prev.reincludedOrderIds);
+        if (nextChecked) {
+          excludedSet.delete(item.orderId);
+          includedSet.add(item.orderId);
+          if (prev.excludedOrderIds.includes(item.orderId) || prev.reincludedOrderIds.includes(item.orderId)) {
+            reincludedSet.add(item.orderId);
+          }
+        } else {
+          excludedSet.add(item.orderId);
+          includedSet.delete(item.orderId);
+          reincludedSet.delete(item.orderId);
+        }
+        return {
+          excludedOrderIds: Array.from(excludedSet),
+          includedOrderIds: Array.from(includedSet),
+          reincludedOrderIds: Array.from(reincludedSet),
+        };
+      });
+      setSelectedFinanceOrderIds((prev) =>
+        nextChecked
+          ? Array.from(new Set([...prev, item.orderId]))
+          : prev.filter((id) => id !== item.orderId),
+      );
+      if (financeLogTarget?.customerId === financePreview.customerId) {
+        void loadFinanceActionLogs(financePreview);
+      }
+    } catch (selectionError) {
+      setFinanceStatementActionError(selectionError instanceof Error ? selectionError.message : (lang === "zh" ? "更新订单选择失败" : "No se pudo actualizar la seleccion"));
+    }
+  };
+
+  const openFinancePreview = (row: DsFinanceRow) => {
+    setFinanceStatementPreviewStandalone(false);
+    setFinancePreview(row);
+    void recordFinanceAction(row, "view_detail");
+  };
+
+  const openFinanceStatementRecordPreview = (row: DsFinanceRow, entry: FinanceStatementRecordEntry) => {
+    setFinanceStatementRecordTarget(null);
+    setFinanceStatementRecordEntries([]);
+    setFinanceStatementRecordError("");
+    setFinanceStatementPreviewStandalone(true);
+    setFinancePreview(row);
+    setFinanceStatementPreviewOpen(true);
+    setFinancePreviewPage(1);
+    void recordFinanceAction(row, "statement_preview", {
+      statementNumber: entry.statementNumber,
+      cycleText: entry.cycleText,
+    });
+    window.requestAnimationFrame(() => {
+      financePreviewScrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
+    });
+  };
+
+  function buildFinanceStatementData(
+    sourceInventory: DsInventoryRow[],
+    mode: "weekly_unpaid" | "all" = "weekly_unpaid",
+  ) {
+    if (!financePreview) return null;
+    const getExportSkuKey = (value: string | null | undefined) =>
+      normalizeProductCode(value || "") || String(value || "").trim().toLowerCase();
+    const targetPreparedOrders =
+      mode === "all"
+        ? financePreviewPreparedOrders
+        : financePreviewPreparedOrders.filter(
+            (item) => item.settlementStatus !== "paid" && selectedFinanceOrderIds.includes(item.orderId),
+          );
+    const financeOrderIds = new Set(targetPreparedOrders.map((item) => item.orderId).filter(Boolean));
+    const financeTrackingSkuKeys = new Set(
+      targetPreparedOrders.map((item) => `${String(item.trackingNo || "").trim().toLowerCase()}::${getExportSkuKey(item.sku)}`),
+    );
+    const financeSkuKeys = new Set(targetPreparedOrders.map((item) => getExportSkuKey(item.sku)).filter(Boolean));
+    const matchesFinanceCustomer = (row: { customerId?: string | null; customerName?: string | null }) =>
+      (row.customerId && financePreview.customerId && row.customerId === financePreview.customerId)
+      || String(row.customerName || "").trim() === String(financePreview.customerName || "").trim();
+    const matchesFinanceInventoryRow = (row: {
+      customerId?: string | null;
+      customerName?: string | null;
+      orderId?: string | null;
+      trackingNo?: string | null;
+      sku?: string | null;
+    }) => {
+      if (matchesFinanceCustomer(row)) return true;
+      if (row.orderId && financeOrderIds.has(row.orderId)) return true;
+      const trackingSkuKey = `${String(row.trackingNo || "").trim().toLowerCase()}::${normalizeProductCode(row.sku || "")}`;
+      if (financeTrackingSkuKeys.has(trackingSkuKey)) return true;
+      return financeSkuKeys.has(normalizeProductCode(row.sku || ""));
+    };
+    const inventoryStockBySku = sourceInventory.reduce((map, row) => {
+      if (!matchesFinanceInventoryRow(row)) return map;
+      const skuKey = getExportSkuKey(row.sku);
+      if (!skuKey) return map;
+      const current = map.get(skuKey) || { isStocked: false, stockedQty: 0, stockedAt: null as string | null };
+      map.set(skuKey, {
+        isStocked: current.isStocked || row.isStocked,
+        stockedQty: current.stockedQty + (row.isStocked ? Math.max(row.stockedQty, 0) : 0),
+        stockedAt: current.stockedAt || row.stockedAt || null,
+      });
+      return map;
+    }, new Map<string, { isStocked: boolean; stockedQty: number; stockedAt: string | null }>());
+    const inventoryStockBySkuFallback = sourceInventory.reduce((map, row) => {
+      const skuKey = getExportSkuKey(row.sku);
+      if (!skuKey || !row.isStocked) return map;
+      const current = map.get(skuKey) || { isStocked: false, stockedQty: 0, stockedAt: null as string | null };
+      map.set(skuKey, {
+        isStocked: true,
+        stockedQty: current.stockedQty + Math.max(row.stockedQty, 0),
+        stockedAt: current.stockedAt || row.stockedAt || null,
+      });
+      return map;
+    }, new Map<string, { isStocked: boolean; stockedQty: number; stockedAt: string | null }>());
+    const inventoryStockByOrderId = sourceInventory.reduce((map, row) => {
+      if (!matchesFinanceInventoryRow(row)) return map;
+      if (!row.isStocked || !row.orderId) return map;
+      map.set(row.orderId, {
+        isStocked: true,
+        stockedQty: Math.max(row.stockedQty, 0),
+        stockedAt: row.stockedAt || null,
+      });
+      return map;
+    }, new Map<string, { isStocked: boolean; stockedQty: number; stockedAt: string | null }>());
+    const inventoryStockByTrackingSku = sourceInventory.reduce((map, row) => {
+      if (!matchesFinanceInventoryRow(row)) return map;
+      if (!row.isStocked) return map;
+      const trackingKey = `${String(row.trackingNo || "").trim().toLowerCase()}::${getExportSkuKey(row.sku)}`;
+      if (!trackingKey || trackingKey.startsWith("::")) return map;
+      map.set(trackingKey, {
+        isStocked: true,
+        stockedQty: Math.max(row.stockedQty, 0),
+        stockedAt: row.stockedAt || null,
+      });
+      return map;
+    }, new Map<string, { isStocked: boolean; stockedQty: number; stockedAt: string | null }>());
+    const inventoryStockBySkuStockedDate = sourceInventory.reduce((map, row) => {
+      if (!matchesFinanceInventoryRow(row)) return map;
+      if (!row.isStocked || !row.stockedAt) return map;
+      const stockedDateKey = toDateInputValue(row.stockedAt);
+      const skuStockedDateKey = `${getExportSkuKey(row.sku)}::${stockedDateKey}`;
+      if (!stockedDateKey || skuStockedDateKey.startsWith("::")) return map;
+      map.set(skuStockedDateKey, {
+        isStocked: true,
+        stockedQty: Math.max(row.stockedQty, 0),
+        stockedAt: row.stockedAt || null,
+      });
+      return map;
+    }, new Map<string, { isStocked: boolean; stockedQty: number; stockedAt: string | null }>());
+    const getMatchedStockInfo = (item: (typeof financePreviewPreparedOrders)[number]) => {
+      const directMatch = inventoryStockByOrderId.get(item.orderId);
+      if (directMatch) return directMatch;
+      const trackingSkuKey = `${String(item.trackingNo || "").trim().toLowerCase()}::${getExportSkuKey(item.sku)}`;
+      const trackingMatch = inventoryStockByTrackingSku.get(trackingSkuKey);
+      if (trackingMatch) return trackingMatch;
+      const shippedDateKey = toDateInputValue(item.shippedAt);
+      const skuStockedDateKey = `${getExportSkuKey(item.sku)}::${shippedDateKey}`;
+      const datedMatch = inventoryStockBySkuStockedDate.get(skuStockedDateKey);
+      if (datedMatch) return datedMatch;
+      return inventoryStockBySku.get(getExportSkuKey(item.sku)) || inventoryStockBySkuFallback.get(getExportSkuKey(item.sku)) || null;
+    };
+    const getExactMatchedStockInfo = (item: (typeof financePreviewPreparedOrders)[number]) => {
+      const directMatch = inventoryStockByOrderId.get(item.orderId);
+      if (directMatch) return directMatch;
+      const trackingSkuKey = `${String(item.trackingNo || "").trim().toLowerCase()}::${getExportSkuKey(item.sku)}`;
+      const trackingMatch = inventoryStockByTrackingSku.get(trackingSkuKey);
+      if (trackingMatch) return trackingMatch;
+      const shippedDateKey = toDateInputValue(item.shippedAt);
+      const skuStockedDateKey = `${getExportSkuKey(item.sku)}::${shippedDateKey}`;
+      return inventoryStockBySkuStockedDate.get(skuStockedDateKey) || null;
+    };
+    const findExactMatchedInventoryRow = (item: (typeof financePreviewPreparedOrders)[number]) => {
+      const directMatch = sourceInventory.find((row) =>
+        row.isStocked
+        && row.orderId === item.orderId,
+      );
+      if (directMatch) return directMatch;
+      const trackingNo = String(item.trackingNo || "").trim().toLowerCase();
+      const skuKey = getExportSkuKey(item.sku);
+      const trackingMatch = sourceInventory.find((row) =>
+        row.isStocked
+        && String(row.trackingNo || "").trim().toLowerCase() === trackingNo
+        && getExportSkuKey(row.sku) === skuKey,
+      );
+      if (trackingMatch) return trackingMatch;
+      const shippedDateKey = toDateInputValue(item.shippedAt);
+      return sourceInventory.find((row) =>
+        row.isStocked
+        && getExportSkuKey(row.sku) === skuKey
+        && toDateInputValue(row.stockedAt) === shippedDateKey,
+      ) || null;
+    };
+    const shippedQtyBySku = targetPreparedOrders.reduce((map, item) => {
+      const skuKey = getExportSkuKey(item.sku);
+      if (!skuKey) return map;
+      map.set(skuKey, (map.get(skuKey) || 0) + Math.max(item.quantity, 0));
+      return map;
+    }, new Map<string, number>());
+    const remainingQtyBySku = new Map<string, number>();
+    for (const skuKey of new Set([...inventoryStockBySku.keys(), ...inventoryStockBySkuFallback.keys(), ...shippedQtyBySku.keys()])) {
+      const stockedQty = inventoryStockBySku.get(skuKey)?.stockedQty || inventoryStockBySkuFallback.get(skuKey)?.stockedQty || 0;
+      remainingQtyBySku.set(skuKey, stockedQty - (shippedQtyBySku.get(skuKey) || 0));
+    }
+    const preparedOrders = targetPreparedOrders.map((item) => {
+      const matchedStockInfo = getMatchedStockInfo(item);
+      const exactMatchedStockInfo = getExactMatchedStockInfo(item);
+      const exactMatchedInventoryRow = findExactMatchedInventoryRow(item);
+      const exportIsStocked = matchedStockInfo?.isStocked ?? item.isStocked;
+      const exportStockedQty =
+        matchedStockInfo && matchedStockInfo.stockedQty > 0
+          ? matchedStockInfo.stockedQty
+          : item.isStocked && item.stockedQty > 0
+            ? item.stockedQty
+            : 0;
+      return {
+        ...item,
+        exportIsStocked,
+        exportStockedQty,
+        exportStockedAt: matchedStockInfo?.stockedAt || null,
+        displayIsStocked: Boolean(exactMatchedInventoryRow?.isStocked || exactMatchedStockInfo?.isStocked),
+        displayStockedQty: exactMatchedInventoryRow?.stockedQty || exactMatchedStockInfo?.stockedQty || 0,
+        displayStockedAt: exactMatchedInventoryRow?.stockedAt || exactMatchedStockInfo?.stockedAt || null,
+        exportRemainingQty: remainingQtyBySku.get(getExportSkuKey(item.sku)),
+        skuStockInfo: inventoryStockBySku.get(getExportSkuKey(item.sku)) || inventoryStockBySkuFallback.get(getExportSkuKey(item.sku)),
+        skuKey: getExportSkuKey(item.sku),
+        displayReincluded:
+          financeSelectionReincludedIdSet.has(item.orderId)
+          && !financePreviewWeekUnpaidIdSet.has(item.orderId),
+      };
+    });
+    const displayedProductAmountByOrderId = new Map<string, number>();
+    const activeStockRemainingBySku = new Map<string, number>();
+    const computeAmountWithQty = (item: (typeof preparedOrders)[number], effectiveQty: number) => {
+      const normalizedNormalDiscount = Math.min(
+        Math.max(Math.abs(item.normalDiscount) <= 1 ? item.normalDiscount : item.normalDiscount / 100, 0),
+        1,
+      );
+      const normalizedVipDiscount = Math.min(
+        Math.max(Math.abs(item.vipDiscount) <= 1 ? item.vipDiscount : item.vipDiscount / 100, 0),
+        1,
+      );
+      return item.unitPrice > 0 && effectiveQty > 0
+        ? item.unitPrice * effectiveQty * (1 - normalizedNormalDiscount) * (1 - normalizedVipDiscount)
+        : 0;
+    };
+    const sortedPreparedOrders = [...preparedOrders].sort((a, b) => {
+      const aTime = a.shippedAt ? new Date(a.shippedAt).getTime() : 0;
+      const bTime = b.shippedAt ? new Date(b.shippedAt).getTime() : 0;
+      return aTime - bTime;
+    });
+    for (const item of sortedPreparedOrders) {
+      const currentRemaining = activeStockRemainingBySku.get(item.skuKey) || 0;
+      const shippedQty = Math.max(item.quantity, 0);
+      let effectiveQty = 0;
+      if (item.exportIsStocked && item.exportStockedQty > 0 && currentRemaining <= 0) {
+        effectiveQty = item.exportStockedQty;
+        activeStockRemainingBySku.set(item.skuKey, Math.max(item.exportStockedQty - shippedQty, 0));
+      } else if (currentRemaining > 0) {
+        effectiveQty = 0;
+        activeStockRemainingBySku.set(item.skuKey, Math.max(currentRemaining - shippedQty, 0));
+      } else {
+        effectiveQty = shippedQty;
+        activeStockRemainingBySku.set(item.skuKey, 0);
+      }
+      displayedProductAmountByOrderId.set(item.orderId, computeAmountWithQty(item, effectiveQty));
+    }
+    const computeDisplayedProductAmount = (item: (typeof sortedPreparedOrders)[number]) =>
+      displayedProductAmountByOrderId.get(item.orderId) || 0;
+    const computeSettlementGroupAmount = (items: typeof sortedPreparedOrders) => {
+      const mxnAmount = items.reduce((sum, item) => sum + computeDisplayedProductAmount(item), 0);
+      const shippingAmount = items.reduce((sum, item) => sum + item.shippingFee, 0);
+      const convertedAmount =
+        exchangeRate.rateValue && Number.isFinite(exchangeRate.rateValue)
+          ? mxnAmount * exchangeRate.rateValue
+          : items.reduce((sum, item) => sum + item.productAmount, 0);
+      return {
+        mxnAmount,
+        convertedAmount,
+        shippingAmount,
+        totalAmount: convertedAmount + shippingAmount,
+      };
+    };
+    const overallAmounts = computeSettlementGroupAmount(sortedPreparedOrders);
+    const ordersWithDisplayAmounts = sortedPreparedOrders.map((item) => {
+      const displayProductAmount = computeDisplayedProductAmount(item);
+      const displayConvertedAmount =
+        exchangeRate.rateValue && Number.isFinite(exchangeRate.rateValue)
+          ? displayProductAmount * exchangeRate.rateValue
+          : item.productAmount;
+      return {
+        ...item,
+        displayProductAmount,
+        displayConvertedAmount,
+        displayCnyTotalAmount: displayConvertedAmount + item.shippingFee,
+      };
+    });
+    const uniqueShippingFees = Array.from(
+      new Set(
+        ordersWithDisplayAmounts
+          .map((item) => item.shippingFee)
+          .filter((value) => Number.isFinite(value) && value > 0)
+          .map((value) => Number(value.toFixed(2))),
+      ),
+    ).sort((a, b) => a - b);
+    const serviceFeeDisplay = uniqueShippingFees.length === 0
+      ? "￥0.00 / 单"
+      : uniqueShippingFees.length === 1
+        ? `￥${fmtMoney(uniqueShippingFees[0], lang)} / 单`
+        : `￥${fmtMoney(uniqueShippingFees[0], lang)}-${fmtMoney(uniqueShippingFees[uniqueShippingFees.length - 1], lang)} / 单`;
+    return {
+      orders: ordersWithDisplayAmounts,
+      mxnSubtotal: overallAmounts.mxnAmount,
+      cnySubtotal: overallAmounts.convertedAmount,
+      serviceFeeTotal: overallAmounts.shippingAmount,
+      payableTotal: overallAmounts.totalAmount,
+      totalPaidAmount: computeSettlementGroupAmount(sortedPreparedOrders.filter((item) => item.settlementStatus === "paid")).totalAmount,
+      totalUnpaidAmount: computeSettlementGroupAmount(sortedPreparedOrders.filter((item) => item.settlementStatus !== "paid")).totalAmount,
+      hasUnpaid: ordersWithDisplayAmounts.some((item) => item.settlementStatus !== "paid"),
+      orderCount: ordersWithDisplayAmounts.length,
+      serviceFeePerOrder: overallAmounts.shippingAmount > 0
+        ? overallAmounts.shippingAmount / Math.max(1, ordersWithDisplayAmounts.filter((item) => item.shippingFee > 0).length)
+        : 0,
+      serviceFeeDisplay,
+    };
+  }
+
+  function buildFinanceCustomerExportSummary(row: DsFinanceRow, sourceInventory: DsInventoryRow[]) {
+    const getExportSkuKey = (value: string | null | undefined) =>
+      normalizeProductCode(value || "") || String(value || "").trim().toLowerCase();
+    const targetPreparedOrders = row.settledOrders.map((item) => {
+      const trackingKey = String(item.trackingNo || "").trim().toLowerCase() || `order:${item.orderId}`;
+      return {
+        ...item,
+        trackingKey,
+      };
+    });
+    const seenTracking = new Set<string>();
+    const dedupedOrders = targetPreparedOrders.map((item) => {
+      const shouldCountShipping = !seenTracking.has(item.trackingKey);
+      if (shouldCountShipping) seenTracking.add(item.trackingKey);
+      return {
+        ...item,
+        shippingFee: shouldCountShipping ? item.shippingFee : 0,
+      };
+    });
+    const financeOrderIds = new Set(dedupedOrders.map((item) => item.orderId).filter(Boolean));
+    const financeTrackingSkuKeys = new Set(
+      dedupedOrders.map((item) => `${String(item.trackingNo || "").trim().toLowerCase()}::${getExportSkuKey(item.sku)}`),
+    );
+    const financeSkuKeys = new Set(dedupedOrders.map((item) => getExportSkuKey(item.sku)).filter(Boolean));
+    const matchesFinanceCustomer = (inventoryRow: { customerId?: string | null; customerName?: string | null }) =>
+      (inventoryRow.customerId && row.customerId && inventoryRow.customerId === row.customerId)
+      || String(inventoryRow.customerName || "").trim() === String(row.customerName || "").trim();
+    const matchesFinanceInventoryRow = (inventoryRow: {
+      customerId?: string | null;
+      customerName?: string | null;
+      orderId?: string | null;
+      trackingNo?: string | null;
+      sku?: string | null;
+    }) => {
+      if (matchesFinanceCustomer(inventoryRow)) return true;
+      if (inventoryRow.orderId && financeOrderIds.has(inventoryRow.orderId)) return true;
+      const trackingSkuKey = `${String(inventoryRow.trackingNo || "").trim().toLowerCase()}::${normalizeProductCode(inventoryRow.sku || "")}`;
+      if (financeTrackingSkuKeys.has(trackingSkuKey)) return true;
+      return financeSkuKeys.has(normalizeProductCode(inventoryRow.sku || ""));
+    };
+    const inventoryStockBySku = sourceInventory.reduce((map, inventoryRow) => {
+      if (!matchesFinanceInventoryRow(inventoryRow)) return map;
+      const skuKey = getExportSkuKey(inventoryRow.sku);
+      if (!skuKey) return map;
+      const current = map.get(skuKey) || { isStocked: false, stockedQty: 0, stockedAt: null as string | null };
+      map.set(skuKey, {
+        isStocked: current.isStocked || inventoryRow.isStocked,
+        stockedQty: current.stockedQty + (inventoryRow.isStocked ? Math.max(inventoryRow.stockedQty, 0) : 0),
+        stockedAt: current.stockedAt || inventoryRow.stockedAt || null,
+      });
+      return map;
+    }, new Map<string, { isStocked: boolean; stockedQty: number; stockedAt: string | null }>());
+    const inventoryStockBySkuFallback = sourceInventory.reduce((map, inventoryRow) => {
+      const skuKey = getExportSkuKey(inventoryRow.sku);
+      if (!skuKey || !inventoryRow.isStocked) return map;
+      const current = map.get(skuKey) || { isStocked: false, stockedQty: 0, stockedAt: null as string | null };
+      map.set(skuKey, {
+        isStocked: true,
+        stockedQty: current.stockedQty + Math.max(inventoryRow.stockedQty, 0),
+        stockedAt: current.stockedAt || inventoryRow.stockedAt || null,
+      });
+      return map;
+    }, new Map<string, { isStocked: boolean; stockedQty: number; stockedAt: string | null }>());
+    const inventoryStockByOrderId = sourceInventory.reduce((map, inventoryRow) => {
+      if (!matchesFinanceInventoryRow(inventoryRow)) return map;
+      if (!inventoryRow.isStocked || !inventoryRow.orderId) return map;
+      map.set(inventoryRow.orderId, {
+        isStocked: true,
+        stockedQty: Math.max(inventoryRow.stockedQty, 0),
+        stockedAt: inventoryRow.stockedAt || null,
+      });
+      return map;
+    }, new Map<string, { isStocked: boolean; stockedQty: number; stockedAt: string | null }>());
+    const inventoryStockByTrackingSku = sourceInventory.reduce((map, inventoryRow) => {
+      if (!matchesFinanceInventoryRow(inventoryRow)) return map;
+      if (!inventoryRow.isStocked) return map;
+      const trackingKey = `${String(inventoryRow.trackingNo || "").trim().toLowerCase()}::${getExportSkuKey(inventoryRow.sku)}`;
+      if (!trackingKey || trackingKey.startsWith("::")) return map;
+      map.set(trackingKey, {
+        isStocked: true,
+        stockedQty: Math.max(inventoryRow.stockedQty, 0),
+        stockedAt: inventoryRow.stockedAt || null,
+      });
+      return map;
+    }, new Map<string, { isStocked: boolean; stockedQty: number; stockedAt: string | null }>());
+    const inventoryStockBySkuStockedDate = sourceInventory.reduce((map, inventoryRow) => {
+      if (!matchesFinanceInventoryRow(inventoryRow)) return map;
+      if (!inventoryRow.isStocked || !inventoryRow.stockedAt) return map;
+      const stockedDateKey = toDateInputValue(inventoryRow.stockedAt);
+      const skuStockedDateKey = `${getExportSkuKey(inventoryRow.sku)}::${stockedDateKey}`;
+      if (!stockedDateKey || skuStockedDateKey.startsWith("::")) return map;
+      map.set(skuStockedDateKey, {
+        isStocked: true,
+        stockedQty: Math.max(inventoryRow.stockedQty, 0),
+        stockedAt: inventoryRow.stockedAt || null,
+      });
+      return map;
+    }, new Map<string, { isStocked: boolean; stockedQty: number; stockedAt: string | null }>());
+    const getMatchedStockInfo = (item: (typeof dedupedOrders)[number]) => {
+      const directMatch = inventoryStockByOrderId.get(item.orderId);
+      if (directMatch) return directMatch;
+      const trackingSkuKey = `${String(item.trackingNo || "").trim().toLowerCase()}::${getExportSkuKey(item.sku)}`;
+      const trackingMatch = inventoryStockByTrackingSku.get(trackingSkuKey);
+      if (trackingMatch) return trackingMatch;
+      const shippedDateKey = toDateInputValue(item.shippedAt);
+      const skuStockedDateKey = `${getExportSkuKey(item.sku)}::${shippedDateKey}`;
+      const datedMatch = inventoryStockBySkuStockedDate.get(skuStockedDateKey);
+      if (datedMatch) return datedMatch;
+      return inventoryStockBySku.get(getExportSkuKey(item.sku)) || inventoryStockBySkuFallback.get(getExportSkuKey(item.sku)) || null;
+    };
+    const shippedQtyBySku = dedupedOrders.reduce((map, item) => {
+      const skuKey = getExportSkuKey(item.sku);
+      if (!skuKey) return map;
+      map.set(skuKey, (map.get(skuKey) || 0) + Math.max(item.quantity, 0));
+      return map;
+    }, new Map<string, number>());
+    const remainingQtyBySku = new Map<string, number>();
+    for (const skuKey of new Set([...inventoryStockBySku.keys(), ...inventoryStockBySkuFallback.keys(), ...shippedQtyBySku.keys()])) {
+      const stockedQty = inventoryStockBySku.get(skuKey)?.stockedQty || inventoryStockBySkuFallback.get(skuKey)?.stockedQty || 0;
+      remainingQtyBySku.set(skuKey, stockedQty - (shippedQtyBySku.get(skuKey) || 0));
+    }
+    const preparedOrders = dedupedOrders.map((item) => {
+      const matchedStockInfo = getMatchedStockInfo(item);
+      const exportIsStocked = matchedStockInfo?.isStocked ?? item.isStocked;
+      const exportStockedQty =
+        matchedStockInfo && matchedStockInfo.stockedQty > 0
+          ? matchedStockInfo.stockedQty
+          : item.isStocked && item.stockedQty > 0
+            ? item.stockedQty
+            : 0;
+      return {
+        ...item,
+        exportIsStocked,
+        exportStockedQty,
+        exportRemainingQty: remainingQtyBySku.get(getExportSkuKey(item.sku)),
+        skuKey: getExportSkuKey(item.sku),
+      };
+    });
+    const displayedProductAmountByOrderId = new Map<string, number>();
+    const activeStockRemainingBySku = new Map<string, number>();
+    const computeAmountWithQty = (item: (typeof preparedOrders)[number], effectiveQty: number) => {
+      const normalizedNormalDiscount = Math.min(
+        Math.max(Math.abs(item.normalDiscount) <= 1 ? item.normalDiscount : item.normalDiscount / 100, 0),
+        1,
+      );
+      const normalizedVipDiscount = Math.min(
+        Math.max(Math.abs(item.vipDiscount) <= 1 ? item.vipDiscount : item.vipDiscount / 100, 0),
+        1,
+      );
+      return item.unitPrice > 0 && effectiveQty > 0
+        ? item.unitPrice * effectiveQty * (1 - normalizedNormalDiscount) * (1 - normalizedVipDiscount)
+        : 0;
+    };
+    const sortedPreparedOrders = [...preparedOrders].sort((a, b) => {
+      const aTime = a.shippedAt ? new Date(a.shippedAt).getTime() : 0;
+      const bTime = b.shippedAt ? new Date(b.shippedAt).getTime() : 0;
+      return aTime - bTime;
+    });
+    for (const item of sortedPreparedOrders) {
+      const currentRemaining = activeStockRemainingBySku.get(item.skuKey) || 0;
+      const shippedQty = Math.max(item.quantity, 0);
+      let effectiveQty = 0;
+      if (item.exportIsStocked && item.exportStockedQty > 0 && currentRemaining <= 0) {
+        effectiveQty = item.exportStockedQty;
+        activeStockRemainingBySku.set(item.skuKey, Math.max(item.exportStockedQty - shippedQty, 0));
+      } else if (currentRemaining > 0) {
+        effectiveQty = 0;
+        activeStockRemainingBySku.set(item.skuKey, Math.max(currentRemaining - shippedQty, 0));
+      } else {
+        effectiveQty = shippedQty;
+        activeStockRemainingBySku.set(item.skuKey, 0);
+      }
+      displayedProductAmountByOrderId.set(item.orderId, computeAmountWithQty(item, effectiveQty));
+    }
+    const computeDisplayedProductAmount = (item: (typeof sortedPreparedOrders)[number]) =>
+      displayedProductAmountByOrderId.get(item.orderId) || 0;
+    const computeSettlementGroupAmount = (items: typeof sortedPreparedOrders) => {
+      const mxnAmount = items.reduce((sum, item) => sum + computeDisplayedProductAmount(item), 0);
+      const shippingAmount = items.reduce((sum, item) => sum + item.shippingFee, 0);
+      const convertedAmount =
+        exchangeRate.rateValue && Number.isFinite(exchangeRate.rateValue)
+          ? mxnAmount * exchangeRate.rateValue
+          : items.reduce((sum, item) => sum + item.productAmount, 0);
+      return {
+        mxnAmount,
+        convertedAmount,
+        shippingAmount,
+        totalAmount: convertedAmount + shippingAmount,
+      };
+    };
+    const overallAmounts = computeSettlementGroupAmount(sortedPreparedOrders);
+    return {
+      mxnSubtotal: overallAmounts.mxnAmount,
+      cnySubtotal: overallAmounts.convertedAmount,
+      serviceFeeTotal: overallAmounts.shippingAmount,
+      payableTotal: overallAmounts.totalAmount,
+      totalPaidAmount: computeSettlementGroupAmount(sortedPreparedOrders.filter((item) => item.settlementStatus === "paid")).totalAmount,
+      totalUnpaidAmount: computeSettlementGroupAmount(sortedPreparedOrders.filter((item) => item.settlementStatus !== "paid")).totalAmount,
+      hasUnpaid: dedupedOrders.some((item) => item.settlementStatus !== "paid"),
+    };
+  }
+
+  const exportFinancePreviewRows = async (
+    actionType: "export_all" | "export_weekly_statement" = "export_all",
+  ) => {
+    if (!financePreview) return;
+    let exportInventory = inventory;
+    try {
+      const inventoryResponse = await fetch("/api/dropshipping/inventory");
+      const inventoryJson = await inventoryResponse.json();
+      if (inventoryResponse.ok && inventoryJson?.ok && Array.isArray(inventoryJson.items)) {
+        exportInventory = inventoryJson.items;
+      }
+    } catch {
+      // Fallback to the current in-memory inventory state when the refresh request fails.
+    }
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet(lang === "zh" ? "结算详情" : "Detalle");
+    const companyTitle = financePreview.customerName || (lang === "zh" ? "公司名" : "Empresa");
+    const statementData = buildFinanceStatementData(
+      exportInventory,
+      actionType === "export_all" ? "all" : "weekly_unpaid",
+    );
+    if (!statementData) return;
+    const totalProductAmount = statementData.mxnSubtotal;
+    const totalConvertedAmount = statementData.cnySubtotal;
+    const totalShippingFee = statementData.serviceFeeTotal;
+    const totalPayableAmount = statementData.payableTotal;
+    const totalPaidAmount = statementData.totalPaidAmount;
+    const totalUnpaidAmount = statementData.totalUnpaidAmount;
+    const todayParts = getMexicoDatePartsMap(new Date());
+    const todayZhText = `今天${Number(todayParts.year)}年${Number(todayParts.month)}月${Number(todayParts.day)}日`;
+    const exportDateCode = `${todayParts.year}${todayParts.month}${todayParts.day}`;
+    const exportDateText =
+      lang === "zh"
+        ? `文件导出日期：${Number(todayParts.year)}年${Number(todayParts.month)}月${Number(todayParts.day)}日`
+        : `Fecha de exportacion: ${todayParts.year}/${todayParts.month}/${todayParts.day}`;
+    const rateHintText =
+      lang === "zh"
+        ? `${todayZhText}   汇率：MXN兑RMB  ${exchangeRate.rateValue ? exchangeRate.rateValue.toFixed(4) : "-"}`
+        : `Hoy ${todayParts.year}/${todayParts.month}/${todayParts.day}   Tipo de cambio: MXN a RMB ${exchangeRate.rateValue ? exchangeRate.rateValue.toFixed(4) : "-"}`;
+    const headerLabels = [
+      lang === "zh" ? "订单号" : "Pedido",
+      lang === "zh" ? "物流号" : "Guia",
+      lang === "zh" ? "发货日期" : "Fecha envio",
+      lang === "zh" ? "编码" : "Codigo",
+      lang === "zh" ? "中文名" : "Nombre",
+      lang === "zh" ? "产品单价" : "Precio unitario",
+      lang === "zh" ? "普通折扣" : "Descuento general",
+      lang === "zh" ? "VIP折扣" : "Descuento VIP",
+      lang === "zh" ? "备货" : "Stock",
+      lang === "zh" ? "备货时间" : "Fecha stock",
+      lang === "zh" ? "备货数量" : "Cantidad stock",
+      lang === "zh" ? "发货数量" : "Cantidad",
+      lang === "zh" ? "备货剩余" : "Stock restante",
+      lang === "zh" ? "产品金额" : "Monto producto",
+      lang === "zh" ? "代发费" : "Cargo servicio",
+      lang === "zh" ? "结算日期" : "Fecha liquidacion",
+      lang === "zh" ? "状态" : "Estado",
+    ];
+
+    if (actionType === "export_weekly_statement") {
+      const response = await fetch(`/api/dropshipping/finance/${financePreview.customerId}/export/pdf`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          payload: {
+            customerName: financePreview.customerName,
+            statementNumber: financeStatementSummary?.statementNumber || `BS-${exportDateCode}`,
+            generatedDateText: fmtDateOnly(getMexicoTodayDateValue(), lang),
+            orderCount: statementData.orderCount,
+            statusText: statementData.hasUnpaid ? (lang === "zh" ? "未结" : "Con pendientes") : (lang === "zh" ? "已结" : "Liquidado"),
+            hasUnpaid: statementData.hasUnpaid,
+            cycleText:
+              lang === "zh"
+                ? (() => {
+                    const start = parseDateOnlyParts(financeStatementSummary?.minShippedAt || "");
+                    const end = parseDateOnlyParts(financeStatementSummary?.maxShippedAt || "");
+                    if (!start || !end) {
+                      return `结算周期：${fmtDateOnly(financeStatementSummary?.minShippedAt || "", lang)} - ${fmtDateOnly(financeStatementSummary?.maxShippedAt || "", lang)}`;
+                    }
+                    return `结算周期：${start.year}/${start.month}/${start.day} - ${end.month}/${end.day}`;
+                  })()
+                : `Periodo: ${fmtDateOnly(financeStatementSummary?.minShippedAt || "", lang)} - ${fmtDateOnly(financeStatementSummary?.maxShippedAt || "", lang)}`,
+            rateText:
+              lang === "zh"
+                ? `结算汇率：1 MXN = ${exchangeRate.rateValue ? exchangeRate.rateValue.toFixed(4) : "-"} RMB    ${fmtDateOnly(getMexicoTodayDateValue(), lang)}汇率   来源：${exchangeRate.sourceName || "-"}`
+                : `Tipo de cambio: 1 MXN = ${exchangeRate.rateValue ? exchangeRate.rateValue.toFixed(4) : "-"} RMB`,
+            serviceFeeDisplay: financeStatementPreparedData?.serviceFeeDisplay || "￥0.00 / 单",
+            mxnSubtotalText: `$${fmtMoney(totalProductAmount, lang)}`,
+            cnySubtotalText: `￥${fmtMoney(totalConvertedAmount, lang)}`,
+            serviceFeeTotalText: `￥${fmtMoney(totalShippingFee, lang)}`,
+            payableTotalText: `￥${fmtMoney(totalPayableAmount, lang)}`,
+            isGenerated: Boolean(financeStatementLockState?.isGenerated),
+            noteLines:
+              lang === "zh"
+                ? [
+                    "1. 商品按墨西哥比索（MXN）计价。",
+                    "2. 产品金额按单价、发货数量、普通折扣和 VIP 折扣计算。",
+                    "3. 代发费按唯一物流单计入人民币费用。",
+                    "4. 合计 = 折算 + 当行代发费。",
+                  ]
+                : [
+                    "1. Los productos se cotizan en MXN.",
+                    "2. El monto considera precio, cantidad y descuentos.",
+                    "3. El servicio se cobra una vez por guia unica.",
+                    "4. Total RMB = conversion RMB + servicio por fila.",
+                  ],
+            orders: statementData.orders.map((item) => ({
+              platformOrderNo: item.platformOrderNo,
+              trackingNo: item.trackingNo || "-",
+              shippedAtText: fmtDateOnly(item.shippedAt, lang),
+              sku: item.sku,
+              quantity: item.quantity,
+              unitPriceText: item.unitPrice > 0 ? `$${fmtMoney(item.unitPrice, lang)}` : "-",
+              normalDiscountText: item.normalDiscount > 0 ? `${fmtPercent(item.normalDiscount, lang)}%` : "-",
+              vipDiscountText: item.vipDiscount > 0 ? `${fmtPercent(item.vipDiscount, lang)}%` : "-",
+              productAmountText: item.displayProductAmount > 0 ? `$${fmtMoney(item.displayProductAmount, lang)}` : "-",
+              convertedAmountText: item.displayConvertedAmount > 0 ? `￥${fmtMoney(item.displayConvertedAmount, lang)}` : "-",
+              shippingFeeText: item.shippingFee > 0 ? `￥${fmtMoney(item.shippingFee, lang)}` : "-",
+              totalAmountText: `￥${fmtMoney(item.displayCnyTotalAmount, lang)}`,
+              highlightRed: item.displayReincluded,
+            })),
+            exportDateCode,
+          },
+        }),
+      });
+      if (!response.ok) {
+        const json = await response.json().catch(() => null);
+        throw new Error(json?.error || (lang === "zh" ? "导出账单失败" : "No se pudo exportar"));
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename="([^"]+)"/);
+      anchor.href = url;
+      anchor.download = match?.[1] ? decodeURIComponent(match[1]) : `BS-${financePreview.customerName || "finance"}-本周未结账单-${exportDateCode}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      void recordFinanceAction(financePreview, actionType, {
+        statementNumber: financeStatementSummary?.statementNumber,
+        cycleText: financeStatementCycleText,
+      });
+      return;
+    }
+
+    worksheet.getRow(1).height = 16;
+    const brandCell = worksheet.getCell(2, 1);
+    brandCell.value = "PARKSONMX";
+    brandCell.font = {
+      name: getExcelFontName("PARKSONMX", true),
+      size: 14,
+      bold: true,
+      color: { argb: "FF2F3C7F" },
+    };
+    brandCell.alignment = { horizontal: "left", vertical: "middle" };
+    worksheet.getRow(2).height = 24;
+    worksheet.getRow(3).height = 16;
+
+    worksheet.mergeCells(4, 1, 4, headerLabels.length);
+    const companyCell = worksheet.getCell(4, 1);
+    const companyLabel = lang === "zh" ? "客户名称：" : "Cliente:";
+    companyCell.value = {
+      richText: [
+        {
+          text: companyLabel,
+          font: {
+            name: getExcelFontName(companyLabel, true),
+            size: 11,
+            bold: true,
+            color: { argb: "FF111827" },
+          },
+        },
+        {
+          text: companyTitle,
+          font: {
+            name: getExcelFontName(companyTitle, false),
+            size: 11,
+            bold: false,
+            color: { argb: "FF111827" },
+          },
+        },
+      ],
+    };
+    companyCell.alignment = { horizontal: "left", vertical: "middle" };
+    worksheet.getRow(4).height = 22;
+
+    const summaryLines = [
+      {
+        title: lang === "zh" ? "商品金额：" : "Monto producto:",
+        value: `$ ${fmtMoney(totalProductAmount, lang)}`,
+      },
+      {
+        title: lang === "zh" ? "折算人民币：" : "Convertido RMB:",
+        value: `￥${fmtMoney(totalConvertedAmount, lang)}`,
+        suffix: rateHintText,
+      },
+      {
+        title: lang === "zh" ? "代发费：" : "Cargo servicio:",
+        value: `￥${fmtMoney(totalShippingFee, lang)}`,
+      },
+      {
+        title: lang === "zh" ? "合计金额：" : "Monto total:",
+        value: `￥${fmtMoney(totalPayableAmount, lang)}`,
+      },
+      {
+        title: lang === "zh" ? "已结：" : "Pagado:",
+        value: `￥${fmtMoney(totalPaidAmount, lang)}`,
+        valueColor: "FF059669",
+      },
+      {
+        title: lang === "zh" ? "未结：" : "Pendiente:",
+        value: `￥${fmtMoney(totalUnpaidAmount, lang)}`,
+        valueColor: "FFE11D48",
+      },
+    ];
+
+    summaryLines.forEach((line, index) => {
+      const rowNumber = index + 5;
+      worksheet.mergeCells(rowNumber, 1, rowNumber, headerLabels.length);
+      const cell = worksheet.getCell(rowNumber, 1);
+      cell.value = {
+        richText: [
+          {
+            text: line.title,
+            font: {
+              name: getExcelFontName(line.title, true),
+              size: 11,
+              bold: true,
+              color: { argb: "FF111827" },
+            },
+          },
+          {
+            text: line.value,
+            font: {
+              name: getExcelFontName(line.value, false),
+              size: 11,
+              bold: false,
+              color: { argb: line.valueColor || "FF111827" },
+            },
+          },
+          ...(line.suffix
+            ? [
+                {
+                  text: "   ",
+                  font: {
+                    name: getExcelFontName(line.value, false),
+                    size: 11,
+                    bold: false,
+                    color: { argb: "FF111827" },
+                  },
+                },
+                {
+                  text: line.suffix,
+                  font: {
+                    name: getExcelFontName(line.suffix, false),
+                    size: 9,
+                    bold: false,
+                    color: { argb: "FF111827" },
+                  },
+                },
+              ]
+            : []),
+        ],
+      };
+      cell.alignment = { horizontal: "left", vertical: "middle" };
+      worksheet.getRow(rowNumber).height = 22;
+    });
+
+    worksheet.getRow(11).height = 18;
+    worksheet.getRow(12).height = 18;
+    const exportDateCell = worksheet.getCell(12, headerLabels.length);
+    exportDateCell.value = exportDateText;
+    exportDateCell.font = {
+      name: getExcelFontName(exportDateText, false),
+      size: 10,
+      bold: false,
+      color: { argb: "FF111827" },
+    };
+    exportDateCell.alignment = { horizontal: "right", vertical: "middle" };
+
+    const headerRow = worksheet.getRow(13);
+    headerLabels.forEach((label, index) => {
+      const cell = headerRow.getCell(index + 1);
+      cell.value = label;
+      cell.font = {
+        name: getExcelFontName(label, true),
+        size: 11,
+        bold: true,
+        color: { argb: "FF000000" },
+      };
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFF8FAFC" },
+      };
+      cell.alignment = { horizontal: "center", vertical: "middle" };
+      cell.border = {
+        top: { style: "thin", color: { argb: "FFD9E1EA" } },
+        left: { style: "thin", color: { argb: "FFD9E1EA" } },
+        bottom: { style: "thin", color: { argb: "FFD9E1EA" } },
+        right: { style: "thin", color: { argb: "FFD9E1EA" } },
+      };
+    });
+    headerRow.height = 24;
+
+    for (const item of statementData.orders) {
+      const exportProductAmount = item.displayProductAmount;
+      const row = worksheet.addRow([
+        item.platformOrderNo,
+        item.trackingNo || "",
+        fmtDateOnly(item.shippedAt, lang),
+        item.sku,
+        item.productNameZh || "",
+        item.unitPrice > 0 ? `$${fmtMoney(item.unitPrice, lang)}` : "-",
+        item.normalDiscount > 0 ? `${fmtPercent(item.normalDiscount, lang)}%` : "-",
+        item.vipDiscount > 0 ? `${fmtPercent(item.vipDiscount, lang)}%` : "-",
+        item.displayIsStocked ? (lang === "zh" ? "备" : "Stock") : "-",
+        item.displayIsStocked && item.displayStockedAt ? fmtDateOnly(item.displayStockedAt, lang) : "-",
+        item.displayIsStocked && item.displayStockedQty > 0 ? String(item.displayStockedQty) : "-",
+        item.quantity,
+        item.skuStockInfo?.isStocked && typeof item.exportRemainingQty === "number" ? String(item.exportRemainingQty) : "-",
+        exportProductAmount > 0 ? `$${fmtMoney(exportProductAmount, lang)}` : "-",
+        item.shippingFee > 0 ? `￥${fmtMoney(item.shippingFee, lang)}` : "-",
+        fmtDateOnly(item.settledAt, lang),
+        getSettlementStatusLabel(item.settlementStatus, lang),
+      ]);
+      row.height = 30;
+      row.eachCell((cell) => {
+        const text = String(cell.value ?? "");
+        cell.font = {
+          name: getExcelFontName(text, false),
+          size: 10.5,
+          bold: false,
+          color: { argb: item.displayReincluded ? "FFE11D48" : "FF111827" },
+        };
+        cell.alignment = { vertical: "middle", horizontal: "left" };
+        cell.border = {
+          top: { style: "thin", color: { argb: "FFE5EAF1" } },
+          left: { style: "thin", color: { argb: "FFE5EAF1" } },
+          bottom: { style: "thin", color: { argb: "FFE5EAF1" } },
+          right: { style: "thin", color: { argb: "FFE5EAF1" } },
+        };
+      });
+      [3, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17].forEach((columnIndex) => {
+        row.getCell(columnIndex).alignment = { vertical: "middle", horizontal: "center" };
+      });
+      const statusCell = row.getCell(17);
+      const statusText = String(statusCell.value ?? "");
+      statusCell.font = {
+        name: getExcelFontName(statusText, false),
+        size: 10.5,
+        bold: false,
+        color: { argb: item.displayReincluded ? "FFE11D48" : statusText === (lang === "zh" ? "已结" : "Liquidado") ? "FF059669" : "FFE11D48" },
+      };
+      const stockedCell = row.getCell(9);
+      const stockedText = String(stockedCell.value ?? "");
+      stockedCell.font = {
+        name: getExcelFontName(stockedText, false),
+        size: 10.5,
+        bold: false,
+        color: { argb: item.displayReincluded ? "FFE11D48" : "FF111827" },
+      };
+    }
+
+    worksheet.columns = [
+      { width: 22 },
+      { width: 20 },
+      { width: 14 },
+      { width: 14 },
+      { width: 20 },
+      { width: 12 },
+      { width: 10 },
+      { width: 10 },
+      { width: 10 },
+      { width: 14 },
+      { width: 12 },
+      { width: 10 },
+      { width: 10 },
+      { width: 14 },
+      { width: 10 },
+      { width: 10 },
+      { width: 10 },
+    ];
+    worksheet.views = [{ state: "frozen", ySplit: 13, showGridLines: false }];
+    const safeCustomerName = (financePreview.customerName || "finance")
+      .replace(/[\\/:*?"<>|]/g, "_")
+      .trim();
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `BS-${safeCustomerName || "finance"}-${lang === "zh" ? "详情" : "detalle"}-${exportDateCode}.xlsx`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    void recordFinanceAction(financePreview, actionType, {
+      statementNumber: financeStatementSummary?.statementNumber,
+      cycleText: financeStatementCycleText,
+    });
+  };
 
   const orderTableCardProps = {
     description: undefined,
@@ -4470,73 +5956,107 @@ export function DropshippingClient({
               </span>
             </a>
           }
+          right={
+            showSaturdaySettlementReminder ? (
+              <div className="relative inline-flex items-center">
+                <div
+                  className="finance-reminder-breath relative inline-flex items-center rounded-full bg-secondary-accent px-4 py-2 text-sm font-semibold text-primary shadow-[0_1px_4px_rgba(47,60,127,0.12)] ring-1 ring-primary/15"
+                >
+                  {lang === "zh" ? (
+                    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                    <span>{`今天是${fmtDateOnly(getMexicoTodayDateValue(), lang)}，周六-结账日，请点击下面`}</span>
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-primary/20 bg-white/70 text-primary">
+                      <EyeIcon />
+                    </span>
+                    <span>浏览并生成结账单</span>
+                    </span>
+                  ) : (
+                    `Hoy es ${fmtDateOnly(getMexicoTodayDateValue(), lang)}, revisa y genera el estado de cuenta.`
+                  )}
+                </div>
+              </div>
+            ) : null
+          }
         >
           {finance.length === 0 ? (
             <EmptyState title={text.empty.title} description={text.empty.desc} />
           ) : (
             <div>
-              {showSaturdaySettlementReminder ? (
-                <div className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800">
-                  {lang === "zh"
-                    ? `按墨西哥时间，每周六中午 12:00 后提醒本周结算。当天结算汇率按 MXN → RMB ${financeDisplayRate?.toFixed(4) || "-"} / ${fmtDateOnly(financeRateDate, lang)} 显示。`
-                    : `En horario de Mexico, despues de las 12:00 del sabado ya es momento de recordar la liquidacion semanal. El tipo de cambio de hoy para liquidar se muestra como MXN -> RMB ${financeDisplayRate?.toFixed(4) || "-"} / ${fmtDateOnly(financeRateDate, lang)}.`}
-                </div>
-              ) : null}
               <div className="overflow-x-auto">
                 <table className="min-w-full border-separate border-spacing-0">
                   <thead>
                     <tr className="bg-slate-50 text-left text-sm text-slate-700">
                       <th className="px-4 py-3 font-semibold">{text.fields.customer}</th>
-                      <th className="px-4 py-3 font-semibold">{lang === "zh" ? "备货金额 (MXN)" : "Monto stock (MXN)"}</th>
-                      <th className="px-4 py-3 font-semibold">{lang === "zh" ? "今日汇率 (MXN → RMB)" : "Tipo de cambio hoy (MXN -> RMB)"}</th>
-                      <th className="px-4 py-3 font-semibold">{lang === "zh" ? "汇率后金额 (RMB)" : "Monto convertido (RMB)"}</th>
+                      <th className="px-4 py-3 font-semibold">{lang === "zh" ? "产品金额" : "Monto producto"}</th>
+                      <th className="px-4 py-3 font-semibold">{lang === "zh" ? "折算人民币" : "Convertido RMB"}</th>
                       <th className="px-4 py-3 font-semibold">{text.fields.shippingFee}</th>
-                      <th className="px-4 py-3 font-semibold">{text.fields.total}</th>
-                      <th className="px-4 py-3 font-semibold">{text.fields.paid}</th>
-                      <th className="px-4 py-3 font-semibold">{text.fields.unpaid}</th>
-                      <th className="px-4 py-3 font-semibold">{text.fields.lastPaid}</th>
+                      <th className="px-4 py-3 font-semibold">{lang === "zh" ? "合计金额" : "Monto total"}</th>
+                      <th className="px-4 py-3 font-semibold">{lang === "zh" ? "已付金额" : "Monto pagado"}</th>
+                      <th className="px-4 py-3 font-semibold">{lang === "zh" ? "未付金额" : "Monto pendiente"}</th>
                       <th className="px-4 py-3 font-semibold">{text.fields.status}</th>
-                      <th className="px-4 py-3 font-semibold">{lang === "zh" ? "\u8be6\u60c5" : "Detalle"}</th>
-                      <th className="px-4 py-3 font-semibold">{lang === "zh" ? "\u5bfc\u51fa" : "Exportar"}</th>
+                      <th className="w-[110px] px-3 py-3 text-center font-semibold">{lang === "zh" ? "账单记录" : "Facturas"}</th>
+                      <th className="w-[132px] px-3 py-3 text-center font-semibold">{lang === "zh" ? "\u8be6\u60c5" : "Detalle"}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {finance.map((row) => (
                       <tr key={row.customerId} className="border-t border-slate-100">
+                        {(() => {
+                          const exportSummary = financeExportSummaryByCustomerId.get(row.customerId);
+                          const displayProductAmount = exportSummary?.mxnSubtotal ?? row.stockAmount;
+                          const displayConvertedAmount = exportSummary?.cnySubtotal ?? row.exchangedAmount;
+                          const displayShippingAmount = exportSummary?.serviceFeeTotal ?? row.shippingAmount;
+                          const displayTotalAmount = exportSummary?.payableTotal ?? row.totalAmount;
+                          const displayPaidAmount = exportSummary?.totalPaidAmount ?? row.paidAmount;
+                          const displayUnpaidAmount = exportSummary?.totalUnpaidAmount ?? row.unpaidAmount;
+                          const displayStatus = deriveFinanceSummaryStatus(displayTotalAmount, displayPaidAmount);
+                          return (
+                            <>
                         <td className="px-4 py-3 text-sm font-semibold text-slate-900">{row.customerName}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.stockAmount, lang)}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700">{row.exchangeRate?.toFixed(4) || "-"}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.exchangedAmount, lang)}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.shippingAmount, lang)}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700">{fmtMoney(row.totalAmount, lang)}</td>
-                        <td className="px-4 py-3 text-sm text-emerald-600">{fmtMoney(row.paidAmount, lang)}</td>
-                        <td className="px-4 py-3 text-sm text-rose-600">{fmtMoney(row.unpaidAmount, lang)}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700">{fmtDateOnly(row.lastPaidAt, lang)}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700">{text.status[row.status]}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700">
+                        <td className="px-4 py-3 text-sm text-slate-700">{`$${fmtMoney(displayProductAmount, lang)}`}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{`￥${fmtMoney(displayConvertedAmount, lang)}`}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{`￥${fmtMoney(displayShippingAmount, lang)}`}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{`￥${fmtMoney(displayTotalAmount, lang)}`}</td>
+                        <td className="px-4 py-3 text-sm text-emerald-600">{`￥${fmtMoney(displayPaidAmount, lang)}`}</td>
+                        <td className="px-4 py-3 text-sm text-rose-600">{`￥${fmtMoney(displayUnpaidAmount, lang)}`}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{text.status[displayStatus as keyof typeof text.status]}</td>
+                        <td className="px-3 py-3 text-center text-sm text-slate-700">
                           <button
                             type="button"
-                            onClick={() => setFinancePreview(row)}
-                            disabled={row.settledOrders.length === 0}
-                            title={lang === "zh" ? "\u67e5\u770b\u5df2\u7ed3\u7b97\u8be6\u60c5" : "Ver liquidaciones"}
-                            aria-label={lang === "zh" ? "\u67e5\u770b\u5df2\u7ed3\u7b97\u8be6\u60c5" : "Ver liquidaciones"}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300"
-                          >
-                            <EyeIcon />
-                          </button>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-slate-700">
-                          <a
-                            href={`/api/dropshipping/finance/${row.customerId}/export/pdf`}
-                            target="_blank"
-                            rel="noreferrer"
-                            title={lang === "zh" ? "\u5bfc\u51fa\u7ed3\u7b97 PDF" : "Exportar PDF"}
-                            aria-label={lang === "zh" ? "\u5bfc\u51fa\u7ed3\u7b97 PDF" : "Exportar PDF"}
+                            onClick={() => void loadFinanceStatementRecords(row)}
+                            title={lang === "zh" ? "查看账单记录" : "Ver facturas"}
+                            aria-label={lang === "zh" ? "查看账单记录" : "Ver facturas"}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
                           >
-                            <DownloadIcon />
-                          </a>
+                            <LedgerIcon />
+                          </button>
                         </td>
+                        <td className="px-3 py-3 text-center text-sm text-slate-700">
+                          <div className="flex items-center justify-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => openFinancePreview(row)}
+                              disabled={row.settledOrders.length === 0}
+                              title={lang === "zh" ? "\u67e5\u770b\u5df2\u7ed3\u7b97\u8be6\u60c5" : "Ver liquidaciones"}
+                              aria-label={lang === "zh" ? "\u67e5\u770b\u5df2\u7ed3\u7b97\u8be6\u60c5" : "Ver liquidaciones"}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300"
+                            >
+                              <EyeIcon />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void loadFinanceActionLogs(row)}
+                              title={lang === "zh" ? "查看账单动作记录" : "Ver historial"}
+                              aria-label={lang === "zh" ? "查看账单动作记录" : "Ver historial"}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+                            >
+                              <NotebookIcon />
+                            </button>
+                          </div>
+                        </td>
+                            </>
+                          );
+                        })()}
                       </tr>
                     ))}
                   </tbody>
@@ -5939,50 +7459,92 @@ export function DropshippingClient({
           </div>
         </div>
       ) : null}
-      {financePreview ? (
+      {financePreview && !financeStatementPreviewStandalone ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-3">
-          <div className="flex max-h-[calc(100vh-16px)] w-full max-w-[1320px] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_28px_80px_rgba(15,23,42,0.18)]">
+          <div className="flex max-h-[calc(100vh-16px)] w-full max-w-[1160px] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_28px_80px_rgba(15,23,42,0.18)]">
             <div className="border-b border-slate-200 bg-white px-5 py-2">
               <div className="flex items-center justify-between gap-3 text-sm">
                 <div className="flex min-w-0 items-center gap-3">
                   <h3 className="whitespace-nowrap text-xl font-semibold text-slate-900">
-                    {lang === "zh" ? "\u5df2\u7ed3\u7b97\u8be6\u60c5" : "Detalle de liquidaciones"}
+                    {lang === "zh" ? "\u7ed3\u7b97\u8be6\u60c5" : "Detalle de liquidaciones"}
                   </h3>
-                  <p className="truncate text-sm text-slate-500">{financePreview.customerName}</p>
+                  <p className="truncate text-sm text-slate-500">
+                    {lang === "zh" ? `客户：${financePreview.customerName}` : `Cliente: ${financePreview.customerName}`}
+                  </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setFinancePreview(null)}
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-                  aria-label={lang === "zh" ? "关闭" : "Cerrar"}
-                  title={lang === "zh" ? "关闭" : "Cerrar"}
-                >
-                  ×
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFinanceStatementPreviewOpen(true);
+                      void recordFinanceAction(financePreview, "statement_preview");
+                    }}
+                    className="inline-flex h-9 items-center justify-center rounded-xl border border-secondary-accent bg-secondary-accent px-3 text-sm font-semibold text-primary transition hover:brightness-95"
+                  >
+                    {lang === "zh" ? "本周 未结单 预览" : "Vista previa"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void exportFinancePreviewRows()}
+                    className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                  >
+                    {lang === "zh" ? "导出全部数据" : "Exportar todo"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFinanceStatementPreviewOpen(false);
+                      setFinanceStatementPreviewStandalone(false);
+                      setFinancePreview(null);
+                    }}
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                    aria-label={lang === "zh" ? "关闭" : "Cerrar"}
+                    title={lang === "zh" ? "关闭" : "Cerrar"}
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-hidden bg-white">
-              {financePreview.settledOrders.length === 0 ? (
+              {financePreviewPreparedOrders.length === 0 ? (
                 <EmptyState
                   title={lang === "zh" ? "\u6682\u65e0\u5df2\u7ed3\u7b97\u8bb0\u5f55" : "Sin registros liquidados"}
                   description={lang === "zh" ? "\u5f53\u524d\u5ba2\u6237\u8fd8\u6ca1\u6709\u5df2\u7ed3\u7b97\u7684\u8ba2\u5355\u3002" : "Este cliente aun no tiene pedidos liquidados."}
                 />
               ) : (
                 <div className="overflow-hidden bg-white">
-                  <div ref={financePreviewScrollRef} className="max-h-[calc(100vh-152px)] overflow-auto">
-                    <table className="min-w-[1040px] w-full border-collapse">
+                  <div ref={financePreviewScrollRef} className="max-h-[calc(100vh-152px)] overflow-y-auto overflow-x-hidden px-[15px]">
+                    <table className="w-auto border-collapse">
                       <thead className="sticky top-0 z-10">
                         <tr className="border-b border-slate-200 bg-slate-50 text-left text-[12px] font-semibold text-slate-600 shadow-[0_1px_0_0_rgba(226,232,240,1),0_6px_16px_rgba(15,23,42,0.04)]">
-                          <th className="w-[64px] whitespace-nowrap px-3 py-2.5">{lang === "zh" ? "\u5546\u54c1\u56fe" : "Image"}</th>
-                          <th className="w-[180px] whitespace-nowrap px-4 py-2.5">{text.fields.orderNo}</th>
-                          <th className="w-[120px] whitespace-nowrap px-4 py-2.5">{text.fields.sku}</th>
-                          <th className="w-[180px] whitespace-nowrap px-4 py-2.5">{text.fields.productZh}</th>
-                          <th className="w-[170px] whitespace-nowrap px-4 py-2.5">{text.fields.trackingNo}</th>
-                          <th className="w-[96px] whitespace-nowrap px-3 py-2.5">{text.fields.shippedAt}</th>
-                          <th className="w-[96px] whitespace-nowrap px-3 py-2.5">{lang === "zh" ? "\u7ed3\u7b97\u65e5\u671f" : "Settled"}</th>
-                          <th className="w-[72px] whitespace-nowrap px-3 py-2.5">{lang === "zh" ? "\u72b6\u6001" : "Status"}</th>
-                          <th className="w-[92px] whitespace-nowrap px-3 py-2.5 text-right">{lang === "zh" ? "\u5df2\u7ed3" : "Paid"}</th>
-                          <th className="w-[92px] whitespace-nowrap px-3 py-2.5 text-right">{lang === "zh" ? "\u603b\u91d1\u989d" : "Total"}</th>
+                          <th className="w-[1%] whitespace-nowrap px-3 py-2.5">{text.fields.orderNo}</th>
+                          <th className="w-[1%] whitespace-nowrap px-3 py-2.5">{text.fields.trackingNo}</th>
+                          <th className="w-[1%] whitespace-nowrap px-3 py-2.5">{text.fields.shippedAt}</th>
+                          <th className="w-[1%] whitespace-nowrap px-3 py-2.5">{lang === "zh" ? "\u5546\u54c1\u56fe" : "Image"}</th>
+                          <th className="w-[1%] whitespace-nowrap px-3 py-2.5">{text.fields.sku}</th>
+                          <th className="w-[18ch] whitespace-nowrap px-3 py-2.5">{text.fields.productZh}</th>
+                          <th className="w-[3ch] whitespace-nowrap px-1.5 py-2.5 text-right">{lang === "zh" ? "\u53d1\u8d27\u6570\u91cf" : "Qty"}</th>
+                          <th className="w-[5ch] whitespace-nowrap px-1.5 py-2.5 text-right">{lang === "zh" ? "\u4ea7\u54c1\u91d1\u989d" : "Prod."}</th>
+                          <th className="w-[4ch] whitespace-nowrap px-1.5 py-2.5 text-right">{lang === "zh" ? "\u4ee3\u53d1\u8d39" : "Ship."}</th>
+                          <th className="w-[6ch] whitespace-nowrap px-1.5 py-2.5">{lang === "zh" ? "\u7ed3\u7b97\u65e5\u671f" : "Settled"}</th>
+                          <th className="w-[3ch] whitespace-nowrap px-1 py-2.5 text-center">{lang === "zh" ? "\u72b6\u6001" : "Status"}</th>
+                          <th className="w-[2ch] whitespace-nowrap px-1 py-2.5 text-center">
+                            <input
+                              type="checkbox"
+                              checked={areAllVisibleFinanceOrdersSelected}
+                              disabled={Boolean(financeStatementLockState?.isGenerated) || financePreviewSelectableVisibleOrders.length === 0}
+                              onChange={(event) => {
+                                const targetOrders = financePreviewSelectableVisibleOrders.filter(
+                                  (item) => selectedFinanceOrderIds.includes(item.orderId) !== event.target.checked,
+                                );
+                                void Promise.all(
+                                  targetOrders.map((item) => updateFinanceOrderSelection(item, event.target.checked)),
+                                );
+                              }}
+                              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                            />
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -5991,7 +7553,10 @@ export function DropshippingClient({
                             key={item.orderId}
                             className={`border-b border-slate-100 text-[12px] text-slate-700 ${index % 2 === 0 ? "bg-white" : "bg-slate-50/45"}`}
                           >
-                            <td className="px-4 py-2.5 align-middle">
+                            <td className="whitespace-nowrap px-3 py-2.5 align-middle text-slate-900">{item.platformOrderNo}</td>
+                            <td className="whitespace-nowrap px-3 py-2.5 align-middle">{item.trackingNo || "-"}</td>
+                            <td className="whitespace-nowrap px-3 py-2.5 align-middle">{fmtDateOnly(item.shippedAt, lang)}</td>
+                            <td className="px-3 py-2.5 align-middle">
                               <div className="flex h-10 w-10 items-center justify-center overflow-hidden border border-slate-200 bg-white">
                                 {item.productImageUrl && !failedFinanceImages.includes(item.orderId) ? (
                                   <button
@@ -6020,19 +7585,36 @@ export function DropshippingClient({
                                 )}
                               </div>
                             </td>
-                            <td className="max-w-[180px] whitespace-nowrap px-4 py-2.5 align-middle text-slate-900 truncate">{item.platformOrderNo}</td>
-                            <td className="max-w-[120px] whitespace-nowrap px-4 py-2.5 align-middle truncate">{item.sku}</td>
-                            <td className="max-w-[180px] whitespace-nowrap px-4 py-2.5 align-middle truncate">{item.productNameZh || "-"}</td>
-                            <td className="max-w-[170px] whitespace-nowrap px-4 py-2.5 align-middle truncate">{item.trackingNo || "-"}</td>
-                            <td className="whitespace-nowrap px-4 py-2.5 align-middle">{fmtDateOnly(item.shippedAt, lang)}</td>
-                            <td className="whitespace-nowrap px-4 py-2.5 align-middle">{fmtDateOnly(item.settledAt, lang)}</td>
-                            <td className="px-4 py-2.5 align-middle">
-                              <span className="inline-flex h-6 min-w-[52px] items-center justify-center whitespace-nowrap rounded-full bg-emerald-50 px-3 text-[11px] font-semibold text-emerald-600">
-                                {lang === "zh" ? "\u5df2\u7ed3" : "Paid"}
+                            <td className="whitespace-nowrap px-3 py-2.5 align-middle">{item.sku}</td>
+                            <td className="w-[18ch] whitespace-nowrap px-3 py-2.5 align-middle">
+                              <span className="inline-block max-w-[18ch] truncate align-middle" title={item.productNameZh || "-"}>
+                                {item.productNameZh || "-"}
                               </span>
                             </td>
-                            <td className="whitespace-nowrap px-4 py-2.5 text-right font-semibold text-emerald-600 align-middle">{`\uffe5${fmtMoney(item.paidAmount, lang)}`}</td>
-                            <td className="whitespace-nowrap px-4 py-2.5 text-right text-slate-900 align-middle">{`\uffe5${fmtMoney(item.totalAmount, lang)}`}</td>
+                            <td className="whitespace-nowrap px-1.5 py-2.5 text-right text-slate-900 align-middle">{item.quantity}</td>
+                            <td className="whitespace-nowrap px-1.5 py-2.5 text-right text-slate-900 align-middle">{item.rawProductAmount > 0 ? `$${fmtMoney(item.rawProductAmount, lang)}` : "-"}</td>
+                            <td className="whitespace-nowrap px-1.5 py-2.5 text-right text-slate-900 align-middle">{item.shippingFee > 0 ? `\uffe5${fmtMoney(item.shippingFee, lang)}` : "-"}</td>
+                            <td className="whitespace-nowrap px-1.5 py-2.5 align-middle">{fmtDateOnly(item.settledAt, lang)}</td>
+                            <td className="px-1 py-2.5 text-center align-middle">
+                              <span
+                                className={`inline-flex h-6 min-w-[38px] items-center justify-center whitespace-nowrap rounded-full px-1 text-[11px] font-normal ${
+                                  item.settlementStatus === "paid"
+                                    ? "bg-emerald-50 text-emerald-600"
+                                    : "bg-rose-50 text-rose-600"
+                                }`}
+                              >
+                                {getSettlementStatusLabel(item.settlementStatus, lang)}
+                              </span>
+                            </td>
+                            <td className="px-1 py-2.5 text-center align-middle">
+                              <input
+                                type="checkbox"
+                                checked={selectedFinanceOrderIds.includes(item.orderId)}
+                                disabled={Boolean(financeStatementLockState?.isGenerated) || item.settlementStatus === "paid"}
+                                onChange={(event) => void updateFinanceOrderSelection(item, event.target.checked)}
+                                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                              />
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -6041,8 +7623,8 @@ export function DropshippingClient({
                   <div className="flex items-center justify-between border-t border-slate-200 bg-white px-5 py-2 text-xs text-slate-400">
                     <span>
                       {lang === "zh"
-                        ? `\u5171 ${financePreview.settledOrders.length} \u6761\u5df2\u7ed3\u7b97\u8bb0\u5f55`
-                        : `${financePreview.settledOrders.length} settled records`}
+                        ? `共 ${financePreviewPreparedOrders.length} 条详情记录`
+                        : `${financePreviewPreparedOrders.length} detail records`}
                     </span>
                     <div className="flex items-center gap-2">
                       <button
@@ -6089,6 +7671,495 @@ export function DropshippingClient({
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {financeStatementRecordTarget ? (
+        <div className="fixed inset-0 z-[54] flex items-center justify-center bg-slate-900/40 px-4 py-6">
+          <div className="flex max-h-[calc(100vh-180px)] w-full max-w-[840px] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_28px_80px_rgba(15,23,42,0.18)]">
+            <div className="border-b border-slate-200 px-5 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-lg font-semibold text-slate-900">
+                    {lang === "zh" ? "账单记录" : "Facturas del periodo"}
+                  </h3>
+                  <p className="truncate text-sm text-slate-500">
+                    {lang === "zh" ? `客户：${financeStatementRecordTarget.customerName}` : `Cliente: ${financeStatementRecordTarget.customerName}`}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFinanceStatementRecordTarget(null);
+                    setFinanceStatementRecordEntries([]);
+                    setFinanceStatementRecordError("");
+                  }}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                  aria-label={lang === "zh" ? "关闭" : "Cerrar"}
+                  title={lang === "zh" ? "关闭" : "Cerrar"}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-hidden px-5 py-5">
+              {financeStatementRecordLoading ? (
+                <div className="py-14 text-center text-sm text-slate-500">
+                  {lang === "zh" ? "正在加载账单记录..." : "Cargando facturas..."}
+                </div>
+              ) : financeStatementRecordError ? (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-6 text-sm text-rose-600">
+                  {financeStatementRecordError}
+                </div>
+              ) : financeStatementRecordEntries.length === 0 ? (
+                <EmptyState
+                  title={lang === "zh" ? "暂无账单记录" : "Sin facturas"}
+                  description={lang === "zh" ? "当前客户还没有周期账单记录。" : "Este cliente aun no tiene facturas por periodo."}
+                />
+              ) : (
+                <div className="max-h-[400px] overflow-auto">
+                  <table className="min-w-full border-separate border-spacing-0">
+                    <thead>
+                      <tr className="bg-slate-50 text-left text-sm text-slate-700">
+                        <th className="px-4 py-3 font-semibold">{lang === "zh" ? "对账单号" : "No. estado"}</th>
+                        <th className="px-4 py-3 font-semibold">{lang === "zh" ? "对账周期" : "Periodo"}</th>
+                        <th className="px-4 py-3 font-semibold">{lang === "zh" ? "导出日期" : "Fecha exportacion"}</th>
+                        <th className="px-4 py-3 font-semibold">{lang === "zh" ? "导出人" : "Usuario"}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {financeStatementRecordEntries.map((entry) => (
+                        <tr
+                          key={`${entry.statementNumber}-${entry.exportedAtText}`}
+                          className="cursor-pointer border-t border-slate-100 transition hover:bg-slate-50"
+                          onClick={() => openFinanceStatementRecordPreview(financeStatementRecordTarget, entry)}
+                        >
+                          <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-slate-900">{entry.statementNumber}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{entry.cycleText || "-"}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{entry.exportedAtText || "-"}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{entry.operatorName || "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {financeLogTarget ? (
+        <div className="fixed inset-0 z-[55] flex items-center justify-center bg-slate-900/40 px-4 py-6">
+          <div className="flex max-h-[calc(100vh-160px)] w-full max-w-[880px] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_28px_80px_rgba(15,23,42,0.18)]">
+            <div className="border-b border-slate-200 px-5 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-lg font-semibold text-slate-900">
+                    {lang === "zh" ? "账单动作记录" : "Historial de acciones"}
+                  </h3>
+                  <p className="truncate text-sm text-slate-500">
+                    {lang === "zh" ? `客户：${financeLogTarget.customerName}` : `Cliente: ${financeLogTarget.customerName}`}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFinanceLogTarget(null);
+                    setFinanceLogEntries([]);
+                    setFinanceLogError("");
+                  }}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                  aria-label={lang === "zh" ? "关闭" : "Cerrar"}
+                  title={lang === "zh" ? "关闭" : "Cerrar"}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-hidden px-5 py-5">
+              {financeLogLoading ? (
+                <div className="py-16 text-center text-sm text-slate-500">
+                  {lang === "zh" ? "正在加载记录..." : "Cargando historial..."}
+                </div>
+              ) : financeLogError ? (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-6 text-sm text-rose-600">
+                  {financeLogError}
+                </div>
+              ) : financeLogEntries.length === 0 ? (
+                <EmptyState
+                  title={lang === "zh" ? "暂无动作记录" : "Sin acciones"}
+                  description={lang === "zh" ? "当前客户账单还没有记录动作时间线。" : "Este cliente aun no tiene historial de acciones."}
+                />
+              ) : (
+                <div className="max-h-[420px] overflow-auto">
+                  <table className="min-w-full border-separate border-spacing-0">
+                    <thead>
+                      <tr className="bg-slate-50 text-left text-sm text-slate-700">
+                        <th className="px-4 py-3 font-semibold">{lang === "zh" ? "动作时间" : "Fecha"}</th>
+                        <th className="px-4 py-3 font-semibold">{lang === "zh" ? "动作" : "Accion"}</th>
+                        <th className="px-4 py-3 font-semibold">{lang === "zh" ? "操作用户" : "Usuario"}</th>
+                        <th className="px-4 py-3 font-semibold">{lang === "zh" ? "说明" : "Detalle"}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {financeLogEntries.map((entry) => (
+                        <tr key={entry.id} className="border-t border-slate-100">
+                          <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{entry.createdAtText || "-"}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-slate-900">{entry.actionText}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{entry.operatorName || "-"}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600">{entry.detailText || "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {financePreview && financeStatementPreviewOpen && financeStatementSummary ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/55 px-4 py-10">
+          <div className="flex max-h-[calc(100vh-80px)] w-full max-w-[1380px] flex-col overflow-hidden rounded-[28px] bg-white shadow-[0_32px_90px_rgba(15,23,42,0.28)]">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <h3 className="text-lg font-semibold text-slate-900">
+                  {lang === "zh" ? "本周 未结单 预览" : "Vista previa del estado"}
+                </h3>
+                <p className="truncate text-sm text-slate-500">{financePreview.customerName}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  disabled={Boolean(financeStatementLockState?.isGenerated) || financeStatementActionLoading === "generate" || financeStatementLockLoading}
+                  onClick={() => void updateFinanceStatementGeneratedState("generate")}
+                  className="inline-flex h-9 items-center justify-center rounded-xl border border-primary bg-primary px-3 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {lang === "zh" ? "生成账单" : "Generar"}
+                </button>
+                <button
+                  type="button"
+                  disabled={!financeStatementLockState?.isGenerated || financeStatementActionLoading === "revoke" || financeStatementLockLoading}
+                  onClick={() => setFinanceStatementRevokeState({ confirmStatementNumber: "", note: "", error: "" })}
+                  className="inline-flex h-9 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 px-3 text-sm font-semibold text-amber-900 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {lang === "zh" ? "撤销生成" : "Revocar"}
+                </button>
+                <button
+                  type="button"
+                  disabled={financeStatementActionLoading === "export"}
+                  onClick={async () => {
+                    setFinanceStatementActionLoading("export");
+                    setFinanceStatementActionError("");
+                    try {
+                      await exportFinancePreviewRows("export_weekly_statement");
+                    } catch (exportError) {
+                      setFinanceStatementActionError(exportError instanceof Error ? exportError.message : (lang === "zh" ? "导出账单失败" : "No se pudo exportar"));
+                    } finally {
+                      setFinanceStatementActionLoading("");
+                    }
+                  }}
+                  className={`inline-flex h-9 items-center justify-center rounded-xl border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                    financeStatementLockState?.isGenerated
+                      ? "border-primary bg-primary text-white hover:opacity-95"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  {lang === "zh" ? "导出本周未结账单" : "Exportar semanal"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFinanceStatementPreviewOpen(false)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                  aria-label={lang === "zh" ? "关闭" : "Cerrar"}
+                  title={lang === "zh" ? "关闭" : "Cerrar"}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            {financeStatementActionError ? (
+              <div className="border-b border-rose-100 bg-rose-50 px-5 py-2 text-sm text-rose-600">
+                {financeStatementActionError}
+              </div>
+            ) : null}
+            <div className="min-h-0 flex-1 overflow-auto bg-slate-100 p-4">
+              <div className="relative mx-auto flex w-full max-w-[1280px] flex-col rounded-[28px] bg-white shadow-[0_12px_40px_rgba(15,23,42,0.08)]">
+                {financeStatementLockState?.isGenerated ? (
+                  <div className="pointer-events-none absolute left-[calc(50%+132px)] top-[62px] z-20 -translate-x-1/2 rotate-[-11deg] opacity-[0.82]">
+                    <div className="relative inline-block min-w-[320px] border-[6px] border-[#b03127]/90 bg-[#fffaf8]/45 px-5 py-4 text-[#b03127] shadow-[0_12px_26px_rgba(176,49,39,0.08)]">
+                      <div className="pointer-events-none absolute inset-[8px] border-[2px] border-[#b03127]/38" />
+                      <div
+                        className="pointer-events-none absolute inset-0 opacity-[0.28]"
+                        style={{
+                          backgroundImage:
+                            "radial-gradient(circle at 10% 18%, rgba(176,49,39,0.22) 0 1.1px, transparent 1.1px), radial-gradient(circle at 74% 26%, rgba(176,49,39,0.16) 0 1px, transparent 1px), radial-gradient(circle at 22% 76%, rgba(176,49,39,0.18) 0 1.1px, transparent 1.1px), radial-gradient(circle at 86% 68%, rgba(176,49,39,0.12) 0 0.9px, transparent 0.9px), repeating-linear-gradient(135deg, rgba(176,49,39,0.12) 0 2px, transparent 2px 15px)",
+                        }}
+                      />
+                      <div className="pointer-events-none absolute inset-x-[18px] top-1/2 h-px -translate-y-1/2 bg-[#b03127]/34" />
+                      <div className="relative flex min-h-[96px] flex-col justify-between py-1">
+                        <div className="text-center text-[28px] font-black leading-none tracking-[0.01em] text-[#b03127]">
+                          {lang === "zh" ? "账单生成并锁定" : "BLOQUEADO"}
+                        </div>
+                        <div className="text-center text-[28px] font-black uppercase leading-none tracking-[0.01em] text-[#b03127]">
+                          FACT. GEN. Y BLOQ.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+                <div className="bg-transparent px-6 py-4 text-slate-950">
+                  <div className="flex items-start justify-between gap-8">
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-2 inline-flex h-8 items-center rounded-full border border-slate-200/70 px-4 text-sm font-semibold tracking-[0.18em] text-slate-400">
+                        PARKSONMX
+                      </div>
+                      <h2 className="text-[34px] font-black text-black" style={{ letterSpacing: "4px" }}>
+                        {lang === "zh" ? "代发结算单" : "Estado de liquidacion"}
+                      </h2>
+                      <div className="mt-4 grid w-fit max-w-none grid-cols-[max-content_max-content] gap-x-[60px] gap-y-2.5 text-[14px]">
+                        <p className="font-normal text-slate-400">
+                          {lang === "zh" ? `客户：${financePreview.customerName}` : `Cliente: ${financePreview.customerName}`}
+                        </p>
+                        <p className="font-normal text-slate-400">
+                          {lang === "zh"
+                            ? (() => {
+                                const start = parseDateOnlyParts(financeStatementSummary.minShippedAt || "");
+                                const end = parseDateOnlyParts(financeStatementSummary.maxShippedAt || "");
+                                if (!start || !end) {
+                                  return `结算周期：${fmtDateOnly(financeStatementSummary.minShippedAt, lang)} -- ${fmtDateOnly(financeStatementSummary.maxShippedAt, lang)}`;
+                                }
+                                return `结算周期：${start.year}/${start.month}/${start.day} - ${end.month}/${end.day}`;
+                              })()
+                            : `Periodo: ${fmtDateOnly(financeStatementSummary.minShippedAt, lang)} - ${fmtDateOnly(financeStatementSummary.maxShippedAt, lang)}`}
+                        </p>
+                        {lang === "zh" ? (
+                          <p className="text-[12px] font-normal text-slate-400">
+                            <span>{`结算汇率：1 MXN = ${exchangeRate.rateValue ? exchangeRate.rateValue.toFixed(4) : "-"} RMB`}</span>
+                            <span className="ml-[20px]">{`${fmtDateOnly(getMexicoTodayDateValue(), lang)}汇率`}</span>
+                            <span className="ml-3">{`来源：${exchangeRate.sourceName || "-"}`}</span>
+                          </p>
+                        ) : (
+                          <p className="text-[12px] font-normal text-slate-400">
+                            <span>{`Tipo de cambio: 1 MXN = ${exchangeRate.rateValue ? exchangeRate.rateValue.toFixed(4) : "-"} RMB`}</span>
+                            <span className="ml-[20px]">{fmtDateOnly(getMexicoTodayDateValue(), lang)}</span>
+                            <span className="ml-3">{`fuente: ${exchangeRate.sourceName || "-"}`}</span>
+                          </p>
+                        )}
+                        <p className="font-normal text-slate-400">
+                          {lang === "zh"
+                            ? `代发费：${financeStatementPreparedData?.serviceFeeDisplay || "￥0.00 / 单"}`
+                            : `Servicio: ${financeStatementPreparedData?.serviceFeeDisplay || "￥0.00 / pedido"}`}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="w-full max-w-[280px] rounded-[24px] border border-slate-200/60 bg-slate-50/35 p-3.5">
+                      <div className="space-y-2 text-[12px]">
+                        {[
+                          [lang === "zh" ? "对账单号" : "Folio", financeStatementSummary.statementNumber],
+                          [lang === "zh" ? "生成日期" : "Fecha", fmtDateOnly(getMexicoTodayDateValue(), lang)],
+                          [lang === "zh" ? "订单数" : "Pedidos", String(financeStatementSummary.orderCount)],
+                          [
+                            lang === "zh" ? "状态" : "Estado",
+                            financeStatementSummary.hasUnpaid
+                              ? lang === "zh"
+                                ? "未结"
+                                : "Con pendientes"
+                              : lang === "zh"
+                                ? "已结"
+                                : "Generado / Cerrado",
+                          ],
+                        ].map(([label, value], index) => (
+                          <div
+                            key={`${label}-${index}`}
+                            className={`flex items-center justify-between gap-3 ${index < 3 ? "border-b border-slate-200/80 pb-3" : ""}`}
+                          >
+                            <span className="text-slate-400">{label}</span>
+                            <span
+                              className={`text-right font-semibold ${
+                                index === 3 && value === (lang === "zh" ? "未结" : "Con pendientes")
+                                  ? "text-rose-600"
+                                  : "text-slate-700"
+                              }`}
+                            >
+                              {value}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex min-h-0 flex-1 flex-col px-6 pt-5 pb-2">
+                  <div className="grid justify-center gap-3.5 lg:grid-cols-4">
+                    {[
+                      {
+                        label: lang === "zh" ? "商品小计（比索）" : "Subtotal (MXN)",
+                        value: `$${fmtMoney(financeStatementSummary.mxnSubtotal, lang)}`,
+                        valueClass: "text-slate-950",
+                        cardClass: "bg-transparent",
+                      },
+                      {
+                        label: lang === "zh" ? "商品折算（人民币）" : "Convertido (RMB)",
+                        value: `￥${fmtMoney(financeStatementSummary.cnySubtotal, lang)}`,
+                        valueClass: "text-slate-950",
+                        cardClass: "bg-transparent",
+                      },
+                      {
+                        label: lang === "zh" ? "代发服务费（人民币）" : "Servicio (RMB)",
+                        value: `￥${fmtMoney(financeStatementSummary.serviceFeeTotal, lang)}`,
+                        valueClass: "text-slate-950",
+                        cardClass: "bg-transparent",
+                      },
+                      {
+                        label: lang === "zh" ? "应付总额（人民币）" : "Total a pagar (RMB)",
+                        value: `￥${fmtMoney(financeStatementSummary.payableTotal, lang)}`,
+                        valueClass: "text-rose-600",
+                        cardClass: "bg-transparent",
+                      },
+                    ].map((card) => (
+                      <div key={card.label} className={`px-5 pt-3 pb-1 text-center ${card.cardClass}`}>
+                        <p className="text-[12px] text-slate-500">{card.label}</p>
+                        <p className={`mt-2 mb-0 text-[14px] font-black tracking-tight ${card.valueClass}`}>{card.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-3 border border-slate-200">
+                    <div className="overflow-visible">
+                      <table className="w-full table-auto border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-200 bg-white text-left text-xs font-semibold text-slate-400">
+                            <th className="w-[1%] whitespace-nowrap px-2 py-2">{lang === "zh" ? "订单号" : "Pedido"}</th>
+                            <th className="w-[1%] whitespace-nowrap px-2 py-2">{lang === "zh" ? "物流号" : "Guia"}</th>
+                            <th className="w-[1%] whitespace-nowrap px-2 py-2">{lang === "zh" ? "发货日期" : "Envio"}</th>
+                            <th className="w-[1%] whitespace-nowrap px-2 py-2">{lang === "zh" ? "编码" : "Codigo"}</th>
+                            <th className="w-[1%] whitespace-nowrap px-2 py-2 text-right">{lang === "zh" ? "数量" : "Cant."}</th>
+                            <th className="w-[1%] whitespace-nowrap px-2 py-2 text-right">{lang === "zh" ? "单价" : "Precio"}</th>
+                            <th className="w-[1%] whitespace-nowrap px-2 py-2 text-right">{lang === "zh" ? "普通折扣" : "Desc. gen."}</th>
+                            <th className="w-[1%] whitespace-nowrap px-2 py-2 text-right">{lang === "zh" ? "VIP折扣" : "Desc. VIP"}</th>
+                            <th className="w-[1%] whitespace-nowrap px-2 py-2 text-right">{lang === "zh" ? "产品金额" : "Monto producto"}</th>
+                            <th className="w-[1%] whitespace-nowrap px-2 py-2 text-right">{lang === "zh" ? "折算" : "RMB"}</th>
+                            <th className="w-[1%] whitespace-nowrap px-2 py-2 text-right">{lang === "zh" ? "代发费" : "Servicio"}</th>
+                            <th className="w-[1%] whitespace-nowrap px-2 py-2 text-right">{lang === "zh" ? "合计" : "Total RMB"}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(financeStatementPreparedData?.orders || []).map((item, index) => {
+                            const rowTextClass = item.displayReincluded ? "text-rose-600" : "text-slate-700";
+                            return (
+                            <tr key={`statement-${item.orderId}`} className={`border-b border-slate-200/70 ${index % 2 === 0 ? "bg-white" : "bg-white"}`}>
+                              <td className={`whitespace-nowrap px-2 py-1.5 text-[12px] font-normal ${item.displayReincluded ? "text-rose-600" : "text-slate-900"}`}>{item.platformOrderNo}</td>
+                              <td className={`whitespace-nowrap px-2 py-1.5 text-[12px] ${rowTextClass}`}>{item.trackingNo || "-"}</td>
+                              <td className={`whitespace-nowrap px-2 py-1.5 text-[12px] ${rowTextClass}`}>{fmtDateOnly(item.shippedAt, lang)}</td>
+                              <td className={`whitespace-nowrap px-2 py-1.5 text-[12px] ${rowTextClass}`}>{item.sku}</td>
+                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${rowTextClass}`}>{item.quantity}</td>
+                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${item.displayReincluded ? "text-rose-600" : "text-slate-900"}`}>{item.unitPrice > 0 ? `$${fmtMoney(item.unitPrice, lang)}` : "-"}</td>
+                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${rowTextClass}`}>{item.normalDiscount > 0 ? `${fmtPercent(item.normalDiscount, lang)}%` : "-"}</td>
+                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${rowTextClass}`}>{item.vipDiscount > 0 ? `${fmtPercent(item.vipDiscount, lang)}%` : "-"}</td>
+                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] font-normal ${item.displayReincluded ? "text-rose-600" : "text-slate-900"}`}>{item.displayProductAmount > 0 ? `$${fmtMoney(item.displayProductAmount, lang)}` : "-"}</td>
+                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${item.displayReincluded ? "text-rose-600" : "text-slate-900"}`}>{item.displayConvertedAmount > 0 ? `￥${fmtMoney(item.displayConvertedAmount, lang)}` : "-"}</td>
+                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${item.displayReincluded ? "text-rose-600" : "text-slate-900"}`}>{item.shippingFee > 0 ? `￥${fmtMoney(item.shippingFee, lang)}` : "-"}</td>
+                              <td className="whitespace-nowrap px-2 py-1.5 text-right text-[12px] font-normal text-rose-600">{`￥${fmtMoney(item.displayCnyTotalAmount, lang)}`}</td>
+                            </tr>
+                          );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-5 lg:grid-cols-[1.7fr_1fr]">
+                    <div className="px-1 py-1">
+                      <h4 className="text-[14px] font-black tracking-tight text-slate-400">{lang === "zh" ? "备注说明" : "Notas"}</h4>
+                      <div className="mt-4 space-y-[13px] text-[12px] leading-[18px] text-slate-400">
+                        <p>{lang === "zh" ? "1. 商品按墨西哥比索（MXN）计价。" : "1. Los productos se cotizan en MXN."}</p>
+                        <p>{lang === "zh" ? "2. 产品金额按单价、发货数量、普通折扣和 VIP 折扣计算。" : "2. El monto del producto considera precio, cantidad y descuentos."}</p>
+                        <p>{lang === "zh" ? "3. 代发费按唯一物流单计入人民币费用。" : "3. El servicio se cobra una vez por guia unica."}</p>
+                        <p>{lang === "zh" ? "4. 合计 = 折算 + 当行代发费。" : "4. Total = conversion + servicio por fila."}</p>
+                      </div>
+                    </div>
+                    <div className="px-1 py-1 text-slate-400">
+                      <h4 className="text-[14px] font-black tracking-tight">{lang === "zh" ? "结算汇总" : "Resumen"}</h4>
+                      <div className="mt-4 space-y-[13px] text-[12px]">
+                        {[
+                          [lang === "zh" ? "商品金额（比索）" : "Productos (MXN)", `$${fmtMoney(financeStatementSummary.mxnSubtotal, lang)}`],
+                          [lang === "zh" ? "商品折算（人民币）" : "Convertido (RMB)", `￥${fmtMoney(financeStatementSummary.cnySubtotal, lang)}`],
+                          [lang === "zh" ? "代发服务费（人民币）" : "Servicio (RMB)", `￥${fmtMoney(financeStatementSummary.serviceFeeTotal, lang)}`],
+                        ].map(([label, value]) => (
+                          <div key={String(label)} className="flex items-center justify-between border-b border-slate-200 pb-[13px]">
+                            <span className="text-slate-400">{label}</span>
+                            <span className="text-slate-400">{value}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-[18px] mb-[18px] flex items-end justify-between gap-3">
+                        <span className="text-[16px] font-black tracking-tight text-slate-400">{lang === "zh" ? "应付总额" : "Total"}</span>
+                        <span className="text-[16px] font-black tracking-tight text-rose-600">{`￥${fmtMoney(financeStatementSummary.payableTotal, lang)}`}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {financePreview && financeStatementSummary && financeStatementRevokeState ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-4" onClick={() => setFinanceStatementRevokeState(null)}>
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
+            <div className="border-b border-slate-200 px-6 py-4">
+              <h3 className="text-lg font-semibold text-slate-900">{lang === "zh" ? "撤销生成" : "Revocar generacion"}</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                {lang === "zh" ? "请输入完整对账单号，并填写备注后继续。" : "Ingresa el folio completo y agrega una nota."}
+              </p>
+            </div>
+            <div className="space-y-4 px-6 py-5">
+              <div>
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <label className="text-sm text-slate-600">{lang === "zh" ? "完整对账单号" : "Folio completo"}</label>
+                  <span className="text-xs text-slate-400">{financeStatementSummary.statementNumber}</span>
+                </div>
+                <input
+                  value={financeStatementRevokeState.confirmStatementNumber}
+                  onChange={(event) => setFinanceStatementRevokeState((prev) => prev ? { ...prev, confirmStatementNumber: event.target.value, error: "" } : prev)}
+                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">{lang === "zh" ? "备注" : "Nota"}</label>
+                <textarea
+                  value={financeStatementRevokeState.note}
+                  onChange={(event) => setFinanceStatementRevokeState((prev) => prev ? { ...prev, note: event.target.value, error: "" } : prev)}
+                  className="min-h-[110px] w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-primary/40"
+                />
+              </div>
+              {financeStatementRevokeState.error ? <div className="text-sm text-rose-600">{financeStatementRevokeState.error}</div> : null}
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-4">
+              <button type="button" onClick={() => setFinanceStatementRevokeState(null)} className="h-10 rounded-xl border border-slate-200 px-4 text-sm text-slate-600 hover:bg-slate-50">
+                {lang === "zh" ? "取消" : "Cancelar"}
+              </button>
+              <button
+                type="button"
+                disabled={financeStatementActionLoading === "revoke"}
+                onClick={() => {
+                  if (financeStatementRevokeState.confirmStatementNumber.trim() !== financeStatementSummary.statementNumber.trim()) {
+                    setFinanceStatementRevokeState((prev) => prev ? { ...prev, error: lang === "zh" ? "对账单号校验失败" : "El folio no coincide" } : prev);
+                    return;
+                  }
+                  if (!financeStatementRevokeState.note.trim()) {
+                    setFinanceStatementRevokeState((prev) => prev ? { ...prev, error: lang === "zh" ? "请填写备注" : "Escribe una nota" } : prev);
+                    return;
+                  }
+                  void updateFinanceStatementGeneratedState("revoke", { note: financeStatementRevokeState.note.trim() });
+                }}
+                className="h-10 rounded-xl bg-primary px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {lang === "zh" ? "确认撤销" : "Confirmar"}
+              </button>
             </div>
           </div>
         </div>
@@ -6200,6 +8271,32 @@ export function DropshippingClient({
         title={previewImage?.title || ""}
         onClose={() => setPreviewImage(null)}
       />
+      <style jsx>{`
+        .finance-reminder-breath {
+          animation: finance-reminder-breath 2.8s ease-in-out infinite;
+          transform-origin: center;
+          will-change: transform, opacity, box-shadow;
+        }
+
+        @keyframes finance-reminder-breath {
+          0%,
+          100% {
+            transform: scale(1);
+            opacity: 0.94;
+            box-shadow: 0 1px 4px rgba(47, 60, 127, 0.1);
+          }
+          35% {
+            transform: scale(1.018);
+            opacity: 1;
+            box-shadow: 0 2px 8px rgba(47, 60, 127, 0.14);
+          }
+          60% {
+            transform: scale(1.01);
+            opacity: 0.98;
+            box-shadow: 0 1px 6px rgba(47, 60, 127, 0.12);
+          }
+        }
+      `}</style>
     </section>
   );
 }
