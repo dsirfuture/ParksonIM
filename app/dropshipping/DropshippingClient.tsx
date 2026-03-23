@@ -1064,6 +1064,8 @@ export function DropshippingClient({
   const [inventoryPage, setInventoryPage] = useState(1);
   const [orderPage, setOrderPage] = useState(1);
   const [shippedAtSortDirection, setShippedAtSortDirection] = useState<"asc" | "desc">("asc");
+  const [financeDetailShippedAtSortDirection, setFinanceDetailShippedAtSortDirection] = useState<"asc" | "desc">("asc");
+  const [financeDetailShippedAtSortTouched, setFinanceDetailShippedAtSortTouched] = useState(false);
   const [expandedTrackingNos, setExpandedTrackingNos] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "shipped" | "cancelled">("all");
   const [settlementFilter, setSettlementFilter] = useState<"all" | "paid" | "unpaid">("all");
@@ -2361,17 +2363,8 @@ export function DropshippingClient({
     [financeSelectionState.reincludedOrderIds],
   );
   const financePreviewDetailOrders = useMemo(() => {
-    if (!financePreview) return [];
-    const currentWeekOrderIds = new Set(financePreviewWeekOrders.map((item) => item.orderId));
-    const touchedOrderIds = new Set([
-      ...financeSelectionState.excludedOrderIds,
-      ...financeSelectionState.includedOrderIds,
-    ]);
-    return financePreview.settledOrders.filter((item) => {
-      if (currentWeekOrderIds.has(item.orderId)) return true;
-      return item.settlementStatus !== "paid" && touchedOrderIds.has(item.orderId);
-    });
-  }, [financePreview, financePreviewWeekOrders, financeSelectionState.excludedOrderIds, financeSelectionState.includedOrderIds]);
+    return financePreview?.settledOrders || [];
+  }, [financePreview]);
   const financePreviewWeekUnpaidIdSet = useMemo(
     () =>
       new Set(
@@ -2405,12 +2398,33 @@ export function DropshippingClient({
     () => prepareFinanceOrders(financePreviewDetailOrders),
     [financePreviewDetailOrders],
   );
+  const financePreviewSortedOrders = useMemo(() => {
+    return [...financePreviewPreparedOrders].sort((a, b) => {
+      if (!financeDetailShippedAtSortTouched) {
+        const aIsCurrentWeekUnpaid =
+          a.settlementStatus !== "paid" && financePreviewWeekUnpaidIdSet.has(a.orderId);
+        const bIsCurrentWeekUnpaid =
+          b.settlementStatus !== "paid" && financePreviewWeekUnpaidIdSet.has(b.orderId);
+        if (aIsCurrentWeekUnpaid !== bIsCurrentWeekUnpaid) {
+          return aIsCurrentWeekUnpaid ? -1 : 1;
+        }
+      }
+      const aTime = a.shippedAt ? new Date(a.shippedAt).getTime() : 0;
+      const bTime = b.shippedAt ? new Date(b.shippedAt).getTime() : 0;
+      return financeDetailShippedAtSortDirection === "asc" ? aTime - bTime : bTime - aTime;
+    });
+  }, [
+    financeDetailShippedAtSortTouched,
+    financeDetailShippedAtSortDirection,
+    financePreviewPreparedOrders,
+    financePreviewWeekUnpaidIdSet,
+  ]);
   const financePreviewAllPreparedOrders = useMemo(
     () => prepareFinanceOrders(financePreview?.settledOrders || []),
     [financePreview?.settledOrders],
   );
   const financeDefaultSelectedOrderIds = useMemo(() => {
-    return financePreviewPreparedOrders
+    return financePreviewSortedOrders
       .filter((item) => {
         if (item.settlementStatus === "paid") return false;
         if (financePreviewWeekUnpaidIdSet.has(item.orderId)) {
@@ -2420,12 +2434,12 @@ export function DropshippingClient({
       })
       .map((item) => item.orderId);
   }, [
-    financePreviewPreparedOrders,
+    financePreviewSortedOrders,
     financePreviewWeekUnpaidIdSet,
     financeSelectionExcludedIdSet,
     financeSelectionIncludedIdSet,
   ]);
-  const financePreviewVisibleOrders = financePreviewPreparedOrders.slice(
+  const financePreviewVisibleOrders = financePreviewSortedOrders.slice(
     (financePreviewCurrentPage - 1) * financePreviewPageSize,
     financePreviewCurrentPage * financePreviewPageSize,
   );
@@ -2788,6 +2802,8 @@ export function DropshippingClient({
   const openFinancePreview = async (row: DsFinanceRow) => {
     setFinanceStatementPreviewStandalone(false);
     setFinanceStatementPreviewRecord(null);
+    setFinanceDetailShippedAtSortTouched(false);
+    setFinanceDetailShippedAtSortDirection("asc");
     setFinancePreview(row);
     try {
       const statementEntries = await fetchFinanceStatementEntries(row.customerId);
@@ -7920,7 +7936,19 @@ export function DropshippingClient({
                         <tr className="border-b border-slate-200 bg-slate-50 text-left text-[12px] font-semibold text-slate-600 shadow-[0_1px_0_0_rgba(226,232,240,1),0_6px_16px_rgba(15,23,42,0.04)]">
                           <th className="w-[1%] whitespace-nowrap px-3 py-2.5">{text.fields.orderNo}</th>
                           <th className="w-[1%] whitespace-nowrap px-3 py-2.5">{text.fields.trackingNo}</th>
-                          <th className="w-[1%] whitespace-nowrap px-3 py-2.5">{text.fields.shippedAt}</th>
+                          <th className="w-[1%] whitespace-nowrap px-3 py-2.5">
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 text-inherit"
+                              onClick={() => {
+                                setFinanceDetailShippedAtSortTouched(true);
+                                setFinanceDetailShippedAtSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+                              }}
+                            >
+                              <span>{text.fields.shippedAt}</span>
+                              <SortDirectionIcon direction={financeDetailShippedAtSortDirection} />
+                            </button>
+                          </th>
                           <th className="w-[1%] whitespace-nowrap px-3 py-2.5">{lang === "zh" ? "\u5546\u54c1\u56fe" : "Image"}</th>
                           <th className="w-[1%] whitespace-nowrap px-3 py-2.5">{text.fields.sku}</th>
                           <th className="w-[18ch] whitespace-nowrap px-3 py-2.5">{text.fields.productZh}</th>
