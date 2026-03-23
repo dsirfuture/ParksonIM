@@ -4366,11 +4366,20 @@ export function DropshippingClient({
       );
       return;
     }
-    if (message === "duplicate_platform_order_no" || message === "duplicate_tracking_no") {
+    if (message === "duplicate_platform_order_no") {
       setDuplicateAlertMessage(
         lang === "zh"
           ? "此订单号已存在，请检查"
           : "Este numero de pedido ya existe. Revisalo.",
+      );
+      setError("");
+      return;
+    }
+    if (message === "duplicate_tracking_no") {
+      setDuplicateAlertMessage(
+        lang === "zh"
+          ? "此物流号已存在，请检查"
+          : "Esta guia ya existe. Revisala.",
       );
       setError("");
       return;

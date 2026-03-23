@@ -150,10 +150,12 @@ async function ensureOrderUniqueness(
     id?: string;
     platformOrderNo: string;
     trackingNo?: string;
+    trackingGroupId?: string | null;
   },
 ) {
   const normalizedOrderNo = String(payload.platformOrderNo || "").trim();
   const normalizedTrackingNo = String(payload.trackingNo || "").trim();
+  const normalizedTrackingGroupId = String(payload.trackingGroupId || "").trim();
 
   if (!normalizedOrderNo && !normalizedTrackingNo) return;
 
@@ -178,14 +180,25 @@ async function ensureOrderUniqueness(
   }
 
   if (normalizedTrackingNo) {
-    const duplicateTracking = await prisma.dropshippingOrder.findFirst({
+    const duplicateTrackingRows = await prisma.dropshippingOrder.findMany({
       where: {
         ...baseWhere,
         tracking_no: normalizedTrackingNo,
       },
-      select: { id: true },
+      select: {
+        id: true,
+        tracking_group_id: true,
+      },
     });
-    if (duplicateTracking) {
+    const hasTrackingConflict = duplicateTrackingRows.some((row) => {
+      const rowTrackingGroupId = String(row.tracking_group_id || "").trim();
+      return !(
+        normalizedTrackingGroupId &&
+        rowTrackingGroupId &&
+        normalizedTrackingGroupId === rowTrackingGroupId
+      );
+    });
+    if (hasTrackingConflict) {
       throw new Error("duplicate_tracking_no");
     }
   }
@@ -991,10 +1004,26 @@ export async function saveOrder(
     notes?: string;
   },
 ) {
+  let effectiveTrackingGroupId = payload.trackingGroupId;
+  if (payload.id && payload.trackingGroupId === undefined) {
+    const existingGroup = await prisma.dropshippingOrder.findFirst({
+      where: {
+        id: payload.id,
+        tenant_id: session.tenantId,
+        company_id: session.companyId,
+      },
+      select: {
+        tracking_group_id: true,
+      },
+    });
+    effectiveTrackingGroupId = existingGroup?.tracking_group_id || null;
+  }
+
   await ensureOrderUniqueness(session, {
     id: payload.id,
     platformOrderNo: payload.platformOrderNo,
     trackingNo: payload.trackingNo,
+    trackingGroupId: effectiveTrackingGroupId,
   });
 
   const customer = await ensureCustomer(session, payload.customerName);
