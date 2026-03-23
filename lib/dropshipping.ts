@@ -2196,6 +2196,13 @@ export async function getFinanceRows(session: Session) {
       ?? 0;
     const normalizedNormalDiscount = Math.min(Math.max(Math.abs(normalDiscount) <= 1 ? normalDiscount : normalDiscount / 100, 0), 1);
     const normalizedVipDiscount = Math.min(Math.max(Math.abs(vipDiscount) <= 1 ? vipDiscount : vipDiscount / 100, 0), 1);
+    const snapshotShippingAmount =
+      row.snapshot_shipping_amount === null
+        ? toNumber(row.shipping_fee)
+        : toNumber(row.snapshot_shipping_amount);
+    const snapshotTotalAmount = toNumber(row.snapshot_total_amount);
+    const snapshotExchangedAmount = toNumber(row.snapshot_exchanged_amount);
+    const fallbackProductAmount = Math.max(snapshotTotalAmount - snapshotShippingAmount, 0);
     items.push({
       orderId: row.id,
       platformOrderNo: row.platform_order_no,
@@ -2216,27 +2223,17 @@ export async function getFinanceRows(session: Session) {
       rawProductAmount: unitPrice * row.quantity * (1 - normalizedNormalDiscount) * (1 - normalizedVipDiscount),
       shippedAt: row.shipped_at?.toISOString() || null,
       settledAt: row.settled_at?.toISOString() || null,
-      productAmount:
-        toNumber(row.snapshot_exchanged_amount)
-        || Math.max(
-          (toNumber(row.snapshot_total_amount) || 0)
-            - (toNumber(row.snapshot_shipping_amount) || toNumber(row.shipping_fee)),
-          0,
-        ),
-      shippingFee: toNumber(row.snapshot_shipping_amount) || toNumber(row.shipping_fee),
+      productAmount: snapshotExchangedAmount || fallbackProductAmount,
+      shippingFee: snapshotShippingAmount,
       mxnAmount:
         toNumber(row.snapshot_stock_amount)
         || (
           toNumber(row.snapshot_rate_value) > 0
-            ? (toNumber(row.snapshot_exchanged_amount) || Math.max(
-                (toNumber(row.snapshot_total_amount) || 0)
-                  - (toNumber(row.snapshot_shipping_amount) || toNumber(row.shipping_fee)),
-                0,
-              )) / toNumber(row.snapshot_rate_value)
+            ? (snapshotExchangedAmount || fallbackProductAmount) / toNumber(row.snapshot_rate_value)
             : 0
         ),
       paidAmount: toNumber(row.snapshot_paid_amount),
-      totalAmount: toNumber(row.snapshot_total_amount),
+      totalAmount: snapshotTotalAmount,
     });
     settledOrdersByCustomer.set(row.customer_id, items);
   }
