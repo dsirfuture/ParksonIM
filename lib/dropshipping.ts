@@ -511,8 +511,6 @@ function buildOverviewFinanceCustomerSummary(
       skuKey: getExportSkuKey(item.sku),
     };
   });
-  const displayedProductAmountByOrderId = new Map<string, number>();
-  const activeStockRemainingBySku = new Map<string, number>();
   const computeAmountWithQty = (item: (typeof preparedOrders)[number], effectiveQty: number) => {
     const normalizedNormalDiscount = Math.min(
       Math.max(Math.abs(item.normalDiscount) <= 1 ? item.normalDiscount : item.normalDiscount / 100, 0),
@@ -531,24 +529,8 @@ function buildOverviewFinanceCustomerSummary(
     const bTime = b.shippedAt ? new Date(b.shippedAt).getTime() : 0;
     return aTime - bTime;
   });
-  for (const item of sortedPreparedOrders) {
-    const currentRemaining = activeStockRemainingBySku.get(item.skuKey) || 0;
-    const shippedQty = Math.max(item.quantity, 0);
-    let effectiveQty = 0;
-    if (item.exportIsStocked && item.exportStockedQty > 0 && currentRemaining <= 0) {
-      effectiveQty = item.exportStockedQty;
-      activeStockRemainingBySku.set(item.skuKey, Math.max(item.exportStockedQty - shippedQty, 0));
-    } else if (currentRemaining > 0) {
-      effectiveQty = 0;
-      activeStockRemainingBySku.set(item.skuKey, Math.max(currentRemaining - shippedQty, 0));
-    } else {
-      effectiveQty = shippedQty;
-      activeStockRemainingBySku.set(item.skuKey, 0);
-    }
-    displayedProductAmountByOrderId.set(item.orderId, computeAmountWithQty(item, effectiveQty));
-  }
   const computeDisplayedProductAmount = (item: (typeof sortedPreparedOrders)[number]) =>
-    displayedProductAmountByOrderId.get(item.orderId) || 0;
+    computeAmountWithQty(item, Math.max(item.quantity, 0));
   const computeSettlementGroupAmount = (items: typeof sortedPreparedOrders) => {
     const mxnAmount = items.reduce((sum, item) => sum + computeDisplayedProductAmount(item), 0);
     const shippingAmount = items.reduce((sum, item) => sum + item.shippingFee, 0);
