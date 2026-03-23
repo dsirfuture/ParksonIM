@@ -4,8 +4,10 @@ export type DsStockPriorityAmountInput = {
   unitPrice: number;
   normalDiscount: number;
   vipDiscount: number;
+  initialCoveredQty?: number | null;
   stockBatchKey?: string | null;
   stockBatchQty?: number | null;
+  stockBatchShouldBill?: boolean | null;
 };
 
 export type DsStockPriorityAmountOutput<T extends DsStockPriorityAmountInput> = T & {
@@ -44,27 +46,50 @@ export function applyStockPriorityProductAmounts<T extends DsStockPriorityAmount
   options?: { vipEnabled?: boolean },
 ): Array<DsStockPriorityAmountOutput<T>> {
   const vipEnabled = options?.vipEnabled ?? true;
-  const remainingStockBySku = new Map<string, number>();
   const consumedBatchKeys = new Set<string>();
+  const remainingCoverageBySku = new Map<string, number>();
+  const totalCoverageBySku = new Map<string, number>();
+
+  for (const item of items) {
+    const skuKey = String(item.skuKey || "").trim();
+    if (!skuKey || totalCoverageBySku.has(skuKey)) continue;
+
+    const sameSkuItems = items.filter((entry) => String(entry.skuKey || "").trim() === skuKey);
+    const initialCoveredQty = Math.max(
+      ...sameSkuItems.map((entry) => Math.max(Number(entry.initialCoveredQty) || 0, 0)),
+      0,
+    );
+    const batchKeys = new Set<string>();
+    let billableBatchQty = 0;
+    for (const entry of sameSkuItems) {
+      const stockBatchKey = String(entry.stockBatchKey || "").trim();
+      const stockBatchQty = Math.max(Number(entry.stockBatchQty) || 0, 0);
+      const stockBatchShouldBill = Boolean(entry.stockBatchShouldBill);
+      if (!stockBatchShouldBill || !stockBatchKey || stockBatchQty <= 0 || batchKeys.has(stockBatchKey)) continue;
+      batchKeys.add(stockBatchKey);
+      billableBatchQty += stockBatchQty;
+    }
+    totalCoverageBySku.set(skuKey, initialCoveredQty + billableBatchQty);
+    remainingCoverageBySku.set(skuKey, initialCoveredQty + billableBatchQty);
+  }
 
   return items.map((item) => {
     const skuKey = String(item.skuKey || "").trim();
     const quantity = Math.max(Number(item.quantity) || 0, 0);
     const stockBatchKey = String(item.stockBatchKey || "").trim();
     const stockBatchQty = Math.max(Number(item.stockBatchQty) || 0, 0);
-
-    let availableStockQty = remainingStockBySku.get(skuKey) || 0;
+    const stockBatchShouldBill = Boolean(item.stockBatchShouldBill);
+    let availableCoverageQty = remainingCoverageBySku.get(skuKey) ?? 0;
     let billedStockQty = 0;
 
     if (skuKey && stockBatchKey && stockBatchQty > 0 && !consumedBatchKeys.has(stockBatchKey)) {
-      availableStockQty += stockBatchQty;
-      billedStockQty = stockBatchQty;
+      billedStockQty = stockBatchShouldBill ? stockBatchQty : 0;
       consumedBatchKeys.add(stockBatchKey);
     }
 
-    const consumedStockQty = Math.min(availableStockQty, quantity);
-    availableStockQty = Math.max(availableStockQty - quantity, 0);
-    remainingStockBySku.set(skuKey, availableStockQty);
+    const consumedStockQty = Math.min(availableCoverageQty, quantity);
+    availableCoverageQty = Math.max(availableCoverageQty - quantity, 0);
+    remainingCoverageBySku.set(skuKey, availableCoverageQty);
 
     const billedShipmentQty = Math.max(quantity - consumedStockQty, 0);
     const chargedQty = billedStockQty + billedShipmentQty;
@@ -76,7 +101,7 @@ export function applyStockPriorityProductAmounts<T extends DsStockPriorityAmount
       displayBilledStockQty: billedStockQty,
       displayBilledShipmentQty: billedShipmentQty,
       displayConsumedStockQty: consumedStockQty,
-      displayRemainingStockQtyAfter: availableStockQty,
+      displayRemainingStockQtyAfter: availableCoverageQty,
     };
   });
 }

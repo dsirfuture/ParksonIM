@@ -419,7 +419,7 @@ function getDatePartFromDateTimeText(value: string | null | undefined) {
   const text = String(value || "").trim();
   if (!text) return "";
   const match = text.match(/(\d{4}\/\d{2}\/\d{2})/);
-  return match?.[1] || "";
+  return match?.[1]?.replace(/\//g, "-") || "";
 }
 
 function toDateInputValue(value: string | null | undefined) {
@@ -1051,6 +1051,7 @@ export function DropshippingClient({
   const [inventory, setInventory] = useState(initialInventory);
   const [finance, setFinance] = useState(initialFinance);
   const [exchangeRate, setExchangeRate] = useState(initialExchangeRate);
+  const [financeStatementLockedRate, setFinanceStatementLockedRate] = useState<DsExchangeRatePayload | null>(null);
   const [loadedTabs, setLoadedTabs] = useState(initialLoadedTabs);
   const [now, setNow] = useState(() => new Date());
   const [overviewRange, setOverviewRange] = useState<OverviewRange>("month");
@@ -2455,9 +2456,19 @@ export function DropshippingClient({
       currentCycleText: financeStatementPreviewRecord?.cycleText,
     });
   }, [financeStatementLockState?.isPaid, financeStatementPreviewRecord?.cycleText, financeStatementRecordEntries]);
+  const financeStatementLockedDateValue =
+    getDatePartFromDateTimeText(financeStatementPreviewRecord?.generatedAtText)
+    || getDatePartFromDateTimeText(financeStatementLockState?.generatedAtText)
+    || (financeStatementLockState?.isGenerated ? getDatePartFromDateTimeText(financeStatementLockState?.createdAtText) : "")
+    || "";
+  const financeStatementDisplayDateValue = financeStatementLockedDateValue || getMexicoTodayDateValue();
+  const financeStatementDisplayRate = financeStatementLockState?.isGenerated && financeStatementLockedRate
+    ? financeStatementLockedRate
+    : exchangeRate;
+  const financeStatementRateValue = financeStatementDisplayRate.rateValue || 0;
   const financeStatementPreparedData = useMemo(
     () => buildFinanceStatementData(inventory, "weekly_unpaid", financePaidCycleTextSet, financeStatementVipEnabled),
-    [exchangeRate.rateValue, financePaidCycleTextSet, financePreview, financePreviewPreparedOrders, inventory, selectedFinanceOrderIds, financeSelectionReincludedIdSet, financeStatementVipEnabled],
+    [financePaidCycleTextSet, financePreview, financePreviewPreparedOrders, inventory, selectedFinanceOrderIds, financeSelectionReincludedIdSet, financeStatementRateValue, financeStatementVipEnabled],
   );
   const financeExportSummaryByCustomerId = useMemo(
     () =>
@@ -2479,7 +2490,7 @@ export function DropshippingClient({
           ];
         }),
       ),
-    [finance, financePreview?.customerId, financeStatementEntriesByCustomerId, financeStatementLockState?.isPaid, financeStatementPreviewRecord?.cycleText, inventory, exchangeRate.rateValue],
+    [finance, financePreview?.customerId, financeStatementEntriesByCustomerId, financeStatementLockState?.isPaid, financeStatementPreviewRecord?.cycleText, inventory, financeStatementRateValue],
   );
   const financeStatementSummary = useMemo(() => {
     if (!financePreview) return null;
@@ -2513,12 +2524,34 @@ export function DropshippingClient({
   const financeCurrentCycleText = financeStatementPreviewRecord?.cycleText || financeStatementCycleText;
   const financeStatementIsPaid = Boolean(financeStatementLockState?.isPaid);
   const financeStatementHasUnpaid = financeStatementIsPaid ? false : Boolean(financeStatementSummary?.hasUnpaid);
-  const financeStatementLockedDateValue =
-    getDatePartFromDateTimeText(financeStatementPreviewRecord?.generatedAtText)
-    || getDatePartFromDateTimeText(financeStatementLockState?.generatedAtText)
-    || (financeStatementLockState?.isGenerated ? getDatePartFromDateTimeText(financeStatementLockState?.createdAtText) : "")
-    || "";
-  const financeStatementDisplayDateValue = financeStatementLockedDateValue || getMexicoTodayDateValue();
+
+  useEffect(() => {
+    if (!financeStatementLockState?.isGenerated || !financeStatementDisplayDateValue) {
+      setFinanceStatementLockedRate(null);
+      return;
+    }
+    let cancelled = false;
+    const loadLockedRate = async () => {
+      try {
+        const response = await fetch(`/api/dropshipping/exchange-rate?date=${encodeURIComponent(financeStatementDisplayDateValue)}`);
+        const result = await response.json().catch(() => null);
+        if (!response.ok || !result?.ok || !result?.item) {
+          throw new Error(result?.error || "failed_to_load_locked_rate");
+        }
+        if (!cancelled) {
+          setFinanceStatementLockedRate(result.item as DsExchangeRatePayload);
+        }
+      } catch {
+        if (!cancelled) {
+          setFinanceStatementLockedRate(null);
+        }
+      }
+    };
+    void loadLockedRate();
+    return () => {
+      cancelled = true;
+    };
+  }, [financeStatementLockState?.isGenerated, financeStatementDisplayDateValue]);
 
   useEffect(() => {
     if (!financePreview || !financeCurrentStatementNumber) {
@@ -2697,13 +2730,14 @@ export function DropshippingClient({
     setFinanceStatementActionLoading(action);
     setFinanceStatementActionError("");
     try {
+      const statementNumber = financeCurrentStatementNumber || financeStatementSummary.statementNumber;
       const response = await fetch(`/api/dropshipping/finance/${encodeURIComponent(financePreview.customerId)}/logs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           actionType: action === "generate" ? "generate_statement" : "revoke_statement",
           customerName: financePreview.customerName,
-          statementNumber: financeStatementSummary.statementNumber,
+          statementNumber,
           cycleText: financeStatementCycleText,
           note: options?.note || "",
           confirmStatementNumber: options?.confirmStatementNumber || "",
@@ -2715,7 +2749,7 @@ export function DropshippingClient({
       }
       const nextGenerated = action === "generate";
       setFinanceStatementLockState({
-        statementNumber: financeStatementSummary.statementNumber,
+        statementNumber,
         isGenerated: nextGenerated,
         isPaid: false,
         actionText: nextGenerated ? (lang === "zh" ? "生成账单" : "Generado") : (lang === "zh" ? "撤销生成" : "Revocado"),
@@ -2756,7 +2790,7 @@ export function DropshippingClient({
         body: JSON.stringify({
           actionType: nextChecked ? "include_weekly_order" : "exclude_weekly_order",
           customerName: financePreview.customerName,
-          statementNumber: financeStatementSummary.statementNumber,
+          statementNumber: financeCurrentStatementNumber || financeStatementSummary.statementNumber,
           cycleText: financeStatementCycleText,
           orderId: item.orderId,
           orderNo: item.platformOrderNo,
@@ -2948,6 +2982,11 @@ export function DropshippingClient({
         : financePreviewPreparedOrders.filter(
             (item) => item.settlementStatus !== "paid" && selectedFinanceOrderIds.includes(item.orderId),
           );
+    const cycleStartTime = targetPreparedOrders.reduce((min, item) => {
+      const time = item.shippedAt ? new Date(item.shippedAt).getTime() : Number.POSITIVE_INFINITY;
+      return Math.min(min, time);
+    }, Number.POSITIVE_INFINITY);
+    const cycleStartDate = Number.isFinite(cycleStartTime) ? new Date(cycleStartTime) : null;
     const financeOrderIds = new Set(targetPreparedOrders.map((item) => item.orderId).filter(Boolean));
     const financeTrackingSkuKeys = new Set(
       targetPreparedOrders.map((item) => `${String(item.trackingNo || "").trim().toLowerCase()}::${getExportSkuKey(item.sku)}`),
@@ -3078,15 +3117,47 @@ export function DropshippingClient({
       map.set(skuKey, (map.get(skuKey) || 0) + Math.max(item.quantity, 0));
       return map;
     }, new Map<string, number>());
+    const shippedBeforeCycleBySku = financePreviewAllPreparedOrders.reduce((map, item) => {
+      const skuKey = getExportSkuKey(item.sku);
+      if (!skuKey || !cycleStartDate || !item.shippedAt) return map;
+      const shippedAt = new Date(item.shippedAt);
+      if (!(shippedAt < cycleStartDate)) return map;
+      map.set(skuKey, (map.get(skuKey) || 0) + Math.max(item.quantity, 0));
+      return map;
+    }, new Map<string, number>());
+    const stockedBeforeCycleBySku = sourceInventory.reduce((map, row) => {
+      const skuKey = getExportSkuKey(row.sku);
+      if (!skuKey || !row.isStocked || !cycleStartDate || !row.stockedAt) return map;
+      const stockedAt = new Date(row.stockedAt);
+      if (!(stockedAt < cycleStartDate)) return map;
+      map.set(skuKey, (map.get(skuKey) || 0) + Math.max(row.stockedQty, 0));
+      return map;
+    }, new Map<string, number>());
+    const initialCoveredQtyBySku = new Map<string, number>();
+    for (const skuKey of new Set([...stockedBeforeCycleBySku.keys(), ...shippedBeforeCycleBySku.keys()])) {
+      initialCoveredQtyBySku.set(
+        skuKey,
+        Math.max((stockedBeforeCycleBySku.get(skuKey) || 0) - (shippedBeforeCycleBySku.get(skuKey) || 0), 0),
+      );
+    }
     const remainingQtyBySku = new Map<string, number>();
     for (const skuKey of new Set([...inventoryStockBySku.keys(), ...inventoryStockBySkuFallback.keys(), ...shippedQtyBySku.keys()])) {
       const stockedQty = inventoryStockBySku.get(skuKey)?.stockedQty || inventoryStockBySkuFallback.get(skuKey)?.stockedQty || 0;
       remainingQtyBySku.set(skuKey, stockedQty - (shippedQtyBySku.get(skuKey) || 0));
     }
+    const findDirectMatchedInventoryRow = (item: (typeof financePreviewPreparedOrders)[number]) =>
+      sourceInventory.find((row) =>
+        row.rowKey.startsWith("order:")
+        && row.orderId === item.orderId
+        && (row.stockedQty || 0) > 0
+        && Boolean(row.stockedAt)
+      ) || null;
     const preparedOrders = targetPreparedOrders.map((item) => {
       const matchedStockInfo = getMatchedStockInfo(item);
       const exactMatchedStockInfo = getExactMatchedStockInfo(item);
       const exactMatchedInventoryRow = findExactMatchedInventoryRow(item);
+      const directMatchedInventoryRow = findDirectMatchedInventoryRow(item);
+      const billedStockInventoryRow = directMatchedInventoryRow || exactMatchedInventoryRow;
       const exportIsStocked = matchedStockInfo?.isStocked ?? item.isStocked;
       const exportStockedQty =
         matchedStockInfo && matchedStockInfo.stockedQty > 0
@@ -3110,8 +3181,14 @@ export function DropshippingClient({
         exportRemainingQty: remainingQtyBySku.get(getExportSkuKey(item.sku)),
         skuStockInfo: inventoryStockBySku.get(getExportSkuKey(item.sku)) || inventoryStockBySkuFallback.get(getExportSkuKey(item.sku)),
         skuKey: getExportSkuKey(item.sku),
-        stockBatchKey: exactMatchedInventoryRow?.rowKey || null,
-        stockBatchQty: exactMatchedInventoryRow?.stockedQty || exactMatchedStockInfo?.stockedQty || 0,
+        initialCoveredQty: initialCoveredQtyBySku.get(getExportSkuKey(item.sku)) || 0,
+        stockBatchKey: billedStockInventoryRow?.rowKey || null,
+        stockBatchQty: billedStockInventoryRow?.stockedQty || exactMatchedStockInfo?.stockedQty || 0,
+        stockBatchShouldBill: Boolean(
+          billedStockInventoryRow?.stockedAt
+          && cycleStartDate
+          && new Date(billedStockInventoryRow.stockedAt) >= cycleStartDate,
+        ),
         statementCycleText: cycleText,
         displayReincluded:
           financeSelectionReincludedIdSet.has(item.orderId)
@@ -3142,8 +3219,8 @@ export function DropshippingClient({
       vipEnabled: financeStatementVipEnabled,
     }).map((item) => {
       const displayConvertedAmount =
-        exchangeRate.rateValue && Number.isFinite(exchangeRate.rateValue)
-          ? item.displayProductAmount * exchangeRate.rateValue
+        financeStatementRateValue && Number.isFinite(financeStatementRateValue)
+          ? item.displayProductAmount * financeStatementRateValue
           : item.productAmount;
       return {
         ...item,
@@ -3155,8 +3232,8 @@ export function DropshippingClient({
       const mxnAmount = items.reduce((sum, item) => sum + item.displayProductAmount, 0);
       const shippingAmount = items.reduce((sum, item) => sum + item.shippingFee, 0);
       const convertedAmount =
-        exchangeRate.rateValue && Number.isFinite(exchangeRate.rateValue)
-          ? mxnAmount * exchangeRate.rateValue
+        financeStatementRateValue && Number.isFinite(financeStatementRateValue)
+          ? mxnAmount * financeStatementRateValue
           : items.reduce((sum, item) => sum + item.productAmount, 0);
       return {
         mxnAmount,
@@ -3219,6 +3296,11 @@ export function DropshippingClient({
         shippingFee: shouldCountShipping ? item.shippingFee : 0,
       };
     });
+    const cycleStartTime = dedupedOrders.reduce((min, item) => {
+      const time = item.shippedAt ? new Date(item.shippedAt).getTime() : Number.POSITIVE_INFINITY;
+      return Math.min(min, time);
+    }, Number.POSITIVE_INFINITY);
+    const cycleStartDate = Number.isFinite(cycleStartTime) ? new Date(cycleStartTime) : null;
     const financeOrderIds = new Set(dedupedOrders.map((item) => item.orderId).filter(Boolean));
     const financeTrackingSkuKeys = new Set(
       dedupedOrders.map((item) => `${String(item.trackingNo || "").trim().toLowerCase()}::${getExportSkuKey(item.sku)}`),
@@ -3349,15 +3431,47 @@ export function DropshippingClient({
       map.set(skuKey, (map.get(skuKey) || 0) + Math.max(item.quantity, 0));
       return map;
     }, new Map<string, number>());
+    const shippedBeforeCycleBySku = row.settledOrders.reduce((map, item) => {
+      const skuKey = getExportSkuKey(item.sku);
+      if (!skuKey || !cycleStartDate || !item.shippedAt) return map;
+      const shippedAt = new Date(item.shippedAt);
+      if (!(shippedAt < cycleStartDate)) return map;
+      map.set(skuKey, (map.get(skuKey) || 0) + Math.max(item.quantity, 0));
+      return map;
+    }, new Map<string, number>());
+    const stockedBeforeCycleBySku = sourceInventory.reduce((map, inventoryRow) => {
+      const skuKey = getExportSkuKey(inventoryRow.sku);
+      if (!skuKey || !inventoryRow.isStocked || !cycleStartDate || !inventoryRow.stockedAt) return map;
+      const stockedAt = new Date(inventoryRow.stockedAt);
+      if (!(stockedAt < cycleStartDate)) return map;
+      map.set(skuKey, (map.get(skuKey) || 0) + Math.max(inventoryRow.stockedQty, 0));
+      return map;
+    }, new Map<string, number>());
+    const initialCoveredQtyBySku = new Map<string, number>();
+    for (const skuKey of new Set([...stockedBeforeCycleBySku.keys(), ...shippedBeforeCycleBySku.keys()])) {
+      initialCoveredQtyBySku.set(
+        skuKey,
+        Math.max((stockedBeforeCycleBySku.get(skuKey) || 0) - (shippedBeforeCycleBySku.get(skuKey) || 0), 0),
+      );
+    }
     const remainingQtyBySku = new Map<string, number>();
     for (const skuKey of new Set([...inventoryStockBySku.keys(), ...inventoryStockBySkuFallback.keys(), ...shippedQtyBySku.keys()])) {
       const stockedQty = inventoryStockBySku.get(skuKey)?.stockedQty || inventoryStockBySkuFallback.get(skuKey)?.stockedQty || 0;
       remainingQtyBySku.set(skuKey, stockedQty - (shippedQtyBySku.get(skuKey) || 0));
     }
+    const findDirectMatchedInventoryRow = (item: (typeof dedupedOrders)[number]) =>
+      sourceInventory.find((inventoryRow) =>
+        inventoryRow.rowKey.startsWith("order:")
+        && inventoryRow.orderId === item.orderId
+        && (inventoryRow.stockedQty || 0) > 0
+        && Boolean(inventoryRow.stockedAt)
+      ) || null;
     const preparedOrders = dedupedOrders.map((item) => {
       const matchedStockInfo = getMatchedStockInfo(item);
       const exactMatchedStockInfo = getExactMatchedStockInfo(item);
       const exactMatchedInventoryRow = findExactMatchedInventoryRow(item);
+      const directMatchedInventoryRow = findDirectMatchedInventoryRow(item);
+      const billedStockInventoryRow = directMatchedInventoryRow || exactMatchedInventoryRow;
       const exportIsStocked = matchedStockInfo?.isStocked ?? item.isStocked;
       const exportStockedQty =
         matchedStockInfo && matchedStockInfo.stockedQty > 0
@@ -3376,8 +3490,14 @@ export function DropshippingClient({
         exportStockedQty,
         exportRemainingQty: remainingQtyBySku.get(getExportSkuKey(item.sku)),
         skuKey: getExportSkuKey(item.sku),
-        stockBatchKey: exactMatchedInventoryRow?.rowKey || null,
-        stockBatchQty: exactMatchedInventoryRow?.stockedQty || exactMatchedStockInfo?.stockedQty || 0,
+        initialCoveredQty: initialCoveredQtyBySku.get(getExportSkuKey(item.sku)) || 0,
+        stockBatchKey: billedStockInventoryRow?.rowKey || null,
+        stockBatchQty: billedStockInventoryRow?.stockedQty || exactMatchedStockInfo?.stockedQty || 0,
+        stockBatchShouldBill: Boolean(
+          billedStockInventoryRow?.stockedAt
+          && cycleStartDate
+          && new Date(billedStockInventoryRow.stockedAt) >= cycleStartDate,
+        ),
       };
     });
     const computeAmountWithQty = (item: (typeof preparedOrders)[number], effectiveQty: number) => {
@@ -3400,8 +3520,8 @@ export function DropshippingClient({
     });
     const ordersWithDisplayAmounts = applyStockPriorityProductAmounts(sortedPreparedOrders).map((item) => {
       const displayConvertedAmount =
-        exchangeRate.rateValue && Number.isFinite(exchangeRate.rateValue)
-          ? item.displayProductAmount * exchangeRate.rateValue
+        financeStatementRateValue && Number.isFinite(financeStatementRateValue)
+          ? item.displayProductAmount * financeStatementRateValue
           : item.productAmount;
       return {
         ...item,
@@ -3413,8 +3533,8 @@ export function DropshippingClient({
       const mxnAmount = items.reduce((sum, item) => sum + item.displayProductAmount, 0);
       const shippingAmount = items.reduce((sum, item) => sum + item.shippingFee, 0);
       const convertedAmount =
-        exchangeRate.rateValue && Number.isFinite(exchangeRate.rateValue)
-          ? mxnAmount * exchangeRate.rateValue
+        financeStatementRateValue && Number.isFinite(financeStatementRateValue)
+          ? mxnAmount * financeStatementRateValue
           : items.reduce((sum, item) => sum + item.productAmount, 0);
       return {
         mxnAmount,
@@ -3490,8 +3610,8 @@ export function DropshippingClient({
         : `Fecha de exportacion: ${todayParts.year}/${todayParts.month}/${todayParts.day}`;
     const rateHintText =
       lang === "zh"
-        ? `${todayZhText}   汇率：MXN兑RMB  ${exchangeRate.rateValue ? exchangeRate.rateValue.toFixed(4) : "-"}`
-        : `Hoy ${todayParts.year}/${todayParts.month}/${todayParts.day}   Tipo de cambio: MXN a RMB ${exchangeRate.rateValue ? exchangeRate.rateValue.toFixed(4) : "-"}`;
+        ? `${todayZhText}   汇率：MXN兑RMB  ${financeStatementDisplayRate.rateValue ? financeStatementDisplayRate.rateValue.toFixed(4) : "-"}`
+        : `Hoy ${todayParts.year}/${todayParts.month}/${todayParts.day}   Tipo de cambio: MXN a RMB ${financeStatementDisplayRate.rateValue ? financeStatementDisplayRate.rateValue.toFixed(4) : "-"}`;
     const headerLabels = [
       lang === "zh" ? "订单号" : "Pedido",
       lang === "zh" ? "物流号" : "Guia",
@@ -3534,8 +3654,8 @@ export function DropshippingClient({
                 : `Periodo: ${financeCurrentCycleText}`,
             rateText:
               lang === "zh"
-                ? `结算汇率：1 MXN = ${exchangeRate.rateValue ? exchangeRate.rateValue.toFixed(4) : "-"} RMB    ${fmtDateOnly(financeStatementDisplayDateValue, lang)}汇率   来源：${exchangeRate.sourceName || "-"}`
-                : `Tipo de cambio: 1 MXN = ${exchangeRate.rateValue ? exchangeRate.rateValue.toFixed(4) : "-"} RMB`,
+                ? `结算汇率：1 MXN = ${financeStatementDisplayRate.rateValue ? financeStatementDisplayRate.rateValue.toFixed(4) : "-"} RMB    ${fmtDateOnly(financeStatementDisplayDateValue, lang)}汇率   来源：${financeStatementDisplayRate.sourceName || "-"}`
+                : `Tipo de cambio: 1 MXN = ${financeStatementDisplayRate.rateValue ? financeStatementDisplayRate.rateValue.toFixed(4) : "-"} RMB`,
             serviceFeeDisplay: financeStatementPreparedData?.serviceFeeDisplay || "￥0.00 / 单",
             mxnSubtotalText: `$${fmtMoney(totalProductAmount, lang)}`,
             cnySubtotalText: `￥${fmtMoney(totalConvertedAmount, lang)}`,
@@ -3565,6 +3685,7 @@ export function DropshippingClient({
               trackingNo: item.trackingNo || "-",
               shippedAtText: fmtDateOnly(item.shippedAt, lang),
               sku: item.sku,
+              isStockedBadge: Boolean(item.stockBatchShouldBill),
               quantity: item.quantity,
               unitPriceText: item.unitPrice > 0 ? `$${fmtMoney(item.unitPrice, lang)}` : "-",
               normalDiscountText: item.normalDiscount > 0 ? `${fmtPercent(item.normalDiscount, lang)}%` : "-",
@@ -6491,6 +6612,8 @@ export function DropshippingClient({
                       <tr key={row.customerId} className="border-t border-slate-100">
                         {(() => {
                           const exportSummary = financeExportSummaryByCustomerId.get(row.customerId);
+                          const statementEntries = financeStatementEntriesByCustomerId[row.customerId] || [];
+                          const unpaidStatementCount = statementEntries.filter((entry) => !entry.isPaid).length;
                           const displayProductAmount = exportSummary?.mxnSubtotal ?? row.stockAmount;
                           const displayConvertedAmount = exportSummary?.cnySubtotal ?? row.exchangedAmount;
                           const displayShippingAmount = exportSummary?.serviceFeeTotal ?? row.shippingAmount;
@@ -6509,15 +6632,22 @@ export function DropshippingClient({
                         <td className="px-4 py-3 text-sm text-rose-600">{`￥${fmtMoney(displayUnpaidAmount, lang)}`}</td>
                         <td className="px-4 py-3 text-sm text-slate-700">{text.status[displayStatus as keyof typeof text.status]}</td>
                         <td className="px-3 py-3 text-center text-sm text-slate-700">
-                          <button
-                            type="button"
-                            onClick={() => void loadFinanceStatementRecords(row)}
-                            title={lang === "zh" ? "查看账单记录" : "Ver facturas"}
-                            aria-label={lang === "zh" ? "查看账单记录" : "Ver facturas"}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
-                          >
-                            <LedgerIcon />
-                          </button>
+                          <div className="inline-flex flex-col items-center gap-1">
+                            {unpaidStatementCount > 0 ? (
+                              <span className="inline-flex min-h-5 items-center justify-center rounded-full bg-rose-500 px-2.5 text-[11px] font-semibold leading-none text-white">
+                                {lang === "zh" ? `未结${unpaidStatementCount}单` : `${unpaidStatementCount} pendientes`}
+                              </span>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() => void loadFinanceStatementRecords(row)}
+                              title={lang === "zh" ? "查看账单记录" : "Ver facturas"}
+                              aria-label={lang === "zh" ? "查看账单记录" : "Ver facturas"}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+                            >
+                              <LedgerIcon />
+                            </button>
+                          </div>
                         </td>
                         <td className="px-3 py-3 text-center text-sm text-slate-700">
                           <button
@@ -8484,15 +8614,15 @@ export function DropshippingClient({
                         </p>
                         {lang === "zh" ? (
                           <p className="text-[12px] font-normal text-slate-400">
-                            <span>{`结算汇率：1 MXN = ${exchangeRate.rateValue ? exchangeRate.rateValue.toFixed(4) : "-"} RMB`}</span>
+                            <span>{`结算汇率：1 MXN = ${financeStatementDisplayRate.rateValue ? financeStatementDisplayRate.rateValue.toFixed(4) : "-"} RMB`}</span>
                             <span className="ml-[20px]">{`${fmtDateOnly(financeStatementDisplayDateValue, lang)}汇率`}</span>
-                            <span className="ml-3">{`来源：${exchangeRate.sourceName || "-"}`}</span>
+                            <span className="ml-3">{`来源：${financeStatementDisplayRate.sourceName || "-"}`}</span>
                           </p>
                         ) : (
                           <p className="text-[12px] font-normal text-slate-400">
-                            <span>{`Tipo de cambio: 1 MXN = ${exchangeRate.rateValue ? exchangeRate.rateValue.toFixed(4) : "-"} RMB`}</span>
+                            <span>{`Tipo de cambio: 1 MXN = ${financeStatementDisplayRate.rateValue ? financeStatementDisplayRate.rateValue.toFixed(4) : "-"} RMB`}</span>
                             <span className="ml-[20px]">{fmtDateOnly(financeStatementDisplayDateValue, lang)}</span>
-                            <span className="ml-3">{`fuente: ${exchangeRate.sourceName || "-"}`}</span>
+                            <span className="ml-3">{`fuente: ${financeStatementDisplayRate.sourceName || "-"}`}</span>
                           </p>
                         )}
                         <p className="font-normal text-slate-400">
@@ -8604,7 +8734,16 @@ export function DropshippingClient({
                               <td className={`whitespace-nowrap px-2 py-1.5 text-[12px] font-normal ${item.displayReincluded && !financeStatementIsPaid ? "text-rose-600" : "text-slate-900"}`}>{item.platformOrderNo}</td>
                               <td className={`whitespace-nowrap px-2 py-1.5 text-[12px] ${rowTextClass}`}>{item.trackingNo || "-"}</td>
                               <td className={`whitespace-nowrap px-2 py-1.5 text-[12px] ${rowTextClass}`}>{fmtDateOnly(item.shippedAt, lang)}</td>
-                              <td className={`whitespace-nowrap px-2 py-1.5 text-[12px] ${rowTextClass}`}>{item.sku}</td>
+                              <td className={`whitespace-nowrap px-2 py-1.5 text-[12px] ${rowTextClass}`}>
+                                <div className="flex items-center gap-2">
+                                  {item.stockBatchShouldBill ? (
+                                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#273a8a] text-[10px] font-semibold leading-none text-white">
+                                      {lang === "zh" ? "备" : "S"}
+                                    </span>
+                                  ) : null}
+                                  <span>{item.sku}</span>
+                                </div>
+                              </td>
                               <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${rowTextClass}`}>{item.quantity}</td>
                               <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${item.displayReincluded && !financeStatementIsPaid ? "text-rose-600" : "text-slate-900"}`}>{item.unitPrice > 0 ? `$${fmtMoney(item.unitPrice, lang)}` : "-"}</td>
                               <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${rowTextClass}`}>{item.normalDiscount > 0 ? `${fmtPercent(item.normalDiscount, lang)}%` : "-"}</td>
@@ -8678,7 +8817,7 @@ export function DropshippingClient({
               <div>
                 <div className="mb-1 flex items-center justify-between gap-3">
                   <label className="text-sm text-slate-600">{lang === "zh" ? "完整对账单号" : "Folio completo"}</label>
-                  <span className="text-xs text-slate-400">{financeStatementSummary.statementNumber}</span>
+                  <span className="text-xs text-slate-400">{financeCurrentStatementNumber || financeStatementSummary.statementNumber}</span>
                 </div>
                 <input
                   value={financeStatementRevokeState.confirmStatementNumber}
@@ -8704,7 +8843,7 @@ export function DropshippingClient({
                 type="button"
                 disabled={financeStatementActionLoading === "revoke"}
                 onClick={() => {
-                  if (financeStatementRevokeState.confirmStatementNumber.trim() !== financeStatementSummary.statementNumber.trim()) {
+                  if (financeStatementRevokeState.confirmStatementNumber.trim() !== (financeCurrentStatementNumber || financeStatementSummary.statementNumber).trim()) {
                     setFinanceStatementRevokeState((prev) => prev ? { ...prev, error: lang === "zh" ? "对账单号校验失败" : "El folio no coincide" } : prev);
                     return;
                   }

@@ -1641,6 +1641,7 @@ export async function getInventoryRows(session: Session) {
         : null)
       || candidates.find((inventory) => {
         if (!inventory.is_stocked) return false;
+        if (inventory.linked_order_id && inventory.linked_order_id !== row.id) return false;
         const remainingCapacity = remainingCapacityByInventoryId.get(inventory.id) || 0;
         if (remainingCapacity < row.quantity) return false;
         const stockedDate = inventory.stocked_at?.toISOString()?.slice(0, 10) || "";
@@ -1651,6 +1652,7 @@ export async function getInventoryRows(session: Session) {
       exactMatchedInventory
       || candidates.find((inventory) => {
         if (!inventory.is_stocked) return false;
+        if (inventory.linked_order_id && inventory.linked_order_id !== row.id) return false;
         const remainingCapacity = remainingCapacityByInventoryId.get(inventory.id) || 0;
         return remainingCapacity >= row.quantity;
       })
@@ -2528,8 +2530,28 @@ export async function getOverview(session: Session) {
   };
 }
 
-export async function getExchangeRatePayload(session: Session): Promise<DsExchangeRatePayload> {
-  const rate = await ensureTodayExchangeRate(session);
+export async function getExchangeRatePayload(session: Session, dateValue?: string | null): Promise<DsExchangeRatePayload> {
+  const normalizedDateValue = String(dateValue || "").trim();
+  let rate: Awaited<ReturnType<typeof ensureTodayExchangeRate>> | null = null;
+
+  if (normalizedDateValue) {
+    const requestedDate = startOfMexicoDay(new Date(`${normalizedDateValue}T12:00:00`));
+    rate = await prisma.dropshippingExchangeRate.findFirst({
+      where: {
+        tenant_id: session.tenantId,
+        company_id: session.companyId,
+        rate_date: requestedDate,
+        base_currency: "RMB",
+        target_currency: "MXN",
+      },
+      orderBy: { created_at: "desc" },
+    });
+  }
+
+  if (!rate) {
+    rate = await ensureTodayExchangeRate(session);
+  }
+
   return {
     id: rate.id,
     rateDate: rate.rate_date.toISOString(),

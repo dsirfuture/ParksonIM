@@ -11,6 +11,7 @@ export type WeeklyStatementPdfOrder = {
   trackingNo: string;
   shippedAtText: string;
   sku: string;
+  isStockedBadge?: boolean;
   quantity: number;
   unitPriceText: string;
   normalDiscountText: string;
@@ -92,7 +93,12 @@ function buildStatementHtml(payload: WeeklyStatementPdfPayload) {
           <td>${escapeHtml(item.platformOrderNo)}</td>
           <td>${escapeHtml(item.trackingNo || "-")}</td>
           <td>${escapeHtml(item.shippedAtText || "-")}</td>
-          <td>${escapeHtml(item.sku || "-")}</td>
+          <td>
+            <span class="sku-cell">
+              ${item.isStockedBadge ? '<span class="stock-badge">备</span>' : ""}
+              <span>${escapeHtml(item.sku || "-")}</span>
+            </span>
+          </td>
           <td class="num">${escapeHtml(String(item.quantity ?? "-"))}</td>
           <td class="num">${escapeHtml(item.unitPriceText || "-")}</td>
           <td class="num">${escapeHtml(item.normalDiscountText || "-")}</td>
@@ -352,6 +358,25 @@ function buildStatementHtml(payload: WeeklyStatementPdfPayload) {
       color: #e11d48;
     }
     .settle-total-value.success { color: #334155; }
+    .sku-cell {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .stock-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      background: #273a8a;
+      color: #ffffff;
+      font-size: 10px;
+      line-height: 1;
+      font-weight: 700;
+      flex: 0 0 auto;
+    }
   </style>
 </head>
 <body>
