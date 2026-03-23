@@ -11,6 +11,8 @@ export type DsStockPriorityAmountInput = {
 export type DsStockPriorityAmountOutput<T extends DsStockPriorityAmountInput> = T & {
   displayProductAmount: number;
   displayChargedQty: number;
+  displayBilledStockQty: number;
+  displayBilledShipmentQty: number;
   displayConsumedStockQty: number;
   displayRemainingStockQtyAfter: number;
 };
@@ -52,10 +54,11 @@ export function applyStockPriorityProductAmounts<T extends DsStockPriorityAmount
     const stockBatchQty = Math.max(Number(item.stockBatchQty) || 0, 0);
 
     let availableStockQty = remainingStockBySku.get(skuKey) || 0;
-    let chargedQty = 0;
+    let billedStockQty = 0;
 
     if (skuKey && stockBatchKey && stockBatchQty > 0 && !consumedBatchKeys.has(stockBatchKey)) {
       availableStockQty += stockBatchQty;
+      billedStockQty = stockBatchQty;
       consumedBatchKeys.add(stockBatchKey);
     }
 
@@ -63,13 +66,15 @@ export function applyStockPriorityProductAmounts<T extends DsStockPriorityAmount
     availableStockQty = Math.max(availableStockQty - quantity, 0);
     remainingStockBySku.set(skuKey, availableStockQty);
 
-    const nonStockQty = Math.max(quantity - consumedStockQty, 0);
-    chargedQty += nonStockQty;
+    const billedShipmentQty = Math.max(quantity - consumedStockQty, 0);
+    const chargedQty = billedStockQty + billedShipmentQty;
 
     return {
       ...item,
       displayProductAmount: computeAmountWithQty(item, chargedQty, vipEnabled),
       displayChargedQty: chargedQty,
+      displayBilledStockQty: billedStockQty,
+      displayBilledShipmentQty: billedShipmentQty,
       displayConsumedStockQty: consumedStockQty,
       displayRemainingStockQtyAfter: availableStockQty,
     };
