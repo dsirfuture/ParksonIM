@@ -56,7 +56,6 @@ export function applyStockPriorityProductAmounts<T extends DsStockPriorityAmount
 
     if (skuKey && stockBatchKey && stockBatchQty > 0 && !consumedBatchKeys.has(stockBatchKey)) {
       availableStockQty += stockBatchQty;
-      chargedQty += stockBatchQty;
       consumedBatchKeys.add(stockBatchKey);
     }
 
