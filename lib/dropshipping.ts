@@ -448,11 +448,11 @@ function buildOverviewFinanceCustomerSummary(
     });
     return map;
   }, new Map<string, { isStocked: boolean; stockedQty: number }>());
-  const isExactMatchableInventoryRow = (inventoryRow: DsInventoryRow) =>
+  const isDirectExactMatchableInventoryRow = (inventoryRow: DsInventoryRow) =>
     inventoryRow.isStocked && inventoryRow.rowKey.startsWith("order:");
   const inventoryStockByOrderId = sourceInventory.reduce((map, inventoryRow) => {
     if (!matchesFinanceInventoryRow(inventoryRow)) return map;
-    if (!isExactMatchableInventoryRow(inventoryRow) || !inventoryRow.orderId) return map;
+    if (!isDirectExactMatchableInventoryRow(inventoryRow) || !inventoryRow.orderId) return map;
     map.set(inventoryRow.orderId, {
       isStocked: true,
       stockedQty: Math.max(inventoryRow.stockedQty, 0),
@@ -461,7 +461,7 @@ function buildOverviewFinanceCustomerSummary(
   }, new Map<string, { isStocked: boolean; stockedQty: number }>());
   const inventoryStockByTrackingSku = sourceInventory.reduce((map, inventoryRow) => {
     if (!matchesFinanceInventoryRow(inventoryRow)) return map;
-    if (!isExactMatchableInventoryRow(inventoryRow)) return map;
+    if (!isDirectExactMatchableInventoryRow(inventoryRow)) return map;
     const trackingKey = `${String(inventoryRow.trackingNo || "").trim().toLowerCase()}::${getExportSkuKey(inventoryRow.sku)}`;
     if (!trackingKey || trackingKey.startsWith("::")) return map;
     map.set(trackingKey, {
@@ -472,7 +472,7 @@ function buildOverviewFinanceCustomerSummary(
   }, new Map<string, { isStocked: boolean; stockedQty: number }>());
   const inventoryStockBySkuStockedDate = sourceInventory.reduce((map, inventoryRow) => {
     if (!matchesFinanceInventoryRow(inventoryRow)) return map;
-    if (!isExactMatchableInventoryRow(inventoryRow) || !inventoryRow.stockedAt) return map;
+    if (!inventoryRow.isStocked || !inventoryRow.stockedAt) return map;
     const stockedDateKey = toMexicoDateKey(inventoryRow.stockedAt);
     const skuStockedDateKey = `${getExportSkuKey(inventoryRow.sku)}::${stockedDateKey}`;
     if (!stockedDateKey || skuStockedDateKey.startsWith("::")) return map;
@@ -506,21 +506,21 @@ function buildOverviewFinanceCustomerSummary(
   };
   const findExactMatchedInventoryRow = (item: (typeof dedupedOrders)[number]) => {
     const directMatch = sourceInventory.find((row) =>
-      isExactMatchableInventoryRow(row)
+      isDirectExactMatchableInventoryRow(row)
       && row.orderId === item.orderId,
     );
     if (directMatch) return directMatch;
     const trackingNo = String(item.trackingNo || "").trim().toLowerCase();
     const skuKey = getExportSkuKey(item.sku);
     const trackingMatch = sourceInventory.find((row) =>
-      isExactMatchableInventoryRow(row)
+      isDirectExactMatchableInventoryRow(row)
       && String(row.trackingNo || "").trim().toLowerCase() === trackingNo
       && getExportSkuKey(row.sku) === skuKey,
     );
     if (trackingMatch) return trackingMatch;
     const shippedDateKey = toMexicoDateKey(item.shippedAt);
     return sourceInventory.find((row) =>
-      isExactMatchableInventoryRow(row)
+      row.isStocked
       && getExportSkuKey(row.sku) === skuKey
       && toMexicoDateKey(row.stockedAt) === shippedDateKey,
     ) || null;

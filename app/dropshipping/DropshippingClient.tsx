@@ -2992,11 +2992,11 @@ export function DropshippingClient({
       });
       return map;
     }, new Map<string, { isStocked: boolean; stockedQty: number; stockedAt: string | null }>());
-    const isExactMatchableInventoryRow = (row: DsInventoryRow) =>
+    const isDirectExactMatchableInventoryRow = (row: DsInventoryRow) =>
       row.isStocked && row.rowKey.startsWith("order:");
     const inventoryStockByOrderId = sourceInventory.reduce((map, row) => {
       if (!matchesFinanceInventoryRow(row)) return map;
-      if (!isExactMatchableInventoryRow(row) || !row.orderId) return map;
+      if (!isDirectExactMatchableInventoryRow(row) || !row.orderId) return map;
       map.set(row.orderId, {
         isStocked: true,
         stockedQty: Math.max(row.stockedQty, 0),
@@ -3006,7 +3006,7 @@ export function DropshippingClient({
     }, new Map<string, { isStocked: boolean; stockedQty: number; stockedAt: string | null }>());
     const inventoryStockByTrackingSku = sourceInventory.reduce((map, row) => {
       if (!matchesFinanceInventoryRow(row)) return map;
-      if (!isExactMatchableInventoryRow(row)) return map;
+      if (!isDirectExactMatchableInventoryRow(row)) return map;
       const trackingKey = `${String(row.trackingNo || "").trim().toLowerCase()}::${getExportSkuKey(row.sku)}`;
       if (!trackingKey || trackingKey.startsWith("::")) return map;
       map.set(trackingKey, {
@@ -3018,7 +3018,7 @@ export function DropshippingClient({
     }, new Map<string, { isStocked: boolean; stockedQty: number; stockedAt: string | null }>());
     const inventoryStockBySkuStockedDate = sourceInventory.reduce((map, row) => {
       if (!matchesFinanceInventoryRow(row)) return map;
-      if (!isExactMatchableInventoryRow(row) || !row.stockedAt) return map;
+      if (!row.isStocked || !row.stockedAt) return map;
       const stockedDateKey = toDateInputValue(row.stockedAt);
       const skuStockedDateKey = `${getExportSkuKey(row.sku)}::${stockedDateKey}`;
       if (!stockedDateKey || skuStockedDateKey.startsWith("::")) return map;
@@ -3053,21 +3053,21 @@ export function DropshippingClient({
     };
     const findExactMatchedInventoryRow = (item: (typeof financePreviewPreparedOrders)[number]) => {
       const directMatch = sourceInventory.find((row) =>
-        isExactMatchableInventoryRow(row)
+        isDirectExactMatchableInventoryRow(row)
         && row.orderId === item.orderId,
       );
       if (directMatch) return directMatch;
       const trackingNo = String(item.trackingNo || "").trim().toLowerCase();
       const skuKey = getExportSkuKey(item.sku);
       const trackingMatch = sourceInventory.find((row) =>
-        isExactMatchableInventoryRow(row)
+        isDirectExactMatchableInventoryRow(row)
         && String(row.trackingNo || "").trim().toLowerCase() === trackingNo
         && getExportSkuKey(row.sku) === skuKey,
       );
       if (trackingMatch) return trackingMatch;
       const shippedDateKey = toDateInputValue(item.shippedAt);
       return sourceInventory.find((row) =>
-        isExactMatchableInventoryRow(row)
+        row.isStocked
         && getExportSkuKey(row.sku) === skuKey
         && toDateInputValue(row.stockedAt) === shippedDateKey,
       ) || null;
@@ -3263,11 +3263,11 @@ export function DropshippingClient({
       });
       return map;
     }, new Map<string, { isStocked: boolean; stockedQty: number; stockedAt: string | null }>());
-    const isExactMatchableInventoryRow = (inventoryRow: DsInventoryRow) =>
+    const isDirectExactMatchableInventoryRow = (inventoryRow: DsInventoryRow) =>
       inventoryRow.isStocked && inventoryRow.rowKey.startsWith("order:");
     const inventoryStockByOrderId = sourceInventory.reduce((map, inventoryRow) => {
       if (!matchesFinanceInventoryRow(inventoryRow)) return map;
-      if (!isExactMatchableInventoryRow(inventoryRow) || !inventoryRow.orderId) return map;
+      if (!isDirectExactMatchableInventoryRow(inventoryRow) || !inventoryRow.orderId) return map;
       map.set(inventoryRow.orderId, {
         isStocked: true,
         stockedQty: Math.max(inventoryRow.stockedQty, 0),
@@ -3277,7 +3277,7 @@ export function DropshippingClient({
     }, new Map<string, { isStocked: boolean; stockedQty: number; stockedAt: string | null }>());
     const inventoryStockByTrackingSku = sourceInventory.reduce((map, inventoryRow) => {
       if (!matchesFinanceInventoryRow(inventoryRow)) return map;
-      if (!isExactMatchableInventoryRow(inventoryRow)) return map;
+      if (!isDirectExactMatchableInventoryRow(inventoryRow)) return map;
       const trackingKey = `${String(inventoryRow.trackingNo || "").trim().toLowerCase()}::${getExportSkuKey(inventoryRow.sku)}`;
       if (!trackingKey || trackingKey.startsWith("::")) return map;
       map.set(trackingKey, {
@@ -3289,7 +3289,7 @@ export function DropshippingClient({
     }, new Map<string, { isStocked: boolean; stockedQty: number; stockedAt: string | null }>());
     const inventoryStockBySkuStockedDate = sourceInventory.reduce((map, inventoryRow) => {
       if (!matchesFinanceInventoryRow(inventoryRow)) return map;
-      if (!isExactMatchableInventoryRow(inventoryRow) || !inventoryRow.stockedAt) return map;
+      if (!inventoryRow.isStocked || !inventoryRow.stockedAt) return map;
       const stockedDateKey = toDateInputValue(inventoryRow.stockedAt);
       const skuStockedDateKey = `${getExportSkuKey(inventoryRow.sku)}::${stockedDateKey}`;
       if (!stockedDateKey || skuStockedDateKey.startsWith("::")) return map;
@@ -3324,21 +3324,21 @@ export function DropshippingClient({
     };
     const findExactMatchedInventoryRow = (item: (typeof dedupedOrders)[number]) => {
       const directMatch = sourceInventory.find((row) =>
-        isExactMatchableInventoryRow(row)
+        isDirectExactMatchableInventoryRow(row)
         && row.orderId === item.orderId,
       );
       if (directMatch) return directMatch;
       const trackingNo = String(item.trackingNo || "").trim().toLowerCase();
       const skuKey = getExportSkuKey(item.sku);
       const trackingMatch = sourceInventory.find((row) =>
-        isExactMatchableInventoryRow(row)
+        isDirectExactMatchableInventoryRow(row)
         && String(row.trackingNo || "").trim().toLowerCase() === trackingNo
         && getExportSkuKey(row.sku) === skuKey,
       );
       if (trackingMatch) return trackingMatch;
       const shippedDateKey = toDateInputValue(item.shippedAt);
       return sourceInventory.find((row) =>
-        isExactMatchableInventoryRow(row)
+        row.isStocked
         && getExportSkuKey(row.sku) === skuKey
         && toDateInputValue(row.stockedAt) === shippedDateKey,
       ) || null;
