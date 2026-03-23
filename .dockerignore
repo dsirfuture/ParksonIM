@@ -1,9 +1,16 @@
 node_modules
 .next
 .git
-.gitignore
 .env
+.env.local
+.env.production
+.env.*.local
 npm-debug.log
 data
 tmp
 coverage
+.vscode
+preview
+*.log
+*.pdf
+*.png

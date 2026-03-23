@@ -1,26 +1,67 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# ParksonIM
 
-# Run and deploy your AI Studio app
+ParksonIM is a Next.js + Prisma + PostgreSQL application for ParksonMX business workflows, including receipts, billing, and dropshipping operations.
 
-This contains everything you need to run your app locally.
+## Local Development
 
-View your app in AI Studio: https://ai.studio/apps/42c4638e-84c1-43ee-94bb-a8bf3018cb77
+### Prerequisites
 
-## Run Locally
+- Node.js 20+
+- npm
+- PostgreSQL 16 locally, or Docker Desktop
 
-**Prerequisites:**  Node.js
+### Local environment
 
-
-1. Install dependencies:
+1. Copy the example file and adjust values if needed:
+   `copy .env.local.example .env.local`
+2. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+3. Generate Prisma client:
+   `npx prisma generate`
+4. Push schema to your local database:
+   `npx prisma db push`
+5. Start the development server:
    `npm run dev`
+
+Default local URL:
+- `http://localhost:3000`
+
+## Local Docker Compose
+
+For local containerized development, use the local override file:
+
+```bash
+docker compose -f compose.yaml -f compose.local.yaml --env-file .env.local up --build
+```
+
+This keeps local development pointed at local-safe environment variables instead of production values.
+
+## Production Deployment
+
+Production deployment uses Docker Compose and the server's own `.env`.
+
+Typical production flow:
+
+```bash
+git pull origin main
+docker compose build --pull
+docker compose up -d
+```
+
+An example deployment helper is included at:
+- `scripts/deploy-production.sh`
+
+## Included deployment files
+
+- `compose.yaml`: production compose stack
+- `compose.local.yaml`: local-only compose override
+- `.env.local.example`: safe local environment example
+- `scripts/deploy-production.sh`: production deployment helper
+- `scripts/docker-maintenance.sh`: Docker cleanup helper
 
 ## Server Maintenance
 
-- Docker cleanup script: `scripts/docker-maintenance.sh`
+- Docker cleanup script:
+  `scripts/docker-maintenance.sh`
 - Recommended cron entry:
   `20 4 * * * /opt/stacks/parksonim/scripts/docker-maintenance.sh >> /var/log/parksonim_docker_cleanup.log 2>&1`

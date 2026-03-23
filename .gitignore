@@ -10,7 +10,9 @@ coverage/
 *.log
 .env*
 !.env.example
+!.env.local.example
 data/
 public/products/
 tmp/ParksonMX-*/
 preview/
+.vscode/
