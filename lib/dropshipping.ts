@@ -24,6 +24,7 @@ import type {
   DsShippingStatus,
 } from "@/lib/dropshipping-types";
 import { buildProductImageUrl } from "@/lib/product-image-url";
+import { applyStockPriorityProductAmounts } from "@/lib/dropshipping-finance";
 import { normalizeProductCode } from "@/lib/product-code";
 import { uploadR2Object } from "@/lib/r2-upload";
 import { parseYogoDiscountNumbers } from "@/lib/yogo-product-utils";
@@ -491,6 +492,37 @@ function buildOverviewFinanceCustomerSummary(
     if (datedMatch) return datedMatch;
     return inventoryStockBySku.get(getExportSkuKey(item.sku)) || inventoryStockBySkuFallback.get(getExportSkuKey(item.sku)) || null;
   };
+  const getExactMatchedStockInfo = (item: (typeof dedupedOrders)[number]) => {
+    const directMatch = inventoryStockByOrderId.get(item.orderId);
+    if (directMatch) return directMatch;
+    const trackingSkuKey = `${String(item.trackingNo || "").trim().toLowerCase()}::${getExportSkuKey(item.sku)}`;
+    const trackingMatch = inventoryStockByTrackingSku.get(trackingSkuKey);
+    if (trackingMatch) return trackingMatch;
+    const shippedDateKey = toMexicoDateKey(item.shippedAt);
+    const skuStockedDateKey = `${getExportSkuKey(item.sku)}::${shippedDateKey}`;
+    return inventoryStockBySkuStockedDate.get(skuStockedDateKey) || null;
+  };
+  const findExactMatchedInventoryRow = (item: (typeof dedupedOrders)[number]) => {
+    const directMatch = sourceInventory.find((row) =>
+      row.isStocked
+      && row.orderId === item.orderId,
+    );
+    if (directMatch) return directMatch;
+    const trackingNo = String(item.trackingNo || "").trim().toLowerCase();
+    const skuKey = getExportSkuKey(item.sku);
+    const trackingMatch = sourceInventory.find((row) =>
+      row.isStocked
+      && String(row.trackingNo || "").trim().toLowerCase() === trackingNo
+      && getExportSkuKey(row.sku) === skuKey,
+    );
+    if (trackingMatch) return trackingMatch;
+    const shippedDateKey = toMexicoDateKey(item.shippedAt);
+    return sourceInventory.find((row) =>
+      row.isStocked
+      && getExportSkuKey(row.sku) === skuKey
+      && toMexicoDateKey(row.stockedAt) === shippedDateKey,
+    ) || null;
+  };
   const shippedQtyBySku = dedupedOrders.reduce((map, item) => {
     const skuKey = getExportSkuKey(item.sku);
     if (!skuKey) return map;
@@ -504,6 +536,8 @@ function buildOverviewFinanceCustomerSummary(
   }
   const preparedOrders = dedupedOrders.map((item) => {
     const matchedStockInfo = getMatchedStockInfo(item);
+    const exactMatchedStockInfo = getExactMatchedStockInfo(item);
+    const exactMatchedInventoryRow = findExactMatchedInventoryRow(item);
     const exportIsStocked = matchedStockInfo?.isStocked ?? item.isStocked;
     const exportStockedQty =
       matchedStockInfo && matchedStockInfo.stockedQty > 0
@@ -522,6 +556,8 @@ function buildOverviewFinanceCustomerSummary(
       exportStockedQty,
       exportRemainingQty: remainingQtyBySku.get(getExportSkuKey(item.sku)),
       skuKey: getExportSkuKey(item.sku),
+      stockBatchKey: exactMatchedInventoryRow?.rowKey || null,
+      stockBatchQty: exactMatchedInventoryRow?.stockedQty || exactMatchedStockInfo?.stockedQty || 0,
     };
   });
   const computeAmountWithQty = (item: (typeof preparedOrders)[number], effectiveQty: number) => {
@@ -542,10 +578,9 @@ function buildOverviewFinanceCustomerSummary(
     const bTime = b.shippedAt ? new Date(b.shippedAt).getTime() : 0;
     return aTime - bTime;
   });
-  const computeDisplayedProductAmount = (item: (typeof sortedPreparedOrders)[number]) =>
-    computeAmountWithQty(item, Math.max(item.quantity, 0));
+  const ordersWithDisplayAmounts = applyStockPriorityProductAmounts(sortedPreparedOrders);
   const computeSettlementGroupAmount = (items: typeof sortedPreparedOrders) => {
-    const mxnAmount = items.reduce((sum, item) => sum + computeDisplayedProductAmount(item), 0);
+    const mxnAmount = items.reduce((sum, item) => sum + item.displayProductAmount, 0);
     const shippingAmount = items.reduce((sum, item) => sum + item.shippingFee, 0);
     const convertedAmount =
       exchangeRateValue && Number.isFinite(exchangeRateValue)
@@ -558,12 +593,12 @@ function buildOverviewFinanceCustomerSummary(
       totalAmount: convertedAmount + shippingAmount,
     };
   };
-  const overallAmounts = computeSettlementGroupAmount(sortedPreparedOrders);
+  const overallAmounts = computeSettlementGroupAmount(ordersWithDisplayAmounts);
   const totalPaidAmount = computeSettlementGroupAmount(
-    sortedPreparedOrders.filter((item) => item.settlementStatus === "paid"),
+    ordersWithDisplayAmounts.filter((item) => item.settlementStatus === "paid"),
   ).totalAmount;
   const totalUnpaidAmount = computeSettlementGroupAmount(
-    sortedPreparedOrders.filter((item) => item.settlementStatus !== "paid"),
+    ordersWithDisplayAmounts.filter((item) => item.settlementStatus !== "paid"),
   ).totalAmount;
   return {
     totalAmount: overallAmounts.totalAmount,

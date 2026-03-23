@@ -8,6 +8,7 @@ import { ProductImage } from "@/components/product-image";
 import { StatCard } from "@/components/stat-card";
 import { TableCard } from "@/components/table-card";
 import { getClientLang } from "@/lib/lang-client";
+import { applyStockPriorityProductAmounts } from "@/lib/dropshipping-finance";
 import { normalizeProductCode } from "@/lib/product-code";
 import { buildProductImageUrls } from "@/lib/product-image-url";
 import type {
@@ -3107,6 +3108,8 @@ export function DropshippingClient({
         exportRemainingQty: remainingQtyBySku.get(getExportSkuKey(item.sku)),
         skuStockInfo: inventoryStockBySku.get(getExportSkuKey(item.sku)) || inventoryStockBySkuFallback.get(getExportSkuKey(item.sku)),
         skuKey: getExportSkuKey(item.sku),
+        stockBatchKey: exactMatchedInventoryRow?.rowKey || null,
+        stockBatchQty: exactMatchedInventoryRow?.stockedQty || exactMatchedStockInfo?.stockedQty || 0,
         statementCycleText: cycleText,
         displayReincluded:
           financeSelectionReincludedIdSet.has(item.orderId)
@@ -3133,10 +3136,21 @@ export function DropshippingClient({
       const bTime = b.shippedAt ? new Date(b.shippedAt).getTime() : 0;
       return aTime - bTime;
     });
-    const computeDisplayedProductAmount = (item: (typeof sortedPreparedOrders)[number]) =>
-      computeAmountWithQty(item, Math.max(item.quantity, 0));
-    const computeSettlementGroupAmount = (items: typeof sortedPreparedOrders) => {
-      const mxnAmount = items.reduce((sum, item) => sum + computeDisplayedProductAmount(item), 0);
+    const ordersWithDisplayAmounts = applyStockPriorityProductAmounts(sortedPreparedOrders, {
+      vipEnabled: financeStatementVipEnabled,
+    }).map((item) => {
+      const displayConvertedAmount =
+        exchangeRate.rateValue && Number.isFinite(exchangeRate.rateValue)
+          ? item.displayProductAmount * exchangeRate.rateValue
+          : item.productAmount;
+      return {
+        ...item,
+        displayConvertedAmount,
+        displayCnyTotalAmount: displayConvertedAmount + item.shippingFee,
+      };
+    });
+    const computeSettlementGroupAmount = (items: typeof ordersWithDisplayAmounts) => {
+      const mxnAmount = items.reduce((sum, item) => sum + item.displayProductAmount, 0);
       const shippingAmount = items.reduce((sum, item) => sum + item.shippingFee, 0);
       const convertedAmount =
         exchangeRate.rateValue && Number.isFinite(exchangeRate.rateValue)
@@ -3149,20 +3163,7 @@ export function DropshippingClient({
         totalAmount: convertedAmount + shippingAmount,
       };
     };
-    const overallAmounts = computeSettlementGroupAmount(sortedPreparedOrders);
-    const ordersWithDisplayAmounts = sortedPreparedOrders.map((item) => {
-      const displayProductAmount = computeDisplayedProductAmount(item);
-      const displayConvertedAmount =
-        exchangeRate.rateValue && Number.isFinite(exchangeRate.rateValue)
-          ? displayProductAmount * exchangeRate.rateValue
-          : item.productAmount;
-      return {
-        ...item,
-        displayProductAmount,
-        displayConvertedAmount,
-        displayCnyTotalAmount: displayConvertedAmount + item.shippingFee,
-      };
-    });
+    const overallAmounts = computeSettlementGroupAmount(ordersWithDisplayAmounts);
     const uniqueShippingFees = Array.from(
       new Set(
         ordersWithDisplayAmounts
@@ -3182,8 +3183,8 @@ export function DropshippingClient({
       cnySubtotal: overallAmounts.convertedAmount,
       serviceFeeTotal: overallAmounts.shippingAmount,
       payableTotal: overallAmounts.totalAmount,
-      totalPaidAmount: computeSettlementGroupAmount(sortedPreparedOrders.filter((item) => item.settlementStatus === "paid")).totalAmount,
-      totalUnpaidAmount: computeSettlementGroupAmount(sortedPreparedOrders.filter((item) => item.settlementStatus !== "paid")).totalAmount,
+      totalPaidAmount: computeSettlementGroupAmount(ordersWithDisplayAmounts.filter((item) => item.settlementStatus === "paid")).totalAmount,
+      totalUnpaidAmount: computeSettlementGroupAmount(ordersWithDisplayAmounts.filter((item) => item.settlementStatus !== "paid")).totalAmount,
       hasUnpaid: ordersWithDisplayAmounts.some((item) => item.settlementStatus !== "paid"),
       orderCount: ordersWithDisplayAmounts.length,
       serviceFeePerOrder: overallAmounts.shippingAmount > 0
@@ -3307,6 +3308,37 @@ export function DropshippingClient({
       if (datedMatch) return datedMatch;
       return inventoryStockBySku.get(getExportSkuKey(item.sku)) || inventoryStockBySkuFallback.get(getExportSkuKey(item.sku)) || null;
     };
+    const getExactMatchedStockInfo = (item: (typeof dedupedOrders)[number]) => {
+      const directMatch = inventoryStockByOrderId.get(item.orderId);
+      if (directMatch) return directMatch;
+      const trackingSkuKey = `${String(item.trackingNo || "").trim().toLowerCase()}::${getExportSkuKey(item.sku)}`;
+      const trackingMatch = inventoryStockByTrackingSku.get(trackingSkuKey);
+      if (trackingMatch) return trackingMatch;
+      const shippedDateKey = toDateInputValue(item.shippedAt);
+      const skuStockedDateKey = `${getExportSkuKey(item.sku)}::${shippedDateKey}`;
+      return inventoryStockBySkuStockedDate.get(skuStockedDateKey) || null;
+    };
+    const findExactMatchedInventoryRow = (item: (typeof dedupedOrders)[number]) => {
+      const directMatch = sourceInventory.find((row) =>
+        row.isStocked
+        && row.orderId === item.orderId,
+      );
+      if (directMatch) return directMatch;
+      const trackingNo = String(item.trackingNo || "").trim().toLowerCase();
+      const skuKey = getExportSkuKey(item.sku);
+      const trackingMatch = sourceInventory.find((row) =>
+        row.isStocked
+        && String(row.trackingNo || "").trim().toLowerCase() === trackingNo
+        && getExportSkuKey(row.sku) === skuKey,
+      );
+      if (trackingMatch) return trackingMatch;
+      const shippedDateKey = toDateInputValue(item.shippedAt);
+      return sourceInventory.find((row) =>
+        row.isStocked
+        && getExportSkuKey(row.sku) === skuKey
+        && toDateInputValue(row.stockedAt) === shippedDateKey,
+      ) || null;
+    };
     const shippedQtyBySku = dedupedOrders.reduce((map, item) => {
       const skuKey = getExportSkuKey(item.sku);
       if (!skuKey) return map;
@@ -3320,6 +3352,8 @@ export function DropshippingClient({
     }
     const preparedOrders = dedupedOrders.map((item) => {
       const matchedStockInfo = getMatchedStockInfo(item);
+      const exactMatchedStockInfo = getExactMatchedStockInfo(item);
+      const exactMatchedInventoryRow = findExactMatchedInventoryRow(item);
       const exportIsStocked = matchedStockInfo?.isStocked ?? item.isStocked;
       const exportStockedQty =
         matchedStockInfo && matchedStockInfo.stockedQty > 0
@@ -3338,6 +3372,8 @@ export function DropshippingClient({
         exportStockedQty,
         exportRemainingQty: remainingQtyBySku.get(getExportSkuKey(item.sku)),
         skuKey: getExportSkuKey(item.sku),
+        stockBatchKey: exactMatchedInventoryRow?.rowKey || null,
+        stockBatchQty: exactMatchedInventoryRow?.stockedQty || exactMatchedStockInfo?.stockedQty || 0,
       };
     });
     const computeAmountWithQty = (item: (typeof preparedOrders)[number], effectiveQty: number) => {
@@ -3358,10 +3394,19 @@ export function DropshippingClient({
       const bTime = b.shippedAt ? new Date(b.shippedAt).getTime() : 0;
       return aTime - bTime;
     });
-    const computeDisplayedProductAmount = (item: (typeof sortedPreparedOrders)[number]) =>
-      computeAmountWithQty(item, Math.max(item.quantity, 0));
-    const computeSettlementGroupAmount = (items: typeof sortedPreparedOrders) => {
-      const mxnAmount = items.reduce((sum, item) => sum + computeDisplayedProductAmount(item), 0);
+    const ordersWithDisplayAmounts = applyStockPriorityProductAmounts(sortedPreparedOrders).map((item) => {
+      const displayConvertedAmount =
+        exchangeRate.rateValue && Number.isFinite(exchangeRate.rateValue)
+          ? item.displayProductAmount * exchangeRate.rateValue
+          : item.productAmount;
+      return {
+        ...item,
+        displayConvertedAmount,
+        displayCnyTotalAmount: displayConvertedAmount + item.shippingFee,
+      };
+    });
+    const computeSettlementGroupAmount = (items: typeof ordersWithDisplayAmounts) => {
+      const mxnAmount = items.reduce((sum, item) => sum + item.displayProductAmount, 0);
       const shippingAmount = items.reduce((sum, item) => sum + item.shippingFee, 0);
       const convertedAmount =
         exchangeRate.rateValue && Number.isFinite(exchangeRate.rateValue)
@@ -3374,28 +3419,15 @@ export function DropshippingClient({
         totalAmount: convertedAmount + shippingAmount,
       };
     };
-    const overallAmounts = computeSettlementGroupAmount(sortedPreparedOrders);
-    const ordersWithDisplayAmounts = sortedPreparedOrders.map((item) => {
-      const displayProductAmount = computeDisplayedProductAmount(item);
-      const displayConvertedAmount =
-        exchangeRate.rateValue && Number.isFinite(exchangeRate.rateValue)
-          ? displayProductAmount * exchangeRate.rateValue
-          : item.productAmount;
-      return {
-        ...item,
-        displayProductAmount,
-        displayConvertedAmount,
-        displayCnyTotalAmount: displayConvertedAmount + item.shippingFee,
-      };
-    });
+    const overallAmounts = computeSettlementGroupAmount(ordersWithDisplayAmounts);
     return {
       orders: ordersWithDisplayAmounts,
       mxnSubtotal: overallAmounts.mxnAmount,
       cnySubtotal: overallAmounts.convertedAmount,
       serviceFeeTotal: overallAmounts.shippingAmount,
       payableTotal: overallAmounts.totalAmount,
-      totalPaidAmount: computeSettlementGroupAmount(sortedPreparedOrders.filter((item) => item.settlementStatus === "paid")).totalAmount,
-      totalUnpaidAmount: computeSettlementGroupAmount(sortedPreparedOrders.filter((item) => item.settlementStatus !== "paid")).totalAmount,
+      totalPaidAmount: computeSettlementGroupAmount(ordersWithDisplayAmounts.filter((item) => item.settlementStatus === "paid")).totalAmount,
+      totalUnpaidAmount: computeSettlementGroupAmount(ordersWithDisplayAmounts.filter((item) => item.settlementStatus !== "paid")).totalAmount,
       hasUnpaid: sortedPreparedOrders.some((item) => item.settlementStatus !== "paid"),
     };
   }
@@ -3511,16 +3543,16 @@ export function DropshippingClient({
                 ? [
                     "1. 商品按墨西哥比索（MXN）计价。",
                     financeStatementVipEnabled
-                      ? "2. 产品金额按单价、发货数量、普通折扣和 VIP 折扣计算。"
-                      : "2. 产品金额按单价、发货数量和普通折扣计算。",
+                      ? "2. 产品金额按备货优先消耗；无备货部分再按发货数量、普通折扣和 VIP 折扣计算。"
+                      : "2. 产品金额按备货优先消耗；无备货部分再按发货数量和普通折扣计算。",
                     "3. 代发费按唯一物流单计入人民币费用。",
                     "4. 合计 = 折算 + 当行代发费。",
                   ]
                 : [
                     "1. Los productos se cotizan en MXN.",
                     financeStatementVipEnabled
-                      ? "2. El monto considera precio, cantidad y descuentos."
-                      : "2. El monto considera precio, cantidad y descuento general.",
+                      ? "2. El monto usa stock primero; sin stock, cobra por cantidad enviada y descuentos."
+                      : "2. El monto usa stock primero; sin stock, cobra por cantidad enviada y descuento general.",
                     "3. El servicio se cobra una vez por guia unica.",
                     "4. Total RMB = conversion RMB + servicio por fila.",
                   ],
