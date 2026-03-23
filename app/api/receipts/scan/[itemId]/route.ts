@@ -7,6 +7,7 @@ import { getSession } from "@/lib/tenant";
 const BodySchema = z.object({
   receiptId: z.string().trim().min(1),
   mode: z.enum(["scan", "edit_item", "edit_qty"]).optional(),
+  useSupplierCasePack: z.boolean().optional(),
   sku: z.string().trim().optional(),
   barcode: z.string().trim().optional(),
   casePack: z.union([z.string(), z.number()]).optional(),
@@ -14,6 +15,52 @@ const BodySchema = z.object({
   damagedQty: z.union([z.string(), z.number()]).optional(),
   excessQty: z.union([z.string(), z.number()]).optional(),
 });
+
+async function resolveSupplierCasePack(
+  tenantId: string,
+  companyId: string,
+  supplierName: string | null | undefined,
+  sku: string | null | undefined,
+) {
+  const normalizedSupplierName = String(supplierName || "").trim();
+  const normalizedSku = String(sku || "").trim();
+
+  if (!normalizedSupplierName || !normalizedSku) {
+    return null;
+  }
+
+  const supplierProfile = await prisma.supplierProfile.findFirst({
+    where: {
+      tenant_id: tenantId,
+      company_id: companyId,
+      OR: [
+        { short_name: normalizedSupplierName },
+        { full_name: normalizedSupplierName },
+      ],
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!supplierProfile) {
+    return null;
+  }
+
+  const supplierProduct = await prisma.supplierProductSource.findFirst({
+    where: {
+      tenant_id: tenantId,
+      company_id: companyId,
+      supplier_profile_id: supplierProfile.id,
+      sku: normalizedSku,
+    },
+    select: {
+      case_pack: true,
+    },
+  });
+
+  return supplierProduct?.case_pack ?? null;
+}
 
 function toNullableInt(value: unknown): number | null {
   if (value === undefined || value === null || value === "") return null;
@@ -170,6 +217,7 @@ export async function PATCH(
     const {
       receiptId,
       mode,
+      useSupplierCasePack,
       sku,
       barcode,
       casePack,
@@ -211,6 +259,17 @@ export async function PATCH(
       );
     }
 
+    const receipt = await prisma.receipt.findFirst({
+      where: {
+        id: item.receipt_id,
+        tenant_id: session.tenantId,
+        company_id: session.companyId,
+      },
+      select: {
+        supplier_name: true,
+      },
+    });
+
     let nextSku = item.sku || "";
     let nextBarcode = item.barcode || "";
     let nextCasePack = item.case_pack ?? 0;
@@ -221,7 +280,17 @@ export async function PATCH(
 
     if (mode === "scan") {
       if (!item.unexpected) {
-        const increment = nextCasePack > 0 ? nextCasePack : 1;
+        const supplierCasePack = useSupplierCasePack
+          ? await resolveSupplierCasePack(
+              session.tenantId,
+              session.companyId,
+              receipt?.supplier_name,
+              nextSku,
+            )
+          : null;
+        const increment = useSupplierCasePack
+          ? (supplierCasePack && supplierCasePack > 0 ? supplierCasePack : 1)
+          : (nextCasePack > 0 ? nextCasePack : 1);
         const maxGoodAllowed = Math.max(nextExpectedQty - nextDamagedQty, 0);
         nextGoodQty = Math.min(nextGoodQty + increment, maxGoodAllowed);
       }
@@ -314,6 +383,13 @@ export async function PATCH(
       item.unexpected,
     );
 
+    const supplierCasePack = await resolveSupplierCasePack(
+      session.tenantId,
+      session.companyId,
+      receipt?.supplier_name,
+      nextSku,
+    );
+
     const result = await prisma.$transaction(async (tx) => {
       const updatedItem = await tx.receiptItem.update({
         where: { id: item.id },
@@ -397,6 +473,7 @@ export async function PATCH(
           nameZh: updatedItem.name_zh || "",
           nameEs: updatedItem.name_es || "",
           casePack: updatedItem.case_pack ?? null,
+          supplierCasePack,
           expectedQty: updatedItem.expected_qty ?? 0,
           goodQty: updatedItem.unexpected ? 0 : (updatedItem.good_qty ?? 0),
           damagedQty: updatedItem.unexpected

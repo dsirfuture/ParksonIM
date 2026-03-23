@@ -306,6 +306,8 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   const [supplierKeyword, setSupplierKeyword] = useState("");
   const [supplierForm, setSupplierForm] = useState<Supplier>(EMPTY_SUPPLIER);
   const [uploadingSupplierLogo, setUploadingSupplierLogo] = useState(false);
+  const [pendingSupplierImportId, setPendingSupplierImportId] = useState("");
+  const [importingSupplierId, setImportingSupplierId] = useState("");
   const [supplierEditorOpen, setSupplierEditorOpen] = useState(false);
   const [quickCategoryDraft, setQuickCategoryDraft] = useState({
     open: false,
@@ -328,6 +330,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   const [categoryDefaultActive, setCategoryDefaultActive] = useState(true);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const categoryZhInputRef = useRef<HTMLInputElement | null>(null);
+  const supplierProductInputRef = useRef<HTMLInputElement | null>(null);
 
   const zhFallbackMap: Record<string, string> = {
     "Vista de documento": "文档预览",
@@ -544,6 +547,37 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       await loadAll();
     } catch (e) {
       setError(e instanceof Error ? e.message : tx("删除供应商失败", "Delete prov fail"));
+    }
+  }
+
+  async function importSupplierProducts(supplierId: string, file: File) {
+    try {
+      setError("");
+      setImportingSupplierId(supplierId);
+      const form = new FormData();
+      form.append("supplierId", supplierId);
+      form.append("file", file);
+
+      const res = await fetch("/api/settings/suppliers/products/import", {
+        method: "POST",
+        body: form,
+      });
+      const json = await readJsonSafe<any>(res);
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || tx("导入产品资料失败", "Import fail"));
+      }
+
+      showSaved(
+        tx(
+          `已导入 ${json.total || 0} 条产品资料`,
+          `Importadas ${json.total || 0} filas`,
+        ),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : tx("导入产品资料失败", "Import fail"));
+    } finally {
+      setPendingSupplierImportId("");
+      setImportingSupplierId("");
     }
   }
 
@@ -944,7 +978,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       <th className="px-3 py-2 text-left">{tx("折扣规则", "Disc rule")}</th>
                       <th className="px-3 py-2 text-left">{tx("账期", "Term")}</th>
                       <th className="px-3 py-2 text-left">{tx("状态", "Status")}</th>
-                      <th className="w-[88px] px-3 py-2 text-right"></th>
+                      <th className="w-[220px] px-3 py-2 text-right"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -987,6 +1021,20 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                           <div className="flex justify-end gap-2">
                             <button
                               type="button"
+                              disabled={!canManageSuppliers || importingSupplierId === s.id}
+                              onClick={() => {
+                                setError("");
+                                setPendingSupplierImportId(s.id);
+                                supplierProductInputRef.current?.click();
+                              }}
+                              className="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                            >
+                              {importingSupplierId === s.id
+                                ? tx("导入中...", "Importando...")
+                                : tx("导入产品资料", "Importar productos")}
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => {
                                 setSupplierForm(s);
                                 setSupplierEditorOpen(true);
@@ -1012,6 +1060,23 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                   </tbody>
                 </table>
               </div>
+              <input
+                ref={supplierProductInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  const supplierId = pendingSupplierImportId;
+                  e.target.value = "";
+                  if (file && supplierId) {
+                    void importSupplierProducts(supplierId, file);
+                  } else {
+                    setPendingSupplierImportId("");
+                    setImportingSupplierId("");
+                  }
+                }}
+              />
             </div>
           </div>
         ) : null}

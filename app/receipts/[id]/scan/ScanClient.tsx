@@ -22,6 +22,7 @@ type ItemRow = {
   nameZh: string;
   nameEs: string;
   casePack: number | null;
+  supplierCasePack: number | null;
   expectedQty: number | null;
   goodQty: number;
   damagedQty: number;
@@ -61,6 +62,8 @@ type TextMap = {
   nameZh: string;
   nameEs: string;
   casePack: string;
+  supplierCasePack: string;
+  supplierCasePackColumn: string;
   expectedQty: string;
   goodQty: string;
   damagedQty: string;
@@ -432,6 +435,7 @@ export function ScanClient({
   const [summary, setSummary] = useState<SummaryState>(initialSummary);
   const [scanInput, setScanInput] = useState("");
   const [keyword, setKeyword] = useState("");
+  const [useSupplierCasePack, setUseSupplierCasePack] = useState(false);
   const [activeItemId, setActiveItemId] = useState<string | null>(
     rows[0]?.id || null,
   );
@@ -530,13 +534,13 @@ export function ScanClient({
 
   const canFinishInspection = useMemo(() => {
     if (receiptLocked || receiptStatus === "completed") return false;
-    if (summary.progress < 80) return false;
+    if (!hasRealScanData) return false;
     return summary.diffQtyTotal > 0 || summary.uncheckedQtyTotal > 0;
   }, [
+    hasRealScanData,
     receiptLocked,
     receiptStatus,
     summary.diffQtyTotal,
-    summary.progress,
     summary.uncheckedQtyTotal,
   ]);
 
@@ -963,6 +967,7 @@ export function ScanClient({
         body: JSON.stringify({
           receiptId,
           mode: "scan",
+          useSupplierCasePack,
         }),
       });
 
@@ -1259,24 +1264,35 @@ export function ScanClient({
               </div>
             </div>
 
-            <div className="w-full max-w-[420px] xl:w-[420px]">
-              <div className="flex h-11 items-center rounded-xl border border-slate-200 bg-white px-4">
-                <svg
-                  className="mr-3 h-4 w-4 shrink-0 text-slate-400"
-                  viewBox="0 0 20 20"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                >
-                  <path d="M14.5 14.5L18 18" />
-                  <circle cx="8.5" cy="8.5" r="5.75" />
-                </svg>
-                <input
-                  value={keyword}
-                  onChange={(e) => setKeyword(e.target.value)}
-                  placeholder={text.searchPlaceholder}
-                  className="w-full border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
-                />
+            <div className="w-full max-w-[720px] xl:w-auto">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-end">
+                <label className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={useSupplierCasePack}
+                    onChange={(e) => setUseSupplierCasePack(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                  />
+                  <span>{text.supplierCasePack}</span>
+                </label>
+                <div className="flex h-11 w-full min-w-[320px] items-center rounded-xl border border-slate-200 bg-white px-4 xl:w-[420px]">
+                  <svg
+                    className="mr-3 h-4 w-4 shrink-0 text-slate-400"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  >
+                    <path d="M14.5 14.5L18 18" />
+                    <circle cx="8.5" cy="8.5" r="5.75" />
+                  </svg>
+                  <input
+                    value={keyword}
+                    onChange={(e) => setKeyword(e.target.value)}
+                    placeholder={text.searchPlaceholder}
+                    className="w-full border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -1291,6 +1307,7 @@ export function ScanClient({
               <col className="w-[16%]" />
               <col className="w-[16%]" />
               <col className="w-[72px]" />
+              <col className="w-[92px]" />
               <col className="w-[72px]" />
               <col className="w-[56px]" />
               <col className="w-[56px]" />
@@ -1321,6 +1338,9 @@ export function ScanClient({
                   {text.casePack}
                 </th>
                 <th className="whitespace-nowrap px-2 py-3 font-semibold">
+                  {text.supplierCasePackColumn}
+                </th>
+                <th className="whitespace-nowrap px-2 py-3 font-semibold">
                   {text.expectedQty}
                 </th>
                 <th className="whitespace-nowrap px-2 py-3 font-semibold">
@@ -1349,7 +1369,7 @@ export function ScanClient({
               {items.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={14}
+                    colSpan={15}
                     className="px-4 py-10 text-center text-sm text-slate-500"
                   >
                     {text.noItems}
@@ -1358,7 +1378,7 @@ export function ScanClient({
               ) : filteredRows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={14}
+                    colSpan={15}
                     className="px-4 py-10 text-center text-sm text-slate-500"
                   >
                     {text.noMatch}
@@ -1413,7 +1433,10 @@ export function ScanClient({
                         {row.nameEs || "-"}
                       </td>
                       <td className="whitespace-nowrap px-2 py-3 text-sm text-slate-700">
-                        {row.casePack ?? "-"}
+                        {useSupplierCasePack ? "-" : (row.casePack ?? "-")}
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-3 text-sm text-slate-700">
+                        {useSupplierCasePack ? (row.supplierCasePack ?? "-") : "-"}
                       </td>
                       <td className="whitespace-nowrap px-2 py-3 text-sm text-slate-700">
                         {row.expectedQty ?? 0}

@@ -12,6 +12,52 @@ const BodySchema = z.object({
   expectedQty: z.union([z.string(), z.number()]),
 });
 
+async function resolveSupplierCasePack(
+  tenantId: string,
+  companyId: string,
+  supplierName: string | null | undefined,
+  sku: string | null | undefined,
+) {
+  const normalizedSupplierName = String(supplierName || "").trim();
+  const normalizedSku = String(sku || "").trim();
+
+  if (!normalizedSupplierName || !normalizedSku) {
+    return null;
+  }
+
+  const supplierProfile = await prisma.supplierProfile.findFirst({
+    where: {
+      tenant_id: tenantId,
+      company_id: companyId,
+      OR: [
+        { short_name: normalizedSupplierName },
+        { full_name: normalizedSupplierName },
+      ],
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!supplierProfile) {
+    return null;
+  }
+
+  const supplierProduct = await prisma.supplierProductSource.findFirst({
+    where: {
+      tenant_id: tenantId,
+      company_id: companyId,
+      supplier_profile_id: supplierProfile.id,
+      sku: normalizedSku,
+    },
+    select: {
+      case_pack: true,
+    },
+  });
+
+  return supplierProduct?.case_pack ?? null;
+}
+
 function toNonNegativeInt(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return 0;
 
@@ -149,6 +195,7 @@ export async function POST(req: Request) {
       },
       select: {
         id: true,
+        supplier_name: true,
       },
     });
 
@@ -171,6 +218,12 @@ export async function POST(req: Request) {
 
     const sku = parsed.data.sku.trim();
     const barcode = parsed.data.barcode?.trim() || null;
+    const supplierCasePack = await resolveSupplierCasePack(
+      session.tenantId,
+      session.companyId,
+      receipt.supplier_name,
+      sku,
+    );
 
     const duplicate = await prisma.receiptItem.findFirst({
       where: {
@@ -273,6 +326,7 @@ export async function POST(req: Request) {
           nameZh: created.name_zh || "",
           nameEs: created.name_es || "",
           casePack: created.case_pack ?? null,
+          supplierCasePack,
           expectedQty: created.expected_qty ?? 0,
           goodQty: 0,
           damagedQty: 0,

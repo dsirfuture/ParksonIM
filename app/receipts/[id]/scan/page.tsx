@@ -66,6 +66,7 @@ type ItemRow = {
   nameZh: string;
   nameEs: string;
   casePack: number | null;
+  supplierCasePack: number | null;
   expectedQty: number | null;
   goodQty: number;
   damagedQty: number;
@@ -150,6 +151,8 @@ export default async function ReceiptScanPage({ params }: ScanPageProps) {
           nameZh: "中文名",
           nameEs: "西文名",
           casePack: "包装数",
+          supplierCasePack: "启用供应商中包数",
+          supplierCasePackColumn: "供应商中包数",
           expectedQty: "应验",
           goodQty: "良品",
           damagedQty: "破损",
@@ -204,6 +207,8 @@ export default async function ReceiptScanPage({ params }: ScanPageProps) {
           nameZh: "Nombre CN",
           nameEs: "Nombre ES",
           casePack: "Pack",
+          supplierCasePack: "Usar pack proveedor",
+          supplierCasePackColumn: "Pack prov.",
           expectedQty: "Esp.",
           goodQty: "Buenas",
           damagedQty: "Daño",
@@ -283,6 +288,52 @@ export default async function ReceiptScanPage({ params }: ScanPageProps) {
     );
   }
 
+  const receiptSupplierName = (receipt.supplier_name || "").trim();
+  const receiptSkuList = Array.from(
+    new Set(
+      receipt.items
+        .map((item) => String(item.sku || "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  let supplierCasePackMap = new Map<string, number | null>();
+
+  if (receiptSupplierName && receiptSkuList.length > 0) {
+    const supplierProfile = await prisma.supplierProfile.findFirst({
+      where: {
+        tenant_id: session.tenantId,
+        company_id: session.companyId,
+        OR: [
+          { short_name: receiptSupplierName },
+          { full_name: receiptSupplierName },
+        ],
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (supplierProfile) {
+      const supplierProducts = await prisma.supplierProductSource.findMany({
+        where: {
+          tenant_id: session.tenantId,
+          company_id: session.companyId,
+          supplier_profile_id: supplierProfile.id,
+          sku: { in: receiptSkuList },
+        },
+        select: {
+          sku: true,
+          case_pack: true,
+        },
+      });
+
+      supplierCasePackMap = new Map(
+        supplierProducts.map((item) => [item.sku, toNumber(item.case_pack)]),
+      );
+    }
+  }
+
   const itemRows: ItemRow[] = receipt.items.map((item) => {
     const expectedQty = item.expected_qty ?? 0;
     const goodQty = item.unexpected ? 0 : (item.good_qty ?? 0);
@@ -301,6 +352,7 @@ export default async function ReceiptScanPage({ params }: ScanPageProps) {
       nameZh: item.name_zh || "",
       nameEs: item.name_es || "",
       casePack: toNumber(item.case_pack),
+      supplierCasePack: supplierCasePackMap.get(item.sku || "") ?? null,
       expectedQty: toNumber(item.expected_qty),
       goodQty,
       damagedQty,

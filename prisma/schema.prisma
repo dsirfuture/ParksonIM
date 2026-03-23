@@ -72,6 +72,7 @@ model Tenant {
   productImportBatches ProductImportBatch[]
   yogoProductSources   YogoProductSource[]
   yogoProductSyncLogs  YogoProductSyncLog[]
+  supplierProductSources SupplierProductSource[]
   userPermissions      UserPermission[]
   suppliers            SupplierProfile[]
   customers            CustomerProfile[]
@@ -116,6 +117,7 @@ model Company {
   productImportBatches ProductImportBatch[]
   yogoProductSources   YogoProductSource[]
   yogoProductSyncLogs  YogoProductSyncLog[]
+  supplierProductSources SupplierProductSource[]
   userPermissions      UserPermission[]
   suppliers            SupplierProfile[]
   customers            CustomerProfile[]
@@ -213,6 +215,35 @@ model SupplierProfile {
   @@index([tenant_id, company_id])
   @@index([short_name])
   @@map("supplier_profiles")
+}
+
+model SupplierProductSource {
+  id         String @id @default(uuid()) @db.Uuid
+  tenant_id  String @db.Uuid
+  company_id String @db.Uuid
+
+  supplier_profile_id String @db.Uuid
+  supplier_name       String
+  sku                 String
+  barcode             String?
+  name_zh             String?
+  name_es             String?
+  case_pack           Int?
+  carton_pack         Int?
+  unit_price          Decimal? @db.Decimal(14, 2)
+  last_import_batch   String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, company_id, supplier_profile_id, sku])
+  @@index([tenant_id, company_id, supplier_profile_id])
+  @@index([tenant_id, company_id, supplier_name])
+  @@index([sku])
+  @@map("supplier_product_sources")
 }
 
 model CustomerProfile {
