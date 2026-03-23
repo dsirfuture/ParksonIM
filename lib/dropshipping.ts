@@ -1613,6 +1613,7 @@ export async function getInventoryRows(session: Session) {
   }
 
   const assignedOrderByInventoryId = new Map<string, string>();
+  const exactAssignedOrderByInventoryId = new Map<string, string>();
   const assignedShippedQtyByInventoryId = new Map<string, number>();
   const remainingCapacityByInventoryId = new Map<string, number>();
   const totalShippedQtyByPair = new Map<string, number>();
@@ -1634,7 +1635,7 @@ export async function getInventoryRows(session: Session) {
     const candidates = inventoriesByPair.get(pairKey) || [];
     const linkedInventory = candidates.find((inventory) => inventory.linked_order_id === row.id) || null;
     const shippedDate = row.shipped_at?.toISOString()?.slice(0, 10) || "";
-    const matchedInventory =
+    const exactMatchedInventory =
       (linkedInventory && linkedInventory.is_stocked && (remainingCapacityByInventoryId.get(linkedInventory.id) || 0) >= row.quantity
         ? linkedInventory
         : null)
@@ -1645,6 +1646,9 @@ export async function getInventoryRows(session: Session) {
         const stockedDate = inventory.stocked_at?.toISOString()?.slice(0, 10) || "";
         return Boolean(stockedDate) && stockedDate === shippedDate;
       })
+      || null;
+    const matchedInventory =
+      exactMatchedInventory
       || candidates.find((inventory) => {
         if (!inventory.is_stocked) return false;
         const remainingCapacity = remainingCapacityByInventoryId.get(inventory.id) || 0;
@@ -1655,6 +1659,9 @@ export async function getInventoryRows(session: Session) {
     if (matchedInventory) {
       if (!assignedOrderByInventoryId.has(matchedInventory.id)) {
         assignedOrderByInventoryId.set(matchedInventory.id, row.id);
+      }
+      if (exactMatchedInventory && !exactAssignedOrderByInventoryId.has(exactMatchedInventory.id)) {
+        exactAssignedOrderByInventoryId.set(exactMatchedInventory.id, row.id);
       }
       assignedShippedQtyByInventoryId.set(
         matchedInventory.id,
@@ -1727,7 +1734,7 @@ export async function getInventoryRows(session: Session) {
     const discountRate = Math.abs(rawDiscountRate) <= 1 ? rawDiscountRate : rawDiscountRate / 100;
     const stockedAt = assignedInventory?.stocked_at?.toISOString() || null;
     const shippedAt = row.shipped_at?.toISOString() || null;
-    const assignedOrderId = assignedInventory ? assignedOrderByInventoryId.get(assignedInventory.id) : null;
+    const assignedOrderId = assignedInventory ? exactAssignedOrderByInventoryId.get(assignedInventory.id) : null;
     const showsStockDetails = Boolean(assignedInventory?.is_stocked) && assignedOrderId === row.id;
     if (showsStockDetails && assignedInventory?.id) {
       representedStockedInventoryIds.add(assignedInventory.id);
