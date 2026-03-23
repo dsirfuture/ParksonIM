@@ -4276,6 +4276,14 @@ export function DropshippingClient({
   }
 
   async function persistOrderRequest(source: OrderFormState, trackingGroupId?: string | null) {
+    const normalizedOrderNo = source.platformOrderNo.trim();
+    const normalizedTrackingNo = source.trackingNo.trim();
+    if (!normalizedTrackingNo) {
+      throw new Error("missing_tracking_no");
+    }
+    if (!source.id && normalizedOrderNo && normalizedOrderNo === normalizedTrackingNo) {
+      throw new Error("same_order_and_tracking_no");
+    }
     const endpoint = source.id ? `/api/dropshipping/orders/${source.id}` : "/api/dropshipping/orders";
     const method = source.id ? "PATCH" : "POST";
     const response = await fetch(endpoint, {
@@ -4342,6 +4350,22 @@ export function DropshippingClient({
 
   function handleOrderSaveError(rawError: unknown) {
     const message = rawError instanceof Error ? rawError.message : "save_failed";
+    if (message === "missing_tracking_no") {
+      setError(
+        lang === "zh"
+          ? "物流号必须填写"
+          : "La guia es obligatoria.",
+      );
+      return;
+    }
+    if (message === "same_order_and_tracking_no") {
+      setError(
+        lang === "zh"
+          ? "订单号和物流号不能相同"
+          : "El numero de pedido y la guia no pueden ser iguales.",
+      );
+      return;
+    }
     if (message === "duplicate_platform_order_no" || message === "duplicate_tracking_no") {
       setDuplicateAlertMessage(
         lang === "zh"

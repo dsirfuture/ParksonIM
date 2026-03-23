@@ -12,14 +12,16 @@ export async function PATCH(
 ) {
   try {
     const session = await getSession();
-    if (!session) return NextResponse.json({ ok: false, error: "未登录" }, { status: 401 });
+    if (!session) {
+      return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+    }
     if (!(await hasPermission(session, "viewReports"))) {
-      return NextResponse.json({ ok: false, error: "无权限" }, { status: 403 });
+      return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
     }
 
     const { id } = await context.params;
     if (!id) {
-      return NextResponse.json({ ok: false, error: "参数不完整" }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "invalid_request" }, { status: 400 });
     }
 
     const body = (await request.json()) as Record<string, unknown>;
@@ -54,11 +56,17 @@ export async function PATCH(
         ? existing.customer.name
         : String(body.customerName || "").trim();
     const platform =
-      body.platform === undefined ? existing.platform : String(body.platform || "无").trim() || "无";
+      body.platform === undefined
+        ? existing.platform
+        : String(body.platform || "未知").trim() || "未知";
     const platformOrderNo =
       body.platformOrderNo === undefined
         ? existing.platform_order_no
         : String(body.platformOrderNo || "").trim();
+    const trackingNo =
+      body.trackingNo === undefined
+        ? existing.tracking_no || ""
+        : String(body.trackingNo || "").trim();
     const sku =
       body.sku === undefined ? existing.product.sku : String(body.sku || "").trim();
     const productNameZh =
@@ -70,8 +78,8 @@ export async function PATCH(
         ? existing.quantity
         : Number(body.quantity);
 
-    if (!customerName || !platformOrderNo || !sku || !productNameZh || quantity < 0) {
-      return NextResponse.json({ ok: false, error: "参数不完整" }, { status: 400 });
+    if (!customerName || !trackingNo || !sku || !productNameZh || quantity < 0) {
+      return NextResponse.json({ ok: false, error: "missing_tracking_no" }, { status: 400 });
     }
 
     const order = await saveOrder(session, {
@@ -90,10 +98,7 @@ export async function PATCH(
           ? existing.product.name_es || undefined
           : String(body.productNameEs || "").trim() || undefined,
       quantity,
-      trackingNo:
-        body.trackingNo === undefined
-          ? existing.tracking_no || undefined
-          : String(body.trackingNo || "").trim() || undefined,
+      trackingNo: trackingNo || undefined,
       color:
         body.color === undefined
           ? existing.color || undefined
@@ -101,24 +106,33 @@ export async function PATCH(
       warehouse: FIXED_WAREHOUSE,
       shippedAt:
         body.shippedAt === undefined
-          ? (existing.shipped_at ? existing.shipped_at.toISOString().slice(0, 10) : null)
+          ? existing.shipped_at
+            ? existing.shipped_at.toISOString().slice(0, 10)
+            : null
           : body.shippedAt
             ? String(body.shippedAt)
             : null,
       shippingFee:
         body.shippingFee === undefined
-          ? (existing.shipping_fee ? Number(existing.shipping_fee) : undefined)
+          ? existing.shipping_fee
+            ? Number(existing.shipping_fee)
+            : undefined
           : body.shippingFee === "" || body.shippingFee === null
             ? undefined
             : Number(body.shippingFee),
       settlementStatus:
         body.settlementStatus === undefined
-          ? (existing.settled_at ? "paid" : "unpaid")
+          ? existing.settled_at
+            ? "paid"
+            : "unpaid"
           : (String(body.settlementStatus || "unpaid") as "unpaid" | "paid"),
       shippingStatus:
         body.shippingStatus === undefined
           ? existing.shipping_status
-          : (String(body.shippingStatus || "pending") as "pending" | "shipped" | "cancelled"),
+          : (String(body.shippingStatus || "pending") as
+              | "pending"
+              | "shipped"
+              | "cancelled"),
       notes:
         body.notes === undefined
           ? existing.notes || undefined
@@ -135,7 +149,7 @@ export async function PATCH(
       return NextResponse.json({ ok: false, error: error.message }, { status: 409 });
     }
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "更新订单失败" },
+      { ok: false, error: error instanceof Error ? error.message : "update_order_failed" },
       { status: 500 },
     );
   }
@@ -147,7 +161,9 @@ export async function DELETE(
 ) {
   try {
     const session = await getSession();
-    if (!session) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+    if (!session) {
+      return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+    }
     if (!(await hasPermission(session, "viewReports"))) {
       return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
     }
