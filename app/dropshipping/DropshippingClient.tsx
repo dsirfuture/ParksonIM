@@ -8487,7 +8487,12 @@ export function DropshippingClient({
                           <tr className="border-b border-slate-200 bg-white text-left text-xs font-semibold text-slate-400">
                             <th className="w-[1%] whitespace-nowrap px-2 py-2">{lang === "zh" ? "订单号" : "Pedido"}</th>
                             <th className="w-[1%] whitespace-nowrap px-2 py-2">{lang === "zh" ? "物流号" : "Guia"}</th>
-                            <th className="w-[1%] whitespace-nowrap px-2 py-2">{lang === "zh" ? "发货日期" : "Envio"}</th>
+                            <th className="w-[1%] whitespace-nowrap px-2 py-2">
+                              <span className="inline-flex items-center gap-1">
+                                <span>{lang === "zh" ? "发货日期" : "Envio"}</span>
+                                <span aria-hidden="true">↑</span>
+                              </span>
+                            </th>
                             <th className="w-[1%] whitespace-nowrap px-2 py-2">{lang === "zh" ? "编码" : "Codigo"}</th>
                             <th className="w-[1%] whitespace-nowrap px-2 py-2 text-right">{lang === "zh" ? "数量" : "Cant."}</th>
                             <th className="w-[1%] whitespace-nowrap px-2 py-2 text-right">{lang === "zh" ? "单价" : "Precio"}</th>
