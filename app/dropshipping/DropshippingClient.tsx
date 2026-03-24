@@ -467,6 +467,15 @@ function extractImportedPlatformSku(value: string) {
   return parts.length >= 2 ? `${parts[0]}-${parts[1]}` : (parts[0] || "");
 }
 
+function extractImportedPlatformQuantity(value: string) {
+  const text = String(value || "").trim();
+  if (!text) return 0;
+  const matched = text.match(/\*(\d+)/);
+  if (!matched?.[1]) return 0;
+  const quantity = Number(matched[1]);
+  return Number.isFinite(quantity) && quantity > 0 ? Math.max(1, Math.round(quantity)) : 0;
+}
+
 function formatMexicoDateFromChinaParts(
   year: number,
   month: number,
@@ -621,7 +630,6 @@ async function parseImportedOrderFile(file: File) {
     || orderNoCol === undefined
     || shippedAtCol === undefined
     || platformSkuCol === undefined
-    || quantityCol === undefined
     || trackingNoCol === undefined
   ) {
     throw new Error("import_columns_missing");
@@ -635,11 +643,14 @@ async function parseImportedOrderFile(file: File) {
     const shippedAt = toMexicoDateInputFromChinaDateTime(cells[shippedAtCol]);
     const rawPlatformSku = String(cells[platformSkuCol] || "").trim();
     const sku = extractImportedPlatformSku(rawPlatformSku);
-    const quantityValue = Number(String(cells[quantityCol] || "").trim());
+    const quantityFromSku = extractImportedPlatformQuantity(rawPlatformSku);
+    const quantityValue = quantityCol === undefined ? Number.NaN : Number(String(cells[quantityCol] || "").trim());
     const trackingNo = String(cells[trackingNoCol] || "").trim();
 
     if (!platformOrderNo && !rawPlatformSku && !trackingNo) return;
-    const quantity = Number.isFinite(quantityValue) && quantityValue > 0 ? Math.max(1, Math.round(quantityValue)) : 0;
+    const quantity = quantityFromSku > 0
+      ? quantityFromSku
+      : (Number.isFinite(quantityValue) && quantityValue > 0 ? Math.max(1, Math.round(quantityValue)) : 0);
 
     importedRows.push({
       platform,
@@ -1384,6 +1395,7 @@ export function DropshippingClient({
   const [orderImportPreviewError, setOrderImportPreviewError] = useState("");
   const [orderImportPreviewFileName, setOrderImportPreviewFileName] = useState("");
   const [orderImportPreviewPage, setOrderImportPreviewPage] = useState(1);
+  const [orderImportSuccessMessage, setOrderImportSuccessMessage] = useState("");
   const [importProgress, setImportProgress] = useState<number | null>(null);
   const [importSummary, setImportSummary] = useState<string>("");
   const [error, setError] = useState("");
@@ -5735,8 +5747,8 @@ export function DropshippingClient({
       if (message === "import_columns_missing") {
         setOrderImportPreviewError(
           lang === "zh"
-            ? "导入文件缺少必需列：平台、订单编号、发货时间、商品SKU、产品数量、跟踪号"
-            : "Faltan columnas requeridas: plataforma, pedido, fecha, SKU, cantidad y guia",
+            ? "导入文件缺少必需列：平台、订单编号、发货时间、商品SKU、跟踪号"
+            : "Faltan columnas requeridas: plataforma, pedido, fecha, SKU y guia",
         );
       } else if (message === "import_sheet_missing") {
         setOrderImportPreviewError(lang === "zh" ? "导入文件没有工作表" : "El archivo no tiene hojas");
@@ -5821,7 +5833,7 @@ export function DropshippingClient({
       setOrderImportPreviewPage(1);
       setOrderImportPreviewRows([]);
       setOrderImportPreviewError("");
-      setSuccess(
+      setOrderImportSuccessMessage(
         lang === "zh"
           ? `订单文件已导入：新增 ${createdCount} 条，跳过 ${skippedCount} 条。`
           : `Archivo importado: ${createdCount} nuevos, ${skippedCount} omitidos.`,
@@ -5831,8 +5843,8 @@ export function DropshippingClient({
       if (message === "import_columns_missing") {
         setOrderImportPreviewError(
           lang === "zh"
-            ? "导入文件缺少必需列：平台、订单编号、发货时间、商品SKU、产品数量、跟踪号"
-            : "Faltan columnas requeridas: plataforma, pedido, fecha, SKU, cantidad y guia",
+            ? "导入文件缺少必需列：平台、订单编号、发货时间、商品SKU、跟踪号"
+            : "Faltan columnas requeridas: plataforma, pedido, fecha, SKU y guia",
         );
       } else if (message === "import_sheet_missing") {
         setOrderImportPreviewError(lang === "zh" ? "导入文件没有工作表" : "El archivo no tiene hojas");
@@ -8235,6 +8247,30 @@ export function DropshippingClient({
                   {orderFileImporting ? (lang === "zh" ? "导入中..." : "Importando...") : (lang === "zh" ? "确认导入" : "Confirmar")}
                 </button>
               ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {orderImportSuccessMessage ? (
+        <div className="fixed inset-0 z-[66] flex items-center justify-center bg-slate-900/45 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <h3 className="text-base font-semibold text-slate-900">
+                {lang === "zh" ? "导入完成" : "Importacion completada"}
+              </h3>
+            </div>
+            <div className="px-5 py-5 text-sm text-slate-700">
+              {orderImportSuccessMessage}
+            </div>
+            <div className="flex justify-end border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setOrderImportSuccessMessage("")}
+                className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white hover:opacity-95"
+              >
+                {lang === "zh" ? "知道了" : "Entendido"}
+              </button>
             </div>
           </div>
         </div>
