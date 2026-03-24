@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 import { getClientLang } from "@/lib/lang-client";
 
 type PermissionState = {
@@ -50,6 +50,19 @@ type SupplierDiscountRule = {
   category: string;
   normalDiscount: string;
   vipDiscount: string;
+};
+
+type SupplierProductSourceItem = {
+  id: string;
+  sku: string;
+  barcode: string;
+  nameZh: string;
+  nameEs: string;
+  casePack: number | null;
+  cartonPack: number | null;
+  unitPrice: string | number | null;
+  lastImportBatch: string;
+  updatedAt: string;
 };
 
 type Customer = {
@@ -295,6 +308,8 @@ function formatYogoCodeDraft(value: string) {
 }
 
 export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientProps) {
+  const SUPPLIER_PAGE_SIZE = 10;
+  const SUPPLIER_PRODUCT_PREVIEW_PAGE_SIZE = 12;
   const [lang, setLang] = useState<"zh" | "es">("zh");
   const [tab, setTab] = useState<TabKey>("perm");
   const [loading, setLoading] = useState(true);
@@ -304,11 +319,26 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   const [permissionRows, setPermissionRows] = useState<UserPermissionRow[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [supplierKeyword, setSupplierKeyword] = useState("");
+  const [supplierPage, setSupplierPage] = useState(1);
   const [supplierForm, setSupplierForm] = useState<Supplier>(EMPTY_SUPPLIER);
   const [uploadingSupplierLogo, setUploadingSupplierLogo] = useState(false);
   const [pendingSupplierImportId, setPendingSupplierImportId] = useState("");
   const [importingSupplierId, setImportingSupplierId] = useState("");
+  const [previewingSupplierId, setPreviewingSupplierId] = useState("");
   const [supplierEditorOpen, setSupplierEditorOpen] = useState(false);
+  const [supplierProductPreview, setSupplierProductPreview] = useState<{
+    open: boolean;
+    supplierName: string;
+    loading: boolean;
+    page: number;
+    items: SupplierProductSourceItem[];
+  }>({
+    open: false,
+    supplierName: "",
+    loading: false,
+    page: 1,
+    items: [],
+  });
   const [quickCategoryDraft, setQuickCategoryDraft] = useState({
     open: false,
     ruleId: "",
@@ -581,6 +611,37 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
     }
   }
 
+  async function previewSupplierProducts(supplier: Supplier) {
+    try {
+      setError("");
+      setPreviewingSupplierId(supplier.id);
+      setSupplierProductPreview({
+        open: true,
+        supplierName: supplier.shortName || supplier.fullName || "-",
+        loading: true,
+        page: 1,
+        items: [],
+      });
+      const res = await fetch(`/api/settings/suppliers/products/import?supplierId=${encodeURIComponent(supplier.id)}`);
+      const json = await readJsonSafe<any>(res);
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || tx("加载供应商产品资料失败", "Load fail"));
+      }
+      setSupplierProductPreview({
+        open: true,
+        supplierName: supplier.shortName || supplier.fullName || "-",
+        loading: false,
+        page: 1,
+        items: json.items || [],
+      });
+    } catch (e) {
+      setSupplierProductPreview((prev) => ({ ...prev, loading: false }));
+      setError(e instanceof Error ? e.message : tx("加载供应商产品资料失败", "Load fail"));
+    } finally {
+      setPreviewingSupplierId("");
+    }
+  }
+
   async function saveCustomer() {
     try {
       setError("");
@@ -782,6 +843,35 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
     [suppliers, supplierKeyword],
   );
 
+  useEffect(() => {
+    setSupplierPage(1);
+  }, [supplierKeyword, suppliers.length]);
+
+  const supplierTotalPages = Math.max(1, Math.ceil(filteredSuppliers.length / SUPPLIER_PAGE_SIZE));
+  const safeSupplierPage = Math.min(supplierPage, supplierTotalPages);
+  const pagedSuppliers = useMemo(
+    () =>
+      filteredSuppliers.slice(
+        (safeSupplierPage - 1) * SUPPLIER_PAGE_SIZE,
+        safeSupplierPage * SUPPLIER_PAGE_SIZE,
+      ),
+    [filteredSuppliers, safeSupplierPage, SUPPLIER_PAGE_SIZE],
+  );
+
+  const supplierPreviewTotalPages = Math.max(
+    1,
+    Math.ceil(supplierProductPreview.items.length / SUPPLIER_PRODUCT_PREVIEW_PAGE_SIZE),
+  );
+  const safeSupplierPreviewPage = Math.min(supplierProductPreview.page, supplierPreviewTotalPages);
+  const pagedSupplierPreviewItems = useMemo(
+    () =>
+      supplierProductPreview.items.slice(
+        (safeSupplierPreviewPage - 1) * SUPPLIER_PRODUCT_PREVIEW_PAGE_SIZE,
+        safeSupplierPreviewPage * SUPPLIER_PRODUCT_PREVIEW_PAGE_SIZE,
+      ),
+    [supplierProductPreview.items, safeSupplierPreviewPage, SUPPLIER_PRODUCT_PREVIEW_PAGE_SIZE],
+  );
+
   const filteredCustomers = useMemo(
     () =>
       customers.filter((c) =>
@@ -967,24 +1057,24 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                 </div>
                 <input value={supplierKeyword} onChange={(e) => setSupplierKeyword(e.target.value)} placeholder={tx("搜索供应商", "Search prov")} className="h-10 w-full max-w-[280px] rounded-xl border border-slate-200 px-3 text-sm" />
               </div>
-              <div className="max-h-[360px] overflow-auto">
+              <div className="max-h-[540px] overflow-auto">
                 <table className="w-full min-w-[1040px] text-sm">
                   <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600">
                     <tr>
-                      <th className="w-[76px] px-3 py-2 text-left">LOGO</th>
-                      <th className="px-3 py-2 text-left">{tx("简称", "Short")}</th>
-                      <th className="px-3 py-2 text-left">{tx("全称", "Full")}</th>
-                      <th className="px-3 py-2 text-left">{tx("联系人 / 电话", "Cont / Tel")}</th>
-                      <th className="px-3 py-2 text-left">{tx("折扣规则", "Disc rule")}</th>
-                      <th className="px-3 py-2 text-left">{tx("账期", "Term")}</th>
-                      <th className="px-3 py-2 text-left">{tx("状态", "Status")}</th>
+                      <th className="w-[76px] px-3 py-2 text-left whitespace-nowrap">LOGO</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("简称", "Short")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("全称", "Full")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("联系人 / 电话", "Cont / Tel")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("折扣规则", "Disc rule")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("账期", "Term")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("状态", "Status")}</th>
                       <th className="w-[220px] px-3 py-2 text-right"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredSuppliers.map((s) => (
+                    {pagedSuppliers.map((s) => (
                       <tr key={s.id} className="border-t border-slate-100">
-                        <td className="px-3 py-2.5">
+                        <td className="px-3 py-1.5">
                           <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
                             {s.logoUrl ? (
                               <img
@@ -999,16 +1089,16 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                             )}
                           </div>
                         </td>
-                        <td className="px-3 py-2 font-semibold">{s.shortName || "-"}</td>
-                        <td className="px-3 py-2">{s.fullName || "-"}</td>
-                        <td className="px-3 py-2">{`${s.contact || "-"} / ${s.phone || "-"}`}</td>
-                        <td className="px-3 py-2">
+                        <td className="px-3 py-1.5 font-semibold">{s.shortName || "-"}</td>
+                        <td className="px-3 py-1.5">{s.fullName || "-"}</td>
+                        <td className="px-3 py-1.5">{`${s.contact || "-"} / ${s.phone || "-"}`}</td>
+                        <td className="px-3 py-1.5">
                           {s.discountRules.length
                             ? tx(`已配置 ${s.discountRules.length} 条`, `${s.discountRules.length} reglas`)
                             : tx("未配置", "Sin configurar")}
                         </td>
-                        <td className="px-3 py-2">{s.accountPeriodDays ? `${s.accountPeriodDays} ${tx("天", "d")}` : "-"}</td>
-                        <td className="px-3 py-2">
+                        <td className="px-3 py-1.5">{s.accountPeriodDays ? `${s.accountPeriodDays} ${tx("天", "d")}` : "-"}</td>
+                        <td className="px-3 py-1.5">
                           <span
                             className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                               s.enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"
@@ -1017,7 +1107,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                             {s.enabled ? tx("启用", "Activo") : tx("停用", "Inactivo")}
                           </span>
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="px-3 py-1.5">
                           <div className="flex justify-end gap-2">
                             <button
                               type="button"
@@ -1027,11 +1117,20 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                 setPendingSupplierImportId(s.id);
                                 supplierProductInputRef.current?.click();
                               }}
-                              className="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                              className="inline-flex h-8 items-center whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold leading-none text-slate-700 hover:bg-slate-50 disabled:opacity-40"
                             >
                               {importingSupplierId === s.id
                                 ? tx("导入中...", "Importando...")
                                 : tx("导入产品资料", "Importar productos")}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={previewingSupplierId === s.id}
+                              onClick={() => void previewSupplierProducts(s)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                              aria-label={tx("查看导入资料", "Ver productos")}
+                            >
+                              <Eye className="h-4 w-4" />
                             </button>
                             <button
                               type="button"
@@ -1077,6 +1176,177 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                   }
                 }}
               />
+              {filteredSuppliers.length > 0 ? (
+                <div className="border-t border-slate-200 px-4 py-3">
+                  <div className="flex flex-nowrap items-center justify-center gap-2 overflow-x-auto">
+                    <button
+                      type="button"
+                      onClick={() => setSupplierPage(1)}
+                      disabled={safeSupplierPage <= 1}
+                      className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {tx("回到首页", "Ini")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSupplierPage((prev) => Math.max(prev - 1, 1))}
+                      disabled={safeSupplierPage <= 1}
+                      className="inline-flex h-9 min-w-[40px] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {tx("上一页", "Ant")}
+                    </button>
+                    <div className="inline-flex h-9 min-w-[72px] items-center justify-center rounded-lg border border-slate-300 bg-slate-50 px-3 text-sm font-semibold text-slate-700">
+                      {safeSupplierPage} / {supplierTotalPages}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSupplierPage((prev) => Math.min(prev + 1, supplierTotalPages))}
+                      disabled={safeSupplierPage >= supplierTotalPages}
+                      className="inline-flex h-9 min-w-[40px] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {tx("下一页", "Sig")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSupplierPage(supplierTotalPages)}
+                      disabled={safeSupplierPage >= supplierTotalPages}
+                      className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {tx("去最后页", "Fin")}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {!loading && supplierProductPreview.open ? (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 px-4">
+            <div className="max-h-[86vh] w-full max-w-[1100px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
+              <div className="border-b border-slate-200 px-4 py-3">
+                <h3 className="text-base font-semibold text-slate-900">
+                  {tx("导入资料详情", "Detalle importado")} · {supplierProductPreview.supplierName}
+                </h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  {tx("查看当前供应商已导入的产品资料。", "Ver productos importados del proveedor actual.")}
+                </p>
+              </div>
+              <div className="p-4">
+                {supplierProductPreview.loading ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                    {tx("加载中...", "Cargando...")}
+                  </div>
+                ) : supplierProductPreview.items.length === 0 ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                    {tx("还没有导入资料", "Sin datos importados")}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-slate-200">
+                    <table className="w-full min-w-[980px] text-sm">
+                      <thead className="bg-slate-50 text-slate-600">
+                        <tr>
+                          <th className="px-3 py-2 text-left">{tx("编码", "SKU")}</th>
+                          <th className="px-3 py-2 text-left">{tx("条码", "Barcode")}</th>
+                          <th className="px-3 py-2 text-left">{tx("中文名", "CN")}</th>
+                          <th className="px-3 py-2 text-left">{tx("西文名", "ES")}</th>
+                          <th className="px-3 py-2 text-left">{tx("中包数", "Case")}</th>
+                          <th className="px-3 py-2 text-left">{tx("装箱数", "Carton")}</th>
+                          <th className="px-3 py-2 text-left">{tx("单价", "Price")}</th>
+                          <th className="px-3 py-2 text-left">{tx("更新时间", "Updated")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pagedSupplierPreviewItems.map((item) => (
+                          <tr key={item.id} className="border-t border-slate-100">
+                            <td className="px-3 py-2 font-semibold">{item.sku || "-"}</td>
+                            <td className="px-3 py-2">{item.barcode || "-"}</td>
+                            <td className="px-3 py-2">{item.nameZh || "-"}</td>
+                            <td className="px-3 py-2">{item.nameEs || "-"}</td>
+                            <td className="px-3 py-2">{item.casePack ?? "-"}</td>
+                            <td className="px-3 py-2">{item.cartonPack ?? "-"}</td>
+                            <td className="px-3 py-2">{item.unitPrice ?? "-"}</td>
+                            <td className="px-3 py-2">{item.updatedAt ? item.updatedAt.slice(0, 10).replace(/-/g, "/") : "-"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+              {!supplierProductPreview.loading && supplierProductPreview.items.length > 0 ? (
+                <div className="border-t border-slate-200 px-4 py-3">
+                  <div className="flex flex-nowrap items-center justify-center gap-2 overflow-x-auto">
+                    <button
+                      type="button"
+                      onClick={() => setSupplierProductPreview((prev) => ({ ...prev, page: 1 }))}
+                      disabled={safeSupplierPreviewPage <= 1}
+                      className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {tx("回到首页", "Ini")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSupplierProductPreview((prev) => ({
+                          ...prev,
+                          page: Math.max(prev.page - 1, 1),
+                        }))
+                      }
+                      disabled={safeSupplierPreviewPage <= 1}
+                      className="inline-flex h-9 min-w-[40px] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {tx("上一页", "Ant")}
+                    </button>
+                    <div className="inline-flex h-9 min-w-[72px] items-center justify-center rounded-lg border border-slate-300 bg-slate-50 px-3 text-sm font-semibold text-slate-700">
+                      {safeSupplierPreviewPage} / {supplierPreviewTotalPages}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSupplierProductPreview((prev) => ({
+                          ...prev,
+                          page: Math.min(prev.page + 1, supplierPreviewTotalPages),
+                        }))
+                      }
+                      disabled={safeSupplierPreviewPage >= supplierPreviewTotalPages}
+                      className="inline-flex h-9 min-w-[40px] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {tx("下一页", "Sig")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSupplierProductPreview((prev) => ({
+                          ...prev,
+                          page: supplierPreviewTotalPages,
+                        }))
+                      }
+                      disabled={safeSupplierPreviewPage >= supplierPreviewTotalPages}
+                      className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {tx("去最后页", "Fin")}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSupplierProductPreview({
+                      open: false,
+                      supplierName: "",
+                      loading: false,
+                      page: 1,
+                      items: [],
+                    })
+                  }
+                  className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
+                >
+                  {tx("关闭", "Cerrar")}
+                </button>
+              </div>
             </div>
           </div>
         ) : null}

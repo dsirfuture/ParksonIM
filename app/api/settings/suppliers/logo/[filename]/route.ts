@@ -9,8 +9,13 @@ type RouteParams = {
   }>;
 };
 
-function getSupplierLogoPath(filename: string) {
-  return path.join(process.cwd(), "public", "supplier-logos", filename);
+const PERSISTENT_SUPPLIER_LOGO_DIR = path.join("/data", "supplier-logos");
+
+function getSupplierLogoPaths(filename: string) {
+  return [
+    path.join(PERSISTENT_SUPPLIER_LOGO_DIR, filename),
+    path.join(process.cwd(), "public", "supplier-logos", filename),
+  ];
 }
 
 function getContentType(filename: string) {
@@ -33,8 +38,19 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    const file = await fs.readFile(getSupplierLogoPath(filename));
-    return new NextResponse(file, {
+    let file: Buffer | null = null;
+    for (const candidate of getSupplierLogoPaths(filename)) {
+      try {
+        file = await fs.readFile(candidate);
+        break;
+      } catch (error: any) {
+        if (error?.code !== "ENOENT") throw error;
+      }
+    }
+    if (!file) {
+      return new NextResponse("Not Found", { status: 404 });
+    }
+    return new NextResponse(new Uint8Array(file), {
       status: 200,
       headers: {
         "Content-Type": getContentType(filename),

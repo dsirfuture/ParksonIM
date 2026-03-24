@@ -64,6 +64,7 @@ services:
       - "127.0.0.1:13000:3000"
     volumes:
       - ./data/avatars:/data/avatars
+      - ./data/supplier-logos:/data/supplier-logos
     networks:
       - parksonim_internal
       - nginx-proxy-manager_default

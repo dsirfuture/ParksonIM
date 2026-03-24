@@ -140,6 +140,8 @@ type AddItemFormState = {
   expectedQty: string;
 };
 
+type SummaryFilterKey = "all" | "diffQty" | "uncheckedQty";
+
 type EvidenceItem = {
   id: string;
   name: string;
@@ -231,20 +233,35 @@ function SummaryCard({
   label,
   value,
   valueClassName = "text-slate-900",
+  active = false,
+  clickable = false,
+  onClick,
 }: {
   label: string;
   value: number;
   valueClassName?: string;
+  active?: boolean;
+  clickable?: boolean;
+  onClick?: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!clickable}
+      className={`w-full rounded-2xl border px-5 py-4 text-left transition ${
+        active
+          ? "border-primary bg-primary/5 shadow-sm"
+          : "border-slate-200 bg-slate-50"
+      } ${clickable ? "cursor-pointer hover:border-primary/40 hover:bg-primary/5" : "cursor-default"}`}
+    >
       <div className="text-sm text-slate-500">{label}</div>
       <div
         className={`mt-2 text-[18px] font-bold leading-none ${valueClassName}`}
       >
         {value}
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -435,6 +452,7 @@ export function ScanClient({
   const [summary, setSummary] = useState<SummaryState>(initialSummary);
   const [scanInput, setScanInput] = useState("");
   const [keyword, setKeyword] = useState("");
+  const [summaryFilter, setSummaryFilter] = useState<SummaryFilterKey>("all");
   const [useSupplierCasePack, setUseSupplierCasePack] = useState(false);
   const [activeItemId, setActiveItemId] = useState<string | null>(
     rows[0]?.id || null,
@@ -487,6 +505,7 @@ export function ScanClient({
     setItems(rows);
     setSummary(initialSummary);
     setActiveItemId(rows[0]?.id || null);
+    setSummaryFilter("all");
   }, [rows, initialSummary]);
 
   useEffect(() => {
@@ -512,6 +531,12 @@ export function ScanClient({
       return source.includes(value);
     });
 
+    if (summaryFilter === "diffQty") {
+      list = list.filter((row) => hasRowScanData(row) && row.diffQty > 0);
+    } else if (summaryFilter === "uncheckedQty") {
+      list = list.filter((row) => hasRowScanData(row) && row.uncheckedQty > 0);
+    }
+
     list = [...list].sort((a, b) => {
       if (pinnedItemId) {
         if (a.id === pinnedItemId && b.id !== pinnedItemId) return -1;
@@ -525,7 +550,7 @@ export function ScanClient({
     });
 
     return list;
-  }, [items, keyword, pinnedItemId]);
+  }, [items, keyword, pinnedItemId, summaryFilter]);
 
   const hasRealScanData = useMemo(
     () => items.some((row) => hasRowScanData(row)),
@@ -1185,6 +1210,13 @@ export function ScanClient({
             <SummaryCard
               label={text.diffQty}
               value={summary.diffQtyTotal}
+              clickable={hasRealScanData && summary.diffQtyTotal > 0}
+              active={summaryFilter === "diffQty"}
+              onClick={() =>
+                setSummaryFilter((prev) =>
+                  prev === "diffQty" ? "all" : "diffQty",
+                )
+              }
               valueClassName={
                 hasRealScanData && summary.diffQtyTotal > 0
                   ? "text-rose-600"
@@ -1195,6 +1227,13 @@ export function ScanClient({
             <SummaryCard
               label={text.uncheckedQty}
               value={summary.uncheckedQtyTotal}
+              clickable={hasRealScanData && summary.uncheckedQtyTotal > 0}
+              active={summaryFilter === "uncheckedQty"}
+              onClick={() =>
+                setSummaryFilter((prev) =>
+                  prev === "uncheckedQty" ? "all" : "uncheckedQty",
+                )
+              }
               valueClassName={
                 hasRealScanData && summary.uncheckedQtyTotal > 0
                   ? "text-rose-600"
@@ -1262,6 +1301,15 @@ export function ScanClient({
               <div className="whitespace-nowrap text-[18px] font-bold tracking-tight text-slate-900">
                 {text.listTitle}
               </div>
+              {summaryFilter !== "all" ? (
+                <button
+                  type="button"
+                  onClick={() => setSummaryFilter("all")}
+                  className="mt-2 inline-flex h-8 items-center rounded-full border border-primary/20 bg-primary/5 px-3 text-xs font-semibold text-primary"
+                >
+                  {summaryFilter === "diffQty" ? text.diffQty : text.uncheckedQty}
+                </button>
+              ) : null}
             </div>
 
             <div className="w-full max-w-[720px] xl:w-auto">
@@ -2021,4 +2069,3 @@ export function ScanClient({
     </div>
   );
 }
-

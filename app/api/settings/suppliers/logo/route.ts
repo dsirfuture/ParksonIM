@@ -8,6 +8,7 @@ import { hasPermission } from "@/lib/permissions";
 export const runtime = "nodejs";
 
 const MAX_SIZE = 5 * 1024 * 1024;
+const PERSISTENT_SUPPLIER_LOGO_DIR = path.join("/data", "supplier-logos");
 
 function extFromType(type: string) {
   if (type.includes("png")) return "png";
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
 
     const ext = extFromType(file.type);
     const fileName = `supplier-logo-${session.tenantId}-${session.companyId}-${Date.now()}-${randomUUID().slice(0, 8)}.${ext}`;
-    const folder = path.join(process.cwd(), "public", "supplier-logos");
+    const folder = PERSISTENT_SUPPLIER_LOGO_DIR;
     const fullPath = path.join(folder, fileName);
     await fs.mkdir(folder, { recursive: true });
     await fs.writeFile(fullPath, Buffer.from(await file.arrayBuffer()));

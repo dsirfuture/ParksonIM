@@ -200,40 +200,46 @@ export async function POST(request: Request) {
     let createdCount = 0;
     let updatedCount = 0;
 
-    await prisma.$transaction(async (tx) => {
-      for (const row of parsedRows) {
-        const data = {
-          supplier_name: supplier.short_name || supplier.full_name || "",
-          barcode: row.barcode || null,
-          name_zh: row.nameZh || null,
-          name_es: row.nameEs || null,
-          case_pack: row.casePack,
-          carton_pack: row.cartonPack,
-          unit_price: row.unitPrice,
-          last_import_batch: batchId,
-        };
+    await prisma.$transaction(
+      async (tx) => {
+        for (const row of parsedRows) {
+          const data = {
+            supplier_name: supplier.short_name || supplier.full_name || "",
+            barcode: row.barcode || null,
+            name_zh: row.nameZh || null,
+            name_es: row.nameEs || null,
+            case_pack: row.casePack,
+            carton_pack: row.cartonPack,
+            unit_price: row.unitPrice,
+            last_import_batch: batchId,
+          };
 
-        const existingId = existingMap.get(row.sku);
-        if (existingId) {
-          updatedCount += 1;
-          await tx.supplierProductSource.update({
-            where: { id: existingId },
-            data,
-          });
-        } else {
-          createdCount += 1;
-          await tx.supplierProductSource.create({
-            data: {
-              tenant_id: session.tenantId,
-              company_id: session.companyId,
-              supplier_profile_id: supplier.id,
-              sku: row.sku,
-              ...data,
-            },
-          });
+          const existingId = existingMap.get(row.sku);
+          if (existingId) {
+            updatedCount += 1;
+            await tx.supplierProductSource.update({
+              where: { id: existingId },
+              data,
+            });
+          } else {
+            createdCount += 1;
+            await tx.supplierProductSource.create({
+              data: {
+                tenant_id: session.tenantId,
+                company_id: session.companyId,
+                supplier_profile_id: supplier.id,
+                sku: row.sku,
+                ...data,
+              },
+            });
+          }
         }
-      }
-    });
+      },
+      {
+        maxWait: 10000,
+        timeout: 60000,
+      },
+    );
 
     return NextResponse.json({
       ok: true,
@@ -244,6 +250,68 @@ export async function POST(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : "导入供应商产品资料失败" },
+      { status: 500 },
+    );
+  }
+}
+
+export async function GET(request: Request) {
+  try {
+    const session = await getSession();
+    if (!session?.tenantId || !session?.companyId) {
+      return NextResponse.json({ ok: false, error: "未登录" }, { status: 401 });
+    }
+
+    const allowed = await hasPermission(session, "manageSuppliers");
+    if (!allowed) {
+      return NextResponse.json({ ok: false, error: "无权限" }, { status: 403 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const supplierId = String(searchParams.get("supplierId") || "").trim();
+    if (!supplierId) {
+      return NextResponse.json({ ok: false, error: "缺少供应商" }, { status: 400 });
+    }
+
+    const items = await prisma.supplierProductSource.findMany({
+      where: {
+        tenant_id: session.tenantId,
+        company_id: session.companyId,
+        supplier_profile_id: supplierId,
+      },
+      orderBy: [{ updated_at: "desc" }, { sku: "asc" }],
+      select: {
+        id: true,
+        sku: true,
+        barcode: true,
+        name_zh: true,
+        name_es: true,
+        case_pack: true,
+        carton_pack: true,
+        unit_price: true,
+        last_import_batch: true,
+        updated_at: true,
+      },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      items: items.map((item) => ({
+        id: item.id,
+        sku: item.sku,
+        barcode: item.barcode || "",
+        nameZh: item.name_zh || "",
+        nameEs: item.name_es || "",
+        casePack: item.case_pack,
+        cartonPack: item.carton_pack,
+        unitPrice: item.unit_price,
+        lastImportBatch: item.last_import_batch || "",
+        updatedAt: item.updated_at.toISOString(),
+      })),
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { ok: false, error: error instanceof Error ? error.message : "加载供应商产品资料失败" },
       { status: 500 },
     );
   }

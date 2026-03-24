@@ -17,7 +17,7 @@ function normalizeSupplier(value: string | null | undefined) {
 }
 
 async function syncSuppliersFromYogo(tenantId: string, companyId: string) {
-  const [existingProfiles, yogoSuppliers] = await Promise.all([
+  const [existingProfiles, yogoRows] = await Promise.all([
     withPrismaRetry(() =>
       prisma.supplierProfile.findMany({
         where: { tenant_id: tenantId, company_id: companyId },
@@ -31,8 +31,7 @@ async function syncSuppliersFromYogo(tenantId: string, companyId: string) {
           company_id: companyId,
           supplier: { not: null },
         },
-        select: { supplier: true },
-        distinct: ["supplier"],
+        select: { supplier: true, product_code: true },
       }),
     ),
   ]);
@@ -51,9 +50,12 @@ async function syncSuppliersFromYogo(tenantId: string, companyId: string) {
     enabled: boolean;
   }> = [];
 
-  for (const row of yogoSuppliers) {
+  for (const row of yogoRows) {
     const normalized = normalizeSupplier(row.supplier);
+    const normalizedCode = normalizeSupplier(row.product_code);
     if (!normalized) continue;
+    // Guard against polluted source rows where product code was written into supplier.
+    if (normalizedCode && normalized.toUpperCase() === normalizedCode.toUpperCase()) continue;
     const key = normalized.toUpperCase();
     if (existingSet.has(key) || stagedSet.has(key)) continue;
     stagedSet.add(key);
