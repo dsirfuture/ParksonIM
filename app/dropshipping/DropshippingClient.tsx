@@ -2486,11 +2486,16 @@ export function DropshippingClient({
           });
           return [
             row.customerId,
-            buildFinanceCustomerExportSummary(row, inventory, paidCycleTextSet),
+            buildFinanceCustomerExportSummary(
+              row,
+              inventory,
+              paidCycleTextSet,
+              exchangeRate.rateValue || row.exchangeRate,
+            ),
           ];
         }),
       ),
-    [finance, financePreview?.customerId, financeStatementEntriesByCustomerId, financeStatementLockState?.isPaid, financeStatementPreviewRecord?.cycleText, inventory, financeStatementRateValue],
+    [exchangeRate.rateValue, finance, financePreview?.customerId, financeStatementEntriesByCustomerId, financeStatementLockState?.isPaid, financeStatementPreviewRecord?.cycleText, inventory],
   );
   const financeStatementSummary = useMemo(() => {
     if (!financePreview) return null;
@@ -3277,7 +3282,12 @@ export function DropshippingClient({
     row: DsFinanceRow,
     sourceInventory: DsInventoryRow[],
     paidCycleTextSet: ReadonlySet<string> = new Set<string>(),
+    summaryRateValue?: number | null,
   ) {
+    const effectiveSummaryRateValue =
+      typeof summaryRateValue === "number" && Number.isFinite(summaryRateValue) && summaryRateValue > 0
+        ? summaryRateValue
+        : row.exchangeRate;
     const getExportSkuKey = (value: string | null | undefined) =>
       normalizeProductCode(value || "") || String(value || "").trim().toLowerCase();
     const targetPreparedOrders = row.settledOrders.map((item) => {
@@ -3520,8 +3530,8 @@ export function DropshippingClient({
     });
     const ordersWithDisplayAmounts = applyStockPriorityProductAmounts(sortedPreparedOrders).map((item) => {
       const displayConvertedAmount =
-        financeStatementRateValue && Number.isFinite(financeStatementRateValue)
-          ? item.displayProductAmount * financeStatementRateValue
+        effectiveSummaryRateValue && Number.isFinite(effectiveSummaryRateValue)
+          ? item.displayProductAmount * effectiveSummaryRateValue
           : item.productAmount;
       return {
         ...item,
@@ -3533,8 +3543,8 @@ export function DropshippingClient({
       const mxnAmount = items.reduce((sum, item) => sum + item.displayProductAmount, 0);
       const shippingAmount = items.reduce((sum, item) => sum + item.shippingFee, 0);
       const convertedAmount =
-        financeStatementRateValue && Number.isFinite(financeStatementRateValue)
-          ? mxnAmount * financeStatementRateValue
+        effectiveSummaryRateValue && Number.isFinite(effectiveSummaryRateValue)
+          ? mxnAmount * effectiveSummaryRateValue
           : items.reduce((sum, item) => sum + item.productAmount, 0);
       return {
         mxnAmount,
@@ -3562,6 +3572,7 @@ export function DropshippingClient({
     if (!financePreview) return;
     let exportInventory = inventory;
     let exportPaidCycleTextSet = financePaidCycleTextSet;
+    let exportFinanceRow = financePreview;
     try {
       const inventoryResponse = await fetch("/api/dropshipping/inventory");
       const inventoryJson = await inventoryResponse.json();
@@ -3570,6 +3581,18 @@ export function DropshippingClient({
       }
     } catch {
       // Fallback to the current in-memory inventory state when the refresh request fails.
+    }
+    try {
+      const financeResponse = await fetch("/api/dropshipping/finance");
+      const financeJson = await financeResponse.json();
+      if (financeResponse.ok && financeJson?.ok && Array.isArray(financeJson.items)) {
+        const matchedFinanceRow = financeJson.items.find((row: DsFinanceRow) => row.customerId === financePreview.customerId);
+        if (matchedFinanceRow) {
+          exportFinanceRow = matchedFinanceRow;
+        }
+      }
+    } catch {
+      // Fallback to the current in-memory finance state when the refresh request fails.
     }
     try {
       const logsResponse = await fetch(`/api/dropshipping/finance/${financePreview.customerId}/logs`);
@@ -3587,13 +3610,21 @@ export function DropshippingClient({
     }
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet(lang === "zh" ? "结算详情" : "Detalle");
-    const companyTitle = financePreview.customerName || (lang === "zh" ? "公司名" : "Empresa");
-    const statementData = buildFinanceStatementData(
-      exportInventory,
-      actionType === "export_all" ? "all" : "weekly_unpaid",
-      exportPaidCycleTextSet,
-      actionType === "export_weekly_statement" ? financeStatementVipEnabled : true,
-    );
+    const companyTitle = exportFinanceRow.customerName || (lang === "zh" ? "公司名" : "Empresa");
+    const statementData =
+      actionType === "export_all"
+        ? buildFinanceCustomerExportSummary(
+            exportFinanceRow,
+            exportInventory,
+            exportPaidCycleTextSet,
+            exchangeRate.rateValue || exportFinanceRow.exchangeRate,
+          )
+        : buildFinanceStatementData(
+            exportInventory,
+            "weekly_unpaid",
+            exportPaidCycleTextSet,
+            financeStatementVipEnabled,
+          );
     if (!statementData) return;
     const totalProductAmount = statementData.mxnSubtotal;
     const totalConvertedAmount = statementData.cnySubtotal;
@@ -3608,10 +3639,11 @@ export function DropshippingClient({
       lang === "zh"
         ? `文件导出日期：${Number(todayParts.year)}年${Number(todayParts.month)}月${Number(todayParts.day)}日`
         : `Fecha de exportacion: ${todayParts.year}/${todayParts.month}/${todayParts.day}`;
+    const exportDisplayRate = actionType === "export_all" ? exchangeRate : financeStatementDisplayRate;
     const rateHintText =
       lang === "zh"
-        ? `${todayZhText}   汇率：MXN兑RMB  ${financeStatementDisplayRate.rateValue ? financeStatementDisplayRate.rateValue.toFixed(4) : "-"}`
-        : `Hoy ${todayParts.year}/${todayParts.month}/${todayParts.day}   Tipo de cambio: MXN a RMB ${financeStatementDisplayRate.rateValue ? financeStatementDisplayRate.rateValue.toFixed(4) : "-"}`;
+        ? `${todayZhText}   汇率：MXN兑RMB  ${exportDisplayRate.rateValue ? exportDisplayRate.rateValue.toFixed(4) : "-"}`
+        : `Hoy ${todayParts.year}/${todayParts.month}/${todayParts.day}   Tipo de cambio: MXN a RMB ${exportDisplayRate.rateValue ? exportDisplayRate.rateValue.toFixed(4) : "-"}`;
     const headerLabels = [
       lang === "zh" ? "订单号" : "Pedido",
       lang === "zh" ? "物流号" : "Guia",
@@ -3643,7 +3675,7 @@ export function DropshippingClient({
             customerName: financePreview.customerName,
             statementNumber: financeCurrentStatementNumber || `BS-${exportDateCode}`,
             generatedDateText: fmtDateOnly(financeStatementDisplayDateValue, lang),
-            orderCount: statementData.orderCount,
+            orderCount: statementData.orders.length,
             statusText: financeStatementHasUnpaid ? (lang === "zh" ? "未结" : "Con pendientes") : (lang === "zh" ? "已结" : "Liquidado"),
             hasUnpaid: financeStatementHasUnpaid,
             cycleText:
@@ -3694,7 +3726,7 @@ export function DropshippingClient({
               convertedAmountText: item.displayConvertedAmount > 0 ? `￥${fmtMoney(item.displayConvertedAmount, lang)}` : "-",
               shippingFeeText: item.shippingFee > 0 ? `￥${fmtMoney(item.shippingFee, lang)}` : "-",
               totalAmountText: `￥${fmtMoney(item.displayCnyTotalAmount, lang)}`,
-              highlightRed: item.displayReincluded,
+              highlightRed: "displayReincluded" in item ? item.displayReincluded : false,
             })),
             exportDateCode,
           },
@@ -3886,6 +3918,18 @@ export function DropshippingClient({
 
     for (const item of statementData.orders) {
       const exportProductAmount = item.displayProductAmount;
+      const exportDisplayReincluded = "displayReincluded" in item ? item.displayReincluded : false;
+      const exportDisplayIsStocked = "displayIsStocked" in item ? item.displayIsStocked : item.exportIsStocked;
+      const exportDisplayStockedAt = "displayStockedAt" in item ? item.displayStockedAt : null;
+      const exportDisplayStockedQty = "displayStockedQty" in item ? item.displayStockedQty : item.exportStockedQty;
+      const exportRemainingQty =
+        "skuStockInfo" in item
+          ? item.skuStockInfo?.isStocked && typeof item.exportRemainingQty === "number"
+            ? String(item.exportRemainingQty)
+            : "-"
+          : typeof item.exportRemainingQty === "number"
+            ? String(item.exportRemainingQty)
+            : "-";
       const row = worksheet.addRow([
         item.platformOrderNo,
         item.trackingNo || "",
@@ -3895,11 +3939,11 @@ export function DropshippingClient({
         item.unitPrice > 0 ? `$${fmtMoney(item.unitPrice, lang)}` : "-",
         item.normalDiscount > 0 ? `${fmtPercent(item.normalDiscount, lang)}%` : "-",
         item.vipDiscount > 0 ? `${fmtPercent(item.vipDiscount, lang)}%` : "-",
-        item.displayIsStocked ? (lang === "zh" ? "备" : "Stock") : "-",
-        item.displayIsStocked && item.displayStockedAt ? fmtDateOnly(item.displayStockedAt, lang) : "-",
-        item.displayIsStocked && item.displayStockedQty > 0 ? String(item.displayStockedQty) : "-",
+        exportDisplayIsStocked ? (lang === "zh" ? "备" : "Stock") : "-",
+        exportDisplayIsStocked && exportDisplayStockedAt ? fmtDateOnly(exportDisplayStockedAt, lang) : "-",
+        exportDisplayIsStocked && exportDisplayStockedQty > 0 ? String(exportDisplayStockedQty) : "-",
         item.quantity,
-        item.skuStockInfo?.isStocked && typeof item.exportRemainingQty === "number" ? String(item.exportRemainingQty) : "-",
+        exportRemainingQty,
         exportProductAmount > 0 ? `$${fmtMoney(exportProductAmount, lang)}` : "-",
         item.shippingFee > 0 ? `￥${fmtMoney(item.shippingFee, lang)}` : "-",
         fmtDateOnly(getMexicoWeekSaturdayValue(item.shippedAt) || item.settledAt, lang),
@@ -3912,7 +3956,7 @@ export function DropshippingClient({
           name: getExcelFontName(text, false),
           size: 10.5,
           bold: false,
-          color: { argb: item.displayReincluded ? "FFE11D48" : "FF111827" },
+          color: { argb: exportDisplayReincluded ? "FFE11D48" : "FF111827" },
         };
         cell.alignment = { vertical: "middle", horizontal: "left" };
         cell.border = {
@@ -3931,7 +3975,7 @@ export function DropshippingClient({
         name: getExcelFontName(statusText, false),
         size: 10.5,
         bold: false,
-        color: { argb: item.displayReincluded ? "FFE11D48" : statusText === (lang === "zh" ? "已结" : "Liquidado") ? "FF059669" : "FFE11D48" },
+        color: { argb: exportDisplayReincluded ? "FFE11D48" : statusText === (lang === "zh" ? "已结" : "Liquidado") ? "FF059669" : "FFE11D48" },
       };
       const stockedCell = row.getCell(9);
       const stockedText = String(stockedCell.value ?? "");
@@ -3939,7 +3983,7 @@ export function DropshippingClient({
         name: getExcelFontName(stockedText, false),
         size: 10.5,
         bold: false,
-        color: { argb: item.displayReincluded ? "FFE11D48" : "FF111827" },
+        color: { argb: exportDisplayReincluded ? "FFE11D48" : "FF111827" },
       };
     }
 
