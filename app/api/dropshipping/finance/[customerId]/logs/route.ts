@@ -49,6 +49,20 @@ function normalizeStatementCycleText(value: string | null | undefined) {
   return extractedRangeMatch?.[1] || extracted;
 }
 
+function parseCycleRange(value: string | null | undefined) {
+  const normalized = normalizeStatementCycleText(value);
+  const matched = normalized.match(/^(\d{4})\/(\d{2})\/(\d{2})\s-\s(\d{2})\/(\d{2})$/);
+  if (!matched) return null;
+
+  const [, year, startMonth, startDay, endMonth, endDay] = matched;
+  const startText = `${year}-${startMonth}-${startDay}T00:00:00.000-06:00`;
+  const endText = `${year}-${endMonth}-${endDay}T23:59:59.999-06:00`;
+  const start = new Date(startText);
+  const end = new Date(endText);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+  return { start, end };
+}
+
 function getActionLabel(actionType: string) {
   switch (String(actionType || "").trim()) {
     case "finance_view_detail":
@@ -332,6 +346,9 @@ export async function POST(
     const noteText = String(body?.note || "").trim();
     const orderId = String(body?.orderId || "").trim();
     const orderNo = String(body?.orderNo || "").trim();
+    const orderIds = Array.isArray(body?.orderIds)
+      ? body.orderIds.map((value: unknown) => String(value || "").trim()).filter(Boolean)
+      : [];
     const actionTypeMap: Record<string, string> = {
       view_detail: "finance_view_detail",
       statement_preview: "finance_statement_preview",
@@ -383,6 +400,76 @@ export async function POST(
     });
 
     let generatedAtText = "";
+    if (actionType === "confirm_statement_paid") {
+      if (orderIds.length > 0) {
+        const targetOrders = await prisma.dropshippingOrder.findMany({
+          where: {
+            tenant_id: session.tenantId,
+            company_id: session.companyId,
+            customer_id: normalizedCustomerId,
+            id: { in: orderIds },
+          },
+          select: {
+            id: true,
+            snapshot_total_amount: true,
+          },
+        });
+
+        if (targetOrders.length > 0) {
+          const settledAt = new Date();
+          await Promise.all(
+            targetOrders.map((order) => {
+              const totalAmount = Number(order.snapshot_total_amount || 0);
+              return prisma.dropshippingOrder.update({
+                where: { id: order.id },
+                data: {
+                  settled_at: settledAt,
+                  snapshot_paid_amount: totalAmount,
+                  snapshot_unpaid_amount: 0,
+                },
+              });
+            }),
+          );
+        }
+      } else {
+        const cycleRange = parseCycleRange(cycleText);
+        if (cycleRange) {
+          const targetOrders = await prisma.dropshippingOrder.findMany({
+            where: {
+              tenant_id: session.tenantId,
+              company_id: session.companyId,
+              customer_id: normalizedCustomerId,
+              shipped_at: {
+                gte: cycleRange.start,
+                lte: cycleRange.end,
+              },
+            },
+            select: {
+              id: true,
+              snapshot_total_amount: true,
+            },
+          });
+
+          if (targetOrders.length > 0) {
+            const settledAt = new Date();
+            await Promise.all(
+              targetOrders.map((order) => {
+                const totalAmount = Number(order.snapshot_total_amount || 0);
+                return prisma.dropshippingOrder.update({
+                  where: { id: order.id },
+                  data: {
+                    settled_at: settledAt,
+                    snapshot_paid_amount: totalAmount,
+                    snapshot_unpaid_amount: 0,
+                  },
+                });
+              }),
+            );
+          }
+        }
+      }
+    }
+
     if (statementNumber && actionType === "confirm_statement_paid") {
       const existingGenerateLog = await prisma.billingActionLog.findFirst({
         where: {

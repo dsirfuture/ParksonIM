@@ -3014,6 +3014,13 @@ export function DropshippingClient({
     setFinanceStatementActionLoading("confirm_paid");
     setFinanceStatementActionError("");
     try {
+      const matchedStatementOrderIds =
+        financeStatementPreparedData
+        && financeCurrentStatementNumber === entry.statementNumber
+          ? financeStatementPreparedData.orders
+              .filter((item) => item.settlementStatus !== "paid")
+              .map((item) => item.orderId)
+          : [];
       const response = await fetch(`/api/dropshipping/finance/${encodeURIComponent(row.customerId)}/logs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -3022,11 +3029,25 @@ export function DropshippingClient({
           customerName: row.customerName,
           statementNumber: entry.statementNumber,
           cycleText: entry.cycleText,
+          orderIds: matchedStatementOrderIds,
         }),
       });
       const result = await response.json().catch(() => null);
       if (!response.ok || !result?.ok) {
         throw new Error(result?.error || (lang === "zh" ? "确认已付款失败" : "No se pudo confirmar el pago"));
+      }
+      if (matchedStatementOrderIds.length > 0) {
+        const matchedOrderIdSet = new Set(matchedStatementOrderIds);
+        setOrders((prev) =>
+          prev.map((item) =>
+            matchedOrderIdSet.has(item.id)
+              ? {
+                  ...item,
+                  settlementStatus: "paid",
+                }
+              : item,
+          ),
+        );
       }
       setFinanceStatementRecordEntries((prev) =>
         prev.map((item) =>
@@ -3046,6 +3067,7 @@ export function DropshippingClient({
       } catch {
         // Keep the optimistic paid-state update if the refresh request fails.
       }
+      await refreshData(["orders", "finance", "overview"]);
       if (financeCurrentStatementNumber === entry.statementNumber) {
         setFinanceStatementLockState(result.statementState || {
           statementNumber: entry.statementNumber,
