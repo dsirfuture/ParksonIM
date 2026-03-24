@@ -3,6 +3,21 @@ export type DsLang = "zh" | "es";
 export type DsShippingStatus = "pending" | "shipped" | "cancelled";
 export type DsFinanceStatus = "unpaid" | "partial" | "paid";
 export type DsInventoryStatus = "healthy" | "low" | "empty";
+export type DsSettlementCurrencyMode = "RMB" | "MXN";
+
+export function normalizeDsSettlementCurrencyMode(value: unknown): DsSettlementCurrencyMode {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (
+    normalized === "mxn"
+    || normalized.includes("peso")
+    || normalized.includes("比索")
+    || normalized.includes("mxn_settlement")
+    || normalized.includes("settle_mxn")
+  ) {
+    return "MXN";
+  }
+  return "RMB";
+}
 
 export type DsOverviewStats = {
   todayOrders: number;
@@ -151,6 +166,7 @@ export type DsInventoryRow = {
 export type DsFinanceRow = {
   customerId: string;
   customerName: string;
+  settlementCurrencyMode: DsSettlementCurrencyMode;
   stockAmount: number;
   exchangeRate: number | null;
   exchangedAmount: number;

@@ -2,7 +2,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
-import type { DsExchangeRatePayload, DsFinanceOrderItem, DsFinanceRow } from "@/lib/dropshipping-types";
+import {
+  normalizeDsSettlementCurrencyMode,
+  type DsExchangeRatePayload,
+  type DsFinanceOrderItem,
+  type DsFinanceRow,
+  type DsSettlementCurrencyMode,
+} from "@/lib/dropshipping-types";
 
 type EmbeddedFonts = {
   zhRegular: PDFFont;
@@ -14,7 +20,23 @@ type EmbeddedFonts = {
 type PreparedSettlementItem = DsFinanceOrderItem & {
   effectiveShippingFee: number;
   mxnLineAmount: number;
-  cnyLineAmount: number;
+  settlementProductAmount: number;
+  settlementShippingAmount: number;
+  settlementLineAmount: number;
+};
+
+type PreparedSettlementData = {
+  items: PreparedSettlementItem[];
+  settlementMode: DsSettlementCurrencyMode;
+  mxnSubtotal: number;
+  settlementSubtotal: number;
+  serviceFeeTotal: number;
+  rawServiceFeeRmbTotal: number;
+  payableTotal: number;
+  minShippedAt: string | null;
+  maxShippedAt: string | null;
+  orderCount: number;
+  hasUnpaid: boolean;
 };
 
 function sanitizeFileName(value: string) {
@@ -57,6 +79,62 @@ function formatDateCode(value: Date) {
   }).formatToParts(value);
   const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${map.year}${map.month}${map.day}`;
+}
+
+function convertCnyToMxn(value: number, rateValue: number) {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  if (!Number.isFinite(rateValue) || rateValue <= 0) return 0;
+  return value / rateValue;
+}
+
+function getSettlementMode(financeRow: DsFinanceRow): DsSettlementCurrencyMode {
+  return normalizeDsSettlementCurrencyMode(financeRow.settlementCurrencyMode);
+}
+
+function getSettlementCurrencyPrefix(mode: DsSettlementCurrencyMode) {
+  return mode === "MXN" ? "$" : "￥";
+}
+
+function getSettlementLabels(mode: DsSettlementCurrencyMode) {
+  if (mode === "MXN") {
+    return {
+      productSettlement: "商品金额（比索）",
+      serviceFee: "代发服务费（比索）",
+      payableTotal: "应付总额（比索）",
+      settlementColumn: "结算金额",
+      totalColumn: "合计",
+      rateTextPrefix: "结算汇率：1 RMB = ",
+      rateTextSuffix: " MXN",
+      serviceFeePrefix: "代发费：",
+      noteLines: [
+        "1. 商品按墨西哥比索（MXN）计价。",
+        "2. 产品金额按单价、发货数量、普通折扣和 VIP 折扣计算。",
+        "3. 代发费先按人民币确定，再按结算汇率折算为比索。",
+        "4. 合计 = 商品金额（MXN） + 当行代发费（MXN）。",
+      ],
+    };
+  }
+
+  return {
+    productSettlement: "商品折算（人民币）",
+    serviceFee: "代发服务费（人民币）",
+    payableTotal: "应付总额（人民币）",
+    settlementColumn: "折算人民币",
+    totalColumn: "合计",
+    rateTextPrefix: "结算汇率：1 MXN = ",
+    rateTextSuffix: " RMB",
+    serviceFeePrefix: "代发费：",
+    noteLines: [
+      "1. 商品按墨西哥比索（MXN）计价。",
+      "2. 产品金额按单价、发货数量、普通折扣和 VIP 折扣计算。",
+      "3. 代发费按唯一物流单计入人民币费用。",
+      "4. ￥合计金额 = 折算人民币 + 当行代发费。",
+    ],
+  };
+}
+
+function formatSettlementAmount(value: number, mode: DsSettlementCurrencyMode) {
+  return `${getSettlementCurrencyPrefix(mode)}${formatMoney(value)}`;
 }
 
 async function loadFontCandidates(candidates: string[]) {
@@ -184,25 +262,36 @@ function measureTextWidth(
   }, 0);
 }
 
-function prepareSettlementItems(financeRow: DsFinanceRow) {
+function prepareSettlementItems(financeRow: DsFinanceRow, exchangeRate: DsExchangeRatePayload): PreparedSettlementData {
+  const settlementMode = getSettlementMode(financeRow);
   const seenTracking = new Set<string>();
   const items: PreparedSettlementItem[] = financeRow.settledOrders.map((item) => {
     const trackingKey = String(item.trackingNo || "").trim().toLowerCase() || `order:${item.orderId}`;
     const countShipping = !seenTracking.has(trackingKey);
     if (countShipping) seenTracking.add(trackingKey);
+
     const effectiveShippingFee = countShipping ? item.shippingFee : 0;
+    const settlementProductAmount = settlementMode === "MXN" ? item.rawProductAmount : item.productAmount;
+    const settlementShippingAmount =
+      settlementMode === "MXN"
+        ? convertCnyToMxn(effectiveShippingFee, exchangeRate.rateValue)
+        : effectiveShippingFee;
+
     return {
       ...item,
       effectiveShippingFee,
       mxnLineAmount: item.rawProductAmount,
-      cnyLineAmount: item.productAmount + effectiveShippingFee,
+      settlementProductAmount,
+      settlementShippingAmount,
+      settlementLineAmount: settlementProductAmount + settlementShippingAmount,
     };
   });
 
   const mxnSubtotal = items.reduce((sum, item) => sum + item.mxnLineAmount, 0);
-  const cnySubtotal = items.reduce((sum, item) => sum + item.productAmount, 0);
-  const serviceFeeTotal = items.reduce((sum, item) => sum + item.effectiveShippingFee, 0);
-  const payableTotal = items.reduce((sum, item) => sum + item.cnyLineAmount, 0);
+  const settlementSubtotal = items.reduce((sum, item) => sum + item.settlementProductAmount, 0);
+  const serviceFeeTotal = items.reduce((sum, item) => sum + item.settlementShippingAmount, 0);
+  const rawServiceFeeRmbTotal = items.reduce((sum, item) => sum + item.effectiveShippingFee, 0);
+  const payableTotal = items.reduce((sum, item) => sum + item.settlementLineAmount, 0);
 
   const shippedDates = items.map((item) => item.shippedAt).filter(Boolean) as string[];
   const minShippedAt = shippedDates.length ? shippedDates.slice().sort()[0] : null;
@@ -210,9 +299,11 @@ function prepareSettlementItems(financeRow: DsFinanceRow) {
 
   return {
     items,
+    settlementMode,
     mxnSubtotal,
-    cnySubtotal,
+    settlementSubtotal,
     serviceFeeTotal,
+    rawServiceFeeRmbTotal,
     payableTotal,
     minShippedAt,
     maxShippedAt,
@@ -305,8 +396,15 @@ function drawHero(
   fonts: EmbeddedFonts,
   financeRow: DsFinanceRow,
   exchangeRate: DsExchangeRatePayload,
-  prepared: ReturnType<typeof prepareSettlementItems>,
+  prepared: PreparedSettlementData,
 ) {
+  const labels = getSettlementLabels(prepared.settlementMode);
+  const currencyPrefix = getSettlementCurrencyPrefix(prepared.settlementMode);
+  const rateValue =
+    prepared.settlementMode === "MXN"
+      ? exchangeRate.rateValue ? (1 / exchangeRate.rateValue).toFixed(4) : "-"
+      : exchangeRate.rateValue ? exchangeRate.rateValue.toFixed(4) : "-";
+
   page.drawRectangle({ x: 0, y: 612, width: 842, height: 230, color: rgb(0.12, 0.17, 0.27) });
 
   drawPill(page, fonts, 28, 804, "PARKSONMX");
@@ -317,7 +415,7 @@ function drawHero(
     fonts,
     color: rgb(1, 1, 1),
   });
-  drawText(page, "BS-墨西哥仓库", {
+  drawText(page, "BS-墨西哥仓", {
     x: 28,
     y: 730,
     size: 13,
@@ -342,7 +440,7 @@ function drawHero(
     bold: true,
     color: rgb(1, 1, 1),
   });
-  drawText(page, `结算汇率：1 RMB = ${exchangeRate.rateValue ? (1 / exchangeRate.rateValue).toFixed(4) : "-"} MXN`, {
+  drawText(page, `${labels.rateTextPrefix}${rateValue}${labels.rateTextSuffix}`, {
     x: 28,
     y: 666,
     size: 12,
@@ -350,7 +448,7 @@ function drawHero(
     bold: true,
     color: rgb(1, 1, 1),
   });
-  drawText(page, `代发费：￥${formatMoney(prepared.orderCount > 0 ? prepared.serviceFeeTotal / prepared.orderCount : 0)} / 单`, {
+  drawText(page, `${labels.serviceFeePrefix}${currencyPrefix}${formatMoney(prepared.orderCount > 0 ? prepared.serviceFeeTotal / prepared.orderCount : 0)} / 单`, {
     x: 290,
     y: 666,
     size: 12,
@@ -372,12 +470,22 @@ function drawHero(
   ]);
 }
 
-function drawSummaryCards(page: PDFPage, fonts: EmbeddedFonts, prepared: ReturnType<typeof prepareSettlementItems>) {
+function drawSummaryCards(page: PDFPage, fonts: EmbeddedFonts, prepared: PreparedSettlementData) {
+  const labels = getSettlementLabels(prepared.settlementMode);
   const cards = [
     { label: "商品小计（比索）", value: `$${formatMoney(prepared.mxnSubtotal)}`, color: rgb(0.07, 0.12, 0.24), fill: rgb(1, 1, 1), border: rgb(0.86, 0.89, 0.94) },
-    { label: "商品折算（人民币）", value: `￥${formatMoney(prepared.cnySubtotal)}`, color: rgb(0.07, 0.12, 0.24), fill: rgb(1, 1, 1), border: rgb(0.86, 0.89, 0.94) },
-    { label: "代发服务费（人民币）", value: `￥${formatMoney(prepared.serviceFeeTotal)}`, color: rgb(0.07, 0.12, 0.24), fill: rgb(1, 1, 1), border: rgb(0.86, 0.89, 0.94) },
-    { label: "应付总额（人民币）", value: `￥${formatMoney(prepared.payableTotal)}`, color: rgb(0.82, 0.08, 0.28), fill: rgb(1, 0.96, 0.97), border: rgb(0.98, 0.78, 0.82) },
+    {
+      label: prepared.settlementMode === "MXN" ? "代发服务费（人民币）" : labels.productSettlement,
+      value:
+        prepared.settlementMode === "MXN"
+          ? `￥${formatMoney(prepared.rawServiceFeeRmbTotal)}`
+          : formatSettlementAmount(prepared.settlementSubtotal, prepared.settlementMode),
+      color: rgb(0.07, 0.12, 0.24),
+      fill: rgb(1, 1, 1),
+      border: rgb(0.86, 0.89, 0.94),
+    },
+    { label: labels.serviceFee, value: formatSettlementAmount(prepared.serviceFeeTotal, prepared.settlementMode), color: rgb(0.07, 0.12, 0.24), fill: rgb(1, 1, 1), border: rgb(0.86, 0.89, 0.94) },
+    { label: labels.payableTotal, value: formatSettlementAmount(prepared.payableTotal, prepared.settlementMode), color: rgb(0.82, 0.08, 0.28), fill: rgb(1, 0.96, 0.97), border: rgb(0.98, 0.78, 0.82) },
   ];
 
   const cardWidth = 196;
@@ -393,7 +501,8 @@ function drawSummaryCards(page: PDFPage, fonts: EmbeddedFonts, prepared: ReturnT
   });
 }
 
-function drawTableHeader(page: PDFPage, fonts: EmbeddedFonts, y: number) {
+function drawTableHeader(page: PDFPage, fonts: EmbeddedFonts, y: number, settlementMode: DsSettlementCurrencyMode) {
+  const labels = getSettlementLabels(settlementMode);
   const columns = [
     { label: "订单号", x: 40 },
     { label: "物流号", x: 124 },
@@ -403,8 +512,8 @@ function drawTableHeader(page: PDFPage, fonts: EmbeddedFonts, y: number) {
     { label: "单价（比索）", x: 434 },
     { label: "普通折扣", x: 514 },
     { label: "VIP折扣", x: 586 },
-    { label: "金额（比索）", x: 654 },
-    { label: "折算人民币", x: 738 },
+    { label: "商品金额（比索）", x: 646 },
+    { label: labels.settlementColumn, x: 734 },
   ];
 
   page.drawRectangle({ x: 28, y: y - 12, width: 786, height: 34, color: rgb(0.09, 0.09, 0.1) });
@@ -413,7 +522,14 @@ function drawTableHeader(page: PDFPage, fonts: EmbeddedFonts, y: number) {
   }
 }
 
-function drawTableRow(page: PDFPage, fonts: EmbeddedFonts, y: number, item: PreparedSettlementItem, index: number) {
+function drawTableRow(
+  page: PDFPage,
+  fonts: EmbeddedFonts,
+  y: number,
+  item: PreparedSettlementItem,
+  index: number,
+  settlementMode: DsSettlementCurrencyMode,
+) {
   page.drawRectangle({ x: 28, y: y - 13, width: 786, height: 34, color: index % 2 === 0 ? rgb(1, 1, 1) : rgb(0.985, 0.987, 0.992) });
   drawText(page, sanitizeFileName(item.platformOrderNo).slice(0, 12) || "-", { x: 40, y, size: 9, fonts, bold: true });
   drawText(page, sanitizeFileName(item.trackingNo).slice(0, 12) || "-", { x: 124, y, size: 9, fonts });
@@ -423,33 +539,36 @@ function drawTableRow(page: PDFPage, fonts: EmbeddedFonts, y: number, item: Prep
   drawText(page, `$${formatMoney(item.unitPrice || 0)}`, { x: 430, y, size: 9, fonts });
   drawText(page, formatPercent(item.normalDiscount), { x: 522, y, size: 9, fonts });
   drawText(page, item.vipDiscount > 0 ? formatPercent(item.vipDiscount) : "-", { x: 596, y, size: 9, fonts });
-  drawText(page, `$${formatMoney(item.mxnLineAmount)}`, { x: 662, y, size: 9, fonts, bold: true });
-  drawText(page, `￥${formatMoney(item.cnyLineAmount)}`, { x: 744, y, size: 9, fonts, bold: true, color: rgb(0.82, 0.08, 0.28) });
+  drawText(page, `$${formatMoney(item.mxnLineAmount)}`, { x: 654, y, size: 9, fonts, bold: true });
+  drawText(page, formatSettlementAmount(item.settlementLineAmount, settlementMode), {
+    x: 734,
+    y,
+    size: 9,
+    fonts,
+    bold: true,
+    color: rgb(0.82, 0.08, 0.28),
+  });
 }
 
-function drawNotesBox(page: PDFPage, fonts: EmbeddedFonts, y: number, prepared: ReturnType<typeof prepareSettlementItems>) {
+function drawNotesBox(page: PDFPage, fonts: EmbeddedFonts, y: number, prepared: PreparedSettlementData) {
+  const labels = getSettlementLabels(prepared.settlementMode);
   page.drawRectangle({ x: 28, y, width: 500, height: 146, color: rgb(1, 1, 1), borderColor: rgb(0.86, 0.89, 0.94), borderWidth: 1 });
   drawText(page, "备注说明", { x: 44, y: y + 114, size: 16, fonts, bold: true, color: rgb(0.07, 0.12, 0.24) });
-  const notes = [
-    "1. 商品按墨西哥比索（MXN）计价。",
-    "2. 产品金额按单价、发货数量、普通折扣和 VIP 折扣计算。",
-    "3. 代发费按唯一物流单计入人民币费用。",
-    "4. ￥合计金额 = 折算人民币 + 当行代发费。",
-    `5. 本次对账共 ${prepared.orderCount} 条记录，生成于墨西哥时间。`,
-  ];
+  const notes = [...labels.noteLines, `5. 本次对账共 ${prepared.orderCount} 条记录，生成于墨西哥时间。`];
   notes.forEach((line, index) => {
     drawText(page, line, { x: 44, y: y + 78 - index * 24, size: 10.5, fonts, color: rgb(0.28, 0.32, 0.39) });
   });
 }
 
-function drawSummaryPanel(page: PDFPage, fonts: EmbeddedFonts, y: number, prepared: ReturnType<typeof prepareSettlementItems>) {
+function drawSummaryPanel(page: PDFPage, fonts: EmbeddedFonts, y: number, prepared: PreparedSettlementData) {
+  const labels = getSettlementLabels(prepared.settlementMode);
   page.drawRectangle({ x: 544, y, width: 270, height: 146, color: rgb(0.06, 0.06, 0.07) });
   drawText(page, "结算汇总", { x: 560, y: y + 114, size: 16, fonts, bold: true, color: rgb(1, 1, 1) });
 
   const rows = [
-    ["商品金额（比索）", `$${formatMoney(prepared.mxnSubtotal)}`],
-    ["商品折算（人民币）", `￥${formatMoney(prepared.cnySubtotal)}`],
-    ["代发服务费（人民币）", `￥${formatMoney(prepared.serviceFeeTotal)}`],
+    ["商品小计（比索）", `$${formatMoney(prepared.mxnSubtotal)}`],
+    [labels.productSettlement, formatSettlementAmount(prepared.settlementSubtotal, prepared.settlementMode)],
+    [labels.serviceFee, formatSettlementAmount(prepared.serviceFeeTotal, prepared.settlementMode)],
   ];
 
   rows.forEach(([label, value], index) => {
@@ -460,8 +579,8 @@ function drawSummaryPanel(page: PDFPage, fonts: EmbeddedFonts, y: number, prepar
     page.drawLine({ start: { x: 560, y: baseY - 10 }, end: { x: 798, y: baseY - 10 }, thickness: 0.8, color: rgb(0.23, 0.23, 0.26) });
   });
 
-  drawText(page, "应付总额", { x: 560, y: y + 8, size: 18, fonts, bold: true, color: rgb(1, 1, 1) });
-  const totalText = `￥${formatMoney(prepared.payableTotal)}`;
+  drawText(page, labels.payableTotal, { x: 560, y: y + 8, size: 18, fonts, bold: true, color: rgb(1, 1, 1) });
+  const totalText = formatSettlementAmount(prepared.payableTotal, prepared.settlementMode);
   const totalWidth = measureTextWidth(totalText, { fonts, size: 18, bold: true });
   drawText(page, totalText, { x: 798 - totalWidth, y: y + 8, size: 18, fonts, bold: true, color: rgb(1, 0.35, 0.5) });
 }
@@ -481,24 +600,24 @@ export async function buildDropshippingSettlementPdf(input: {
 }) {
   const pdfDoc = await PDFDocument.create();
   const fonts = await embedFonts(pdfDoc);
-  const prepared = prepareSettlementItems(input.financeRow);
+  const prepared = prepareSettlementItems(input.financeRow, input.exchangeRate);
 
   let page = pdfDoc.addPage([842, 842]);
   drawHero(page, fonts, input.financeRow, input.exchangeRate, prepared);
   drawSummaryCards(page, fonts, prepared);
 
   let y = 420;
-  drawTableHeader(page, fonts, y);
+  drawTableHeader(page, fonts, y, prepared.settlementMode);
   y -= 32;
 
   for (const [index, item] of prepared.items.entries()) {
     if (y < 112) {
       page = pdfDoc.addPage([842, 842]);
       y = 792;
-      drawTableHeader(page, fonts, y);
+      drawTableHeader(page, fonts, y, prepared.settlementMode);
       y -= 32;
     }
-    drawTableRow(page, fonts, y, item, index);
+    drawTableRow(page, fonts, y, item, index, prepared.settlementMode);
     y -= 34;
   }
 

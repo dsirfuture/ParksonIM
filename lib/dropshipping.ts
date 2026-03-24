@@ -2,6 +2,7 @@
 import { prisma } from "@/lib/prisma";
 import { randomUUID } from "crypto";
 import type { Session } from "@/lib/tenant";
+import { normalizeDsSettlementCurrencyMode } from "@/lib/dropshipping-types";
 import type {
   DsAlertItem,
   DsExchangeRatePayload,
@@ -2285,19 +2286,48 @@ export async function getFinanceRows(session: Session) {
   }
 
   return customers.map((customer): DsFinanceRow => {
+    const settlementCurrencyMode = normalizeDsSettlementCurrencyMode(
+      customer.default_settle_rule || customer.default_rate_mode,
+    );
     const stockAmount = stockByCustomer.get(customer.id) || 0;
     const exchangeRate = toNumber(currentRate.rate_value);
-    const exchangedAmount = stockAmount * exchangeRate;
-    const shippingAmount = shippingByCustomer.get(customer.id) || 0;
+    const exchangedAmount =
+      settlementCurrencyMode === "MXN"
+        ? stockAmount
+        : stockAmount * exchangeRate;
+    const rawShippingAmount = shippingByCustomer.get(customer.id) || 0;
+    const shippingAmount =
+      settlementCurrencyMode === "MXN"
+        ? (exchangeRate > 0 ? rawShippingAmount / exchangeRate : 0)
+        : rawShippingAmount;
     const totalAmount = exchangedAmount + shippingAmount;
     const paidItem = paidByCustomer.get(customer.id) || { amount: 0, lastPaidAt: null };
     const orderSettlement = orderSettlementByCustomer.get(customer.id);
-    const paidAmount = orderSettlement && orderSettlement.totalAmount > 0 ? orderSettlement.paidAmount : paidItem.amount;
-    const unpaidAmount = orderSettlement && orderSettlement.totalAmount > 0 ? orderSettlement.unpaidAmount : Math.max(totalAmount - paidItem.amount, 0);
+    const paidAmount =
+      orderSettlement && orderSettlement.totalAmount > 0
+        ? (
+            settlementCurrencyMode === "MXN"
+              ? (exchangeRate > 0 ? orderSettlement.paidAmount / exchangeRate : 0)
+              : orderSettlement.paidAmount
+          )
+        : (
+            settlementCurrencyMode === "MXN"
+              ? (exchangeRate > 0 ? paidItem.amount / exchangeRate : 0)
+              : paidItem.amount
+          );
+    const unpaidAmount =
+      orderSettlement && orderSettlement.totalAmount > 0
+        ? (
+            settlementCurrencyMode === "MXN"
+              ? (exchangeRate > 0 ? orderSettlement.unpaidAmount / exchangeRate : 0)
+              : orderSettlement.unpaidAmount
+          )
+        : Math.max(totalAmount - paidAmount, 0);
     const lastPaidAt = orderSettlement?.lastPaidAt || paidItem.lastPaidAt;
     return {
       customerId: customer.id,
       customerName: customer.name,
+      settlementCurrencyMode,
       stockAmount,
       exchangeRate,
       exchangedAmount,

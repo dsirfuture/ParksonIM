@@ -1,5 +1,4 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -33,9 +32,11 @@ export type WeeklyStatementPdfPayload = {
   cycleText: string;
   rateText: string;
   serviceFeeDisplay: string;
+  settlementMode: "RMB" | "MXN";
   mxnSubtotalText: string;
   cnySubtotalText: string;
   serviceFeeTotalText: string;
+  rawServiceFeeRmbText?: string;
   payableTotalText: string;
   orders: WeeklyStatementPdfOrder[];
   isGenerated: boolean;
@@ -79,6 +80,16 @@ async function resolveBrowserExecutable() {
 }
 
 function buildStatementHtml(payload: WeeklyStatementPdfPayload) {
+  const productSettlementLabel =
+    payload.settlementMode === "MXN" ? "商品金额（比索）" : "商品折算（人民币）";
+  const serviceFeeLabel =
+    payload.settlementMode === "MXN" ? "代发服务费（比索）" : "代发服务费（人民币）";
+  const rawServiceFeeRmbLabel = "代发服务费（人民币）";
+  const payableTotalLabel =
+    payload.settlementMode === "MXN" ? "应付总额（比索）" : "应付总额（人民币）";
+  const settlementColumnLabel =
+    payload.settlementMode === "MXN" ? "结算金额" : "折算";
+  const totalColumnLabel = "合计";
   const notes = payload.noteLines
     .map((line) => `<p>${escapeHtml(line)}</p>`)
     .join("");
@@ -171,30 +182,12 @@ function buildStatementHtml(payload: WeeklyStatementPdfPayload) {
       font-weight: 900;
       color: #020617;
     }
-    .subtitle {
-      margin: 8px 0 0;
-      font-size: 16px;
-      line-height: 1.25;
-      font-weight: 700;
-      color: #64748b;
-    }
-    .subtitle-spacer {
-      margin: 8px 0 0;
-      height: 20px;
-    }
     .meta-grid {
       display: grid;
       grid-template-columns: max-content max-content;
       gap: 10px 60px;
       width: fit-content;
       margin-top: 16px;
-    }
-    .meta-strong {
-      font-size: 14px;
-      line-height: 1.25;
-      font-weight: 700;
-      color: #64748b;
-      white-space: nowrap;
     }
     .meta-normal {
       font-size: 12px;
@@ -235,7 +228,6 @@ function buildStatementHtml(payload: WeeklyStatementPdfPayload) {
     .info-value { color: #334155; font-weight: 700; }
     .info-value.danger { color: #e11d48; }
     .info-value.success { color: #059669; }
-
     .summary {
       margin-top: 20px;
       display: grid;
@@ -259,7 +251,6 @@ function buildStatementHtml(payload: WeeklyStatementPdfPayload) {
     }
     .summary-value.danger { color: #e11d48; }
     .summary-value.success { color: #334155; }
-
     .table-wrap {
       margin-top: 12px;
       border: 1px solid #e2e8f0;
@@ -291,7 +282,6 @@ function buildStatementHtml(payload: WeeklyStatementPdfPayload) {
       color: inherit;
     }
     td.num, th.num { text-align: right; }
-
     .footer {
       margin-top: 24px;
       padding-top: 0;
@@ -403,9 +393,9 @@ function buildStatementHtml(payload: WeeklyStatementPdfPayload) {
 
     <div class="summary">
       <div class="summary-item"><div class="summary-label">商品小计（比索）</div><div class="summary-value">${escapeHtml(payload.mxnSubtotalText)}</div></div>
-      <div class="summary-item"><div class="summary-label">商品折算（人民币）</div><div class="summary-value">${escapeHtml(payload.cnySubtotalText)}</div></div>
-      <div class="summary-item"><div class="summary-label">代发服务费（人民币）</div><div class="summary-value">${escapeHtml(payload.serviceFeeTotalText)}</div></div>
-      <div class="summary-item"><div class="summary-label">应付总额（人民币）</div><div class="summary-value${payload.hasUnpaid ? " danger" : " success"}">${escapeHtml(payload.payableTotalText)}</div></div>
+      <div class="summary-item"><div class="summary-label">${escapeHtml(payload.settlementMode === "MXN" ? rawServiceFeeRmbLabel : productSettlementLabel)}</div><div class="summary-value">${escapeHtml(payload.settlementMode === "MXN" ? (payload.rawServiceFeeRmbText || "-") : payload.cnySubtotalText)}</div></div>
+      <div class="summary-item"><div class="summary-label">${escapeHtml(serviceFeeLabel)}</div><div class="summary-value">${escapeHtml(payload.serviceFeeTotalText)}</div></div>
+      <div class="summary-item"><div class="summary-label">${escapeHtml(payableTotalLabel)}</div><div class="summary-value${payload.hasUnpaid ? " danger" : " success"}">${escapeHtml(payload.payableTotalText)}</div></div>
     </div>
 
     <div class="table-wrap">
@@ -420,10 +410,10 @@ function buildStatementHtml(payload: WeeklyStatementPdfPayload) {
             <th class="num">单价</th>
             <th class="num">普通折扣</th>
             <th class="num">VIP折扣</th>
-            <th class="num">产品金额</th>
-            <th class="num">折算</th>
+            <th class="num">商品金额</th>
+            <th class="num">${escapeHtml(settlementColumnLabel)}</th>
             <th class="num">代发费</th>
-            <th class="num">合计</th>
+            <th class="num">${escapeHtml(totalColumnLabel)}</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -438,12 +428,12 @@ function buildStatementHtml(payload: WeeklyStatementPdfPayload) {
       <div class="settle">
         <div class="settle-title">结算汇总</div>
         <div class="settle-list">
-          <div class="settle-row"><span>商品金额（比索）</span><span>${escapeHtml(payload.mxnSubtotalText)}</span></div>
-          <div class="settle-row"><span>商品折算（人民币）</span><span>${escapeHtml(payload.cnySubtotalText)}</span></div>
-          <div class="settle-row"><span>代发服务费（人民币）</span><span>${escapeHtml(payload.serviceFeeTotalText)}</span></div>
+          <div class="settle-row"><span>商品小计（比索）</span><span>${escapeHtml(payload.mxnSubtotalText)}</span></div>
+          <div class="settle-row"><span>${escapeHtml(productSettlementLabel)}</span><span>${escapeHtml(payload.cnySubtotalText)}</span></div>
+          <div class="settle-row"><span>${escapeHtml(serviceFeeLabel)}</span><span>${escapeHtml(payload.serviceFeeTotalText)}</span></div>
         </div>
         <div class="settle-total">
-          <span class="settle-total-label">应付总额</span>
+          <span class="settle-total-label">${escapeHtml(payableTotalLabel)}</span>
           <span class="settle-total-value${payload.hasUnpaid ? "" : " success"}">${escapeHtml(payload.payableTotalText)}</span>
         </div>
       </div>

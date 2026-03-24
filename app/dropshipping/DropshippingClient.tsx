@@ -23,7 +23,9 @@ import type {
   DsOverviewAnalytics,
   DsOverviewOrder,
   DsOverviewStats,
+  DsSettlementCurrencyMode,
 } from "@/lib/dropshipping-types";
+import { normalizeDsSettlementCurrencyMode } from "@/lib/dropshipping-types";
 
 type OverviewPayload = {
   stats: DsOverviewStats;
@@ -433,6 +435,57 @@ function fmtMoney(value: number, lang: "zh" | "es") {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);
+}
+
+function getFinanceSettlementMode(row: Pick<DsFinanceRow, "settlementCurrencyMode"> | null | undefined): DsSettlementCurrencyMode {
+  return normalizeDsSettlementCurrencyMode(row?.settlementCurrencyMode);
+}
+
+function convertCnyToMxn(value: number, rateValue: number | null | undefined) {
+  return rateValue && Number.isFinite(rateValue) && rateValue > 0 ? value / rateValue : 0;
+}
+
+function formatSettlementAmount(
+  value: number,
+  mode: DsSettlementCurrencyMode,
+  lang: "zh" | "es",
+) {
+  return mode === "MXN" ? `$${fmtMoney(value, lang)}` : `￥${fmtMoney(value, lang)}`;
+}
+
+function getSettlementAmountLabels(
+  mode: DsSettlementCurrencyMode,
+  lang: "zh" | "es",
+) {
+  if (mode === "MXN") {
+    return {
+      productSettlement: lang === "zh" ? "商品金额（比索）" : "Productos (MXN)",
+      serviceFee: lang === "zh" ? "代发服务费（比索）" : "Servicio (MXN)",
+      rawServiceFeeRmb: lang === "zh" ? "代发服务费（人民币）" : "Servicio (RMB)",
+      total: lang === "zh" ? "应付总额（比索）" : "Total a pagar (MXN)",
+      settlementColumn: lang === "zh" ? "结算金额" : "Monto liquidado",
+      totalColumn: lang === "zh" ? "合计" : "Total MXN",
+      rateLine:
+        lang === "zh"
+          ? "结算汇率：1 RMB = {rate} MXN"
+          : "Tipo de cambio: 1 RMB = {rate} MXN",
+      serviceFeeDisplayPrefix: lang === "zh" ? "代发费：" : "Servicio:",
+    };
+  }
+
+  return {
+    productSettlement: lang === "zh" ? "商品折算（人民币）" : "Convertido (RMB)",
+    serviceFee: lang === "zh" ? "代发服务费（人民币）" : "Servicio (RMB)",
+    rawServiceFeeRmb: lang === "zh" ? "代发服务费（人民币）" : "Servicio (RMB)",
+    total: lang === "zh" ? "应付总额（人民币）" : "Total a pagar (RMB)",
+    settlementColumn: lang === "zh" ? "折算" : "RMB",
+    totalColumn: lang === "zh" ? "合计" : "Total RMB",
+    rateLine:
+      lang === "zh"
+        ? "结算汇率：1 MXN = {rate} RMB"
+        : "Tipo de cambio: 1 MXN = {rate} RMB",
+    serviceFeeDisplayPrefix: lang === "zh" ? "代发费：" : "Servicio:",
+  };
 }
 
 function computeInventoryAmount(unitPrice: string, stockedQty: string, discountRate: string) {
@@ -1130,6 +1183,7 @@ export function DropshippingClient({
   const [financeStatementLockLoading, setFinanceStatementLockLoading] = useState(false);
   const [financeStatementActionLoading, setFinanceStatementActionLoading] = useState<"" | "generate" | "revoke" | "export" | "confirm_paid">("");
   const [financeStatementActionError, setFinanceStatementActionError] = useState("");
+  const [financeSettlementSavingCustomerId, setFinanceSettlementSavingCustomerId] = useState("");
   const [financeStatementRevokeState, setFinanceStatementRevokeState] = useState<FinanceStatementRevokeState>(null);
   const [selectedFinanceOrderIds, setSelectedFinanceOrderIds] = useState<string[]>([]);
   const [financePreviewPage, setFinancePreviewPage] = useState(1);
@@ -2470,6 +2524,8 @@ export function DropshippingClient({
     () => buildFinanceStatementData(inventory, "weekly_unpaid", financePaidCycleTextSet, financeStatementVipEnabled),
     [financePaidCycleTextSet, financePreview, financePreviewPreparedOrders, inventory, selectedFinanceOrderIds, financeSelectionReincludedIdSet, financeStatementRateValue, financeStatementVipEnabled],
   );
+  const financeStatementMode = financeStatementPreparedData?.settlementMode || getFinanceSettlementMode(financePreview);
+  const financeStatementLabels = getSettlementAmountLabels(financeStatementMode, lang);
   const financeExportSummaryByCustomerId = useMemo(
     () =>
       new Map(
@@ -2508,6 +2564,7 @@ export function DropshippingClient({
       mxnSubtotal: financeStatementPreparedData?.mxnSubtotal || 0,
       cnySubtotal: financeStatementPreparedData?.cnySubtotal || 0,
       serviceFeeTotal: financeStatementPreparedData?.serviceFeeTotal || 0,
+      rawServiceFeeTotal: financeStatementPreparedData?.rawServiceFeeTotal || 0,
       payableTotal: financeStatementPreparedData?.payableTotal || 0,
       minShippedAt,
       maxShippedAt,
@@ -2724,6 +2781,49 @@ export function DropshippingClient({
       setFinanceStatementRecordError(fetchError instanceof Error ? fetchError.message : (lang === "zh" ? "获取账单记录失败" : "No se pudo cargar las facturas"));
     } finally {
       setFinanceStatementRecordLoading(false);
+    }
+  };
+
+  const updateFinanceSettlementMode = async (row: DsFinanceRow, nextMode: DsSettlementCurrencyMode) => {
+    try {
+      setFinanceSettlementSavingCustomerId(row.customerId);
+      setError("");
+      const response = await fetch(`/api/dropshipping/customers/${encodeURIComponent(row.customerId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settlementMode: nextMode }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.ok) {
+        throw new Error(result?.error || (lang === "zh" ? "更新结算模式失败" : "No se pudo actualizar el modo de liquidacion"));
+      }
+
+      setFinance((prev) =>
+        prev.map((item) =>
+          item.customerId === row.customerId
+            ? { ...item, settlementCurrencyMode: nextMode }
+            : item,
+        ),
+      );
+      setFinancePreview((prev) =>
+        prev && prev.customerId === row.customerId
+          ? { ...prev, settlementCurrencyMode: nextMode }
+          : prev,
+      );
+      setFinanceLogTarget((prev) =>
+        prev && prev.customerId === row.customerId
+          ? { ...prev, settlementCurrencyMode: nextMode }
+          : prev,
+      );
+      setFinanceStatementRecordTarget((prev) =>
+        prev && prev.customerId === row.customerId
+          ? { ...prev, settlementCurrencyMode: nextMode }
+          : prev,
+      );
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : (lang === "zh" ? "更新结算模式失败" : "No se pudo actualizar el modo de liquidacion"));
+    } finally {
+      setFinanceSettlementSavingCustomerId("");
     }
   };
 
@@ -2979,6 +3079,7 @@ export function DropshippingClient({
     vipEnabled = true,
   ) {
     if (!financePreview) return null;
+    const settlementMode = getFinanceSettlementMode(financePreview);
     const getExportSkuKey = (value: string | null | undefined) =>
       normalizeProductCode(value || "") || String(value || "").trim().toLowerCase();
     const targetPreparedOrders =
@@ -3224,22 +3325,35 @@ export function DropshippingClient({
       vipEnabled: financeStatementVipEnabled,
     }).map((item) => {
       const displayConvertedAmount =
-        financeStatementRateValue && Number.isFinite(financeStatementRateValue)
-          ? item.displayProductAmount * financeStatementRateValue
-          : item.productAmount;
+        settlementMode === "MXN"
+          ? item.displayProductAmount
+          : (
+              financeStatementRateValue && Number.isFinite(financeStatementRateValue)
+                ? item.displayProductAmount * financeStatementRateValue
+                : item.productAmount
+            );
+      const displayShippingAmount =
+        settlementMode === "MXN"
+          ? convertCnyToMxn(item.shippingFee, financeStatementRateValue)
+          : item.shippingFee;
       return {
         ...item,
         displayConvertedAmount,
-        displayCnyTotalAmount: displayConvertedAmount + item.shippingFee,
+        displayShippingAmount,
+        displayCnyTotalAmount: displayConvertedAmount + displayShippingAmount,
       };
     });
     const computeSettlementGroupAmount = (items: typeof ordersWithDisplayAmounts) => {
       const mxnAmount = items.reduce((sum, item) => sum + item.displayProductAmount, 0);
-      const shippingAmount = items.reduce((sum, item) => sum + item.shippingFee, 0);
+      const shippingAmount = items.reduce((sum, item) => sum + item.displayShippingAmount, 0);
       const convertedAmount =
-        financeStatementRateValue && Number.isFinite(financeStatementRateValue)
-          ? mxnAmount * financeStatementRateValue
-          : items.reduce((sum, item) => sum + item.productAmount, 0);
+        settlementMode === "MXN"
+          ? mxnAmount
+          : (
+              financeStatementRateValue && Number.isFinite(financeStatementRateValue)
+                ? mxnAmount * financeStatementRateValue
+                : items.reduce((sum, item) => sum + item.productAmount, 0)
+            );
       return {
         mxnAmount,
         convertedAmount,
@@ -3248,24 +3362,27 @@ export function DropshippingClient({
       };
     };
     const overallAmounts = computeSettlementGroupAmount(ordersWithDisplayAmounts);
+    const rawServiceFeeTotal = ordersWithDisplayAmounts.reduce((sum, item) => sum + item.shippingFee, 0);
     const uniqueShippingFees = Array.from(
       new Set(
         ordersWithDisplayAmounts
-          .map((item) => item.shippingFee)
+          .map((item) => item.displayShippingAmount)
           .filter((value) => Number.isFinite(value) && value > 0)
           .map((value) => Number(value.toFixed(2))),
       ),
     ).sort((a, b) => a - b);
     const serviceFeeDisplay = uniqueShippingFees.length === 0
-      ? "￥0.00 / 单"
+      ? `${settlementMode === "MXN" ? "$" : "￥"}0.00 / ${lang === "zh" ? "单" : "pedido"}`
       : uniqueShippingFees.length === 1
-        ? `￥${fmtMoney(uniqueShippingFees[0], lang)} / 单`
-        : `￥${fmtMoney(uniqueShippingFees[0], lang)}-${fmtMoney(uniqueShippingFees[uniqueShippingFees.length - 1], lang)} / 单`;
+        ? `${settlementMode === "MXN" ? "$" : "￥"}${fmtMoney(uniqueShippingFees[0], lang)} / ${lang === "zh" ? "单" : "pedido"}`
+        : `${settlementMode === "MXN" ? "$" : "￥"}${fmtMoney(uniqueShippingFees[0], lang)}-${fmtMoney(uniqueShippingFees[uniqueShippingFees.length - 1], lang)} / ${lang === "zh" ? "单" : "pedido"}`;
     return {
+      settlementMode,
       orders: ordersWithDisplayAmounts,
       mxnSubtotal: overallAmounts.mxnAmount,
       cnySubtotal: overallAmounts.convertedAmount,
       serviceFeeTotal: overallAmounts.shippingAmount,
+      rawServiceFeeTotal,
       payableTotal: overallAmounts.totalAmount,
       totalPaidAmount: computeSettlementGroupAmount(ordersWithDisplayAmounts.filter((item) => item.settlementStatus === "paid")).totalAmount,
       totalUnpaidAmount: computeSettlementGroupAmount(ordersWithDisplayAmounts.filter((item) => item.settlementStatus !== "paid")).totalAmount,
@@ -3288,6 +3405,7 @@ export function DropshippingClient({
       typeof summaryRateValue === "number" && Number.isFinite(summaryRateValue) && summaryRateValue > 0
         ? summaryRateValue
         : row.exchangeRate;
+    const settlementMode = getFinanceSettlementMode(row);
     const getExportSkuKey = (value: string | null | undefined) =>
       normalizeProductCode(value || "") || String(value || "").trim().toLowerCase();
     const targetPreparedOrders = row.settledOrders.map((item) => {
@@ -3530,22 +3648,35 @@ export function DropshippingClient({
     });
     const ordersWithDisplayAmounts = applyStockPriorityProductAmounts(sortedPreparedOrders).map((item) => {
       const displayConvertedAmount =
-        effectiveSummaryRateValue && Number.isFinite(effectiveSummaryRateValue)
-          ? item.displayProductAmount * effectiveSummaryRateValue
-          : item.productAmount;
+        settlementMode === "MXN"
+          ? item.displayProductAmount
+          : (
+              effectiveSummaryRateValue && Number.isFinite(effectiveSummaryRateValue)
+                ? item.displayProductAmount * effectiveSummaryRateValue
+                : item.productAmount
+            );
+      const displayShippingAmount =
+        settlementMode === "MXN"
+          ? convertCnyToMxn(item.shippingFee, effectiveSummaryRateValue)
+          : item.shippingFee;
       return {
         ...item,
         displayConvertedAmount,
-        displayCnyTotalAmount: displayConvertedAmount + item.shippingFee,
+        displayShippingAmount,
+        displayCnyTotalAmount: displayConvertedAmount + displayShippingAmount,
       };
     });
     const computeSettlementGroupAmount = (items: typeof ordersWithDisplayAmounts) => {
       const mxnAmount = items.reduce((sum, item) => sum + item.displayProductAmount, 0);
-      const shippingAmount = items.reduce((sum, item) => sum + item.shippingFee, 0);
+      const shippingAmount = items.reduce((sum, item) => sum + item.displayShippingAmount, 0);
       const convertedAmount =
-        effectiveSummaryRateValue && Number.isFinite(effectiveSummaryRateValue)
-          ? mxnAmount * effectiveSummaryRateValue
-          : items.reduce((sum, item) => sum + item.productAmount, 0);
+        settlementMode === "MXN"
+          ? mxnAmount
+          : (
+              effectiveSummaryRateValue && Number.isFinite(effectiveSummaryRateValue)
+                ? mxnAmount * effectiveSummaryRateValue
+                : items.reduce((sum, item) => sum + item.productAmount, 0)
+            );
       return {
         mxnAmount,
         convertedAmount,
@@ -3554,11 +3685,14 @@ export function DropshippingClient({
       };
     };
     const overallAmounts = computeSettlementGroupAmount(ordersWithDisplayAmounts);
+    const rawServiceFeeTotal = ordersWithDisplayAmounts.reduce((sum, item) => sum + item.shippingFee, 0);
     return {
+      settlementMode,
       orders: ordersWithDisplayAmounts,
       mxnSubtotal: overallAmounts.mxnAmount,
       cnySubtotal: overallAmounts.convertedAmount,
       serviceFeeTotal: overallAmounts.shippingAmount,
+      rawServiceFeeTotal,
       payableTotal: overallAmounts.totalAmount,
       totalPaidAmount: computeSettlementGroupAmount(ordersWithDisplayAmounts.filter((item) => item.settlementStatus === "paid")).totalAmount,
       totalUnpaidAmount: computeSettlementGroupAmount(ordersWithDisplayAmounts.filter((item) => item.settlementStatus !== "paid")).totalAmount,
@@ -3632,6 +3766,8 @@ export function DropshippingClient({
     const totalPayableAmount = statementData.payableTotal;
     const totalPaidAmount = statementData.totalPaidAmount;
     const totalUnpaidAmount = statementData.totalUnpaidAmount;
+    const settlementMode = statementData.settlementMode || getFinanceSettlementMode(financePreview);
+    const settlementLabels = getSettlementAmountLabels(settlementMode, lang);
     const todayParts = getMexicoDatePartsMap(new Date());
     const todayZhText = `今天${Number(todayParts.year)}年${Number(todayParts.month)}月${Number(todayParts.day)}日`;
     const exportDateCode = `${todayParts.year}${todayParts.month}${todayParts.day}`;
@@ -3641,9 +3777,17 @@ export function DropshippingClient({
         : `Fecha de exportacion: ${todayParts.year}/${todayParts.month}/${todayParts.day}`;
     const exportDisplayRate = actionType === "export_all" ? exchangeRate : financeStatementDisplayRate;
     const rateHintText =
-      lang === "zh"
-        ? `${todayZhText}   汇率：MXN兑RMB  ${exportDisplayRate.rateValue ? exportDisplayRate.rateValue.toFixed(4) : "-"}`
-        : `Hoy ${todayParts.year}/${todayParts.month}/${todayParts.day}   Tipo de cambio: MXN a RMB ${exportDisplayRate.rateValue ? exportDisplayRate.rateValue.toFixed(4) : "-"}`;
+      settlementMode === "MXN"
+        ? (
+            lang === "zh"
+              ? `${todayZhText}   汇率：RMB兑MXN  ${exportDisplayRate.rateValue ? (1 / exportDisplayRate.rateValue).toFixed(4) : "-"}`
+              : `Hoy ${todayParts.year}/${todayParts.month}/${todayParts.day}   Tipo de cambio: RMB a MXN ${exportDisplayRate.rateValue ? (1 / exportDisplayRate.rateValue).toFixed(4) : "-"}`
+          )
+        : (
+            lang === "zh"
+              ? `${todayZhText}   汇率：MXN兑RMB  ${exportDisplayRate.rateValue ? exportDisplayRate.rateValue.toFixed(4) : "-"}`
+              : `Hoy ${todayParts.year}/${todayParts.month}/${todayParts.day}   Tipo de cambio: MXN a RMB ${exportDisplayRate.rateValue ? exportDisplayRate.rateValue.toFixed(4) : "-"}`
+          );
     const headerLabels = [
       lang === "zh" ? "订单号" : "Pedido",
       lang === "zh" ? "物流号" : "Guia",
@@ -3659,6 +3803,7 @@ export function DropshippingClient({
       lang === "zh" ? "发货数量" : "Cantidad",
       lang === "zh" ? "备货剩余" : "Stock restante",
       lang === "zh" ? "产品金额" : "Monto producto",
+      lang === "zh" ? "结算金额" : "Monto liquidado",
       lang === "zh" ? "代发费" : "Cargo servicio",
       lang === "zh" ? "结算日期" : "Fecha liquidacion",
       lang === "zh" ? "状态" : "Estado",
@@ -3686,32 +3831,66 @@ export function DropshippingClient({
                 : `Periodo: ${financeCurrentCycleText}`,
             rateText:
               lang === "zh"
-                ? `结算汇率：1 MXN = ${financeStatementDisplayRate.rateValue ? financeStatementDisplayRate.rateValue.toFixed(4) : "-"} RMB    ${fmtDateOnly(financeStatementDisplayDateValue, lang)}汇率   来源：${financeStatementDisplayRate.sourceName || "-"}`
-                : `Tipo de cambio: 1 MXN = ${financeStatementDisplayRate.rateValue ? financeStatementDisplayRate.rateValue.toFixed(4) : "-"} RMB`,
-            serviceFeeDisplay: financeStatementPreparedData?.serviceFeeDisplay || "￥0.00 / 单",
+                ? `${
+                    settlementMode === "MXN"
+                      ? `结算汇率：1 RMB = ${financeStatementDisplayRate.rateValue ? (1 / financeStatementDisplayRate.rateValue).toFixed(4) : "-"} MXN`
+                      : `结算汇率：1 MXN = ${financeStatementDisplayRate.rateValue ? financeStatementDisplayRate.rateValue.toFixed(4) : "-"} RMB`
+                  }    ${fmtDateOnly(financeStatementDisplayDateValue, lang)}汇率   来源：${financeStatementDisplayRate.sourceName || "-"}`
+                : (
+                    settlementMode === "MXN"
+                      ? `Tipo de cambio: 1 RMB = ${financeStatementDisplayRate.rateValue ? (1 / financeStatementDisplayRate.rateValue).toFixed(4) : "-"} MXN`
+                      : `Tipo de cambio: 1 MXN = ${financeStatementDisplayRate.rateValue ? financeStatementDisplayRate.rateValue.toFixed(4) : "-"} RMB`
+                  ),
+            serviceFeeDisplay:
+              financeStatementPreparedData?.serviceFeeDisplay
+              || `${settlementMode === "MXN" ? "$" : "￥"}0.00 / ${lang === "zh" ? "单" : "pedido"}`,
             mxnSubtotalText: `$${fmtMoney(totalProductAmount, lang)}`,
-            cnySubtotalText: `￥${fmtMoney(totalConvertedAmount, lang)}`,
-            serviceFeeTotalText: `￥${fmtMoney(totalShippingFee, lang)}`,
-            payableTotalText: `￥${fmtMoney(totalPayableAmount, lang)}`,
+            cnySubtotalText: formatSettlementAmount(totalConvertedAmount, settlementMode, lang),
+            serviceFeeTotalText: formatSettlementAmount(totalShippingFee, settlementMode, lang),
+            rawServiceFeeRmbText: `￥${fmtMoney(statementData.rawServiceFeeTotal || 0, lang)}`,
+            payableTotalText: formatSettlementAmount(totalPayableAmount, settlementMode, lang),
             isGenerated: Boolean(financeStatementLockState?.isGenerated),
+            settlementMode,
             noteLines:
-              lang === "zh"
-                ? [
-                    "1. 商品按墨西哥比索（MXN）计价。",
-                    financeStatementVipEnabled
-                      ? "2. 产品金额按备货优先消耗；无备货部分再按发货数量、普通折扣和 VIP 折扣计算。"
-                      : "2. 产品金额按备货优先消耗；无备货部分再按发货数量和普通折扣计算。",
-                    "3. 代发费按唯一物流单计入人民币费用。",
-                    "4. 合计 = 折算 + 当行代发费。",
-                  ]
-                : [
-                    "1. Los productos se cotizan en MXN.",
-                    financeStatementVipEnabled
-                      ? "2. El monto usa stock primero; sin stock, cobra por cantidad enviada y descuentos."
-                      : "2. El monto usa stock primero; sin stock, cobra por cantidad enviada y descuento general.",
-                    "3. El servicio se cobra una vez por guia unica.",
-                    "4. Total RMB = conversion RMB + servicio por fila.",
-                  ],
+              settlementMode === "MXN"
+                ? (
+                    lang === "zh"
+                      ? [
+                          "1. 商品按墨西哥比索（MXN）计价。",
+                          financeStatementVipEnabled
+                            ? "2. 产品金额按备货优先消耗；无备货部分再按发货数量、普通折扣和 VIP 折扣计算。"
+                            : "2. 产品金额按备货优先消耗；无备货部分再按发货数量和普通折扣计算。",
+                          "3. 代发费先按人民币确定，再按结算汇率折算为比索。",
+                          "4. 合计 = 商品金额（MXN） + 当行代发费（MXN）。",
+                        ]
+                      : [
+                          "1. Los productos se cotizan en MXN.",
+                          financeStatementVipEnabled
+                            ? "2. El monto usa stock primero; sin stock, cobra por cantidad enviada y descuentos."
+                            : "2. El monto usa stock primero; sin stock, cobra por cantidad enviada y descuento general.",
+                          "3. El servicio se define en RMB y luego se convierte a MXN.",
+                          "4. Total MXN = productos + servicio por fila.",
+                        ]
+                  )
+                : (
+                    lang === "zh"
+                      ? [
+                          "1. 商品按墨西哥比索（MXN）计价。",
+                          financeStatementVipEnabled
+                            ? "2. 产品金额按备货优先消耗；无备货部分再按发货数量、普通折扣和 VIP 折扣计算。"
+                            : "2. 产品金额按备货优先消耗；无备货部分再按发货数量和普通折扣计算。",
+                          "3. 代发费按唯一物流单计入人民币费用。",
+                          "4. 合计 = 折算 + 当行代发费。",
+                        ]
+                      : [
+                          "1. Los productos se cotizan en MXN.",
+                          financeStatementVipEnabled
+                            ? "2. El monto usa stock primero; sin stock, cobra por cantidad enviada y descuentos."
+                            : "2. El monto usa stock primero; sin stock, cobra por cantidad enviada y descuento general.",
+                          "3. El servicio se cobra una vez por guia unica.",
+                          "4. Total RMB = conversion RMB + servicio por fila.",
+                        ]
+                  ),
             orders: statementData.orders.map((item) => ({
               platformOrderNo: item.platformOrderNo,
               trackingNo: item.trackingNo || "-",
@@ -3723,9 +3902,9 @@ export function DropshippingClient({
               normalDiscountText: item.normalDiscount > 0 ? `${fmtPercent(item.normalDiscount, lang)}%` : "-",
               vipDiscountText: financeStatementVipEnabled && item.vipDiscount > 0 ? `${fmtPercent(item.vipDiscount, lang)}%` : "-",
               productAmountText: item.displayProductAmount > 0 ? `$${fmtMoney(item.displayProductAmount, lang)}` : "-",
-              convertedAmountText: item.displayConvertedAmount > 0 ? `￥${fmtMoney(item.displayConvertedAmount, lang)}` : "-",
-              shippingFeeText: item.shippingFee > 0 ? `￥${fmtMoney(item.shippingFee, lang)}` : "-",
-              totalAmountText: `￥${fmtMoney(item.displayCnyTotalAmount, lang)}`,
+              convertedAmountText: item.displayConvertedAmount > 0 ? formatSettlementAmount(item.displayConvertedAmount, settlementMode, lang) : "-",
+              shippingFeeText: item.displayShippingAmount > 0 ? formatSettlementAmount(item.displayShippingAmount, settlementMode, lang) : "-",
+              totalAmountText: formatSettlementAmount(item.displayCnyTotalAmount, settlementMode, lang),
               highlightRed: "displayReincluded" in item ? item.displayReincluded : false,
             })),
             exportDateCode,
@@ -3803,26 +3982,26 @@ export function DropshippingClient({
         value: `$ ${fmtMoney(totalProductAmount, lang)}`,
       },
       {
-        title: lang === "zh" ? "折算人民币：" : "Convertido RMB:",
-        value: `￥${fmtMoney(totalConvertedAmount, lang)}`,
+        title: `${settlementLabels.productSettlement}${lang === "zh" ? "：" : ":"}`,
+        value: formatSettlementAmount(totalConvertedAmount, settlementMode, lang),
         suffix: rateHintText,
       },
       {
-        title: lang === "zh" ? "代发费：" : "Cargo servicio:",
-        value: `￥${fmtMoney(totalShippingFee, lang)}`,
+        title: `${settlementLabels.serviceFee}${lang === "zh" ? "：" : ":"}`,
+        value: formatSettlementAmount(totalShippingFee, settlementMode, lang),
       },
       {
         title: lang === "zh" ? "合计金额：" : "Monto total:",
-        value: `￥${fmtMoney(totalPayableAmount, lang)}`,
+        value: formatSettlementAmount(totalPayableAmount, settlementMode, lang),
       },
       {
         title: lang === "zh" ? "已结：" : "Pagado:",
-        value: `￥${fmtMoney(totalPaidAmount, lang)}`,
+        value: formatSettlementAmount(totalPaidAmount, settlementMode, lang),
         valueColor: "FF059669",
       },
       {
         title: lang === "zh" ? "未结：" : "Pendiente:",
-        value: `￥${fmtMoney(totalUnpaidAmount, lang)}`,
+        value: formatSettlementAmount(totalUnpaidAmount, settlementMode, lang),
         valueColor: "FFE11D48",
       },
     ];
@@ -3945,7 +4124,8 @@ export function DropshippingClient({
         item.quantity,
         exportRemainingQty,
         exportProductAmount > 0 ? `$${fmtMoney(exportProductAmount, lang)}` : "-",
-        item.shippingFee > 0 ? `￥${fmtMoney(item.shippingFee, lang)}` : "-",
+        item.displayConvertedAmount > 0 ? formatSettlementAmount(item.displayConvertedAmount, settlementMode, lang) : "-",
+        item.displayShippingAmount > 0 ? formatSettlementAmount(item.displayShippingAmount, settlementMode, lang) : "-",
         fmtDateOnly(getMexicoWeekSaturdayValue(item.shippedAt) || item.settledAt, lang),
         getSettlementStatusLabel(item.settlementStatus, lang),
       ]);
@@ -6640,12 +6820,13 @@ export function DropshippingClient({
                     <tr className="bg-slate-50 text-left text-sm text-slate-700">
                       <th className="px-4 py-3 font-semibold">{text.fields.customer}</th>
                       <th className="px-4 py-3 font-semibold">{lang === "zh" ? "产品金额" : "Monto producto"}</th>
-                      <th className="px-4 py-3 font-semibold">{lang === "zh" ? "折算人民币" : "Convertido RMB"}</th>
-                      <th className="px-4 py-3 font-semibold">{text.fields.shippingFee}</th>
-                      <th className="px-4 py-3 font-semibold">{lang === "zh" ? "合计金额" : "Monto total"}</th>
+                      <th className="px-4 py-3 font-semibold">{lang === "zh" ? "结算商品金额" : "Monto liquidado"}</th>
+                      <th className="px-4 py-3 font-semibold">{lang === "zh" ? "结算代发费" : "Servicio liquidado"}</th>
+                      <th className="px-4 py-3 font-semibold">{lang === "zh" ? "结算合计" : "Total liquidado"}</th>
                       <th className="px-4 py-3 font-semibold">{lang === "zh" ? "已付金额" : "Monto pagado"}</th>
                       <th className="px-4 py-3 font-semibold">{lang === "zh" ? "未付金额" : "Monto pendiente"}</th>
                       <th className="px-4 py-3 font-semibold">{text.fields.status}</th>
+                      <th className="px-4 py-3 text-center font-semibold">{lang === "zh" ? "结算转换" : "Liquidacion"}</th>
                       <th className="w-[110px] px-3 py-3 text-center font-semibold">{lang === "zh" ? "账单记录" : "Facturas"}</th>
                       <th className="w-[92px] px-3 py-3 text-center font-semibold">{lang === "zh" ? "\u8be6\u60c5" : "Detalle"}</th>
                       <th className="w-[92px] px-3 py-3 text-center font-semibold">{lang === "zh" ? "日志" : "Historial"}</th>
@@ -6665,23 +6846,49 @@ export function DropshippingClient({
                           const displayPaidAmount = exportSummary?.totalPaidAmount ?? row.paidAmount;
                           const displayUnpaidAmount = exportSummary?.totalUnpaidAmount ?? row.unpaidAmount;
                           const displayStatus = deriveFinanceSummaryStatus(displayTotalAmount, displayPaidAmount);
+                          const settlementMode = exportSummary?.settlementMode || getFinanceSettlementMode(row);
                           return (
                             <>
                         <td className="px-4 py-3 text-sm font-semibold text-slate-900">{row.customerName}</td>
                         <td className="px-4 py-3 text-sm text-slate-700">{`$${fmtMoney(displayProductAmount, lang)}`}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700">{`￥${fmtMoney(displayConvertedAmount, lang)}`}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700">{`￥${fmtMoney(displayShippingAmount, lang)}`}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700">{`￥${fmtMoney(displayTotalAmount, lang)}`}</td>
-                        <td className="px-4 py-3 text-sm text-emerald-600">{`￥${fmtMoney(displayPaidAmount, lang)}`}</td>
-                        <td className="px-4 py-3 text-sm text-rose-600">{`￥${fmtMoney(displayUnpaidAmount, lang)}`}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{formatSettlementAmount(displayConvertedAmount, settlementMode, lang)}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{formatSettlementAmount(displayShippingAmount, settlementMode, lang)}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{formatSettlementAmount(displayTotalAmount, settlementMode, lang)}</td>
+                        <td className="px-4 py-3 text-sm text-emerald-600">{formatSettlementAmount(displayPaidAmount, settlementMode, lang)}</td>
+                        <td className="px-4 py-3 text-sm text-rose-600">{formatSettlementAmount(displayUnpaidAmount, settlementMode, lang)}</td>
                         <td className="px-4 py-3 text-sm text-slate-700">{text.status[displayStatus as keyof typeof text.status]}</td>
+                        <td className="px-4 py-3 text-center text-sm text-slate-700">
+                          <div className="inline-flex items-center gap-2 whitespace-nowrap">
+                            <span className={`text-[11px] font-semibold ${settlementMode === "MXN" ? "text-slate-900" : "text-slate-400"}`}>MXN</span>
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={settlementMode === "RMB"}
+                              aria-label={lang === "zh" ? "切换结算模式" : "Cambiar modo de liquidacion"}
+                              title={
+                                lang === "zh"
+                                  ? `当前${settlementMode === "RMB" ? "人民币结算" : "比索结算"}，点击切换`
+                                  : `Modo actual: ${settlementMode === "RMB" ? "RMB" : "MXN"}`
+                              }
+                              disabled={financeSettlementSavingCustomerId === row.customerId}
+                              onClick={() => void updateFinanceSettlementMode(row, settlementMode === "RMB" ? "MXN" : "RMB")}
+                              className={`relative inline-flex h-5 w-10 items-center rounded-full border transition ${
+                                settlementMode === "RMB"
+                                  ? "border-primary bg-primary/90"
+                                  : "border-slate-300 bg-slate-200"
+                              } ${financeSettlementSavingCustomerId === row.customerId ? "cursor-wait opacity-60" : "hover:opacity-90"}`}
+                            >
+                              <span
+                                className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                                  settlementMode === "RMB" ? "translate-x-5" : "translate-x-0.5"
+                                }`}
+                              />
+                            </button>
+                            <span className={`text-[11px] font-semibold ${settlementMode === "RMB" ? "text-primary" : "text-slate-400"}`}>RMB</span>
+                          </div>
+                        </td>
                         <td className="px-3 py-3 text-center text-sm text-slate-700">
-                          <div className="inline-flex flex-col items-center gap-1">
-                            {unpaidStatementCount > 0 ? (
-                              <span className="inline-flex min-h-5 items-center justify-center rounded-full bg-rose-500 px-2.5 text-[11px] font-semibold leading-none text-white">
-                                {lang === "zh" ? `未结${unpaidStatementCount}单` : `${unpaidStatementCount} pendientes`}
-                              </span>
-                            ) : null}
+                          <div className="inline-flex items-center justify-center gap-2">
                             <button
                               type="button"
                               onClick={() => void loadFinanceStatementRecords(row)}
@@ -6691,6 +6898,11 @@ export function DropshippingClient({
                             >
                               <LedgerIcon />
                             </button>
+                            {unpaidStatementCount > 0 ? (
+                              <span className="inline-flex min-h-5 whitespace-nowrap items-center justify-center rounded-full bg-rose-500 px-2 text-[9px] font-semibold leading-none text-white">
+                                {lang === "zh" ? `未结${unpaidStatementCount}单` : `${unpaidStatementCount} pendientes`}
+                              </span>
+                            ) : null}
                           </div>
                         </td>
                         <td className="px-3 py-3 text-center text-sm text-slate-700">
@@ -8658,21 +8870,40 @@ export function DropshippingClient({
                         </p>
                         {lang === "zh" ? (
                           <p className="text-[12px] font-normal text-slate-400">
-                            <span>{`结算汇率：1 MXN = ${financeStatementDisplayRate.rateValue ? financeStatementDisplayRate.rateValue.toFixed(4) : "-"} RMB`}</span>
+                            <span>{financeStatementLabels.rateLine.replace(
+                              "{rate}",
+                              financeStatementDisplayRate.rateValue
+                                ? (
+                                    financeStatementMode === "MXN"
+                                      ? (1 / financeStatementDisplayRate.rateValue).toFixed(4)
+                                      : financeStatementDisplayRate.rateValue.toFixed(4)
+                                  )
+                                : "-",
+                            )}</span>
                             <span className="ml-[20px]">{`${fmtDateOnly(financeStatementDisplayDateValue, lang)}汇率`}</span>
                             <span className="ml-3">{`来源：${financeStatementDisplayRate.sourceName || "-"}`}</span>
                           </p>
                         ) : (
                           <p className="text-[12px] font-normal text-slate-400">
-                            <span>{`Tipo de cambio: 1 MXN = ${financeStatementDisplayRate.rateValue ? financeStatementDisplayRate.rateValue.toFixed(4) : "-"} RMB`}</span>
+                            <span>{financeStatementLabels.rateLine.replace(
+                              "{rate}",
+                              financeStatementDisplayRate.rateValue
+                                ? (
+                                    financeStatementMode === "MXN"
+                                      ? (1 / financeStatementDisplayRate.rateValue).toFixed(4)
+                                      : financeStatementDisplayRate.rateValue.toFixed(4)
+                                  )
+                                : "-",
+                            )}</span>
                             <span className="ml-[20px]">{fmtDateOnly(financeStatementDisplayDateValue, lang)}</span>
                             <span className="ml-3">{`fuente: ${financeStatementDisplayRate.sourceName || "-"}`}</span>
                           </p>
                         )}
                         <p className="font-normal text-slate-400">
-                          {lang === "zh"
-                            ? `代发费：${financeStatementPreparedData?.serviceFeeDisplay || "￥0.00 / 单"}`
-                            : `Servicio: ${financeStatementPreparedData?.serviceFeeDisplay || "￥0.00 / pedido"}`}
+                          {`${financeStatementLabels.serviceFeeDisplayPrefix} ${
+                            financeStatementPreparedData?.serviceFeeDisplay
+                            || `${financeStatementMode === "MXN" ? "$" : "￥"}0.00 / ${lang === "zh" ? "单" : "pedido"}`
+                          }`}
                         </p>
                       </div>
                     </div>
@@ -8726,20 +8957,23 @@ export function DropshippingClient({
                         cardClass: "bg-transparent",
                       },
                       {
-                        label: lang === "zh" ? "商品折算（人民币）" : "Convertido (RMB)",
-                        value: `￥${fmtMoney(financeStatementSummary.cnySubtotal, lang)}`,
+                        label: financeStatementMode === "MXN" ? financeStatementLabels.rawServiceFeeRmb : financeStatementLabels.productSettlement,
+                        value:
+                          financeStatementMode === "MXN"
+                            ? `￥${fmtMoney(financeStatementSummary.rawServiceFeeTotal || 0, lang)}`
+                            : formatSettlementAmount(financeStatementSummary.cnySubtotal, financeStatementMode, lang),
                         valueClass: "text-slate-950",
                         cardClass: "bg-transparent",
                       },
                       {
-                        label: lang === "zh" ? "代发服务费（人民币）" : "Servicio (RMB)",
-                        value: `￥${fmtMoney(financeStatementSummary.serviceFeeTotal, lang)}`,
+                        label: financeStatementLabels.serviceFee,
+                        value: formatSettlementAmount(financeStatementSummary.serviceFeeTotal, financeStatementMode, lang),
                         valueClass: "text-slate-950",
                         cardClass: "bg-transparent",
                       },
                       {
-                        label: lang === "zh" ? "应付总额（人民币）" : "Total a pagar (RMB)",
-                        value: `￥${fmtMoney(financeStatementSummary.payableTotal, lang)}`,
+                        label: financeStatementLabels.total,
+                        value: formatSettlementAmount(financeStatementSummary.payableTotal, financeStatementMode, lang),
                         valueClass: financeStatementIsPaid ? "text-slate-950" : "text-rose-600",
                         cardClass: "bg-transparent",
                       },
@@ -8765,9 +8999,9 @@ export function DropshippingClient({
                             <th className="w-[1%] whitespace-nowrap px-2 py-2 text-right">{lang === "zh" ? "普通折扣" : "Desc. gen."}</th>
                             <th className="w-[1%] whitespace-nowrap px-2 py-2 text-right">{lang === "zh" ? "VIP折扣" : "Desc. VIP"}</th>
                             <th className="w-[1%] whitespace-nowrap px-2 py-2 text-right">{lang === "zh" ? "产品金额" : "Monto producto"}</th>
-                            <th className="w-[1%] whitespace-nowrap px-2 py-2 text-right">{lang === "zh" ? "折算" : "RMB"}</th>
+                            <th className="w-[1%] whitespace-nowrap px-2 py-2 text-right">{financeStatementLabels.settlementColumn}</th>
                             <th className="w-[1%] whitespace-nowrap px-2 py-2 text-right">{lang === "zh" ? "代发费" : "Servicio"}</th>
-                            <th className="w-[1%] whitespace-nowrap px-2 py-2 text-right">{lang === "zh" ? "合计" : "Total RMB"}</th>
+                            <th className="w-[1%] whitespace-nowrap px-2 py-2 text-right">{financeStatementLabels.totalColumn}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -8793,9 +9027,9 @@ export function DropshippingClient({
                               <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${rowTextClass}`}>{item.normalDiscount > 0 ? `${fmtPercent(item.normalDiscount, lang)}%` : "-"}</td>
                               <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${rowTextClass}`}>{financeStatementVipEnabled && item.vipDiscount > 0 ? `${fmtPercent(item.vipDiscount, lang)}%` : "-"}</td>
                               <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] font-normal ${item.displayReincluded && !financeStatementIsPaid ? "text-rose-600" : "text-slate-900"}`}>{item.displayProductAmount > 0 ? `$${fmtMoney(item.displayProductAmount, lang)}` : "-"}</td>
-                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${item.displayReincluded && !financeStatementIsPaid ? "text-rose-600" : "text-slate-900"}`}>{item.displayConvertedAmount > 0 ? `￥${fmtMoney(item.displayConvertedAmount, lang)}` : "-"}</td>
-                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${item.displayReincluded && !financeStatementIsPaid ? "text-rose-600" : "text-slate-900"}`}>{item.shippingFee > 0 ? `￥${fmtMoney(item.shippingFee, lang)}` : "-"}</td>
-                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] font-normal ${financeStatementIsPaid ? "text-slate-950" : "text-rose-600"}`}>{`￥${fmtMoney(item.displayCnyTotalAmount, lang)}`}</td>
+                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${item.displayReincluded && !financeStatementIsPaid ? "text-rose-600" : "text-slate-900"}`}>{item.displayConvertedAmount > 0 ? formatSettlementAmount(item.displayConvertedAmount, financeStatementMode, lang) : "-"}</td>
+                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] ${item.displayReincluded && !financeStatementIsPaid ? "text-rose-600" : "text-slate-900"}`}>{item.displayShippingAmount > 0 ? formatSettlementAmount(item.displayShippingAmount, financeStatementMode, lang) : "-"}</td>
+                              <td className={`whitespace-nowrap px-2 py-1.5 text-right text-[12px] font-normal ${financeStatementIsPaid ? "text-slate-950" : "text-rose-600"}`}>{formatSettlementAmount(item.displayCnyTotalAmount, financeStatementMode, lang)}</td>
                             </tr>
                           );
                           })}
@@ -8818,8 +9052,12 @@ export function DropshippingClient({
                               ? "2. El monto del producto considera precio, cantidad y descuentos."
                               : "2. El monto del producto considera precio, cantidad y descuento general."}
                         </p>
-                        <p>{lang === "zh" ? "3. 代发费按唯一物流单计入人民币费用。" : "3. El servicio se cobra una vez por guia unica."}</p>
-                        <p>{lang === "zh" ? "4. 合计 = 折算 + 当行代发费。" : "4. Total = conversion + servicio por fila."}</p>
+                        <p>{financeStatementMode === "MXN"
+                          ? (lang === "zh" ? "3. 代发费先按人民币确定，再按结算汇率折算为比索。" : "3. El servicio se define en RMB y luego se convierte a MXN.")
+                          : (lang === "zh" ? "3. 代发费按唯一物流单计入人民币费用。" : "3. El servicio se cobra una vez por guia unica.")}</p>
+                        <p>{financeStatementMode === "MXN"
+                          ? (lang === "zh" ? "4. 合计 = 商品金额（MXN） + 当行代发费（MXN）。" : "4. Total MXN = productos + servicio por fila.")
+                          : (lang === "zh" ? "4. 合计 = 折算 + 当行代发费。" : "4. Total = conversion + servicio por fila.")}</p>
                       </div>
                     </div>
                     <div className="px-1 py-1 text-slate-400">
@@ -8827,8 +9065,8 @@ export function DropshippingClient({
                       <div className="mt-4 space-y-[13px] text-[12px]">
                         {[
                           [lang === "zh" ? "商品金额（比索）" : "Productos (MXN)", `$${fmtMoney(financeStatementSummary.mxnSubtotal, lang)}`],
-                          [lang === "zh" ? "商品折算（人民币）" : "Convertido (RMB)", `￥${fmtMoney(financeStatementSummary.cnySubtotal, lang)}`],
-                          [lang === "zh" ? "代发服务费（人民币）" : "Servicio (RMB)", `￥${fmtMoney(financeStatementSummary.serviceFeeTotal, lang)}`],
+                          [financeStatementLabels.productSettlement, formatSettlementAmount(financeStatementSummary.cnySubtotal, financeStatementMode, lang)],
+                          [financeStatementLabels.serviceFee, formatSettlementAmount(financeStatementSummary.serviceFeeTotal, financeStatementMode, lang)],
                         ].map(([label, value]) => (
                           <div key={String(label)} className="flex items-center justify-between border-b border-slate-200 pb-[13px]">
                             <span className="text-slate-400">{label}</span>
@@ -8838,7 +9076,7 @@ export function DropshippingClient({
                       </div>
                       <div className="mt-[18px] mb-[18px] flex items-end justify-between gap-3">
                         <span className="text-[16px] font-black tracking-tight text-slate-400">{lang === "zh" ? "应付总额" : "Total"}</span>
-                        <span className={`text-[16px] font-black tracking-tight ${financeStatementIsPaid ? "text-slate-950" : "text-rose-600"}`}>{`￥${fmtMoney(financeStatementSummary.payableTotal, lang)}`}</span>
+                        <span className={`text-[16px] font-black tracking-tight ${financeStatementIsPaid ? "text-slate-950" : "text-rose-600"}`}>{formatSettlementAmount(financeStatementSummary.payableTotal, financeStatementMode, lang)}</span>
                       </div>
                     </div>
                   </div>
