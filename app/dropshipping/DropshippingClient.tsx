@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type ReactNode, type SetStateAction } from "react";
 import ExcelJS from "exceljs";
+import * as XLSX from "xlsx";
 import { EmptyState } from "@/components/empty-state";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { ProductImage } from "@/components/product-image";
@@ -159,6 +160,19 @@ type DeleteOrderState = {
   id: string;
   trackingNo: string;
 } | null;
+
+type ImportedOrderRow = {
+  platform: string;
+  platformOrderNo: string;
+  rawSku: string;
+  sku: string;
+  quantity: number;
+  trackingNo: string;
+  shippedAt: string;
+  shippingFee: string;
+  parseError: string;
+  duplicateError: string;
+};
 
 type InventoryDeleteTargetState = {
   row: DsInventoryRow;
@@ -428,6 +442,227 @@ function toDateInputValue(value: string | null | undefined) {
   const parts = parseDateOnlyParts(String(value || ""));
   if (!parts) return "";
   return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function normalizeImportHeader(value: unknown) {
+  return String(value || "")
+    .replace(/\s+/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function extractImportedPlatformSku(value: string) {
+  const text = String(value || "")
+    .replace(/[—–－]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!text) return "";
+  const directMatched = text.match(/BS-([A-Za-z0-9]+)-([A-Za-z0-9]+)/i);
+  if (directMatched?.[1] && directMatched?.[2]) {
+    return `${directMatched[1].trim()}-${directMatched[2].trim()}`;
+  }
+  const afterPrefix = text.replace(/^BS-/i, "");
+  const body = afterPrefix.replace(/\*\d+(?:$|\s.*$)/i, "").trim();
+  const parts = body.split("-").map((item) => item.trim()).filter(Boolean);
+  return parts.length >= 2 ? `${parts[0]}-${parts[1]}` : (parts[0] || "");
+}
+
+function formatMexicoDateFromChinaParts(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  second: number,
+) {
+  const utcMillis = Date.UTC(year, month - 1, day, hour - 8, minute, second);
+  const mexicoFormatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return mexicoFormatter.format(new Date(utcMillis));
+}
+
+function toMexicoDateInputFromChinaDateTime(value: unknown) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return formatMexicoDateFromChinaParts(
+      value.getFullYear(),
+      value.getMonth() + 1,
+      value.getDate(),
+      value.getHours(),
+      value.getMinutes(),
+      value.getSeconds(),
+    );
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const dateParts = XLSX.SSF.parse_date_code(value);
+    if (dateParts) {
+      return formatMexicoDateFromChinaParts(
+        Number(dateParts.y || 0),
+        Number(dateParts.m || 1),
+        Number(dateParts.d || 1),
+        Number(dateParts.H || 0),
+        Number(dateParts.M || 0),
+        Number(dateParts.S || 0),
+      );
+    }
+  }
+
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const matched = text.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/);
+  if (!matched) return "";
+  const [, year, month, day, hour = "00", minute = "00", second = "00"] = matched;
+  return formatMexicoDateFromChinaParts(
+    Number(year),
+    Number(month),
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
+  );
+}
+
+function buildImportedOrderRowError(item: Pick<ImportedOrderRow, "platform" | "platformOrderNo" | "trackingNo" | "shippedAt" | "sku" | "quantity">) {
+  const parseErrorList: string[] = [];
+  if (!item.platform) parseErrorList.push("缺少平台");
+  if (!item.platformOrderNo) parseErrorList.push("缺少订单编号");
+  if (!item.trackingNo) parseErrorList.push("缺少跟踪号");
+  if (!item.shippedAt) parseErrorList.push("发货时间无法识别");
+  if (!Number.isFinite(item.quantity) || item.quantity <= 0) parseErrorList.push("产品数量无效");
+  if (!item.sku) parseErrorList.push("商品编码无法解析");
+  return parseErrorList.join("；");
+}
+
+function buildImportedOrderDuplicateErrors(
+  importedRows: ImportedOrderRow[],
+  existingOrders: DsOrderRow[],
+) {
+  const duplicateMap = new Map<number, string>();
+  const existingByOrderNo = new Map<string, DsOrderRow>();
+  const existingByTrackingNo = new Map<string, DsOrderRow>();
+  const importedOrderNoMap = new Map<string, number[]>();
+  const importedTrackingMap = new Map<string, number[]>();
+
+  existingOrders.forEach((order) => {
+    const orderNoKey = String(order.platformOrderNo || "").trim().toLowerCase();
+    const trackingKey = String(order.trackingNo || "").trim().toLowerCase();
+    if (orderNoKey && !existingByOrderNo.has(orderNoKey)) existingByOrderNo.set(orderNoKey, order);
+    if (trackingKey && !existingByTrackingNo.has(trackingKey)) existingByTrackingNo.set(trackingKey, order);
+  });
+
+  importedRows.forEach((row, index) => {
+    const orderNoKey = String(row.platformOrderNo || "").trim().toLowerCase();
+    const trackingKey = String(row.trackingNo || "").trim().toLowerCase();
+    if (orderNoKey) importedOrderNoMap.set(orderNoKey, [...(importedOrderNoMap.get(orderNoKey) || []), index]);
+    if (trackingKey) importedTrackingMap.set(trackingKey, [...(importedTrackingMap.get(trackingKey) || []), index]);
+  });
+
+  importedRows.forEach((row, index) => {
+    const errors: string[] = [];
+    const orderNoKey = String(row.platformOrderNo || "").trim().toLowerCase();
+    const trackingKey = String(row.trackingNo || "").trim().toLowerCase();
+    const existingOrderByNo = orderNoKey ? existingByOrderNo.get(orderNoKey) : null;
+    const existingOrderByTracking = trackingKey ? existingByTrackingNo.get(trackingKey) : null;
+    const importedOrderMatches = orderNoKey ? (importedOrderNoMap.get(orderNoKey) || []).filter((item) => item !== index) : [];
+    const importedTrackingMatches = trackingKey ? (importedTrackingMap.get(trackingKey) || []).filter((item) => item !== index) : [];
+
+    if (existingOrderByNo) {
+      errors.push(`订单编号重复：${existingOrderByNo.platformOrderNo} / ${existingOrderByNo.customerName} / ${existingOrderByNo.sku}`);
+    }
+    if (existingOrderByTracking) {
+      errors.push(`跟踪号重复：${existingOrderByTracking.trackingNo} / ${existingOrderByTracking.platformOrderNo} / ${existingOrderByTracking.customerName}`);
+    }
+    if (importedOrderMatches.length > 0) {
+      errors.push(`订单编号与导入文件第 ${importedOrderMatches.map((item) => item + 2).join("、")} 行重复`);
+    }
+    if (importedTrackingMatches.length > 0) {
+      errors.push(`跟踪号与导入文件第 ${importedTrackingMatches.map((item) => item + 2).join("、")} 行重复`);
+    }
+
+    duplicateMap.set(index, errors.join("；"));
+  });
+
+  return duplicateMap;
+}
+
+async function parseImportedOrderFile(file: File) {
+  const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+  const firstSheetName = workbook.SheetNames[0];
+  const worksheet = firstSheetName ? workbook.Sheets[firstSheetName] : null;
+  if (!worksheet) {
+    throw new Error("import_sheet_missing");
+  }
+
+  const headerIndexMap = new Map<string, number>();
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+    header: 1,
+    defval: "",
+    raw: true,
+  });
+  const headerRow = Array.isArray(matrix[0]) ? matrix[0] : [];
+  headerRow.forEach((cellValue, index) => {
+    const headerKey = normalizeImportHeader(cellValue);
+    if (headerKey) headerIndexMap.set(headerKey, index);
+  });
+
+  const platformCol = headerIndexMap.get("平台");
+  const orderNoCol = headerIndexMap.get("订单编号");
+  const shippedAtCol = headerIndexMap.get("发货时间");
+  const platformSkuCol = headerIndexMap.get("商品sku");
+  const quantityCol = headerIndexMap.get("产品数量");
+  const trackingNoCol = headerIndexMap.get("跟踪号");
+
+  if (
+    platformCol === undefined
+    || orderNoCol === undefined
+    || shippedAtCol === undefined
+    || platformSkuCol === undefined
+    || quantityCol === undefined
+    || trackingNoCol === undefined
+  ) {
+    throw new Error("import_columns_missing");
+  }
+
+  const importedRows: ImportedOrderRow[] = [];
+  matrix.slice(1).forEach((row) => {
+    const cells = Array.isArray(row) ? row : [];
+    const platform = String(cells[platformCol] || "").trim();
+    const platformOrderNo = String(cells[orderNoCol] || "").trim();
+    const shippedAt = toMexicoDateInputFromChinaDateTime(cells[shippedAtCol]);
+    const rawPlatformSku = String(cells[platformSkuCol] || "").trim();
+    const sku = extractImportedPlatformSku(rawPlatformSku);
+    const quantityValue = Number(String(cells[quantityCol] || "").trim());
+    const trackingNo = String(cells[trackingNoCol] || "").trim();
+
+    if (!platformOrderNo && !rawPlatformSku && !trackingNo) return;
+    const quantity = Number.isFinite(quantityValue) && quantityValue > 0 ? Math.max(1, Math.round(quantityValue)) : 0;
+
+    importedRows.push({
+      platform,
+      platformOrderNo,
+      rawSku: rawPlatformSku,
+      sku,
+      quantity,
+      trackingNo,
+      shippedAt,
+      shippingFee: "6",
+      parseError: buildImportedOrderRowError({
+        platform,
+        platformOrderNo,
+        trackingNo,
+        shippedAt,
+        sku,
+        quantity,
+      }),
+      duplicateError: "",
+    });
+  });
+
+  return importedRows;
 }
 
 function fmtMoney(value: number, lang: "zh" | "es") {
@@ -1143,6 +1378,12 @@ export function DropshippingClient({
   const [labelSlotsDirty, setLabelSlotsDirty] = useState(false);
   const [proofSlotsDirty, setProofSlotsDirty] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [orderFileImporting, setOrderFileImporting] = useState(false);
+  const [orderImportPreviewOpen, setOrderImportPreviewOpen] = useState(false);
+  const [orderImportPreviewRows, setOrderImportPreviewRows] = useState<ImportedOrderRow[]>([]);
+  const [orderImportPreviewError, setOrderImportPreviewError] = useState("");
+  const [orderImportPreviewFileName, setOrderImportPreviewFileName] = useState("");
+  const [orderImportPreviewPage, setOrderImportPreviewPage] = useState(1);
   const [importProgress, setImportProgress] = useState<number | null>(null);
   const [importSummary, setImportSummary] = useState<string>("");
   const [error, setError] = useState("");
@@ -1190,12 +1431,14 @@ export function DropshippingClient({
   const [deleteTarget, setDeleteTarget] = useState<DeleteOrderState>(null);
   const [deleteTrackingInput, setDeleteTrackingInput] = useState("");
   const [inventoryDeleteTarget, setInventoryDeleteTarget] = useState<InventoryDeleteTargetState>(null);
+  const orderImportInputRef = useRef<HTMLInputElement | null>(null);
   const financePreviewScrollRef = useRef<HTMLDivElement | null>(null);
   const labelInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const proofInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const financePreviewPageSize = 10;
   const inventoryPageSize = 11;
   const orderPageSize = 10;
+  const orderImportPreviewPageSize = 8;
 
   const overviewCustomerOptions = useMemo(() => {
     const customerMap = new Map<string, string>();
@@ -1529,6 +1772,7 @@ export function DropshippingClient({
         desc: "在现有 ParksonIM 后台内集中处理代发订单、SKU 备货、客户结算与汇率信息。",
         refresh: "刷新数据",
         create: "新增订单",
+        importOrders: "导入订单文件",
         import: "历史迁移导入",
         tabs: { overview: "总览", orders: "订单管理", inventory: "已发商品", finance: "财务结算" },
         stats: {
@@ -1631,6 +1875,7 @@ export function DropshippingClient({
         desc: "Gestiona pedidos, inventario SKU, liquidacion por cliente y tipo de cambio dentro del ParksonIM actual.",
         refresh: "Actualizar",
         create: "Nuevo pedido",
+        importOrders: "Importar archivo",
         import: "Importar historial",
         tabs: { overview: "Resumen", orders: "Pedidos", inventory: "Inventario SKU", finance: "Finanzas" },
         stats: {
@@ -1880,6 +2125,15 @@ export function DropshippingClient({
       return shippedAtSortDirection === "asc" ? aTime - bTime : bTime - aTime;
     });
   }, [filteredOrders, shippedAtSortDirection]);
+
+  const orderImportPreviewTotalPages = useMemo(() => {
+    return Math.max(1, Math.ceil(orderImportPreviewRows.length / orderImportPreviewPageSize));
+  }, [orderImportPreviewRows.length, orderImportPreviewPageSize]);
+
+  const pagedOrderImportPreviewRows = useMemo(() => {
+    const start = (orderImportPreviewPage - 1) * orderImportPreviewPageSize;
+    return orderImportPreviewRows.slice(start, start + orderImportPreviewPageSize);
+  }, [orderImportPreviewPage, orderImportPreviewPageSize, orderImportPreviewRows]);
 
   const filteredInventory = useMemo(() => {
     const normalized = inventoryKeyword.trim().toLowerCase();
@@ -5451,6 +5705,166 @@ export function DropshippingClient({
     }
   }
 
+  async function openOrderFileImportPreview(file: File) {
+    try {
+      setOrderFileImporting(true);
+      setError("");
+      setSuccess("");
+      setOrderImportPreviewError("");
+      setOrderImportPreviewRows([]);
+      setOrderImportPreviewFileName(file.name || "");
+      if (customerFilter === "all") {
+        throw new Error(lang === "zh" ? "请先筛选客户后再导入订单文件" : "Selecciona un cliente antes de importar");
+      }
+
+      const importedRows = await parseImportedOrderFile(file);
+      if (importedRows.length === 0) {
+        throw new Error(lang === "zh" ? "导入文件里没有可用订单数据" : "No hay pedidos validos en el archivo");
+      }
+      const duplicateErrorMap = buildImportedOrderDuplicateErrors(importedRows, orders);
+      setOrderImportPreviewPage(1);
+      setOrderImportPreviewRows(
+        importedRows.map((item, index) => ({
+          ...item,
+          duplicateError: duplicateErrorMap.get(index) || "",
+        })),
+      );
+      setOrderImportPreviewOpen(true);
+    } catch (importError) {
+      const message = importError instanceof Error ? importError.message : "import_failed";
+      if (message === "import_columns_missing") {
+        setOrderImportPreviewError(
+          lang === "zh"
+            ? "导入文件缺少必需列：平台、订单编号、发货时间、商品SKU、产品数量、跟踪号"
+            : "Faltan columnas requeridas: plataforma, pedido, fecha, SKU, cantidad y guia",
+        );
+      } else if (message === "import_sheet_missing") {
+        setOrderImportPreviewError(lang === "zh" ? "导入文件没有工作表" : "El archivo no tiene hojas");
+      } else {
+        setOrderImportPreviewError(message);
+      }
+      setOrderImportPreviewOpen(true);
+    } finally {
+      if (orderImportInputRef.current) {
+        orderImportInputRef.current.value = "";
+      }
+      setOrderFileImporting(false);
+    }
+  }
+
+  async function confirmOrderFileImport() {
+    try {
+      setOrderFileImporting(true);
+      setError("");
+      setSuccess("");
+      const importedRows = orderImportPreviewRows;
+      if (importedRows.length === 0) {
+        throw new Error(lang === "zh" ? "没有可导入的数据" : "No hay datos para importar");
+      }
+      const invalidRows = importedRows.filter((item) =>
+        !item.platform
+        || !item.platformOrderNo
+        || !item.trackingNo
+        || !item.shippedAt
+        || !item.sku
+        || !Number.isFinite(item.quantity)
+        || item.quantity <= 0
+        || !!item.duplicateError
+      );
+      if (invalidRows.length > 0) {
+        setOrderImportPreviewError(
+          lang === "zh"
+            ? "预览里还有重复订单/跟踪号或未修正的行，请先处理后再确认导入。"
+            : "Todavia hay filas duplicadas o incompletas en la vista previa. Corrigelas antes de importar.",
+        );
+        return;
+      }
+      const seenOrderNos = new Set<string>();
+      let createdCount = 0;
+      let skippedCount = 0;
+
+      for (const item of importedRows) {
+        if (seenOrderNos.has(item.platformOrderNo)) {
+          skippedCount += 1;
+          continue;
+        }
+        seenOrderNos.add(item.platformOrderNo);
+
+        const responseId = await persistOrderRequest({
+          id: "",
+          trackingGroupId: "",
+          customerName: customerFilter,
+          platform: item.platform || "无",
+          platformOrderNo: item.platformOrderNo,
+          sku: item.sku,
+          productNameZh: item.sku,
+          productNameEs: "",
+          quantity: String(item.quantity),
+          trackingNo: item.trackingNo,
+          color: "随机",
+          warehouse: FIXED_WAREHOUSE,
+          shippedAt: item.shippedAt,
+          shippingFee: item.shippingFee,
+          settlementStatus: "unpaid",
+          shippingStatus: item.trackingNo ? "shipped" : "pending",
+          notes: "",
+        });
+
+        if (responseId) {
+          createdCount += 1;
+        }
+      }
+
+      await refreshData(["orders", "inventory", "finance", "overview", "rate"]);
+      setOrderPage(1);
+      setOrderImportPreviewOpen(false);
+      setOrderImportPreviewPage(1);
+      setOrderImportPreviewRows([]);
+      setOrderImportPreviewError("");
+      setSuccess(
+        lang === "zh"
+          ? `订单文件已导入：新增 ${createdCount} 条，跳过 ${skippedCount} 条。`
+          : `Archivo importado: ${createdCount} nuevos, ${skippedCount} omitidos.`,
+      );
+    } catch (importError) {
+      const message = importError instanceof Error ? importError.message : "import_failed";
+      if (message === "import_columns_missing") {
+        setOrderImportPreviewError(
+          lang === "zh"
+            ? "导入文件缺少必需列：平台、订单编号、发货时间、商品SKU、产品数量、跟踪号"
+            : "Faltan columnas requeridas: plataforma, pedido, fecha, SKU, cantidad y guia",
+        );
+      } else if (message === "import_sheet_missing") {
+        setOrderImportPreviewError(lang === "zh" ? "导入文件没有工作表" : "El archivo no tiene hojas");
+      } else {
+        setOrderImportPreviewError(message);
+      }
+    } finally {
+      setOrderFileImporting(false);
+    }
+  }
+
+  function updateOrderImportPreviewRow(
+    index: number,
+    patch: Partial<Pick<ImportedOrderRow, "sku" | "shippingFee">>,
+  ) {
+    setOrderImportPreviewError("");
+    setOrderImportPreviewRows((prev) =>
+      prev.map((item, itemIndex) => {
+        if (itemIndex !== index) return item;
+        const nextItem = {
+          ...item,
+          ...patch,
+        };
+        return {
+          ...nextItem,
+          parseError: buildImportedOrderRowError(nextItem),
+          duplicateError: item.duplicateError,
+        };
+      }),
+    );
+  }
+
   const tabButtonClass = (tab: TabKey) =>
     `inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-semibold transition ${
       activeTab === tab ? "bg-primary text-white shadow-soft" : "bg-white text-slate-600 hover:bg-slate-100"
@@ -6084,6 +6498,26 @@ export function DropshippingClient({
           }
           right={
             <div className="flex w-full flex-wrap justify-end gap-2 lg:w-auto lg:flex-nowrap">
+              <input
+                ref={orderImportInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) {
+                    void openOrderFileImportPreview(file);
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => orderImportInputRef.current?.click()}
+                disabled={orderFileImporting}
+                className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-soft transition hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {orderFileImporting ? text.importing : text.importOrders}
+              </button>
               <button
                 type="button"
                 onClick={openCreateModal}
@@ -7646,6 +8080,161 @@ export function DropshippingClient({
               >
                 {saving ? text.saving : text.form.submit}
               </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {orderImportPreviewOpen ? (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-900/45 px-4 py-6">
+          <div className="flex w-[min(1180px,calc(100vw-20px))] max-h-[calc(100vh-32px)] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-base font-semibold text-slate-900">
+                    {lang === "zh" ? "导入订单文件预览" : "Vista previa de importacion"}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {orderImportPreviewFileName || (lang === "zh" ? "未选择文件" : "Sin archivo")}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOrderImportPreviewOpen(false);
+                    setOrderImportPreviewPage(1);
+                    setOrderImportPreviewRows([]);
+                    setOrderImportPreviewError("");
+                  }}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-900"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <div className="overflow-y-auto px-5 py-4">
+              {orderImportPreviewError ? (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700">
+                  {orderImportPreviewError}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="text-sm text-slate-600">
+                    {lang === "zh"
+                      ? `共解析 ${orderImportPreviewRows.length} 条，确认后才会正式导入。`
+                      : `Se detectaron ${orderImportPreviewRows.length} filas. Solo se importaran al confirmar.`}
+                  </div>
+                  <div className="rounded-2xl border border-slate-200">
+                    <table className="w-full table-fixed border-separate border-spacing-0">
+                      <thead className="bg-slate-50 text-left text-sm text-slate-700">
+                        <tr>
+                          <th className="w-[9%] whitespace-nowrap px-2 py-1.5 font-semibold">{lang === "zh" ? "平台" : "Plataforma"}</th>
+                          <th className="w-[18%] whitespace-nowrap px-2 py-1.5 font-semibold">{lang === "zh" ? "订单编号" : "Pedido"}</th>
+                          <th className="w-[17%] whitespace-nowrap px-2 py-1.5 font-semibold">{lang === "zh" ? "跟踪号" : "Guia"}</th>
+                          <th className="w-[10%] whitespace-nowrap px-2 py-1.5 font-semibold">{lang === "zh" ? "发货时间" : "Fecha envio"}</th>
+                          <th className="w-[7%] whitespace-nowrap px-2 py-1.5 font-semibold">{lang === "zh" ? "产品数量" : "Cantidad"}</th>
+                          <th className="w-[9%] whitespace-nowrap px-2 py-1.5 font-semibold">{lang === "zh" ? "代发费" : "Cargo"}</th>
+                          <th className="w-[14%] whitespace-nowrap px-2 py-1.5 font-semibold">{lang === "zh" ? "原始商品SKU" : "SKU original"}</th>
+                          <th className="w-[16%] whitespace-nowrap px-2 py-1.5 font-semibold">{lang === "zh" ? "解析编码" : "SKU解析"}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pagedOrderImportPreviewRows.map((item, index) => {
+                          const actualIndex = (orderImportPreviewPage - 1) * orderImportPreviewPageSize + index;
+                          const rowError = [item.parseError, item.duplicateError].filter(Boolean).join("；");
+                          return (
+                          <tr key={`${item.platformOrderNo}-${actualIndex}`} className="border-t border-slate-100 text-sm text-slate-700">
+                            <td className="truncate px-2 py-1.5">{item.platform}</td>
+                            <td className="truncate px-2 py-1.5">{item.platformOrderNo}</td>
+                            <td className="truncate px-2 py-1.5">{item.trackingNo || "-"}</td>
+                            <td className="whitespace-nowrap px-2 py-1.5">{item.shippedAt || "-"}</td>
+                            <td className="px-2 py-1.5">{item.quantity}</td>
+                            <td className="px-2 py-1.5">
+                              <select
+                                value={item.shippingFee}
+                                onChange={(event) => updateOrderImportPreviewRow(actualIndex, { shippingFee: event.target.value })}
+                                className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none"
+                              >
+                                {SHIPPING_FEE_OPTIONS.map((fee) => (
+                                  <option key={fee} value={fee}>
+                                    {fee}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="truncate px-2 py-1.5">{item.rawSku || "-"}</td>
+                            <td className="px-2 py-1.5">
+                              <div className="space-y-1">
+                                <input
+                                  value={item.sku}
+                                  onChange={(event) => updateOrderImportPreviewRow(actualIndex, { sku: event.target.value })}
+                                  className={`h-8 w-full rounded-lg border bg-white px-2 text-sm font-medium outline-none ${rowError ? "border-rose-300 text-rose-700" : "border-slate-200 text-slate-900"}`}
+                                />
+                                {rowError ? (
+                                  <div className="text-[11px] leading-4 text-rose-600">
+                                    {rowError}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </td>
+                          </tr>
+                        )})}
+                      </tbody>
+                    </table>
+                  </div>
+                  {orderImportPreviewTotalPages > 1 ? (
+                    <div className="flex items-center justify-between pt-2 text-sm text-slate-500">
+                      <div>
+                        {lang === "zh"
+                          ? `第 ${orderImportPreviewPage} / ${orderImportPreviewTotalPages} 页`
+                          : `Pagina ${orderImportPreviewPage} / ${orderImportPreviewTotalPages}`}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setOrderImportPreviewPage((prev) => Math.max(1, prev - 1))}
+                          disabled={orderImportPreviewPage <= 1}
+                          className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {lang === "zh" ? "上一页" : "Anterior"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setOrderImportPreviewPage((prev) => Math.min(orderImportPreviewTotalPages, prev + 1))}
+                          disabled={orderImportPreviewPage >= orderImportPreviewTotalPages}
+                          className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {lang === "zh" ? "下一页" : "Siguiente"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderImportPreviewOpen(false);
+                  setOrderImportPreviewPage(1);
+                  setOrderImportPreviewRows([]);
+                  setOrderImportPreviewError("");
+                }}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:border-slate-300 hover:text-slate-900"
+              >
+                {lang === "zh" ? "取消" : "Cancelar"}
+              </button>
+              {!orderImportPreviewError ? (
+                <button
+                  type="button"
+                  onClick={() => void confirmOrderFileImport()}
+                  disabled={orderFileImporting || orderImportPreviewRows.length === 0}
+                  className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {orderFileImporting ? (lang === "zh" ? "导入中..." : "Importando...") : (lang === "zh" ? "确认导入" : "Confirmar")}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
