@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Eye, Pencil, Trash2 } from "lucide-react";
+import { Eye, MapPin, Pencil, Trash2 } from "lucide-react";
 import { getClientLang } from "@/lib/lang-client";
 
 type PermissionState = {
@@ -22,7 +22,7 @@ type SettingsClientProps = {
   currentPermissions: PermissionState;
 };
 
-type TabKey = "perm" | "supplier" | "customer" | "catalog" | "category" | "doc";
+type TabKey = "perm" | "supplier" | "customer" | "category" | "doc";
 
 type UserPermissionRow = {
   id: string;
@@ -67,6 +67,7 @@ type SupplierProductSourceItem = {
 
 type Customer = {
   id: string;
+  sourceType?: "profile" | "yg";
   name: string;
   contact: string;
   phone: string;
@@ -79,6 +80,23 @@ type Customer = {
   creditLevel: string;
   tags: string;
   orderStats: string;
+  totalOrderAmountText?: string;
+  packingAmountText?: string;
+  totalOrderCount?: number;
+  detailRows?: Array<{
+    orderNo: string;
+    orderDateText: string;
+    orderAmountText: string;
+    latestStatus: string;
+  }>;
+};
+
+type CustomerSearchItem = {
+  id: string;
+  companyName: string;
+  relationName: string;
+  registeredPhone: string;
+  cityCountry: string;
 };
 
 type CatalogConfig = {
@@ -180,7 +198,7 @@ const EMPTY_CATEGORY_MAP: CategoryMapForm = {
   active: true,
 };
 
-const TAB_LIST: TabKey[] = ["perm", "supplier", "customer", "catalog", "category", "doc"];
+const TAB_LIST: TabKey[] = ["perm", "supplier", "customer", "category", "doc"];
 
 const PERMISSION_KEYS: Array<{ key: keyof PermissionState; zh: string; es: string }> = [
   { key: "manageSuppliers", zh: "供应商", es: "Prov" },
@@ -263,6 +281,86 @@ async function compressImageForUpload(file: File, maxSizeBytes = 900 * 1024): Pr
   return new File([blob], `${targetName}.jpg`, { type: "image/jpeg" });
 }
 
+function normalizeCustomerMergeValue(value: unknown) {
+  return String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function buildCustomerMergeKey(item: Customer) {
+  return [
+    normalizeCustomerMergeValue(item.name),
+    normalizeCustomerMergeValue(item.contact),
+    normalizeCustomerMergeValue(item.phone),
+  ]
+    .filter(Boolean)
+    .join("|");
+}
+
+function mergeCustomerRows(items: Customer[]) {
+  const mergedMap = new Map<string, Customer>();
+
+  for (const item of items) {
+    const mergeKey = buildCustomerMergeKey(item) || `${item.sourceType || "profile"}:${item.id}`;
+    const existing = mergedMap.get(mergeKey);
+    if (!existing) {
+      mergedMap.set(mergeKey, {
+        ...item,
+        detailRows: [...(item.detailRows || [])],
+      });
+      continue;
+    }
+
+    const existingDetailMap = new Map<string, Customer["detailRows"][number]>();
+    for (const row of existing.detailRows || []) {
+      existingDetailMap.set(row.orderNo, row);
+    }
+    for (const row of item.detailRows || []) {
+      if (!existingDetailMap.has(row.orderNo)) {
+        existingDetailMap.set(row.orderNo, row);
+      }
+    }
+    const mergedDetailRows = Array.from(existingDetailMap.values()).sort((left, right) =>
+      String(right.orderDateText || "").localeCompare(String(left.orderDateText || ""), "zh-CN"),
+    );
+    const totalOrderAmount = mergedDetailRows.reduce(
+      (sum, row) => sum + Number(row.orderAmountText || 0),
+      0,
+    );
+    const packingAmount = mergedDetailRows.reduce((sum, row) => {
+      const raw = String(row.latestStatus || "").trim().toLowerCase();
+      return raw === "2" || raw === "packing" || raw === "picking" || raw === "配货中"
+        ? sum + Number(row.orderAmountText || 0)
+        : sum;
+    }, 0);
+    const profileRow =
+      existing.sourceType === "profile" ? existing : item.sourceType === "profile" ? item : null;
+    const ygRow =
+      existing.sourceType === "yg" ? existing : item.sourceType === "yg" ? item : null;
+    const baseRow = profileRow || existing;
+
+    mergedMap.set(mergeKey, {
+      ...baseRow,
+      name: ygRow?.name || profileRow?.name || existing.name || item.name || "",
+      contact: ygRow?.contact || profileRow?.contact || existing.contact || item.contact || "",
+      phone: ygRow?.phone || profileRow?.phone || existing.phone || item.phone || "",
+      stores: profileRow?.stores || existing.stores || item.stores || "",
+      cityCountry: ygRow?.cityCountry || profileRow?.cityCountry || existing.cityCountry || item.cityCountry || "",
+      vipLevel: profileRow?.vipLevel || existing.vipLevel || item.vipLevel || "",
+      creditLevel: profileRow?.creditLevel || existing.creditLevel || item.creditLevel || "",
+      orderStats: String(mergedDetailRows.length || ygRow?.orderStats || profileRow?.orderStats || existing.orderStats || item.orderStats || ""),
+      detailRows: mergedDetailRows,
+      totalOrderCount: mergedDetailRows.length,
+      totalOrderAmountText: totalOrderAmount.toFixed(2),
+      packingAmountText: packingAmount.toFixed(2),
+    });
+  }
+
+  return Array.from(mergedMap.values());
+}
+
+function isVipCustomer(item: Customer) {
+  return Number(item.totalOrderAmountText || 0) >= 100000;
+}
+
 function parseSupplierDiscountRules(input: string): SupplierDiscountRule[] {
   const raw = String(input || "").trim();
   if (!raw) return [];
@@ -310,6 +408,7 @@ function formatYogoCodeDraft(value: string) {
 export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientProps) {
   const SUPPLIER_PAGE_SIZE = 10;
   const SUPPLIER_PRODUCT_PREVIEW_PAGE_SIZE = 12;
+  const CUSTOMER_PAGE_SIZE = 11;
   const [lang, setLang] = useState<"zh" | "es">("zh");
   const [tab, setTab] = useState<TabKey>("perm");
   const [loading, setLoading] = useState(true);
@@ -350,7 +449,14 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerKeyword, setCustomerKeyword] = useState("");
+  const [customerVipFilter, setCustomerVipFilter] = useState<"all" | "vip" | "normal">("all");
+  const [customerPage, setCustomerPage] = useState(1);
   const [customerForm, setCustomerForm] = useState<Customer>(EMPTY_CUSTOMER);
+  const [customerEditorOpen, setCustomerEditorOpen] = useState(false);
+  const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
+  const [customerSearchLoading, setCustomerSearchLoading] = useState(false);
+  const [customerSearchResults, setCustomerSearchResults] = useState<CustomerSearchItem[]>([]);
+  const [customerDetailId, setCustomerDetailId] = useState("");
 
   const [catalogConfig, setCatalogConfig] = useState<CatalogConfig>(EMPTY_CATALOG);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -423,7 +529,6 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       perm: tx("权限", "Perm"),
       supplier: tx("供应商", "Prov"),
       customer: tx("客户", "Cli"),
-      catalog: tx("目录配置", "CatCfg"),
       category: tx("分类管理", "Cat map"),
       doc: tx("文档设置", "Doc"),
     })[key];
@@ -647,15 +752,35 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       setError("");
       await saveEntity("/api/settings/customers", customerForm, "客户已保存", "Cli saved");
       setCustomerForm(EMPTY_CUSTOMER);
+      setCustomerEditorOpen(false);
       await loadAll();
     } catch (e) {
       setError(e instanceof Error ? e.message : tx("保存客户失败", "Save cli fail"));
     }
   }
 
-  async function deleteCustomer(id: string) {
+  async function deleteCustomer(id: string, customerName: string) {
     try {
       setError("");
+      const confirmed = window.confirm(
+        lang === "zh"
+          ? `确认删除客户“${customerName || "-"}”吗？删除前需要输入完整公司名称确认。`
+          : `Delete customer "${customerName || "-"}"? You must type the full company name to confirm.`,
+      );
+      if (!confirmed) return;
+      const confirmText = window.prompt(
+        lang === "zh"
+          ? `请输入完整客户公司名称以确认删除：${customerName || "-"}`
+          : `Type full customer company name to confirm deletion: ${customerName || "-"}`,
+      );
+      if ((confirmText || "").trim() !== String(customerName || "").trim()) {
+        setError(
+          lang === "zh"
+            ? "客户公司名称校验失败，未执行删除"
+            : "Customer name confirmation failed. Delete cancelled.",
+        );
+        return;
+      }
       const res = await fetch(`/api/settings/customers/${id}`, { method: "DELETE" });
       const json = await readJson<any>(res);
       if (!res.ok || !json?.ok) throw new Error(json?.error || tx("删除失败", "Delete fail"));
@@ -872,16 +997,96 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
     [supplierProductPreview.items, safeSupplierPreviewPage, SUPPLIER_PRODUCT_PREVIEW_PAGE_SIZE],
   );
 
+  const mergedCustomers = useMemo(() => mergeCustomerRows(customers), [customers]);
+
   const filteredCustomers = useMemo(
     () =>
-      customers.filter((c) =>
+      mergedCustomers.filter((c) =>
         [c.name, c.contact, c.phone, c.whatsapp, c.tags]
           .join(" ")
           .toLowerCase()
-          .includes(customerKeyword.trim().toLowerCase()),
+          .includes(customerKeyword.trim().toLowerCase())
+        && (
+          customerVipFilter === "all"
+          || (customerVipFilter === "vip" && isVipCustomer(c))
+          || (customerVipFilter === "normal" && !isVipCustomer(c))
+        ),
       ),
-    [customers, customerKeyword],
+    [mergedCustomers, customerKeyword, customerVipFilter],
   );
+
+  useEffect(() => {
+    setCustomerPage(1);
+  }, [customerKeyword, customerVipFilter, mergedCustomers.length]);
+
+  const customerTotalPages = Math.max(1, Math.ceil(filteredCustomers.length / CUSTOMER_PAGE_SIZE));
+  const safeCustomerPage = Math.min(customerPage, customerTotalPages);
+  const pagedCustomers = useMemo(
+    () =>
+      filteredCustomers.slice(
+        (safeCustomerPage - 1) * CUSTOMER_PAGE_SIZE,
+        safeCustomerPage * CUSTOMER_PAGE_SIZE,
+      ),
+    [filteredCustomers, safeCustomerPage, CUSTOMER_PAGE_SIZE],
+  );
+  const detailCustomer = useMemo(
+    () => mergedCustomers.find((item) => item.id === customerDetailId) || null,
+    [customerDetailId, mergedCustomers],
+  );
+
+  useEffect(() => {
+    if (!customerEditorOpen) {
+      setCustomerSearchLoading(false);
+      setCustomerSearchResults([]);
+      return;
+    }
+    const keyword = customerForm.name.trim();
+    if (!keyword) {
+      setCustomerSearchLoading(false);
+      setCustomerSearchResults([]);
+      return;
+    }
+
+    let aborted = false;
+    setCustomerSearchLoading(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/settings/customers/search?keyword=${encodeURIComponent(keyword)}`);
+        const json = await readJsonSafe<{ ok?: boolean; items?: CustomerSearchItem[]; error?: string }>(res);
+        if (aborted) return;
+        if (!res.ok || !json?.ok) {
+          throw new Error(json?.error || (lang === "zh" ? "加载友购客户搜索失败" : "Load YG customer search fail"));
+        }
+        setCustomerSearchResults(Array.isArray(json.items) ? json.items : []);
+      } catch (e) {
+        if (!aborted) {
+          setError(e instanceof Error ? e.message : (lang === "zh" ? "加载友购客户搜索失败" : "Load YG customer search fail"));
+          setCustomerSearchResults([]);
+        }
+      } finally {
+        if (!aborted) {
+          setCustomerSearchLoading(false);
+        }
+      }
+    }, 220);
+
+    return () => {
+      aborted = true;
+      window.clearTimeout(timer);
+    };
+  }, [customerEditorOpen, customerForm.name, lang]);
+
+  function handleCustomerSearchSelect(item: CustomerSearchItem) {
+    setCustomerForm((prev) => ({
+      ...prev,
+      name: item.companyName || prev.name,
+      contact: item.relationName || prev.contact,
+      phone: item.registeredPhone || prev.phone,
+      whatsapp: item.registeredPhone || prev.whatsapp,
+      cityCountry: item.cityCountry || prev.cityCountry,
+    }));
+    setCustomerSearchOpen(false);
+  }
 
   const filteredCategoryMaps = useMemo(
     () =>
@@ -1578,89 +1783,311 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
 
         {!loading && tab === "customer" ? (
           <div className="space-y-4 p-5">
-            <div className="grid gap-3 lg:grid-cols-4">
-              <input value={customerForm.name} onChange={(e) => setCustomerForm((p) => ({ ...p, name: e.target.value }))} placeholder={tx("客户名称", "Client")} className="h-10 rounded-xl border border-slate-200 px-3 text-sm" />
-              <input value={customerForm.contact} onChange={(e) => setCustomerForm((p) => ({ ...p, contact: e.target.value }))} placeholder={tx("联系人", "Cont")} className="h-10 rounded-xl border border-slate-200 px-3 text-sm" />
-              <input value={customerForm.phone} onChange={(e) => setCustomerForm((p) => ({ ...p, phone: e.target.value }))} placeholder={tx("手机", "Mob")} className="h-10 rounded-xl border border-slate-200 px-3 text-sm" />
-              <input value={customerForm.whatsapp} onChange={(e) => setCustomerForm((p) => ({ ...p, whatsapp: e.target.value }))} placeholder="WhatsApp" className="h-10 rounded-xl border border-slate-200 px-3 text-sm" />
-              <input value={customerForm.email} onChange={(e) => setCustomerForm((p) => ({ ...p, email: e.target.value }))} placeholder="Email" className="h-10 rounded-xl border border-slate-200 px-3 text-sm" />
-              <input value={customerForm.stores} onChange={(e) => setCustomerForm((p) => ({ ...p, stores: e.target.value }))} placeholder={tx("门店地址", "Stores")}
-                className="h-10 rounded-xl border border-slate-200 px-3 text-sm lg:col-span-2" />
-              <input value={customerForm.cityCountry} onChange={(e) => setCustomerForm((p) => ({ ...p, cityCountry: e.target.value }))} placeholder={tx("城市/国家", "City/Ctry")} className="h-10 rounded-xl border border-slate-200 px-3 text-sm" />
-              <input value={customerForm.customerType} onChange={(e) => setCustomerForm((p) => ({ ...p, customerType: e.target.value }))} placeholder={tx("客户类型", "Type")} className="h-10 rounded-xl border border-slate-200 px-3 text-sm" />
-              <input value={customerForm.vipLevel} onChange={(e) => setCustomerForm((p) => ({ ...p, vipLevel: e.target.value }))} placeholder={tx("VIP等级", "VIP lvl")} className="h-10 rounded-xl border border-slate-200 px-3 text-sm" />
-              <input value={customerForm.creditLevel} onChange={(e) => setCustomerForm((p) => ({ ...p, creditLevel: e.target.value }))} placeholder={tx("信用等级", "Credit")} className="h-10 rounded-xl border border-slate-200 px-3 text-sm" />
-              <input value={customerForm.tags} onChange={(e) => setCustomerForm((p) => ({ ...p, tags: e.target.value }))} placeholder={tx("标签", "Tags")} className="h-10 rounded-xl border border-slate-200 px-3 text-sm lg:col-span-2" />
-              <input value={customerForm.orderStats} onChange={(e) => setCustomerForm((p) => ({ ...p, orderStats: e.target.value }))} placeholder={tx("下单统计", "Order stats")} className="h-10 rounded-xl border border-slate-200 px-3 text-sm lg:col-span-2" />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" disabled={!canManageCustomers} onClick={() => void saveCustomer()} className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-white disabled:opacity-40">{tx("保存客户", "Save cli")}</button>
-              <button type="button" onClick={() => setCustomerForm(EMPTY_CUSTOMER)} className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700">{tx("清空", "Clear")}</button>
-              <input value={customerKeyword} onChange={(e) => setCustomerKeyword(e.target.value)} placeholder={tx("搜索客户", "Search cli")} className="h-10 min-w-[240px] rounded-xl border border-slate-200 px-3 text-sm" />
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[960px] text-sm">
-                <thead className="bg-slate-50 text-slate-600">
-                  <tr>
-                    <th className="px-3 py-2 text-left">{tx("客户", "Client")}</th>
-                    <th className="px-3 py-2 text-left">{tx("联系人", "Cont")}</th>
-                    <th className="px-3 py-2 text-left">{tx("手机/WA", "Mob/WA")}</th>
-                    <th className="px-3 py-2 text-left">{tx("类型", "Type")}</th>
-                    <th className="px-3 py-2 text-left">{tx("标签", "Tags")}</th>
-                    <th className="px-3 py-2 text-left">{tx("操作", "Act")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredCustomers.map((c) => (
-                    <tr key={c.id} className="border-t border-slate-100">
-                      <td className="px-3 py-2 font-semibold">{c.name}</td>
-                      <td className="px-3 py-2">{c.contact || "-"}</td>
-                      <td className="px-3 py-2">{`${c.phone || "-"} / ${c.whatsapp || "-"}`}</td>
-                      <td className="px-3 py-2">{c.customerType || "-"}</td>
-                      <td className="px-3 py-2">{c.tags || "-"}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex gap-2">
-                          <button type="button" onClick={() => setCustomerForm(c)} className="text-primary">{tx("编辑", "Edit")}</button>
-                          <button type="button" disabled={!canManageCustomers} onClick={() => void deleteCustomer(c.id)} className="text-rose-600 disabled:opacity-40">{tx("删除", "Del")}</button>
-                        </div>
-                      </td>
+            <div className="rounded-2xl border border-slate-200 bg-white">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-semibold text-slate-900">{tx("客户列表", "Lista cli")}</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={customerVipFilter}
+                    onChange={(e) => setCustomerVipFilter(e.target.value as "all" | "vip" | "normal")}
+                    className="h-10 min-w-[140px] rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                  >
+                    <option value="all">{tx("全部VIP", "VIP all")}</option>
+                    <option value="vip">{tx("仅VIP", "Solo VIP")}</option>
+                    <option value="normal">{tx("非VIP", "No VIP")}</option>
+                  </select>
+                  <input
+                    value={customerKeyword}
+                    onChange={(e) => setCustomerKeyword(e.target.value)}
+                    placeholder={tx("搜索客户", "Search cli")}
+                    className="h-10 w-full max-w-[280px] rounded-xl border border-slate-200 px-3 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="max-h-[540px] overflow-auto">
+                <table className="w-full min-w-[1300px] text-sm">
+                  <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600">
+                    <tr>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("客户", "Client")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("联系人", "Cont")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("手机", "Mob")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("城市/国家", "City/Ctry")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("VIP等级", "VIP lvl")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("信用等级", "Credit")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("下单次数", "Order count")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("下单金额", "Order amount")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("配货金额", "Packing amount")}</th>
+                      <th className="w-[132px] px-3 py-2 text-right"></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {pagedCustomers.map((c) => (
+                      <tr key={c.id} className="border-t border-slate-100">
+                        <td className="px-3 py-1.5 font-semibold">{c.name || "-"}</td>
+                        <td className="px-3 py-1.5">{c.contact || "-"}</td>
+                        <td className="px-3 py-1.5">{c.phone || "-"}</td>
+                        <td className="px-3 py-1.5">{c.cityCountry || "-"}</td>
+                        <td className="px-3 py-1.5">{c.vipLevel || "-"}</td>
+                        <td className="px-3 py-1.5">{c.creditLevel || "-"}</td>
+                        <td className="px-3 py-1.5">{(c.totalOrderCount ?? c.orderStats) || "-"}</td>
+                        <td className="px-3 py-1.5">$ {c.totalOrderAmountText || "0.00"}</td>
+                        <td className="px-3 py-1.5">$ {c.packingAmountText || "0.00"}</td>
+                        <td className="px-3 py-1.5">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setCustomerDetailId(c.id)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
+                              aria-label={tx("详情", "Detail")}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCustomerForm({
+                                  ...c,
+                                  id: c.sourceType === "yg" ? "" : c.id,
+                                });
+                                setCustomerEditorOpen(true);
+                              }}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
+                              aria-label={tx("编辑", "Edit")}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!canManageCustomers || c.sourceType === "yg"}
+                              onClick={() => void deleteCustomer(c.id, c.name)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 disabled:opacity-40"
+                              aria-label={tx("删除", "Del")}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {filteredCustomers.length > 0 ? (
+                <div className="border-t border-slate-200 px-4 py-3">
+                  <div className="flex flex-nowrap items-center justify-center gap-2 overflow-x-auto">
+                    <button
+                      type="button"
+                      onClick={() => setCustomerPage(1)}
+                      disabled={safeCustomerPage <= 1}
+                      className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {tx("回到首页", "Ini")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCustomerPage((prev) => Math.max(prev - 1, 1))}
+                      disabled={safeCustomerPage <= 1}
+                      className="inline-flex h-9 min-w-[40px] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {tx("上一页", "Ant")}
+                    </button>
+                    <div className="inline-flex h-9 min-w-[72px] items-center justify-center rounded-lg border border-slate-300 bg-slate-50 px-3 text-sm font-semibold text-slate-700">
+                      {safeCustomerPage} / {customerTotalPages}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCustomerPage((prev) => Math.min(prev + 1, customerTotalPages))}
+                      disabled={safeCustomerPage >= customerTotalPages}
+                      className="inline-flex h-9 min-w-[40px] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {tx("下一页", "Sig")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCustomerPage(customerTotalPages)}
+                      disabled={safeCustomerPage >= customerTotalPages}
+                      className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {tx("去最后页", "Fin")}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
 
-        {!loading && tab === "catalog" ? (
-          <div className="space-y-4 p-5">
-            <div className="grid gap-3 lg:grid-cols-3">
-              <input value={catalogConfig.customer} onChange={(e) => setCatalogConfig((p) => ({ ...p, customer: e.target.value }))} placeholder={tx("选择客户", "Sel cli")} className="h-10 rounded-xl border border-slate-200 px-3 text-sm" />
-              <input value={catalogConfig.category} onChange={(e) => setCatalogConfig((p) => ({ ...p, category: e.target.value }))} placeholder={tx("选择分类", "Sel cat")} className="h-10 rounded-xl border border-slate-200 px-3 text-sm" />
-              <input value={catalogConfig.discount} onChange={(e) => setCatalogConfig((p) => ({ ...p, discount: e.target.value }))} placeholder={tx("选择折扣", "Sel disc")} className="h-10 rounded-xl border border-slate-200 px-3 text-sm" />
-
-              <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm"><input type="checkbox" checked={catalogConfig.showStock} onChange={(e) => setCatalogConfig((p) => ({ ...p, showStock: e.target.checked }))} />{tx("显示库存", "Show stock")}</label>
-              <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm"><input type="checkbox" checked={catalogConfig.showImage} onChange={(e) => setCatalogConfig((p) => ({ ...p, showImage: e.target.checked }))} />{tx("显示图片", "Show img")}</label>
-              <select value={catalogConfig.language} onChange={(e) => setCatalogConfig((p) => ({ ...p, language: e.target.value as CatalogConfig["language"] }))} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm">
-                <option value="zh">中文</option>
-                <option value="es">ES</option>
-              </select>
-
-              <input value={catalogConfig.cover} onChange={(e) => setCatalogConfig((p) => ({ ...p, cover: e.target.value }))} placeholder={tx("封面地址", "Cover URL")} className="h-10 rounded-xl border border-slate-200 px-3 text-sm lg:col-span-3" />
-              <textarea value={catalogConfig.note} onChange={(e) => setCatalogConfig((p) => ({ ...p, note: e.target.value }))} placeholder={tx("说明", "Note")} className="min-h-[96px] rounded-xl border border-slate-200 px-3 py-2 text-sm lg:col-span-3" />
+        {!loading && detailCustomer ? (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 px-4">
+            <div className="max-h-[86vh] w-full max-w-[980px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
+              <div className="border-b border-slate-200 px-4 py-3">
+                <h3 className="text-base font-semibold text-slate-900">
+                  {tx("客户下单详情", "Detalle de pedidos")} · {detailCustomer.name || "-"}
+                </h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  {tx("查看该客户所有已匹配的友购下单记录。", "Ver todos los pedidos YG vinculados a este cliente.")}
+                </p>
+              </div>
+              <div className="p-4">
+                {!detailCustomer.detailRows || detailCustomer.detailRows.length === 0 ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                    {tx("当前没有匹配到下单记录", "No hay pedidos vinculados")}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-slate-200">
+                    <table className="w-full min-w-[640px] text-sm">
+                      <thead className="bg-slate-50 text-slate-600">
+                        <tr>
+                          <th className="px-3 py-2 text-left">{tx("订单号", "Order no")}</th>
+                          <th className="px-3 py-2 text-left">{tx("下单日期", "Order date")}</th>
+                          <th className="px-3 py-2 text-left">{tx("订单金额", "Order amount")}</th>
+                          <th className="px-3 py-2 text-left">{tx("状态", "Status")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detailCustomer.detailRows.map((item) => (
+                          <tr key={`${detailCustomer.id}-${item.orderNo}`} className="border-t border-slate-100">
+                            <td className="px-3 py-2 font-semibold">{item.orderNo || "-"}</td>
+                            <td className="px-3 py-2">{item.orderDateText || "-"}</td>
+                            <td className="px-3 py-2">$ {item.orderAmountText || "0.00"}</td>
+                            <td className="px-3 py-2">{item.latestStatus || "-"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() => setCustomerDetailId("")}
+                  className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
+                >
+                  {tx("关闭", "Cerrar")}
+                </button>
+              </div>
             </div>
+          </div>
+        ) : null}
 
-            <button type="button" disabled={!canManageProducts} onClick={() => void saveCatalog()} className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-white disabled:opacity-40">{tx("保存目录配置", "Save cfg")}</button>
+        {!loading && customerEditorOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+            <div className="max-h-[86vh] w-full max-w-[1080px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
+              <div className="border-b border-slate-200 px-4 py-3">
+                <h3 className="text-base font-semibold text-slate-900">{tx("客户信息", "Info cli")}</h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  {tx("用于新增、编辑和维护客户基础资料。", "Alta, edicion y mantenimiento de datos base del cliente.")}
+                </p>
+              </div>
+              <div className="space-y-3 p-3">
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="grid gap-2.5 lg:grid-cols-[1.5fr_1fr_0.92fr_1fr]">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("客户名称", "Client")}</label>
+                      <div className="space-y-2">
+                        <input
+                          value={customerForm.name}
+                          onChange={(e) => {
+                            setCustomerForm((p) => ({ ...p, name: e.target.value }));
+                            setCustomerSearchOpen(true);
+                          }}
+                          onFocus={() => setCustomerSearchOpen(true)}
+                          onBlur={() => window.setTimeout(() => setCustomerSearchOpen(false), 120)}
+                          className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                        />
+                        {customerSearchOpen && customerForm.name.trim() ? (
+                          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+                            {customerSearchLoading ? (
+                              <div className="px-3 py-3 text-sm text-slate-500">{tx("正在加载友购客户...", "Cargando clientes YG...")}</div>
+                            ) : customerSearchResults.length > 0 ? (
+                              <div className="max-h-64 overflow-y-auto py-1">
+                                {customerSearchResults.map((item) => (
+                                  <button
+                                    key={item.id}
+                                    type="button"
+                                    onMouseDown={() => handleCustomerSearchSelect(item)}
+                                    className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50"
+                                  >
+                                    <div className="min-w-0">
+                                      <div className="truncate font-medium text-slate-900">{item.companyName || "-"}</div>
+                                      <div className="truncate text-xs text-slate-500">
+                                        {[item.relationName || "-", item.registeredPhone || "-", item.cityCountry || "-"].join(" / ")}
+                                      </div>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="px-3 py-3 text-sm text-slate-500">{tx("未找到匹配友购客户，请继续输入或换个关键词", "No se encontraron clientes YG")}</div>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("联系人", "Cont")}</label>
+                      <input value={customerForm.contact} onChange={(e) => setCustomerForm((p) => ({ ...p, contact: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("手机", "Mob")}</label>
+                      <input value={customerForm.phone} onChange={(e) => setCustomerForm((p) => ({ ...p, phone: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("城市/国家", "City/Ctry")}</label>
+                      <input value={customerForm.cityCountry} onChange={(e) => setCustomerForm((p) => ({ ...p, cityCountry: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                    </div>
+                  </div>
 
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="mb-2 text-sm font-semibold">{tx("清单展示方式", "Output")}</div>
-              <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">
-                <li>PDF</li>
-                <li>Excel</li>
-                <li>{tx("分享链接（WhatsApp/微信）", "Share (WA/WX)")}</li>
-              </ul>
+                  <div className="mt-2.5">
+                    <label className="mb-1 block text-xs font-medium text-slate-600">{tx("门店地址", "Stores")}</label>
+                    <div className="flex items-center gap-2">
+                      <input value={customerForm.stores} onChange={(e) => setCustomerForm((p) => ({ ...p, stores: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(customerForm.stores || "")}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50"
+                        title="Google Maps"
+                        aria-label="Google Maps"
+                      >
+                        <MapPin className="h-4 w-4" />
+                      </a>
+                    </div>
+                  </div>
+
+                  <div className="mt-2.5 grid gap-2.5 lg:grid-cols-[1fr_1fr_1.2fr]">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("VIP等级", "VIP lvl")}</label>
+                      <input value={customerForm.vipLevel} onChange={(e) => setCustomerForm((p) => ({ ...p, vipLevel: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("信用等级", "Credit")}</label>
+                      <input value={customerForm.creditLevel} onChange={(e) => setCustomerForm((p) => ({ ...p, creditLevel: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("下单次数", "Order count")}</label>
+                      <input value={customerForm.orderStats} onChange={(e) => setCustomerForm((p) => ({ ...p, orderStats: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-4 py-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCustomerEditorOpen(false);
+                    setCustomerForm(EMPTY_CUSTOMER);
+                  }}
+                  className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
+                >
+                  {tx("取消", "Cancelar")}
+                </button>
+                <button type="button" disabled={!canManageCustomers} onClick={() => void saveCustomer()} className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-white disabled:opacity-40">{tx("保存客户", "Save cli")}</button>
+                <button type="button" onClick={() => setCustomerForm(EMPTY_CUSTOMER)} className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700">{tx("清空", "Clear")}</button>
+              </div>
             </div>
           </div>
         ) : null}
