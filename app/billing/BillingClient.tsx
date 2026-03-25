@@ -34,6 +34,7 @@ type BillingRow = {
   paymentTermText: string;
   generatedAtText: string;
   generatedVipEnabled: boolean;
+  paidAtText: string;
 };
 
 type DetailItem = {
@@ -72,6 +73,14 @@ type EditState = {
 type RevokeState = {
   confirmOrderNo: string;
   reason: string;
+  error: string;
+};
+
+type RevokePaidState = {
+  orderId: string;
+  orderNo: string;
+  adminAccount: string;
+  adminPassword: string;
   error: string;
 };
 
@@ -129,6 +138,10 @@ function PencilIcon() {
 
 function NotebookIcon() {
   return <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8"><path d="M5.25 2.5h8a1.75 1.75 0 0 1 1.75 1.75v11.5a1.75 1.75 0 0 1-1.75 1.75h-8A1.75 1.75 0 0 1 3.5 15.75V4.25A1.75 1.75 0 0 1 5.25 2.5Z" /><path d="M6.75 2.5v15" /><path d="M8.75 6.5h4.5" /><path d="M8.75 10h4.5" /><path d="M8.75 13.5h3" /></svg>;
+}
+
+function PaidIcon() {
+  return <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8"><path d="M3.5 10 7.25 13.75 16.5 4.5" /><path d="M10 1.75h4.25A1.75 1.75 0 0 1 16 3.5v4.25" /><path d="M10 18.25H5.75A1.75 1.75 0 0 1 4 16.5v-4.25" /></svg>;
 }
 
 function MapPinIcon() {
@@ -251,9 +264,10 @@ export function BillingClient({
   const [copyState, setCopyState] = useState<CopyState | null>(null);
   const [copyingExport, setCopyingExport] = useState(false);
   const [copyExportError, setCopyExportError] = useState("");
-  const [statusActionLoading, setStatusActionLoading] = useState<"generate" | "revoke" | "">("");
+  const [statusActionLoading, setStatusActionLoading] = useState<"generate" | "revoke" | "mark_paid" | "revoke_paid" | "">("");
   const [statusActionError, setStatusActionError] = useState("");
   const [revokeState, setRevokeState] = useState<RevokeState | null>(null);
+  const [revokePaidState, setRevokePaidState] = useState<RevokePaidState | null>(null);
   const [historyOrderNo, setHistoryOrderNo] = useState<string | null>(null);
   const [historyEntries, setHistoryEntries] = useState<BillingHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -288,6 +302,7 @@ export function BillingClient({
   }, [detailOrderNo]);
   const detailRow = useMemo(() => (detailOrderNo ? rows.find((row) => row.orderNo === detailOrderNo) || null : null), [detailOrderNo, rows]);
   const detailGenerated = Boolean(detailRow?.generatedAtText);
+  const detailPaid = Boolean(detailRow?.paidAtText);
   const rowAmountMap = useMemo(() => {
     const map = new Map<string, { originalAmountText: string; discountedAmountText: string }>();
     for (const row of rows) {
@@ -343,7 +358,10 @@ export function BillingClient({
     }
   }
 
-  async function updateGeneratedState(action: "generate" | "revoke", options?: { confirmOrderNo?: string; revokeReason?: string }) {
+  async function updateGeneratedState(
+    action: "generate" | "revoke" | "mark_paid" | "revoke_paid",
+    options?: { confirmOrderNo?: string; revokeReason?: string; adminAccount?: string; adminPassword?: string },
+  ) {
     if (!detailRow) return;
     setStatusActionError("");
     setStatusActionLoading(action);
@@ -356,29 +374,128 @@ export function BillingClient({
           generatedVipEnabled: vipDiscountEnabled,
           confirmOrderNo: options?.confirmOrderNo,
           revokeReason: options?.revokeReason,
+          adminAccount: options?.adminAccount,
+          adminPassword: options?.adminPassword,
+          snapshotItems:
+            action === "generate"
+              ? detailItems.map((item) => ({
+                  sku: item.sku,
+                  barcode: item.barcode,
+                  nameZh: item.nameZh,
+                  nameEs: item.nameEs,
+                  qty: item.qty,
+                  unitPrice: item.unitPrice,
+                  normalDiscount: item.normalDiscount,
+                  vipDiscount: item.vipDiscount,
+                }))
+              : undefined,
         }),
       });
       const result = await res.json();
       if (!res.ok || !result?.ok) {
-        throw new Error(result?.error || (action === "generate" ? "生成账单失败" : "撤销生成失败"));
+        throw new Error(
+          result?.error ||
+            (action === "generate"
+              ? "生成账单失败"
+              : action === "mark_paid"
+                ? "标记已付款失败"
+                : action === "revoke_paid"
+                  ? "撤销已付款失败"
+                : "撤销生成失败"),
+        );
       }
 
       setRows((prev) => prev.map((row) => row.id !== detailRow.id ? row : {
         ...row,
         generatedAtText: result.data.generatedAtText || "",
         generatedVipEnabled: Boolean(result.data.generatedVipEnabled),
+        paidAtText: result.data.paidAtText || "",
       }));
 
       if (action === "revoke") {
         setRevokeState(null);
       }
+      if (action === "revoke_paid") {
+        setRevokePaidState(null);
+      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : (action === "generate" ? "生成账单失败" : "撤销生成失败");
+      const message =
+        error instanceof Error
+          ? error.message
+          : action === "generate"
+            ? "生成账单失败"
+            : action === "mark_paid"
+              ? "标记已付款失败"
+              : action === "revoke_paid"
+                ? "撤销已付款失败"
+              : "撤销生成失败";
       if (action === "revoke") {
         setRevokeState((prev) => prev ? { ...prev, error: message } : prev);
+      } else if (action === "revoke_paid") {
+        setRevokePaidState((prev) => prev ? { ...prev, error: message } : prev);
       } else {
         setStatusActionError(message);
       }
+    } finally {
+      setStatusActionLoading("");
+    }
+  }
+
+  async function markRowPaid(row: BillingRow) {
+    setStatusActionError("");
+    setStatusActionLoading("mark_paid");
+    try {
+      const res = await fetch(`/api/yg-orders/${row.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "mark_paid" }),
+      });
+      const result = await res.json();
+      if (!res.ok || !result?.ok) {
+        throw new Error(result?.error || "标记已付款失败");
+      }
+      setRows((prev) => prev.map((item) => item.id !== row.id ? item : {
+        ...item,
+        generatedAtText: result.data.generatedAtText || item.generatedAtText,
+        generatedVipEnabled: Boolean(result.data.generatedVipEnabled),
+        paidAtText: result.data.paidAtText || "",
+      }));
+    } catch (error) {
+      setStatusActionError(error instanceof Error ? error.message : "标记已付款失败");
+    } finally {
+      setStatusActionLoading("");
+    }
+  }
+
+  async function revokeRowPaid(orderId: string, orderNo: string, adminAccount: string, adminPassword: string) {
+    setStatusActionError("");
+    setStatusActionLoading("revoke_paid");
+    try {
+      const res = await fetch(`/api/yg-orders/${orderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "revoke_paid",
+          adminAccount,
+          adminPassword,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok || !result?.ok) {
+        throw new Error(result?.error || "撤销已付款失败");
+      }
+      setRows((prev) => prev.map((item) => item.id !== orderId ? item : {
+        ...item,
+        generatedAtText: result.data.generatedAtText || item.generatedAtText,
+        generatedVipEnabled: Boolean(result.data.generatedVipEnabled),
+        paidAtText: result.data.paidAtText || "",
+      }));
+      setRevokePaidState(null);
+      if (detailOrderNo === orderNo) {
+        setStatusActionError("");
+      }
+    } catch (error) {
+      setRevokePaidState((prev) => prev ? { ...prev, error: error instanceof Error ? error.message : "撤销已付款失败" } : prev);
     } finally {
       setStatusActionLoading("");
     }
@@ -600,15 +717,34 @@ export function BillingClient({
                       <td className="whitespace-nowrap px-4 py-4 text-left text-sm font-semibold text-slate-900">{rowAmountMap.get(row.orderNo)?.discountedAmountText || row.discountedAmountText}</td>
                       <td className="whitespace-nowrap px-4 py-4 text-sm text-stone-500">{row.updatedAtText}</td>
                       <td className="whitespace-nowrap px-4 py-4 text-sm">
-                        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${row.generatedAtText ? "bg-emerald-50 text-emerald-700" : "bg-stone-100 text-stone-500"}`}>
-                          {row.generatedAtText ? "已生成" : "未生成"}
+                        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${row.paidAtText ? "bg-sky-50 text-sky-700" : row.generatedAtText ? "bg-emerald-50 text-emerald-700" : "bg-stone-100 text-stone-500"}`}>
+                          {row.paidAtText ? "已付款" : row.generatedAtText ? "已生成" : "未生成"}
                         </span>
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex items-center justify-end gap-2">
-                          <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-stone-300 hover:text-slate-900" title="查看记录" onClick={() => openHistory(row.orderNo)}><NotebookIcon /></button>
+                          <button
+                            type="button"
+                            disabled={!row.generatedAtText || Boolean(row.paidAtText)}
+                            className="inline-flex h-9 items-center justify-center rounded-full border border-emerald-200 px-3 text-xs font-medium text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-300 disabled:hover:bg-transparent"
+                            title={row.paidAtText ? "账单已付款，不能重复标记" : !row.generatedAtText ? "请先生成账单" : "标记已付款并永久锁定"}
+                            onClick={() => markRowPaid(row)}
+                          >
+                            <span className="mr-1"><PaidIcon /></span>已付款
+                          </button>
+                          {row.paidAtText ? (
+                            <button
+                              type="button"
+                              disabled={statusActionLoading === "revoke_paid"}
+                              className="inline-flex h-9 items-center justify-center rounded-full border border-amber-200 px-3 text-xs font-medium text-amber-700 transition hover:border-amber-300 hover:bg-amber-50 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-300 disabled:hover:bg-transparent"
+                              title="撤销已付款（需管理员账号和密码确认）"
+                              onClick={() => setRevokePaidState({ orderId: row.id, orderNo: row.orderNo, adminAccount: "", adminPassword: "", error: "" })}
+                            >
+                              撤销已付款
+                            </button>
+                          ) : null}
                           <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-stone-300 hover:text-slate-900" title="查看账单" onClick={() => setDetailOrderNo(row.orderNo)}><EyeIcon /></button>
-                          <button type="button" disabled={Boolean(row.generatedAtText)} className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-stone-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-300" title={row.generatedAtText ? "账单已生成，需先撤销生成" : "编辑客户信息"} onClick={() => setEditState({
+                          <button type="button" disabled={Boolean(row.generatedAtText || row.paidAtText)} className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-stone-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-300" title={row.paidAtText ? "账单已付款，已永久锁定" : row.generatedAtText ? "账单已生成，需先撤销生成" : "编辑客户信息"} onClick={() => setEditState({
                             id: row.id,
                             orderNo: row.orderNo,
                             companyName: row.companyName === "-" ? "" : row.companyName,
@@ -626,6 +762,7 @@ export function BillingClient({
                             carrierCompanyText: row.carrierCompanyText,
                             paymentTermText: row.paymentTermText,
                           })}><PencilIcon /></button>
+                          <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-stone-300 hover:text-slate-900" title="查看记录" onClick={() => openHistory(row.orderNo)}><NotebookIcon /></button>
                         </div>
                       </td>
                     </tr>
@@ -660,7 +797,7 @@ export function BillingClient({
                 {statusActionError ? <div className="mt-2 text-sm text-red-600">{statusActionError}</div> : null}
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                {detailRow ? (
+                {detailRow && !detailPaid ? (
                   <button
                     type="button"
                     className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
@@ -691,13 +828,33 @@ export function BillingClient({
                 ) : null}
                 {detailRow ? (
                   detailGenerated ? (
-                    <button type="button" disabled={statusActionLoading === "revoke"} className="rounded-full bg-amber-100 px-4 py-2 text-sm font-medium text-amber-900 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60" onClick={() => setRevokeState({ confirmOrderNo: "", reason: "", error: "" })}>撤销生成</button>
+                    <button type="button" disabled={statusActionLoading === "revoke" || detailPaid} className="rounded-full bg-amber-100 px-4 py-2 text-sm font-medium text-amber-900 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60" onClick={() => setRevokeState({ confirmOrderNo: "", reason: "", error: "" })}>撤销生成</button>
                   ) : (
                     <button type="button" disabled={statusActionLoading === "generate"} className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60" onClick={() => updateGeneratedState("generate")}>生成账单</button>
                   )
                 ) : null}
+                {detailRow && detailGenerated ? (
+                  <button
+                    type="button"
+                    disabled={statusActionLoading === "mark_paid" || detailPaid}
+                    className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                    onClick={() => updateGeneratedState("mark_paid")}
+                  >
+                    {detailPaid ? "已付款" : "已付款"}
+                  </button>
+                ) : null}
+                {detailRow && detailPaid ? (
+                  <button
+                    type="button"
+                    disabled={statusActionLoading === "revoke_paid"}
+                    className="rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                    onClick={() => setRevokePaidState({ orderId: detailRow.id, orderNo: detailRow.orderNo, adminAccount: "", adminPassword: "", error: "" })}
+                  >
+                    撤销已付款
+                  </button>
+                ) : null}
                 {detailRow ? (
-                  <button type="button" disabled={detailGenerated} className="rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300 disabled:hover:bg-transparent" onClick={() => setEditState({
+                  <button type="button" disabled={detailGenerated || detailPaid} className="rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300 disabled:hover:bg-transparent" onClick={() => setEditState({
                     id: detailRow.id,
                     orderNo: detailRow.orderNo,
                     companyName: detailRow.companyName === "-" ? "" : detailRow.companyName,
@@ -716,8 +873,8 @@ export function BillingClient({
                     paymentTermText: detailRow.paymentTermText,
                   })}>编辑表头</button>
                 ) : null}
-                <label className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm ${detailGenerated ? "border-slate-200 bg-slate-100 text-slate-400" : "border-slate-200 bg-white text-slate-600"}`}>
-                  <input type="checkbox" className="h-4 w-4 rounded border-slate-300" checked={vipDiscountEnabled} disabled={detailGenerated} onChange={(e) => setVipDiscountEnabled(e.target.checked)} />
+                <label className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm ${detailGenerated || detailPaid ? "border-slate-200 bg-slate-100 text-slate-400" : "border-slate-200 bg-white text-slate-600"}`}>
+                  <input type="checkbox" className="h-4 w-4 rounded border-slate-300" checked={vipDiscountEnabled} disabled={detailGenerated || detailPaid} onChange={(e) => setVipDiscountEnabled(e.target.checked)} />
                   启用 VIP 折扣
                 </label>
                 <button type="button" className="rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-700 transition hover:bg-slate-50" onClick={() => setDetailOrderNo(null)}>关闭</button>
@@ -878,6 +1035,60 @@ export function BillingClient({
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {revokePaidState ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/40 p-4" onClick={() => setRevokePaidState(null)}>
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="border-b border-slate-200 px-6 py-4">
+              <h3 className="text-lg font-semibold text-slate-900">撤销已付款</h3>
+              <p className="mt-1 text-sm text-slate-500">为防止误操作，请输入管理员账号和密码确认。</p>
+            </div>
+            <div className="space-y-4 px-6 py-5">
+              <div>
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <label className="text-sm text-slate-600">账单号</label>
+                  <span className="text-xs text-slate-400">{revokePaidState.orderNo}</span>
+                </div>
+                <input value={revokePaidState.orderNo} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">管理员账号</label>
+                <input
+                  value={revokePaidState.adminAccount}
+                  onChange={(e) => setRevokePaidState((prev) => prev ? { ...prev, adminAccount: e.target.value, error: "" } : prev)}
+                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">管理员密码</label>
+                <input
+                  type="password"
+                  value={revokePaidState.adminPassword}
+                  onChange={(e) => setRevokePaidState((prev) => prev ? { ...prev, adminPassword: e.target.value, error: "" } : prev)}
+                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40"
+                />
+              </div>
+              {revokePaidState.error ? <div className="text-sm text-red-600">{revokePaidState.error}</div> : null}
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-4">
+              <button type="button" onClick={() => setRevokePaidState(null)} className="h-10 rounded-xl border border-slate-200 px-4 text-sm text-slate-600 hover:bg-slate-50">取消</button>
+              <button
+                type="button"
+                disabled={statusActionLoading === "revoke_paid"}
+                onClick={() => revokeRowPaid(
+                  revokePaidState.orderId,
+                  revokePaidState.orderNo,
+                  revokePaidState.adminAccount,
+                  revokePaidState.adminPassword,
+                )}
+                className="h-10 rounded-xl bg-primary px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                确认撤销
+              </button>
             </div>
           </div>
         </div>

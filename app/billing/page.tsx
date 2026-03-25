@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { AppShell } from "@/components/app-shell";
 import {
+  parseBillingSnapshot,
   extractCustomerContactPhone,
   normalizeStoreLabelInput,
   parseBillingBooleanFlag,
@@ -75,6 +76,10 @@ function normalizeLookupKey(value: string | null | undefined) {
 }
 
 function normalizeCustomerKey(value: string | null | undefined) {
+  return String(value || "").trim().toUpperCase();
+}
+
+function normalizeOrderKey(value: string | null | undefined) {
   return String(value || "").trim().toUpperCase();
 }
 
@@ -350,13 +355,22 @@ export default async function BillingPage({
   }
 
   const orderNos = Array.from(grouped.keys());
+  const orderQueryFilters = orderNos.flatMap((orderNo) => {
+    const normalized = String(orderNo || "").trim();
+    if (!normalized) return [];
+    return [
+      { order_no: normalized },
+      { order_no: { startsWith: `${normalized}-` } },
+    ];
+  });
+
   const ygOrders =
     orderNos.length > 0
       ? await prisma.ygOrderImport.findMany({
           where: {
             tenant_id: session.tenantId,
             company_id: session.companyId,
-            order_no: { in: orderNos },
+            OR: orderQueryFilters,
           },
           select: {
             id: true,
@@ -368,6 +382,25 @@ export default async function BillingPage({
             address_text: true,
             order_remark: true,
             store_label: true,
+            updated_at: true,
+          },
+          orderBy: { updated_at: "desc" },
+        })
+      : [];
+
+  const fallbackCustomerRows =
+    orderNos.length > 0
+      ? await prisma.ygCustomerImport.findMany({
+          where: {
+            tenant_id: session.tenantId,
+            company_id: session.companyId,
+            last_order_no: { in: orderNos },
+          },
+          select: {
+            last_order_no: true,
+            company_name: true,
+            relation_name: true,
+            registered_phone: true,
             updated_at: true,
           },
           orderBy: { updated_at: "desc" },
@@ -439,11 +472,24 @@ export default async function BillingPage({
       paymentTermText: string;
       generatedAtText: string;
       generatedVipEnabled: boolean;
+      paidAtText: string;
+      snapshotItems: Array<{
+        sku: string;
+        barcode: string;
+        nameZh: string;
+        nameEs: string;
+        qty: number;
+        unitPrice: number;
+        normalDiscount: number | null;
+        vipDiscount: number | null;
+        lineTotal: number;
+      }>;
     }
   >();
 
   for (const row of ygOrders) {
-    if (orderMap.has(row.order_no)) continue;
+    const orderKey = normalizeOrderKey(baseOrderNo(row.order_no));
+    if (!orderKey || orderMap.has(orderKey)) continue;
     const companyName = row.customer_name || row.company_name || "-";
     const contactName = row.contact_name || row.customer_name || row.company_name || "-";
     const parsedRemark = parseBillingRemark(row.order_remark);
@@ -458,7 +504,17 @@ export default async function BillingPage({
       customerPhoneMap.get(normalizeCustomerKey(row.contact_name)) ||
       "";
     const resolvedPhone = directCustomerPhone || fallbackPhone;
-    orderMap.set(row.order_no, {
+    const snapshotItems = parseBillingSnapshot(parsedRemark.meta.billingSnapshot).map((item) => ({
+      ...item,
+      lineTotal: computeLineTotal(
+        Number(item.qty || 0),
+        Number(item.unitPrice || 0),
+        toDiscountFactor(item.normalDiscount),
+        toDiscountFactor(item.vipDiscount),
+        parseBillingBooleanFlag(parsedRemark.meta.generatedVipEnabled),
+      ),
+    }));
+    orderMap.set(orderKey, {
       id: row.id,
       companyName,
       customerName: row.customer_name || row.company_name || "",
@@ -478,13 +534,42 @@ export default async function BillingPage({
       paymentTermText: parsedRemark.meta.paymentTerm,
       generatedAtText: parsedRemark.meta.generatedAt,
       generatedVipEnabled: parseBillingBooleanFlag(parsedRemark.meta.generatedVipEnabled),
+      paidAtText: parsedRemark.meta.paidAt,
+      snapshotItems,
+    });
+  }
+
+  const fallbackCustomerMap = new Map<
+    string,
+    {
+      companyName: string;
+      contactName: string;
+      contactPhone: string;
+    }
+  >();
+
+  for (const row of fallbackCustomerRows) {
+    const orderKey = normalizeOrderKey(row.last_order_no);
+    if (!orderKey || fallbackCustomerMap.has(orderKey)) continue;
+    const companyName = String(row.company_name || "").trim();
+    const contactName = String(row.relation_name || row.company_name || "").trim();
+    const contactPhone = String(row.registered_phone || "").trim();
+    fallbackCustomerMap.set(orderKey, {
+      companyName: companyName || "-",
+      contactName: contactName || "-",
+      contactPhone: contactPhone || "-",
     });
   }
 
   const initialRows = Array.from(grouped.values())
     .map((row) => {
-      const order = orderMap.get(row.orderNo);
-      const detailItems = Array.from(detailMap.get(row.orderNo)?.values() || []);
+      const orderKey = normalizeOrderKey(row.orderNo);
+      const order = orderMap.get(orderKey);
+      const fallbackCustomer = fallbackCustomerMap.get(orderKey);
+      const detailItems =
+        order?.generatedAtText && (order.snapshotItems?.length || 0) > 0
+          ? order.snapshotItems
+          : Array.from(detailMap.get(row.orderNo)?.values() || []);
       const effectiveVipEnabled = Boolean(order?.generatedAtText && order?.generatedVipEnabled);
       const finalDiscountedAmount = detailItems.reduce((sum, item) => {
         let factor = 1;
@@ -497,10 +582,10 @@ export default async function BillingPage({
       return {
         id: order?.id || "",
         orderNo: row.orderNo,
-        companyName: order?.companyName || "-",
-        customerName: order?.customerName || "",
-        contactName: order?.contactName || "-",
-        contactPhone: order?.contactPhone || "-",
+        companyName: order?.companyName || fallbackCustomer?.companyName || "-",
+        customerName: order?.customerName || fallbackCustomer?.companyName || "",
+        contactName: order?.contactName || fallbackCustomer?.contactName || "-",
+        contactPhone: order?.contactPhone || fallbackCustomer?.contactPhone || "-",
         addressText: order?.addressText || "",
         remarkText: order?.remarkText || "",
         storeLabelText: normalizeStoreLabelInput(order?.storeLabelText || ""),
@@ -515,6 +600,7 @@ export default async function BillingPage({
         paymentTermText: order?.paymentTermText || "",
         generatedAtText: order?.generatedAtText || "",
         generatedVipEnabled: order?.generatedVipEnabled || false,
+        paidAtText: order?.paidAtText || "",
         originalAmountText: formatMoney(row.originalAmount),
         discountedAmountText: formatMoney(finalDiscountedAmount),
         updatedAtText: formatDateOnly(row.latestAt),
@@ -523,7 +609,15 @@ export default async function BillingPage({
     .sort((a, b) => b.orderNo.localeCompare(a.orderNo));
 
   const detailsByOrderNo = Object.fromEntries(
-    Array.from(detailMap.entries()).map(([orderNo, items]) => [orderNo, Array.from(items.values())]),
+    initialRows.map((row) => {
+      const orderKey = normalizeOrderKey(row.orderNo);
+      const order = orderMap.get(orderKey);
+      const items =
+        order?.generatedAtText && (order.snapshotItems?.length || 0) > 0
+          ? order.snapshotItems
+          : Array.from(detailMap.get(row.orderNo)?.values() || []);
+      return [row.orderNo, items];
+    }),
   );
 
   return (

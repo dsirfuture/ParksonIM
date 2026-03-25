@@ -11,6 +11,19 @@ export type BillingHeaderMeta = {
   generatedAt: string;
   generatedVipEnabled: string;
   revokeReason: string;
+  paidAt: string;
+  billingSnapshot: string;
+};
+
+export type BillingSnapshotItem = {
+  sku: string;
+  barcode: string;
+  nameZh: string;
+  nameEs: string;
+  qty: number;
+  unitPrice: number;
+  normalDiscount: number | null;
+  vipDiscount: number | null;
 };
 
 export const EMPTY_BILLING_HEADER_META: BillingHeaderMeta = {
@@ -26,6 +39,8 @@ export const EMPTY_BILLING_HEADER_META: BillingHeaderMeta = {
   generatedAt: "",
   generatedVipEnabled: "",
   revokeReason: "",
+  paidAt: "",
+  billingSnapshot: "",
 };
 
 const BILLING_META_PREFIX = "[[BILLING_META]]";
@@ -98,7 +113,51 @@ export function normalizeBillingHeaderMeta(
     generatedAt: trimString(value?.generatedAt),
     generatedVipEnabled: trimString(value?.generatedVipEnabled),
     revokeReason: trimString(value?.revokeReason),
+    paidAt: trimString(value?.paidAt),
+    billingSnapshot: trimString(value?.billingSnapshot),
   };
+}
+
+export function normalizeBillingSnapshotItems(input: unknown): BillingSnapshotItem[] {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const row = item as Record<string, unknown>;
+      const qty = Number(row.qty || 0);
+      const unitPrice = Number(row.unitPrice || 0);
+      const normalDiscount =
+        row.normalDiscount === null || row.normalDiscount === undefined || row.normalDiscount === ""
+          ? null
+          : Number(row.normalDiscount);
+      const vipDiscount =
+        row.vipDiscount === null || row.vipDiscount === undefined || row.vipDiscount === ""
+          ? null
+          : Number(row.vipDiscount);
+      return {
+        sku: trimString(row.sku),
+        barcode: trimString(row.barcode),
+        nameZh: trimString(row.nameZh),
+        nameEs: trimString(row.nameEs),
+        qty: Number.isFinite(qty) && qty > 0 ? qty : 0,
+        unitPrice: Number.isFinite(unitPrice) && unitPrice >= 0 ? unitPrice : 0,
+        normalDiscount:
+          normalDiscount !== null && Number.isFinite(normalDiscount) ? normalDiscount : null,
+        vipDiscount:
+          vipDiscount !== null && Number.isFinite(vipDiscount) ? vipDiscount : null,
+      } satisfies BillingSnapshotItem;
+    })
+    .filter((item): item is BillingSnapshotItem => Boolean(item && item.qty > 0));
+}
+
+export function parseBillingSnapshot(snapshotText: string | null | undefined) {
+  const raw = trimString(snapshotText);
+  if (!raw) return [];
+  try {
+    return normalizeBillingSnapshotItems(JSON.parse(raw));
+  } catch {
+    return [];
+  }
 }
 
 export function parseBillingRemark(raw: string | null | undefined) {

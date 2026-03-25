@@ -4,7 +4,9 @@ export type BillingActionType =
   | "export"
   | "copy_export"
   | "generate"
-  | "revoke";
+  | "revoke"
+  | "mark_paid"
+  | "revoke_paid";
 
 export async function writeBillingActionLog(params: {
   tenantId: string;
@@ -37,6 +39,8 @@ export function getBillingActionLabel(actionType: string) {
   if (actionType === "copy_export") return "导出复制账单";
   if (actionType === "generate") return "生成账单";
   if (actionType === "revoke") return "撤销生成";
+  if (actionType === "mark_paid") return "标记已付款";
+  if (actionType === "revoke_paid") return "撤销已付款";
   return "账单操作";
 }
 

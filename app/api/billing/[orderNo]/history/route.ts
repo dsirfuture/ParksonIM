@@ -73,6 +73,7 @@ export async function GET(
       const parsed = parseBillingRemark(order.order_remark);
       const hasGenerateLog = logs.some((log) => log.action_type === "generate");
       const hasRevokeLog = logs.some((log) => log.action_type === "revoke");
+      const hasPaidLog = logs.some((log) => log.action_type === "mark_paid");
 
       if (parsed.meta.generatedAt && !hasGenerateLog) {
         entries.push({
@@ -98,6 +99,18 @@ export async function GET(
           formatText: "-",
           detailText: "撤销生成",
           reasonText: parsed.meta.revokeReason,
+          operatorName: "-",
+        });
+      }
+
+      if (parsed.meta.paidAt && !hasPaidLog) {
+        entries.push({
+          id: `paid-${normalizedOrderNo}`,
+          createdAtText: formatDateTime(new Date(parsed.meta.paidAt)),
+          actionText: "标记已付款",
+          formatText: "-",
+          detailText: "账单已付款并永久锁定",
+          reasonText: "",
           operatorName: "-",
         });
       }

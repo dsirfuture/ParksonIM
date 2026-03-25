@@ -8,6 +8,7 @@ import {
   extractCustomerContactPhone,
   formatStoreLabelDisplay,
   getPaymentTermDisplayLines,
+  parseBillingSnapshot,
   normalizeStoreLabelInput,
   parseBillingBooleanFlag,
   parseBillingRemark,
@@ -213,6 +214,16 @@ function normalizeLookupKey(value: string | null | undefined) {
 
 function normalizeCustomerKey(value: string | null | undefined) {
   return String(value || "").trim().toUpperCase();
+}
+
+function lineTotalFromItem(item: BillingExportItem, vipDiscountEnabled: boolean) {
+  return computeLineTotal(
+    Number(item.qty || 0),
+    Number(item.unitPrice || 0),
+    toDiscountFactor(item.normalDiscount),
+    toDiscountFactor(item.vipDiscount),
+    vipDiscountEnabled,
+  );
 }
 
 function formatDateOnly(value: Date | null | undefined) {
@@ -438,6 +449,16 @@ export async function getBillingExportData(params: {
   }
   const vipDiscountEnabled = parseBillingBooleanFlag(parsedRemark.meta.generatedVipEnabled);
   const metaPhone = String(parsedRemark.meta.recipientPhone || "").trim();
+  const snapshotItems = parseBillingSnapshot(parsedRemark.meta.billingSnapshot).map((item) => ({
+    ...item,
+    lineTotal: lineTotalFromItem(
+      {
+        ...item,
+        lineTotal: 0,
+      },
+      vipDiscountEnabled,
+    ),
+  }));
 
   const customerMatchKeys = [orderRow.customer_name, orderRow.company_name, orderRow.contact_name]
     .map((value) => normalizeCustomerKey(value))
@@ -477,6 +498,43 @@ export async function getBillingExportData(params: {
   }
   const resolvedPhone =
     extractCustomerContactPhone(orderRow.contact_phone, parsedRemark.noteText) || fallbackPhone;
+
+  if (snapshotItems.length > 0) {
+    const totalQty = snapshotItems.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+    const totalAmount = snapshotItems.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0);
+    const exportDate = formatDateOnly(new Date(parsedRemark.meta.generatedAt || new Date()));
+
+    return {
+      orderNo,
+      companyName: orderRow.customer_name || orderRow.company_name || "-",
+      contactName: orderRow.contact_name || orderRow.customer_name || orderRow.company_name || "-",
+      contactPhone: resolvedPhone || "-",
+      addressText: orderRow.address_text || "",
+      remarkText: orderRow.order_remark || "",
+      storeLabelText: normalizeStoreLabelInput(orderRow.store_label || ""),
+      updatedAt: parsedRemark.meta.generatedAt ? new Date(parsedRemark.meta.generatedAt) : null,
+      itemCount: snapshotItems.length,
+      totalQty,
+      totalAmount,
+      vipDiscountEnabled,
+      items: snapshotItems,
+      issueDateText: exportDate,
+      boxCountText: parsedRemark.meta.boxCount,
+      shipDateText: parsedRemark.meta.shipDate,
+      warehouseText: FIXED_WAREHOUSE,
+      shippingMethodText: parsedRemark.meta.shippingMethod,
+      recipientNameText:
+        parsedRemark.meta.recipientName ||
+        orderRow.contact_name ||
+        orderRow.customer_name ||
+        orderRow.company_name ||
+        "",
+      recipientPhoneText: metaPhone || "",
+      carrierCompanyText: parsedRemark.meta.carrierCompany,
+      paymentTermText: parsedRemark.meta.paymentTerm,
+      generatedAtText: parsedRemark.meta.generatedAt,
+    } satisfies BillingExportData;
+  }
 
   const receipts = await prisma.receipt.findMany({
     where: {

@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
 import {
   buildBillingRemark,
+  normalizeBillingSnapshotItems,
   normalizeStoreLabelInput,
+  parseBillingSnapshot,
   parseBillingRemark,
   parseBillingBooleanFlag,
   toBillingBooleanFlag,
   type BillingHeaderMeta,
 } from "@/lib/billing-meta";
+import { verifyPassword } from "@/lib/auth";
 import { writeBillingActionLog } from "@/lib/billing-action-log";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
+import { normalizePhone } from "@/lib/user-account";
 
 const FIXED_WAREHOUSE = "PARKSONMX仓";
 
@@ -54,6 +58,9 @@ export async function PATCH(
       confirmOrderNo?: unknown;
       revokeReason?: unknown;
       generatedVipEnabled?: unknown;
+      snapshotItems?: unknown;
+      adminAccount?: unknown;
+      adminPassword?: unknown;
       headerMeta?: Partial<Record<keyof BillingHeaderMeta, unknown>>;
     };
 
@@ -72,6 +79,7 @@ export async function PATCH(
 
     const action = normalizeString(body.action);
     const currentRemark = parseBillingRemark(target.order_remark);
+    let overrideOperator: { id: string; name: string } | null = null;
 
     const updateData: {
       company_name?: string | null;
@@ -82,14 +90,81 @@ export async function PATCH(
       store_label?: string | null;
     } = {};
 
+    if (currentRemark.meta.paidAt && action !== "revoke_paid") {
+      return NextResponse.json({ ok: false, error: "账单已付款，已永久锁定，只允许导出" }, { status: 409 });
+    }
+
     if (action === "generate") {
+      const snapshotItems = normalizeBillingSnapshotItems(body.snapshotItems);
+      if (snapshotItems.length === 0) {
+        return NextResponse.json({ ok: false, error: "缺少账单快照，无法生成并锁定" }, { status: 400 });
+      }
       const nextMeta: BillingHeaderMeta = {
         ...currentRemark.meta,
         generatedAt: new Date().toISOString(),
         generatedVipEnabled: toBillingBooleanFlag(Boolean(body.generatedVipEnabled)),
         revokeReason: "",
+        paidAt: "",
+        billingSnapshot: JSON.stringify(snapshotItems),
       };
       updateData.order_remark = buildBillingRemark(currentRemark.noteText, nextMeta);
+    } else if (action === "mark_paid") {
+      if (!currentRemark.meta.generatedAt) {
+        return NextResponse.json({ ok: false, error: "请先生成账单后再标记已付款" }, { status: 409 });
+      }
+      const nextMeta: BillingHeaderMeta = {
+        ...currentRemark.meta,
+        paidAt: new Date().toISOString(),
+      };
+      updateData.order_remark = buildBillingRemark(currentRemark.noteText, nextMeta);
+    } else if (action === "revoke_paid") {
+      if (!currentRemark.meta.paidAt) {
+        return NextResponse.json({ ok: false, error: "当前账单未标记已付款" }, { status: 409 });
+      }
+
+      const adminAccount = normalizeString(body.adminAccount);
+      const adminPassword = typeof body.adminPassword === "string" ? body.adminPassword.trim() : "";
+      if (!adminAccount || !adminPassword) {
+        return NextResponse.json({ ok: false, error: "请输入管理员账号和密码" }, { status: 400 });
+      }
+
+      const normalizedPhone = normalizePhone(adminAccount);
+      const adminUser = await prisma.user.findFirst({
+        where: {
+          tenant_id: session.tenantId,
+          company_id: session.companyId,
+          active: true,
+          role: "admin",
+          OR: [
+            { user_id: adminAccount },
+            { name: { equals: adminAccount, mode: "insensitive" } },
+            { email: { equals: adminAccount, mode: "insensitive" } },
+            { phone: normalizedPhone || "__invalid__" },
+          ],
+        },
+        select: {
+          id: true,
+          name: true,
+          password_hash: true,
+        },
+        orderBy: {
+          created_at: "asc",
+        },
+      });
+
+      if (!adminUser || !verifyPassword(adminPassword, adminUser.password_hash)) {
+        return NextResponse.json({ ok: false, error: "管理员账号或密码不正确" }, { status: 401 });
+      }
+
+      const nextMeta: BillingHeaderMeta = {
+        ...currentRemark.meta,
+        paidAt: "",
+      };
+      updateData.order_remark = buildBillingRemark(currentRemark.noteText, nextMeta);
+      overrideOperator = {
+        id: adminUser.id,
+        name: adminUser.name,
+      };
     } else if (action === "revoke") {
       const confirmOrderNo = normalizeString(body.confirmOrderNo);
       const revokeReason = normalizeString(body.revokeReason);
@@ -104,6 +179,7 @@ export async function PATCH(
         generatedAt: "",
         generatedVipEnabled: "",
         revokeReason,
+        billingSnapshot: "",
       };
       updateData.order_remark = buildBillingRemark(currentRemark.noteText, nextMeta);
     } else if (currentRemark.meta.generatedAt) {
@@ -146,6 +222,7 @@ export async function PATCH(
       },
     });
     const parsedRemark = parseBillingRemark(updated.order_remark);
+    const snapshotItems = parseBillingSnapshot(parsedRemark.meta.billingSnapshot);
 
     if (action === "generate") {
       await writeBillingActionLog({
@@ -156,6 +233,26 @@ export async function PATCH(
         detailText: Boolean(body.generatedVipEnabled) ? "生成账单（启用VIP折扣）" : "生成账单",
         operatorId: session.userId,
         operatorName: session.name,
+      });
+    } else if (action === "mark_paid") {
+      await writeBillingActionLog({
+        tenantId: session.tenantId,
+        companyId: session.companyId,
+        orderNo: target.order_no,
+        actionType: "mark_paid",
+        detailText: "账单已付款并永久锁定",
+        operatorId: session.userId,
+        operatorName: session.name,
+      });
+    } else if (action === "revoke_paid") {
+      await writeBillingActionLog({
+        tenantId: session.tenantId,
+        companyId: session.companyId,
+        orderNo: target.order_no,
+        actionType: "revoke_paid",
+        detailText: "撤销已付款，恢复为已生成账单",
+        operatorId: overrideOperator?.id || session.userId,
+        operatorName: overrideOperator?.name || session.name,
       });
     } else if (action === "revoke") {
       await writeBillingActionLog({
@@ -191,6 +288,8 @@ export async function PATCH(
         paymentTermText: parsedRemark.meta.paymentTerm,
         generatedAtText: parsedRemark.meta.generatedAt,
         generatedVipEnabled: parseBillingBooleanFlag(parsedRemark.meta.generatedVipEnabled),
+        paidAtText: parsedRemark.meta.paidAt,
+        snapshotItems,
       },
     });
   } catch (error) {
