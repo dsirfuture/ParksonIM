@@ -50,7 +50,7 @@ type Props = {
   initialLoadedTabs: Record<"overview" | "orders" | "inventory" | "finance" | "rate", boolean>;
 };
 
-type TabKey = "overview" | "orders" | "inventory" | "finance";
+type TabKey = "overview" | "orders" | "inventory" | "finance" | "supplier_misc";
 
 type InventoryPreviewState = {
   orderId: string;
@@ -174,6 +174,43 @@ type ImportedOrderRow = {
   duplicateError: string;
 };
 
+type SupplierMiscProductRow = {
+  id: string;
+  sku: string;
+  barcode: string;
+  nameZh: string;
+  nameEs: string;
+  unitPrice: number | null;
+  supplierName: string;
+};
+
+type SupplierMiscRecord = {
+  id: string;
+  customerName: string;
+  sku: string;
+  barcode: string;
+  nameZh: string;
+  nameEs: string;
+  unitPrice: number | null;
+  quantity: number;
+  supplierName: string;
+  recordedDate: string;
+  remark: string;
+  noStock?: boolean;
+};
+
+type SupplierMiscFormState = {
+  customerName: string;
+  sku: string;
+  barcode: string;
+  nameZh: string;
+  nameEs: string;
+  unitPrice: string;
+  quantity: string;
+  supplierName: string;
+  remark: string;
+};
+
 type InventoryDeleteTargetState = {
   row: DsInventoryRow;
   kind: "inventory" | "shipped";
@@ -266,6 +303,24 @@ const EMPTY_ORDER_FORM: OrderFormState = {
   shippingStatus: "pending",
   notes: "",
 };
+
+const SUPPLIER_MISC_STORAGE_KEY = "parksonim:supplier-misc-records";
+
+const EMPTY_SUPPLIER_MISC_FORM: SupplierMiscFormState = {
+  customerName: "",
+  sku: "",
+  barcode: "",
+  nameZh: "",
+  nameEs: "",
+  unitPrice: "",
+  quantity: "1",
+  supplierName: "",
+  remark: "",
+};
+
+function compactSupplierMiscSearchText(value: unknown) {
+  return String(value || "").trim().toUpperCase().replace(/[\s-]+/g, "");
+}
 
 const ATTACHMENT_SLOT_COUNT = 3;
 
@@ -1413,6 +1468,19 @@ export function DropshippingClient({
   const [inventoryProductQuery, setInventoryProductQuery] = useState("");
   const [inventoryProductOptions, setInventoryProductOptions] = useState<InventoryProductOption[]>([]);
   const [inventoryProductLoading, setInventoryProductLoading] = useState(false);
+  const [supplierMiscProducts, setSupplierMiscProducts] = useState<SupplierMiscProductRow[]>([]);
+  const [supplierMiscLoading, setSupplierMiscLoading] = useState(false);
+  const [supplierMiscModalOpen, setSupplierMiscModalOpen] = useState(false);
+  const [supplierMiscSkuSearchOpen, setSupplierMiscSkuSearchOpen] = useState(false);
+  const [supplierMiscResolvedSku, setSupplierMiscResolvedSku] = useState("");
+  const [supplierMiscEditingId, setSupplierMiscEditingId] = useState("");
+  const [supplierMiscForm, setSupplierMiscForm] = useState<SupplierMiscFormState>(EMPTY_SUPPLIER_MISC_FORM);
+  const [supplierMiscRecords, setSupplierMiscRecords] = useState<SupplierMiscRecord[]>([]);
+  const [selectedSupplierMiscIds, setSelectedSupplierMiscIds] = useState<string[]>([]);
+  const [supplierMiscCustomerFilter, setSupplierMiscCustomerFilter] = useState("all");
+  const [supplierMiscDateFilter, setSupplierMiscDateFilter] = useState("");
+  const [supplierMiscSupplierFilter, setSupplierMiscSupplierFilter] = useState("all");
+  const [supplierMiscDateSortDirection, setSupplierMiscDateSortDirection] = useState<"asc" | "desc">("desc");
   const [financePreview, setFinancePreview] = useState<FinancePreviewState>(null);
   const [financeLogTarget, setFinanceLogTarget] = useState<DsFinanceRow | null>(null);
   const [financeLogEntries, setFinanceLogEntries] = useState<FinanceActionLogEntry[]>([]);
@@ -1786,7 +1854,7 @@ export function DropshippingClient({
         create: "新增订单",
         importOrders: "导入订单文件",
         import: "历史迁移导入",
-        tabs: { overview: "总览", orders: "订单管理", inventory: "已发商品", finance: "财务结算" },
+        tabs: { overview: "总览", orders: "订单管理", inventory: "已发商品", finance: "财务结算", supplier_misc: "供应商散单记录" },
         stats: {
           todayOrders: "今日录单",
           todayShipped: "今日已发货",
@@ -1803,7 +1871,24 @@ export function DropshippingClient({
           orders: "订单列表",
           inventory: "已发商品列表",
           finance: "客户结算",
+          supplier_misc: "供应商散单记录",
           rate: "汇率状态",
+        },
+        supplierMisc: {
+          create: "新增记录",
+          customer: "客户",
+          sku: "编码",
+          barcode: "条形码",
+          nameZh: "中文名",
+          nameEs: "西文名",
+          unitPrice: "单价",
+          quantity: "数量",
+          supplier: "供应商",
+          date: "记录日期",
+          remark: "备注",
+          add: "加入记录",
+          empty: "暂无供应商散单记录",
+          autoMatch: "输入编码后自动匹配图片、条形码、名称、单价和供应商",
         },
         fields: {
           customer: "客户",
@@ -1889,7 +1974,7 @@ export function DropshippingClient({
         create: "Nuevo pedido",
         importOrders: "Importar archivo",
         import: "Importar historial",
-        tabs: { overview: "Resumen", orders: "Pedidos", inventory: "Inventario SKU", finance: "Finanzas" },
+        tabs: { overview: "Resumen", orders: "Pedidos", inventory: "Inventario SKU", finance: "Finanzas", supplier_misc: "Registros sueltos proveedor" },
         stats: {
           todayOrders: "Pedidos hoy",
           todayShipped: "Enviados hoy",
@@ -1906,7 +1991,24 @@ export function DropshippingClient({
           orders: "Lista de pedidos",
           inventory: "Resumen SKU",
           finance: "Liquidacion por cliente",
+          supplier_misc: "Registros sueltos proveedor",
           rate: "Estado del tipo de cambio",
+        },
+        supplierMisc: {
+          create: "Nuevo registro",
+          customer: "Cliente",
+          sku: "Codigo",
+          barcode: "Codigo de barras",
+          nameZh: "Nombre CN",
+          nameEs: "Nombre ES",
+          unitPrice: "Precio",
+          quantity: "Cantidad",
+          supplier: "Proveedor",
+          date: "Fecha",
+          remark: "Observacion",
+          add: "Agregar",
+          empty: "Sin registros sueltos de proveedor",
+          autoMatch: "Al ingresar el codigo se completan imagen, barcode, nombres, precio y proveedor",
         },
         fields: {
           customer: "Cliente",
@@ -2084,6 +2186,196 @@ export function DropshippingClient({
   const inventoryCustomerOptions = useMemo(() => {
     return [...new Set(inventory.map((row) => row.customerName.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh"));
   }, [inventory]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(SUPPLIER_MISC_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+      setSupplierMiscRecords(
+        parsed
+          .map((item) => ({
+            id: String(item?.id || ""),
+            customerName: String(item?.customerName || ""),
+            sku: String(item?.sku || ""),
+            barcode: String(item?.barcode || ""),
+            nameZh: String(item?.nameZh || ""),
+            nameEs: String(item?.nameEs || ""),
+            unitPrice: item?.unitPrice === null || item?.unitPrice === undefined || item?.unitPrice === "" ? null : Number(item.unitPrice),
+            quantity: Math.max(Number(item?.quantity || 0), 0),
+            supplierName: String(item?.supplierName || ""),
+            recordedDate: String(item?.recordedDate || ""),
+            remark: String(item?.remark || ""),
+          }))
+          .filter((item) => item.id && item.customerName && item.sku),
+      );
+    } catch {
+      // Ignore broken local cache and allow rebuilding from new records.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(SUPPLIER_MISC_STORAGE_KEY, JSON.stringify(supplierMiscRecords));
+  }, [supplierMiscRecords]);
+
+  useEffect(() => {
+    if (!supplierMiscModalOpen) {
+      setSupplierMiscProducts([]);
+      setSupplierMiscLoading(false);
+      return;
+    }
+
+    const keyword = String(supplierMiscForm.sku || "").trim();
+    if (!keyword) {
+      setSupplierMiscProducts([]);
+      setSupplierMiscLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        setSupplierMiscLoading(true);
+        const response = await fetch(`/api/settings/suppliers/products/search?keyword=${encodeURIComponent(keyword)}`);
+        const json = await response.json();
+        if (!response.ok || !json?.ok) {
+          throw new Error(json?.error || "supplier_misc_search_failed");
+        }
+        if (cancelled) return;
+        setSupplierMiscProducts(Array.isArray(json.items) ? json.items : []);
+      } catch (searchError) {
+        if (!cancelled) {
+          setSupplierMiscProducts([]);
+          setError(searchError instanceof Error ? searchError.message : "supplier_misc_search_failed");
+        }
+      } finally {
+        if (!cancelled) {
+          setSupplierMiscLoading(false);
+        }
+      }
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [supplierMiscForm.sku, supplierMiscModalOpen]);
+
+  const supplierMiscProductMap = useMemo(() => {
+    const map = new Map<string, SupplierMiscProductRow>();
+    supplierMiscProducts.forEach((item) => {
+      const normalized = normalizeProductCode(item.sku);
+      if (!normalized || map.has(normalized)) return;
+      map.set(normalized, item);
+    });
+    return map;
+  }, [supplierMiscProducts]);
+
+  const supplierMiscSkuSuggestions = useMemo(() => {
+    const keyword = normalizeProductCode(supplierMiscForm.sku);
+    if (!keyword) return [];
+    const compactKeyword = compactSupplierMiscSearchText(keyword);
+    return supplierMiscProducts
+      .filter((item) => {
+        const sku = normalizeProductCode(item.sku);
+        const compactSku = compactSupplierMiscSearchText(item.sku);
+        const compactBarcode = compactSupplierMiscSearchText(item.barcode);
+        const compactNameZh = compactSupplierMiscSearchText(item.nameZh);
+        const compactNameEs = compactSupplierMiscSearchText(item.nameEs);
+        return (
+          sku.includes(keyword)
+          || compactSku.includes(compactKeyword)
+          || String(item.barcode || "").toLowerCase().includes(keyword.toLowerCase())
+          || compactBarcode.includes(compactKeyword)
+          || String(item.nameZh || "").toLowerCase().includes(keyword.toLowerCase())
+          || compactNameZh.includes(compactKeyword)
+          || String(item.nameEs || "").toLowerCase().includes(keyword.toLowerCase())
+          || compactNameEs.includes(compactKeyword)
+        );
+      })
+      .slice(0, 8);
+  }, [supplierMiscForm.sku, supplierMiscProducts]);
+
+  const supplierMiscExactMatchedProduct = useMemo(() => {
+    const rawKeyword = String(supplierMiscForm.sku || "").trim();
+    if (!rawKeyword) return null;
+    const normalizedKeyword = normalizeProductCode(rawKeyword);
+    const compactKeyword = compactSupplierMiscSearchText(rawKeyword);
+    return supplierMiscProducts.find((item) => {
+      const normalizedSku = normalizeProductCode(item.sku);
+      const compactBarcode = compactSupplierMiscSearchText(item.barcode);
+      return normalizedSku === normalizedKeyword || (compactBarcode && compactBarcode === compactKeyword);
+    }) || null;
+  }, [supplierMiscForm.sku, supplierMiscProducts]);
+
+  const showSupplierMiscSkuPanel = supplierMiscSkuSearchOpen && Boolean(String(supplierMiscForm.sku || "").trim());
+
+  useEffect(() => {
+    if (!supplierMiscModalOpen) return;
+
+    if (!supplierMiscExactMatchedProduct) {
+      setSupplierMiscForm((prev) => ({
+        ...prev,
+        barcode: "",
+        nameZh: "",
+        nameEs: "",
+        unitPrice: "",
+        supplierName: "",
+      }));
+      setSupplierMiscResolvedSku("");
+      return;
+    }
+
+    setSupplierMiscForm((prev) => ({
+      ...prev,
+      barcode: supplierMiscExactMatchedProduct.barcode || "",
+      nameZh: supplierMiscExactMatchedProduct.nameZh || "",
+      nameEs: supplierMiscExactMatchedProduct.nameEs || "",
+      unitPrice:
+        supplierMiscExactMatchedProduct.unitPrice === null || supplierMiscExactMatchedProduct.unitPrice === undefined
+          ? ""
+          : String(supplierMiscExactMatchedProduct.unitPrice),
+      supplierName: supplierMiscExactMatchedProduct.supplierName || "",
+    }));
+    setSupplierMiscResolvedSku(supplierMiscExactMatchedProduct.sku || "");
+  }, [supplierMiscExactMatchedProduct, supplierMiscModalOpen]);
+
+  const sortedSupplierMiscRecords = useMemo(() => {
+    return [...supplierMiscRecords].sort((a, b) => `${b.recordedDate}-${b.id}`.localeCompare(`${a.recordedDate}-${a.id}`));
+  }, [supplierMiscRecords]);
+
+  const supplierMiscCustomerOptions = useMemo(() => {
+    return [...new Set(supplierMiscRecords.map((row) => row.customerName.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh"));
+  }, [supplierMiscRecords]);
+
+  const supplierMiscSupplierOptions = useMemo(() => {
+    return [...new Set(supplierMiscRecords.map((row) => row.supplierName.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh"));
+  }, [supplierMiscRecords]);
+
+  const filteredSupplierMiscRecords = useMemo(() => {
+    const rows = sortedSupplierMiscRecords.filter((row) => {
+      const customerHit = supplierMiscCustomerFilter === "all" || row.customerName === supplierMiscCustomerFilter;
+      const supplierHit = supplierMiscSupplierFilter === "all" || row.supplierName === supplierMiscSupplierFilter;
+      const dateHit = !supplierMiscDateFilter || row.recordedDate === supplierMiscDateFilter;
+      return customerHit && supplierHit && dateHit;
+    });
+    return [...rows].sort((a, b) => {
+      const compare = `${a.recordedDate}-${a.id}`.localeCompare(`${b.recordedDate}-${b.id}`);
+      return supplierMiscDateSortDirection === "asc" ? compare : -compare;
+    });
+  }, [sortedSupplierMiscRecords, supplierMiscCustomerFilter, supplierMiscSupplierFilter, supplierMiscDateFilter, supplierMiscDateSortDirection]);
+
+  const allFilteredSupplierMiscSelected = useMemo(() => {
+    return filteredSupplierMiscRecords.length > 0
+      && filteredSupplierMiscRecords.every((row) => selectedSupplierMiscIds.includes(row.id));
+  }, [filteredSupplierMiscRecords, selectedSupplierMiscIds]);
+
+  const selectedSupplierMiscRecords = useMemo(() => {
+    return sortedSupplierMiscRecords.filter((row) => selectedSupplierMiscIds.includes(row.id));
+  }, [sortedSupplierMiscRecords, selectedSupplierMiscIds]);
 
   const filteredOrders = useMemo(() => {
     const normalized = keyword.trim().toLowerCase();
@@ -5877,6 +6169,165 @@ export function DropshippingClient({
     );
   }
 
+  function handleSupplierMiscSkuChange(value: string) {
+    const nextSku = String(value || "").trim().toUpperCase();
+    setSupplierMiscForm((prev) => ({
+      ...prev,
+      sku: nextSku,
+      barcode: "",
+      nameZh: "",
+      nameEs: "",
+      unitPrice: "",
+      supplierName: "",
+    }));
+    setSupplierMiscResolvedSku("");
+  }
+
+  function handleSupplierMiscSkuSelect(item: SupplierMiscProductRow) {
+    setSupplierMiscForm((prev) => ({
+      ...prev,
+      sku: item.sku,
+      barcode: item.barcode || "",
+      nameZh: item.nameZh || "",
+      nameEs: item.nameEs || "",
+      unitPrice: item.unitPrice === null || item.unitPrice === undefined ? "" : String(item.unitPrice),
+      supplierName: item.supplierName || "",
+    }));
+    setSupplierMiscResolvedSku(item.sku || "");
+    setSupplierMiscSkuSearchOpen(false);
+  }
+
+  function handleSupplierMiscAddRecord() {
+    const quantity = Math.max(Number(supplierMiscForm.quantity || 0), 0);
+    if (!supplierMiscForm.customerName.trim()) {
+      setError(lang === "zh" ? "请选择客户" : "Selecciona un cliente");
+      return;
+    }
+    if (!supplierMiscForm.sku.trim()) {
+      setError(lang === "zh" ? "请输入编码" : "Ingresa el codigo");
+      return;
+    }
+    if (quantity <= 0) {
+      setError(lang === "zh" ? "数量必须大于 0" : "La cantidad debe ser mayor a 0");
+      return;
+    }
+
+    const normalizedSku = normalizeProductCode(supplierMiscForm.sku);
+    const matched = supplierMiscProductMap.get(normalizedSku);
+    const nextRecord: SupplierMiscRecord = {
+      id: supplierMiscEditingId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      customerName: supplierMiscForm.customerName.trim(),
+      sku: supplierMiscForm.sku.trim(),
+      barcode: supplierMiscForm.barcode.trim() || matched?.barcode || "",
+      nameZh: supplierMiscForm.nameZh.trim() || matched?.nameZh || "",
+      nameEs: supplierMiscForm.nameEs.trim() || matched?.nameEs || "",
+      unitPrice: supplierMiscForm.unitPrice.trim() ? Number(supplierMiscForm.unitPrice) : (matched?.unitPrice ?? null),
+      quantity,
+      supplierName: supplierMiscForm.supplierName.trim() || matched?.supplierName || "",
+      recordedDate: getMexicoTodayDateValue(),
+      remark: supplierMiscForm.remark.trim(),
+      noStock: supplierMiscEditingId
+        ? (supplierMiscRecords.find((item) => item.id === supplierMiscEditingId)?.noStock ?? false)
+        : false,
+    };
+
+    setSupplierMiscRecords((prev) => {
+      if (!supplierMiscEditingId) {
+        return [nextRecord, ...prev];
+      }
+      return prev.map((item) => (item.id === supplierMiscEditingId ? nextRecord : item));
+    });
+    setSupplierMiscForm((prev) => ({
+      ...EMPTY_SUPPLIER_MISC_FORM,
+      customerName: prev.customerName,
+    }));
+    setSupplierMiscModalOpen(false);
+    setSupplierMiscSkuSearchOpen(false);
+    setSupplierMiscResolvedSku("");
+    setSupplierMiscEditingId("");
+    setError("");
+    setSuccess(
+      supplierMiscEditingId
+        ? (lang === "zh" ? "供应商散单记录已更新" : "Registro actualizado")
+        : (lang === "zh" ? "供应商散单记录已加入列表" : "Registro agregado"),
+    );
+  }
+
+  function handleSupplierMiscEditRecord(record: SupplierMiscRecord) {
+    setSupplierMiscEditingId(record.id);
+    setSupplierMiscForm({
+      customerName: record.customerName,
+      sku: record.sku,
+      barcode: record.barcode,
+      nameZh: record.nameZh,
+      nameEs: record.nameEs,
+      unitPrice: record.unitPrice === null || record.unitPrice === undefined ? "" : String(record.unitPrice),
+      quantity: String(record.quantity),
+      supplierName: record.supplierName,
+      remark: record.remark,
+    });
+    setSupplierMiscResolvedSku(record.sku);
+    setSupplierMiscSkuSearchOpen(false);
+    setSupplierMiscModalOpen(true);
+  }
+
+  function toggleSupplierMiscNoStock(recordId: string, checked: boolean) {
+    setSupplierMiscRecords((current) =>
+      current.map((item) => (item.id === recordId ? { ...item, noStock: checked } : item)),
+    );
+  }
+
+  function toggleSupplierMiscSelection(recordId: string, checked: boolean) {
+    setSelectedSupplierMiscIds((current) => {
+      if (checked) {
+        return current.includes(recordId) ? current : [...current, recordId];
+      }
+      return current.filter((id) => id !== recordId);
+    });
+  }
+
+  function toggleAllFilteredSupplierMisc(checked: boolean) {
+    setSelectedSupplierMiscIds((current) => {
+      if (checked) {
+        return Array.from(new Set([...current, ...filteredSupplierMiscRecords.map((row) => row.id)]));
+      }
+      const filteredIdSet = new Set(filteredSupplierMiscRecords.map((row) => row.id));
+      return current.filter((id) => !filteredIdSet.has(id));
+    });
+  }
+
+  async function exportSelectedSupplierMiscRecords() {
+    if (selectedSupplierMiscRecords.length === 0) return;
+
+    const response = await fetch("/api/dropshipping/supplier-misc/export", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        lang,
+        records: selectedSupplierMiscRecords,
+      }),
+    });
+
+    if (!response.ok) {
+      const json = await response.json().catch(() => null);
+      throw new Error(json?.error || (lang === "zh" ? "导出散单失败" : "No se pudo exportar"));
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename=\"([^\"]+)\"/);
+    anchor.href = url;
+    anchor.download = match?.[1] ? decodeURIComponent(match[1]) : "supplier-misc.xlsx";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
   const tabButtonClass = (tab: TabKey) =>
     `inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-semibold transition ${
       activeTab === tab ? "bg-primary text-white shadow-soft" : "bg-white text-slate-600 hover:bg-slate-100"
@@ -5893,7 +6344,7 @@ export function DropshippingClient({
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
-          {(["overview", "orders", "inventory", "finance"] as TabKey[]).map((tab) => (
+          {(["overview", "orders", "inventory", "finance", "supplier_misc"] as TabKey[]).map((tab) => (
             <button
               key={tab}
               type="button"
@@ -7407,6 +7858,337 @@ export function DropshippingClient({
             </div>
           )}
         </TableCard>
+      ) : null}
+
+      {activeTab === "supplier_misc" ? (
+        <TableCard
+          title={text.sections.supplier_misc}
+          titleRight={
+            <button
+              type="button"
+              onClick={() => setSupplierMiscModalOpen(true)}
+              className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-soft transition hover:opacity-90"
+            >
+              {lang === "zh" ? "添加记录" : "Agregar registro"}
+            </button>
+          }
+          right={
+            <div className="flex items-center gap-2">
+              <select
+                value={supplierMiscCustomerFilter}
+                onChange={(event) => setSupplierMiscCustomerFilter(event.target.value)}
+                className="h-9 min-w-[132px] rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
+              >
+                <option value="all">{lang === "zh" ? "全部客户" : "Todos clientes"}</option>
+                {supplierMiscCustomerOptions.map((customer) => (
+                  <option key={customer} value={customer}>{customer}</option>
+                ))}
+              </select>
+              <input
+                type="date"
+                value={supplierMiscDateFilter}
+                onChange={(event) => setSupplierMiscDateFilter(event.target.value)}
+                className="h-9 min-w-[138px] rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
+              />
+              <select
+                value={supplierMiscSupplierFilter}
+                onChange={(event) => setSupplierMiscSupplierFilter(event.target.value)}
+                className="h-9 min-w-[120px] rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
+              >
+                <option value="all">{lang === "zh" ? "全部供应商" : "Todos proveedores"}</option>
+                {supplierMiscSupplierOptions.map((supplier) => (
+                  <option key={supplier} value={supplier}>{supplier}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={exportSelectedSupplierMiscRecords}
+                disabled={selectedSupplierMiscRecords.length === 0}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {lang === "zh" ? "导出已选" : "Exportar seleccion"}
+              </button>
+            </div>
+          }
+        >
+          <div className="space-y-4 px-1 py-2">
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <div className="overflow-x-hidden">
+                <table className="w-full table-fixed">
+                  <thead className="bg-slate-50 text-left text-sm font-semibold text-slate-600">
+                    <tr>
+                      <th className="w-[3%] whitespace-nowrap px-3 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={allFilteredSupplierMiscSelected}
+                          onChange={(event) => toggleAllFilteredSupplierMisc(event.target.checked)}
+                          className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/20"
+                        />
+                      </th>
+                      <th className="w-[8%] whitespace-nowrap px-3 py-3">{text.supplierMisc.customer}</th>
+                      <th className="w-[5%] whitespace-nowrap px-3 py-3">{lang === "zh" ? "图片" : "Imagen"}</th>
+                      <th className="w-[8%] whitespace-nowrap px-3 py-3">{text.supplierMisc.sku}</th>
+                      <th className="w-[8%] whitespace-nowrap px-3 py-3">{text.supplierMisc.barcode}</th>
+                      <th className="w-[13%] whitespace-nowrap px-3 py-3">{text.supplierMisc.nameZh}</th>
+                      <th className="w-[13%] whitespace-nowrap px-3 py-3">{text.supplierMisc.nameEs}</th>
+                      <th className="w-[6%] whitespace-nowrap px-3 py-3 text-center">{text.supplierMisc.unitPrice}</th>
+                      <th className="w-[5%] whitespace-nowrap px-3 py-3 text-center">{text.supplierMisc.quantity}</th>
+                      <th className="w-[7%] whitespace-nowrap px-3 py-3 text-center">{text.supplierMisc.supplier}</th>
+                      <th className="w-[7%] whitespace-nowrap px-3 py-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setSupplierMiscDateSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))}
+                          className="inline-flex items-center gap-1 text-slate-700"
+                          title={lang === "zh" ? "按记录日期排序" : "Ordenar por fecha"}
+                        >
+                          <span>{text.supplierMisc.date}</span>
+                          <SortDirectionIcon direction={supplierMiscDateSortDirection} />
+                        </button>
+                      </th>
+                      <th className="w-[11%] whitespace-nowrap px-3 py-3">{text.supplierMisc.remark}</th>
+                      <th className="w-[9%] whitespace-nowrap px-3 py-3 text-right"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
+                    {filteredSupplierMiscRecords.length === 0 ? (
+                      <tr>
+                        <td colSpan={13} className="px-4 py-10">
+                          <EmptyState title={text.supplierMisc.empty} description={text.supplierMisc.autoMatch} />
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredSupplierMiscRecords.map((row) => (
+                        <tr key={row.id} className="align-middle">
+                          <td className="px-3 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={selectedSupplierMiscIds.includes(row.id)}
+                              onChange={(event) => toggleSupplierMiscSelection(row.id, event.target.checked)}
+                              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/20"
+                            />
+                          </td>
+                          <td className="truncate px-3 py-3 font-medium text-slate-900">{row.customerName}</td>
+                          <td className="px-3 py-3">
+                            <div className="flex justify-center">
+                              <ProductImage
+                                sku={row.sku}
+                                alt={row.nameZh || row.sku}
+                                className="h-9 w-9 rounded-xl border border-slate-200 bg-slate-50 object-cover"
+                                onClick={() =>
+                                  setPreviewImage({
+                                    src: buildProductImageUrls(row.sku, ["jpg", "jpeg", "png", "webp"])[0] || "",
+                                    fallbackSources: buildProductImageUrls(row.sku, ["jpg", "jpeg", "png", "webp"]),
+                                    title: `${row.sku} / ${row.nameZh || row.nameEs || "-"}`,
+                                  })
+                                }
+                              />
+                            </div>
+                          </td>
+                          <td className="truncate px-3 py-3">{row.sku}</td>
+                          <td className="truncate px-3 py-3">{row.barcode || "-"}</td>
+                          <td className="truncate px-3 py-3">{row.nameZh || "-"}</td>
+                          <td className="truncate px-3 py-3">{row.nameEs || "-"}</td>
+                          <td className="px-3 py-3 text-center">{row.unitPrice === null ? "-" : `$${fmtMoney(row.unitPrice, lang)}`}</td>
+                          <td className="px-3 py-3 text-center">{row.quantity}</td>
+                          <td className="truncate px-3 py-3 text-center">{row.supplierName || "-"}</td>
+                          <td className="whitespace-nowrap px-3 py-3 text-center">{fmtDateOnly(row.recordedDate, lang)}</td>
+                          <td className="truncate px-3 py-3 text-slate-500">{row.remark || "-"}</td>
+                          <td className="px-3 py-3 text-right">
+                            <div className="flex items-center justify-end gap-3">
+                              <label className={`inline-flex items-center gap-1.5 whitespace-nowrap text-xs ${row.noStock ? "text-rose-600" : "text-slate-900"}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(row.noStock)}
+                                  onChange={(event) => toggleSupplierMiscNoStock(row.id, event.target.checked)}
+                                  className={`h-4 w-4 rounded border-slate-300 focus:ring-rose-200 ${row.noStock ? "text-rose-600" : "text-slate-900"}`}
+                                />
+                                <span>{lang === "zh" ? "无货" : "Sin stock"}</span>
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => handleSupplierMiscEditRecord(row)}
+                                title={lang === "zh" ? "编辑" : "Editar"}
+                                aria-label={lang === "zh" ? "编辑" : "Editar"}
+                                className="inline-flex h-9 w-9 items-center justify-center text-slate-500 transition hover:text-slate-900"
+                              >
+                                <PencilIcon />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </TableCard>
+      ) : null}
+
+      {supplierMiscModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-4" onClick={() => setSupplierMiscModalOpen(false)}>
+          <div
+            className="flex max-h-[calc(100vh-32px)] w-[min(1080px,calc(100vw-32px))] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">{lang === "zh" ? "添加供应商散单记录" : "Agregar registro suelto"}</h3>
+                <p className="mt-1 text-xs text-slate-500">{text.supplierMisc.autoMatch}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSupplierMiscModalOpen(false)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-5">
+              <div className="grid gap-4 md:grid-cols-12">
+                <label className="space-y-1 md:col-span-3">
+                  <span className="text-xs text-slate-500">{text.supplierMisc.customer}</span>
+                  <select
+                    value={supplierMiscForm.customerName}
+                    onChange={(event) => setSupplierMiscForm((prev) => ({ ...prev, customerName: event.target.value }))}
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
+                  >
+                    <option value="">{lang === "zh" ? "请选择客户" : "Selecciona cliente"}</option>
+                    {customerOptions.map((customer) => (
+                      <option key={customer} value={customer}>{customer}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <div className="space-y-1 md:col-span-1">
+                  <span className="text-xs text-slate-500">{lang === "zh" ? "图片" : "Imagen"}</span>
+                  <div className="flex h-10 items-center">
+                    <ProductImage sku={supplierMiscResolvedSku} alt={supplierMiscForm.nameZh || supplierMiscResolvedSku} size={40} className="h-10 w-10 rounded-xl border border-slate-200 bg-slate-50 object-cover" />
+                  </div>
+                </div>
+
+                <label className="space-y-1 md:col-span-2">
+                  <span className="text-xs text-slate-500">{text.supplierMisc.sku}</span>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={supplierMiscForm.sku}
+                      onChange={(event) => {
+                        handleSupplierMiscSkuChange(event.target.value);
+                        setSupplierMiscSkuSearchOpen(true);
+                      }}
+                      onFocus={() => setSupplierMiscSkuSearchOpen(true)}
+                      onBlur={() => window.setTimeout(() => setSupplierMiscSkuSearchOpen(false), 120)}
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
+                    />
+                    {showSupplierMiscSkuPanel ? (
+                      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+                        {supplierMiscLoading ? (
+                          <div className="px-3 py-3 text-sm text-slate-500">{lang === "zh" ? "正在加载可选编码..." : "Cargando codigos..."}</div>
+                        ) : supplierMiscProducts.length === 0 ? (
+                          <div className="px-3 py-3 text-sm text-rose-500">{lang === "zh" ? "还没有可搜索的友购产品资料" : "Aun no hay productos YG para buscar"}</div>
+                        ) : supplierMiscExactMatchedProduct ? (
+                          <div className="px-3 py-3 text-sm text-emerald-600">
+                            {lang === "zh" ? `已匹配：${supplierMiscExactMatchedProduct.sku}` : `Coincide: ${supplierMiscExactMatchedProduct.sku}`}
+                          </div>
+                        ) : supplierMiscSkuSuggestions.length > 0 ? (
+                          <div className="max-h-64 overflow-y-auto py-1">
+                            {supplierMiscSkuSuggestions.map((item) => (
+                              <button
+                                key={item.id}
+                                type="button"
+                                onMouseDown={() => handleSupplierMiscSkuSelect(item)}
+                                className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50"
+                              >
+                                <div className="min-w-0">
+                                  <div className="truncate font-medium text-slate-900">{item.sku}</div>
+                                  <div className="truncate text-xs text-slate-500">{item.nameZh || item.nameEs || "-"}</div>
+                                </div>
+                                <div className="shrink-0 text-xs text-slate-400">{item.supplierName || "-"}</div>
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="px-3 py-3 text-sm text-slate-500">{lang === "zh" ? "未找到匹配编码，请继续输入或换一个关键词" : "No se encontraron coincidencias"}</div>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                </label>
+
+                <label className="space-y-1 md:col-span-2">
+                  <span className="text-xs text-slate-500">{text.supplierMisc.barcode}</span>
+                  <input type="text" value={supplierMiscForm.barcode} readOnly className="h-10 w-full rounded-xl border border-slate-200 bg-slate-100 px-3 text-sm text-slate-700 outline-none" />
+                </label>
+
+                <label className="space-y-1 md:col-span-2">
+                  <span className="text-xs text-slate-500">{text.supplierMisc.unitPrice}</span>
+                  <input type="text" value={supplierMiscForm.unitPrice} readOnly className="h-10 w-full rounded-xl border border-slate-200 bg-slate-100 px-3 text-sm text-slate-700 outline-none" />
+                </label>
+
+                <label className="space-y-1 md:col-span-2">
+                  <span className="text-xs text-slate-500">{text.supplierMisc.quantity}</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={supplierMiscForm.quantity}
+                    onChange={(event) => setSupplierMiscForm((prev) => ({ ...prev, quantity: event.target.value }))}
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
+                  />
+                </label>
+
+                <label className="space-y-1 md:col-span-4">
+                  <span className="text-xs text-slate-500">{text.supplierMisc.nameZh}</span>
+                  <input type="text" value={supplierMiscForm.nameZh} readOnly className="h-10 w-full rounded-xl border border-slate-200 bg-slate-100 px-3 text-sm text-slate-700 outline-none" />
+                </label>
+
+                <label className="space-y-1 md:col-span-4">
+                  <span className="text-xs text-slate-500">{text.supplierMisc.nameEs}</span>
+                  <input type="text" value={supplierMiscForm.nameEs} readOnly className="h-10 w-full rounded-xl border border-slate-200 bg-slate-100 px-3 text-sm text-slate-700 outline-none" />
+                </label>
+
+                <label className="space-y-1 md:col-span-2">
+                  <span className="text-xs text-slate-500">{text.supplierMisc.supplier}</span>
+                  <input type="text" value={supplierMiscForm.supplierName} readOnly className="h-10 w-full rounded-xl border border-slate-200 bg-slate-100 px-3 text-sm text-slate-700 outline-none" />
+                </label>
+
+                <label className="space-y-1 md:col-span-2">
+                  <span className="text-xs text-slate-500">{text.supplierMisc.date}</span>
+                  <input type="text" value={fmtDateOnly(getMexicoTodayDateValue(), lang)} readOnly className="h-10 w-full rounded-xl border border-slate-200 bg-slate-100 px-3 text-sm text-slate-700 outline-none" />
+                </label>
+
+                <label className="space-y-1 md:col-span-5">
+                  <span className="text-xs text-slate-500">{text.supplierMisc.remark}</span>
+                  <textarea
+                    value={supplierMiscForm.remark}
+                    onChange={(event) => setSupplierMiscForm((prev) => ({ ...prev, remark: event.target.value }))}
+                    rows={1}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setSupplierMiscModalOpen(false)}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                {lang === "zh" ? "取消" : "Cancelar"}
+              </button>
+              <button
+                type="button"
+                onClick={handleSupplierMiscAddRecord}
+                className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-soft transition hover:opacity-90"
+              >
+                {lang === "zh" ? "确认添加" : "Confirmar"}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {modalOpen ? (
