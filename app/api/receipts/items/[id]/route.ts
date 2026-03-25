@@ -123,11 +123,22 @@ export async function PATCH(
         excess_qty: true,
         status: true,
         unexpected: true,
+        receipt: {
+          select: {
+            id: true,
+            locked: true,
+            status: true,
+          },
+        },
       },
     });
 
     if (!currentItem) {
       return NextResponse.json({ error: "未找到商品明细" }, { status: 404 });
+    }
+
+    if (currentItem.receipt?.locked || currentItem.receipt?.status === "completed") {
+      return NextResponse.json({ error: "验货单已完成并锁定，不能再修改" }, { status: 409 });
     }
 
     const sku = String(body.sku ?? "").trim();

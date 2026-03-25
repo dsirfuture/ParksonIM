@@ -63,6 +63,8 @@ async function ensureReceipt(
     },
     select: {
       id: true,
+      locked: true,
+      status: true,
     },
   });
 }
@@ -143,6 +145,13 @@ export async function POST(req: Request, ctx: any) {
 
     if (!receipt) {
       return errorResponse("NOT_FOUND", "Receipt not found", 404);
+    }
+
+    if (receipt.locked || receipt.status === "completed") {
+      return NextResponse.json(
+        { ok: false, error: "验货单已完成并锁定，不能再修改" },
+        { status: 409 },
+      );
     }
 
     const body = await req.json();

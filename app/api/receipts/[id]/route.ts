@@ -48,10 +48,14 @@ export async function DELETE(_req: Request, ctx: any) {
       tenant_id: session.tenantId,
       company_id: session.companyId,
     },
-    select: { id: true },
+    select: { id: true, locked: true, status: true },
   });
 
   if (!receipt) return errorResponse("NOT_FOUND", "Receipt not found", 404);
+
+  if (receipt.locked || receipt.status === "completed") {
+    return errorResponse("LOCKED", "Receipt is locked and cannot be deleted", 409);
+  }
 
   await prisma.receipt.delete({
     where: { id: receipt.id },

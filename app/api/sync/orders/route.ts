@@ -263,6 +263,26 @@ function text(value: unknown) {
   return null;
 }
 
+function normalizeOrderCandidate(value: unknown) {
+  const raw = text(value);
+  if (!raw) return null;
+  return raw.replace(/\s+/g, "").trim().toUpperCase();
+}
+
+function looksLikePhone(value: string | null | undefined) {
+  const raw = String(value || "").trim();
+  if (!raw) return false;
+  const digits = raw.replace(/\D/g, "");
+  return digits.length >= 8 && digits.length <= 15 && !/[A-Z]/i.test(raw);
+}
+
+function looksLikeOrderNo(value: string | null | undefined) {
+  const raw = String(value || "").trim().toUpperCase();
+  if (!raw) return false;
+  if (looksLikePhone(raw)) return false;
+  return /[A-Z]/.test(raw) && /\d/.test(raw) && raw.length >= 8;
+}
+
 function firstNonNull<T>(...values: Array<T | null | undefined>) {
   for (const value of values) {
     if (value !== null && value !== undefined) return value;
@@ -539,16 +559,41 @@ function parseOrder(input: RawOrder, index: number): ParsedOrder {
   const pedidolist = asObjectOrNull(input.pedidolist) ?? asObjectOrNull(input.pedidoList);
   const detectedStatus = detectStatusFromPayload(root, header, pedidolist);
 
-  const orderNo = firstNonNull(
-    text(input.order_no),
-    text(input.orderNo),
-    text(input.order_key),
-    text(input.orderKey),
-    text(header?.order_no),
-    text(header?.orderNo),
-    text(header?.order_key),
-    text(header?.orderKey),
-  );
+  const orderNoCandidates = [
+    input.order_no,
+    input.orderNo,
+    input.order_key,
+    input.orderKey,
+    (input as RawOrder & { bill_no?: unknown }).bill_no,
+    (input as RawOrder & { billNo?: unknown }).billNo,
+    (input as RawOrder & { document_no?: unknown }).document_no,
+    (input as RawOrder & { documentNo?: unknown }).documentNo,
+    (input as RawOrder & { pedido_no?: unknown }).pedido_no,
+    (input as RawOrder & { pedidoNo?: unknown }).pedidoNo,
+    pedidolist?.order_no,
+    pedidolist?.orderNo,
+    pedidolist?.order_key,
+    pedidolist?.orderKey,
+    pedidolist?.bill_no,
+    pedidolist?.billNo,
+    pedidolist?.document_no,
+    pedidolist?.documentNo,
+    header?.order_no,
+    header?.orderNo,
+    header?.order_key,
+    header?.orderKey,
+    header?.bill_no,
+    header?.billNo,
+    header?.document_no,
+    header?.documentNo,
+  ]
+    .map(normalizeOrderCandidate)
+    .filter(Boolean);
+
+  const orderNo =
+    orderNoCandidates.find((candidate) => looksLikeOrderNo(candidate)) ||
+    orderNoCandidates[0] ||
+    null;
   if (!orderNo) throw new Error(`Row ${index + 1}: order_no or order_key is required`);
 
   const rawItems = asItemList(

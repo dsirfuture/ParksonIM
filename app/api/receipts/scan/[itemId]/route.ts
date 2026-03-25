@@ -261,6 +261,33 @@ export async function PATCH(
 
     const receipt = await prisma.receipt.findFirst({
       where: {
+        id: receiptId,
+        tenant_id: session.tenantId,
+        company_id: session.companyId,
+      },
+      select: {
+        id: true,
+        locked: true,
+        status: true,
+      },
+    });
+
+    if (!receipt) {
+      return NextResponse.json(
+        { ok: false, error: "未找到对应验货单" },
+        { status: 404 },
+      );
+    }
+
+    if (receipt.locked || receipt.status === "completed") {
+      return NextResponse.json(
+        { ok: false, error: "验货单已完成并锁定，不能再修改" },
+        { status: 409 },
+      );
+    }
+
+    const receiptMeta = await prisma.receipt.findFirst({
+      where: {
         id: item.receipt_id,
         tenant_id: session.tenantId,
         company_id: session.companyId,
@@ -284,7 +311,7 @@ export async function PATCH(
           ? await resolveSupplierCasePack(
               session.tenantId,
               session.companyId,
-              receipt?.supplier_name,
+              receiptMeta?.supplier_name,
               nextSku,
             )
           : null;
@@ -453,6 +480,7 @@ export async function PATCH(
           completed_items: summary.completedItems,
           progress_percent: summary.progress,
           status: summary.receiptStatus,
+          locked: summary.receiptStatus === "completed",
           last_activity_at: new Date(),
         },
       });

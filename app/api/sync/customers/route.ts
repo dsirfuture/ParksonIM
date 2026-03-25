@@ -132,6 +132,48 @@ function buildCustomerKey(input: RawCustomer) {
   ).trim();
 }
 
+function normalizeOrderCandidate(value: unknown) {
+  const raw = text(value);
+  if (!raw) return null;
+  return raw.replace(/\s+/g, "").trim().toUpperCase();
+}
+
+function looksLikePhone(value: string | null | undefined) {
+  const raw = String(value || "").trim();
+  if (!raw) return false;
+  const digits = raw.replace(/\D/g, "");
+  return digits.length >= 8 && digits.length <= 15 && !/[A-Z]/i.test(raw);
+}
+
+function looksLikeOrderNo(value: string | null | undefined) {
+  const raw = String(value || "").trim().toUpperCase();
+  if (!raw) return false;
+  if (looksLikePhone(raw)) return false;
+  return /[A-Z]/.test(raw) && /\d/.test(raw) && raw.length >= 8;
+}
+
+function resolveLastOrderNo(input: RawCustomer) {
+  const candidates = [
+    input.last_order_no,
+    input.lastOrderNo,
+    (input as RawCustomer & { order_no?: unknown }).order_no,
+    (input as RawCustomer & { orderNo?: unknown }).orderNo,
+    (input as RawCustomer & { last_order_id?: unknown }).last_order_id,
+    (input as RawCustomer & { lastOrderId?: unknown }).lastOrderId,
+    (input as RawCustomer & { order_key?: unknown }).order_key,
+    (input as RawCustomer & { orderKey?: unknown }).orderKey,
+  ]
+    .map(normalizeOrderCandidate)
+    .filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (looksLikeOrderNo(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 export async function POST(request: Request) {
   const expectedApiKey = process.env.YOGO_SYNC_API_KEY?.trim() || "";
   const tenantId = process.env.YOGO_SYNC_TENANT_ID?.trim() || "";
@@ -171,9 +213,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const lockRows = await prisma.$queryRaw<Array<{ locked: boolean }>>`
-    SELECT pg_try_advisory_lock(${SYNC_CUSTOMERS_LOCK_CLASS}, ${SYNC_CUSTOMERS_LOCK_ID}) AS locked
-  `;
+  const lockRows = await prisma.$queryRawUnsafe<Array<{ locked: boolean }>>(
+    `SELECT pg_try_advisory_lock(${SYNC_CUSTOMERS_LOCK_CLASS}::int, ${SYNC_CUSTOMERS_LOCK_ID}::int) AS locked`,
+  );
   const hasLock = lockRows[0]?.locked === true;
   if (!hasLock) {
     return NextResponse.json(
@@ -232,7 +274,7 @@ export async function POST(request: Request) {
             dateOrNull(item.updated_at) ||
             dateOrNull(item.updatedAt),
           last_order_at: dateOrNull(item.last_order_at) || dateOrNull(item.lastOrderAt),
-          last_order_no: text(item.last_order_no) || text(item.lastOrderNo),
+          last_order_no: resolveLastOrderNo(item),
           synced_at: dateOrNull(item.synced_at) || dateOrNull(item.syncedAt) || new Date(),
         },
         update: {
@@ -258,7 +300,7 @@ export async function POST(request: Request) {
             dateOrNull(item.updated_at) ||
             dateOrNull(item.updatedAt),
           last_order_at: dateOrNull(item.last_order_at) || dateOrNull(item.lastOrderAt),
-          last_order_no: text(item.last_order_no) || text(item.lastOrderNo),
+          last_order_no: resolveLastOrderNo(item),
           synced_at: dateOrNull(item.synced_at) || dateOrNull(item.syncedAt) || new Date(),
         },
       });
@@ -279,8 +321,8 @@ export async function POST(request: Request) {
     );
   } finally {
     syncState.lastFinishedAt = Date.now();
-    await prisma.$executeRaw`
-      SELECT pg_advisory_unlock(${SYNC_CUSTOMERS_LOCK_CLASS}, ${SYNC_CUSTOMERS_LOCK_ID})
-    `;
+    await prisma.$executeRawUnsafe(
+      `SELECT pg_advisory_unlock(${SYNC_CUSTOMERS_LOCK_CLASS}::int, ${SYNC_CUSTOMERS_LOCK_ID}::int)`,
+    );
   }
 }

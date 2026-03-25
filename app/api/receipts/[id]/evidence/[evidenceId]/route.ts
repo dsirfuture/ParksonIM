@@ -39,11 +39,20 @@ export async function DELETE(_req: Request, ctx: any) {
       },
       select: {
         id: true,
+        locked: true,
+        status: true,
       },
     });
 
     if (!receipt) {
       return errorResponse("NOT_FOUND", "Receipt not found", 404);
+    }
+
+    if (receipt.locked || receipt.status === "completed") {
+      return NextResponse.json(
+        { ok: false, error: "验货单已完成并锁定，不能再修改" },
+        { status: 409 },
+      );
     }
 
     const receiptEvidence = getEvidenceDelegate();

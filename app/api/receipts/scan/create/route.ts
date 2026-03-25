@@ -196,6 +196,8 @@ export async function POST(req: Request) {
       select: {
         id: true,
         supplier_name: true,
+        locked: true,
+        status: true,
       },
     });
 
@@ -203,6 +205,13 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { ok: false, error: "未找到对应验货单" },
         { status: 404 },
+      );
+    }
+
+    if (receipt.locked || receipt.status === "completed") {
+      return NextResponse.json(
+        { ok: false, error: "验货单已完成并锁定，不能再修改" },
+        { status: 409 },
       );
     }
 
@@ -312,6 +321,7 @@ export async function POST(req: Request) {
           completed_items: summary.completedItems,
           progress_percent: summary.progress,
           status: summary.receiptStatus,
+          locked: summary.receiptStatus === "completed",
           last_activity_at: new Date(),
         },
       });
