@@ -674,6 +674,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   const SUPPLIER_PRODUCT_PREVIEW_PAGE_SIZE = 12;
   const CUSTOMER_PAGE_SIZE = 11;
   const CUSTOMER_DETAIL_PAGE_SIZE = 4;
+  const CUSTOMER_PAYMENT_PAGE_SIZE = 5;
   const [lang, setLang] = useState<"zh" | "es">("zh");
   const [tab, setTab] = useState<TabKey>("perm");
   const [loading, setLoading] = useState(true);
@@ -727,6 +728,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   const [customerDetailId, setCustomerDetailId] = useState("");
   const [customerDetailPage, setCustomerDetailPage] = useState(1);
   const [customerPaymentDetailId, setCustomerPaymentDetailId] = useState("");
+  const [customerPaymentPage, setCustomerPaymentPage] = useState(1);
   const [customerDetailDateSort, setCustomerDetailDateSort] = useState<"desc" | "asc">("desc");
   const [detailEditingRowId, setDetailEditingRowId] = useState("");
   const [detailRowEditForm, setDetailRowEditForm] = useState<DetailRowEditForm>(EMPTY_DETAIL_ROW_EDIT_FORM);
@@ -1697,6 +1699,19 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
     () => sortedDetailRows.find((row) => row.id === customerPaymentDetailId) || null,
     [customerPaymentDetailId, sortedDetailRows],
   );
+  const customerPaymentTotalPages = Math.max(
+    1,
+    Math.ceil((activePaymentDetail?.paymentRows.length || 0) / CUSTOMER_PAYMENT_PAGE_SIZE),
+  );
+  const safeCustomerPaymentPage = Math.min(customerPaymentPage, customerPaymentTotalPages);
+  const pagedPaymentRows = useMemo(
+    () =>
+      (activePaymentDetail?.paymentRows || []).slice(
+        (safeCustomerPaymentPage - 1) * CUSTOMER_PAYMENT_PAGE_SIZE,
+        safeCustomerPaymentPage * CUSTOMER_PAYMENT_PAGE_SIZE,
+      ),
+    [activePaymentDetail?.paymentRows, safeCustomerPaymentPage, CUSTOMER_PAYMENT_PAGE_SIZE],
+  );
   const customerDetailTotalPages = Math.max(1, Math.ceil(sortedDetailRows.length / CUSTOMER_DETAIL_PAGE_SIZE));
   const safeCustomerDetailPage = Math.min(customerDetailPage, customerDetailTotalPages);
   const pagedDetailRows = useMemo(
@@ -1746,10 +1761,14 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   }, [customerDetailDateSort]);
   useEffect(() => {
     if (!activePaymentDetail) {
+      setCustomerPaymentPage(1);
       setPaymentEditingRowId("");
       setPaymentRowEditForm(EMPTY_PAYMENT_ROW_EDIT_FORM);
     }
   }, [activePaymentDetail]);
+  useEffect(() => {
+    setCustomerPaymentPage(1);
+  }, [customerPaymentDetailId]);
   useEffect(() => {
     if (!activePaymentDetail) {
       setPaymentEvidenceItems({});
@@ -3096,36 +3115,36 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       </tr>
                     </thead>
                     <tbody>
-                      {activePaymentDetail.paymentRows.map((row) => (
+                      {pagedPaymentRows.map((row) => (
                         <tr key={row.id} className="border-t border-slate-100">
-                          <td className="px-3 py-2 whitespace-nowrap">
+                          <td className="px-3 py-1.5 whitespace-nowrap">
                             {paymentEditingRowId === row.id ? (
                               <input
                                 value={paymentRowEditForm.payableAmount}
                                 onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, payableAmount: e.target.value }))}
-                                className="h-9 w-[140px] rounded-xl border border-slate-200 px-3 text-sm"
+                                className="h-8 w-[132px] rounded-xl border border-slate-200 px-3 text-sm"
                               />
                             ) : (
                               row.payableAmountText ? `$ ${row.payableAmountText}` : "-"
                             )}
                           </td>
-                          <td className="px-3 py-2 whitespace-nowrap">{row.paidAmountText ? `$ ${row.paidAmountText}` : "-"}</td>
-                          <td className="px-3 py-2 whitespace-nowrap">
+                          <td className="px-3 py-1.5 whitespace-nowrap">{row.paidAmountText ? `$ ${row.paidAmountText}` : "-"}</td>
+                          <td className="px-3 py-1.5 whitespace-nowrap">
                             {paymentEditingRowId === row.id ? (
                               <input
                                 type="date"
                                 value={paymentRowEditForm.paymentTime}
                                 onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, paymentTime: e.target.value }))}
-                                className="h-9 w-[136px] rounded-xl border border-slate-200 px-3 text-sm"
+                                className="h-8 w-[128px] rounded-xl border border-slate-200 px-3 text-sm"
                               />
                             ) : (
                               row.paymentTimeText || "-"
                             )}
                           </td>
-                          <td className="px-3 py-2 break-words whitespace-normal">{row.paymentMethodText || "-"}</td>
-                          <td className="px-3 py-2 break-words whitespace-normal">{row.paymentTargetText || "-"}</td>
-                          <td className="px-3 py-2 whitespace-nowrap">{row.unpaidAmountText ? `$ ${row.unpaidAmountText}` : "-"}</td>
-                          <td className="px-3 py-2 text-right">
+                          <td className="px-3 py-1.5 break-words whitespace-normal">{row.paymentMethodText || "-"}</td>
+                          <td className="px-3 py-1.5 break-words whitespace-normal">{row.paymentTargetText || "-"}</td>
+                          <td className="px-3 py-1.5 whitespace-nowrap">{row.unpaidAmountText ? `$ ${row.unpaidAmountText}` : "-"}</td>
+                          <td className="px-3 py-1.5 text-right">
                             <div className="flex flex-nowrap items-center justify-end gap-2 whitespace-nowrap">
                               <input
                                 ref={(node) => {
@@ -3142,7 +3161,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                               <button
                                 type="button"
                                 onClick={() => handlePaymentEvidenceUpload(row.id, row.sourceType)}
-                                className="inline-flex h-8 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                className="inline-flex h-7 items-center rounded-xl border border-slate-200 bg-white px-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                                 title={tx("上传付款证据", "Upload payment evidence")}
                                 aria-label={tx("上传付款证据", "Upload payment evidence")}
                                 disabled={uploadingPaymentEvidenceRowId === row.id}
@@ -3152,7 +3171,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                               <button
                                 type="button"
                                 onClick={() => handlePaymentRowEdit(activePaymentDetail)}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
                                 title={tx("编辑", "Edit")}
                                 aria-label={tx("编辑", "Edit")}
                               >
@@ -3162,7 +3181,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                 <button
                                   type="button"
                                   onClick={() => void saveInlinePaymentRow()}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
                                   title={tx("保存", "Save")}
                                   aria-label={tx("保存", "Save")}
                                 >
@@ -3195,6 +3214,45 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       ))}
                     </tbody>
                   </table>
+                </div>
+                <div className="border-x border-b border-slate-200 px-4 py-3">
+                  <div className="flex flex-nowrap items-center justify-center gap-2 overflow-x-auto">
+                    <button
+                      type="button"
+                      onClick={() => setCustomerPaymentPage(1)}
+                      disabled={safeCustomerPaymentPage <= 1}
+                      className="inline-flex h-8 items-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-500 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {tx("回到首页", "Ini")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCustomerPaymentPage((prev) => Math.max(1, prev - 1))}
+                      disabled={safeCustomerPaymentPage <= 1}
+                      className="inline-flex h-9 min-w-[40px] items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {tx("上一页", "Ant")}
+                    </button>
+                    <div className="inline-flex h-9 min-w-[72px] items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700">
+                      {safeCustomerPaymentPage} / {customerPaymentTotalPages}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCustomerPaymentPage((prev) => Math.min(customerPaymentTotalPages, prev + 1))}
+                      disabled={safeCustomerPaymentPage >= customerPaymentTotalPages}
+                      className="inline-flex h-9 min-w-[40px] items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {tx("下一页", "Sig")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCustomerPaymentPage(customerPaymentTotalPages)}
+                      disabled={safeCustomerPaymentPage >= customerPaymentTotalPages}
+                      className="inline-flex h-8 items-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-500 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {tx("去最后页", "Fin")}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
