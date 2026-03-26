@@ -132,6 +132,11 @@ type DetailRowEditForm = ManualOrderForm & {
   displayOrderNoField: "ygOrderNo" | "externalOrderNo";
 };
 
+type PaymentRowEditForm = {
+  payableAmount: string;
+  paymentTime: string;
+};
+
 type CustomerSummary = {
   totalOrderCount: number;
   totalOrderAmountText: string;
@@ -279,6 +284,11 @@ const EMPTY_DETAIL_ROW_EDIT_FORM: DetailRowEditForm = {
   ...EMPTY_MANUAL_ORDER_FORM,
   displayOrderNo: "",
   displayOrderNoField: "externalOrderNo",
+};
+
+const EMPTY_PAYMENT_ROW_EDIT_FORM: PaymentRowEditForm = {
+  payableAmount: "",
+  paymentTime: "",
 };
 
 const EMPTY_CATEGORY_MAP: CategoryMapForm = {
@@ -671,6 +681,8 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   const [customerDetailDateSort, setCustomerDetailDateSort] = useState<"desc" | "asc">("desc");
   const [detailEditingRowId, setDetailEditingRowId] = useState("");
   const [detailRowEditForm, setDetailRowEditForm] = useState<DetailRowEditForm>(EMPTY_DETAIL_ROW_EDIT_FORM);
+  const [paymentEditingRowId, setPaymentEditingRowId] = useState("");
+  const [paymentRowEditForm, setPaymentRowEditForm] = useState<PaymentRowEditForm>(EMPTY_PAYMENT_ROW_EDIT_FORM);
   const paymentEvidenceInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [paymentEvidenceNames, setPaymentEvidenceNames] = useState<Record<string, string[]>>({});
   const manualOrderEditorMode = manualOrderForm.sourceType;
@@ -982,13 +994,26 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
     }
   }
 
+  async function refreshCustomersSilently() {
+    const res = await fetch("/api/settings/customers");
+    const json = await readJsonSafe<any>(res);
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.error || tx("加载客户失败", "Load customers fail"));
+    }
+    setCustomers(json.items || []);
+    setCustomerSummary({
+      totalOrderCount: Number(json.summary?.totalOrderCount || 0),
+      totalOrderAmountText: String(json.summary?.totalOrderAmountText || "0.00"),
+    });
+  }
+
   async function saveManualOrder() {
     try {
       setError("");
       await saveEntity("/api/settings/customers/manual-orders", manualOrderForm, "记录已保存", "Record saved");
       setManualOrderOpen(false);
       setManualOrderForm(EMPTY_MANUAL_ORDER_FORM);
-      await loadAll();
+      await refreshCustomersSilently();
     } catch (e) {
       setError(e instanceof Error ? e.message : tx("保存记录失败", "Save record fail"));
     }
@@ -1026,7 +1051,62 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       await saveEntity("/api/settings/customers/manual-orders", nextPayload, "记录已保存", "Record saved");
       setDetailEditingRowId("");
       setDetailRowEditForm(EMPTY_DETAIL_ROW_EDIT_FORM);
-      await loadAll();
+      await refreshCustomersSilently();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : tx("保存记录失败", "Save record fail"));
+    }
+  }
+
+  function handlePaymentRowEdit(row: CustomerTimelineRow) {
+    const activeRow = row.paymentRows[0];
+    setPaymentEditingRowId(activeRow?.id || "");
+    setPaymentRowEditForm({
+      payableAmount: activeRow?.payableAmountText || "",
+      paymentTime: activeRow?.paymentTimeText || "",
+    });
+  }
+
+  async function saveInlinePaymentRow() {
+    try {
+      setError("");
+      if (!activePaymentDetail) return;
+      let nextPayload: ManualOrderForm | null = null;
+      if (activePaymentDetail.sourceType === "yg") {
+        const detailRow = detailCustomer?.detailRows?.find((item) => item.orderNo === activePaymentDetail.orderNo);
+        nextPayload = {
+          id: detailRow?.overlayRecordId || activePaymentDetail.manualRecordId || "",
+          sourceType: "yg",
+          customerProfileId: detailCustomer?.sourceType === "profile" ? detailCustomer.id : "",
+          customerName: detailCustomer?.name || "",
+          ygOrderNo: activePaymentDetail.orderNo || "",
+          externalOrderNo: "",
+          orderChannel: "YOGO",
+          packingAmount: paymentRowEditForm.payableAmount,
+          shippedAt: activePaymentDetail.shippedAtText || "",
+          paidAt: paymentRowEditForm.paymentTime,
+          paymentTermDays: detailRow?.paymentTermText || "",
+        };
+      } else {
+        const manualRow = detailCustomer?.manualOrderRecords?.find((item) => item.id === activePaymentDetail.manualRecordId);
+        if (!manualRow) throw new Error(tx("未找到可编辑记录。", "Editable record not found."));
+        nextPayload = {
+          id: manualRow.id,
+          sourceType: "manual",
+          customerProfileId: manualRow.customerProfileId || (detailCustomer?.sourceType === "profile" ? detailCustomer.id : ""),
+          customerName: manualRow.customerName || detailCustomer?.name || "",
+          ygOrderNo: manualRow.ygOrderNo || "",
+          externalOrderNo: manualRow.externalOrderNo || "",
+          orderChannel: manualRow.orderChannel || "",
+          packingAmount: paymentRowEditForm.payableAmount,
+          shippedAt: manualRow.shippedAtText || "",
+          paidAt: paymentRowEditForm.paymentTime,
+          paymentTermDays: manualRow.paymentTermText || "",
+        };
+      }
+      await saveEntity("/api/settings/customers/manual-orders", nextPayload, "记录已保存", "Record saved");
+      setPaymentEditingRowId("");
+      setPaymentRowEditForm(EMPTY_PAYMENT_ROW_EDIT_FORM);
+      await refreshCustomersSilently();
     } catch (e) {
       setError(e instanceof Error ? e.message : tx("保存记录失败", "Save record fail"));
     }
@@ -1080,10 +1160,6 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       displayOrderNo: manualRow.ygOrderNo || manualRow.externalOrderNo || "",
       displayOrderNoField: manualRow.ygOrderNo ? "ygOrderNo" : "externalOrderNo",
     });
-  }
-
-  function handlePaymentRowEdit(row: CustomerTimelineRow) {
-    handleTimelineRowEdit(row);
   }
 
   function handlePaymentEvidenceUpload(paymentRowId: string, sourceType: "yg" | "manual") {
@@ -1456,6 +1532,12 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       setDetailRowEditForm(EMPTY_DETAIL_ROW_EDIT_FORM);
     }
   }, [detailCustomer]);
+  useEffect(() => {
+    if (!activePaymentDetail) {
+      setPaymentEditingRowId("");
+      setPaymentRowEditForm(EMPTY_PAYMENT_ROW_EDIT_FORM);
+    }
+  }, [activePaymentDetail]);
   useEffect(() => {
     if (!activePaymentDetail) {
       setPaymentEvidenceNames({});
@@ -2659,9 +2741,30 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                     <tbody>
                       {activePaymentDetail.paymentRows.map((row) => (
                         <tr key={row.id} className="border-t border-slate-100">
-                          <td className="px-3 py-2 whitespace-nowrap">{row.payableAmountText ? `$ ${row.payableAmountText}` : "-"}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            {paymentEditingRowId === row.id ? (
+                              <input
+                                value={paymentRowEditForm.payableAmount}
+                                onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, payableAmount: e.target.value }))}
+                                className="h-9 w-[140px] rounded-xl border border-slate-200 px-3 text-sm"
+                              />
+                            ) : (
+                              row.payableAmountText ? `$ ${row.payableAmountText}` : "-"
+                            )}
+                          </td>
                           <td className="px-3 py-2 whitespace-nowrap">{row.paidAmountText ? `$ ${row.paidAmountText}` : "-"}</td>
-                          <td className="px-3 py-2 whitespace-nowrap">{row.paymentTimeText || "-"}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            {paymentEditingRowId === row.id ? (
+                              <input
+                                type="date"
+                                value={paymentRowEditForm.paymentTime}
+                                onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, paymentTime: e.target.value }))}
+                                className="h-9 w-[136px] rounded-xl border border-slate-200 px-3 text-sm"
+                              />
+                            ) : (
+                              row.paymentTimeText || "-"
+                            )}
+                          </td>
                           <td className="px-3 py-2 break-words whitespace-normal">{row.paymentMethodText || "-"}</td>
                           <td className="px-3 py-2 break-words whitespace-normal">{row.paymentTargetText || "-"}</td>
                           <td className="px-3 py-2 whitespace-nowrap">{row.unpaidAmountText ? `$ ${row.unpaidAmountText}` : "-"}</td>
@@ -2697,6 +2800,17 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                               >
                                 <Pencil className="h-4 w-4" />
                               </button>
+                              {paymentEditingRowId === row.id ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void saveInlinePaymentRow()}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
+                                  title={tx("保存", "Save")}
+                                  aria-label={tx("保存", "Save")}
+                                >
+                                  <Check className="h-4 w-4" />
+                                </button>
+                              ) : null}
                             </div>
                             <div className="mt-1 text-xs text-slate-500">
                               {paymentEvidenceNames[row.id]?.length ? `${paymentEvidenceNames[row.id].length} ${tx("个文件待上传", "files pending")}` : ""}
