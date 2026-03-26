@@ -2952,7 +2952,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                           <th className="w-[120px] px-3 py-2 text-left whitespace-nowrap">{tx("下单金额", "Order amount")}</th>
                           <th className="w-[120px] px-3 py-2 text-left whitespace-nowrap">{tx("配货金额", "Packing amount")}</th>
                           <th className="w-[96px] px-3 py-2 text-left whitespace-nowrap">{tx("发货日期", "Ship date")}</th>
-                          <th className="w-[120px] px-3 py-2 text-right whitespace-nowrap">{tx("操作", "Acciones")}</th>
+                          <th className="w-[170px] px-3 py-2 text-right whitespace-nowrap">{tx("操作", "Acciones")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3007,7 +3007,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                 item.shippedAtText || "-"
                               )}
                             </td>
-                            <td className="w-[120px] px-3 py-2 text-right">
+                            <td className="w-[170px] px-3 py-2 text-right">
                               <div className="flex flex-nowrap items-center justify-end gap-2 whitespace-nowrap">
                                 <button
                                   type="button"
