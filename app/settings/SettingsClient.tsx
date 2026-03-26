@@ -2868,27 +2868,27 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       </div>
                     </div>
                   </div>
-                  <div className="mt-3 grid gap-2.5 xl:grid-cols-[minmax(0,120px)_minmax(0,120px)_minmax(0,120px)_minmax(0,170px)_minmax(0,170px)]">
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("VIP等级", "VIP lvl")}</label>
+                  <div className="mt-3 grid gap-3 xl:grid-cols-5">
+                    <div className="min-w-0">
+                      <label className="mb-1 block text-xs font-semibold text-slate-700">{tx("VIP等级", "VIP lvl")}</label>
                       <PlainCustomerValue>
                         {isVipCustomer(detailCustomer) ? <span className="inline-flex"><VipBadgeIcon /></span> : "-"}
                       </PlainCustomerValue>
                     </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("信用等级", "Credit")}</label>
+                    <div className="min-w-0">
+                      <label className="mb-1 block text-xs font-semibold text-slate-700">{tx("信用等级", "Credit")}</label>
                       <PlainCustomerValue value={detailCustomer.creditLevel} />
                     </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("下单次数", "Order count")}</label>
+                    <div className="min-w-0">
+                      <label className="mb-1 block text-xs font-semibold text-slate-700">{tx("下单次数", "Order count")}</label>
                       <PlainCustomerValue value={Number(detailCustomer.totalOrderCount || 0) > 0 ? String(detailCustomer.totalOrderCount) : "-"} />
                     </div>
-                    <div className="max-w-[170px] justify-self-start xl:justify-self-end">
-                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("下单金额", "Order amount")}</label>
+                    <div className="min-w-0">
+                      <label className="mb-1 block text-xs font-semibold text-slate-700">{tx("下单金额", "Order amount")}</label>
                       <PlainCustomerValue value={detailCustomer.totalOrderAmountText ? `$ ${detailCustomer.totalOrderAmountText}` : "-"} />
                     </div>
-                    <div className="max-w-[170px] justify-self-start xl:justify-self-end">
-                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("累计配货金额", "Packing total")}</label>
+                    <div className="min-w-0">
+                      <label className="mb-1 block text-xs font-semibold text-slate-700">{tx("累计配货金额", "Packing total")}</label>
                       <PlainCustomerValue value={hasAnyPackingAmount ? `$ ${detailPackingAmountTotal.toFixed(2)}` : "-"} />
                     </div>
                   </div>
