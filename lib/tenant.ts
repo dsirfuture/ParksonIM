@@ -31,6 +31,77 @@ function normalizeRole(value: string | undefined): Session["role"] {
   return "admin";
 }
 
+function readDevContext(): TenantContext | null {
+  if (process.env.NODE_ENV === "production") return null;
+
+  const tenantId =
+    process.env.DEV_TENANT_ID?.trim() || process.env.YOGO_SYNC_TENANT_ID?.trim();
+  const companyId =
+    process.env.DEV_COMPANY_ID?.trim() ||
+    process.env.YOGO_SYNC_COMPANY_ID?.trim();
+
+  if (!isUuid(tenantId) || !isUuid(companyId)) return null;
+
+  return { tenantId, companyId };
+}
+
+async function findDevSession(context?: TenantContext | null): Promise<Session | null> {
+  let user: {
+    id: string;
+    role: string;
+    tenant_id: string;
+    company_id: string;
+    name: string;
+    phone: string;
+    avatar_url: string | null;
+  } | null = null;
+
+  try {
+    user = await withPrismaRetry(() =>
+      prisma.user.findFirst({
+        where: context
+          ? {
+              tenant_id: context.tenantId,
+              company_id: context.companyId,
+              active: true,
+            }
+          : {
+              active: true,
+            },
+        orderBy: [{ role: "asc" }, { created_at: "asc" }],
+        select: {
+          id: true,
+          role: true,
+          tenant_id: true,
+          company_id: true,
+          name: true,
+          phone: true,
+          avatar_url: true,
+        },
+      }),
+    );
+  } catch (error) {
+    console.error("[getSession] dev session lookup failed:", error);
+    return null;
+  }
+
+  if (!user && context) {
+    return findDevSession(null);
+  }
+
+  if (!user) return null;
+
+  return {
+    userId: user.id,
+    role: normalizeRole(user.role),
+    tenantId: user.tenant_id,
+    companyId: user.company_id,
+    name: user.name,
+    phone: user.phone,
+    avatarUrl: sanitizeAvatarUrl(user.avatar_url),
+  };
+}
+
 export function requireTenantFromSession(session: any): TenantContext {
   if (!session?.tenantId || !session?.companyId) {
     throw new Error("TENANT_CONTEXT_MISSING");
@@ -51,7 +122,10 @@ export async function getSession(): Promise<Session | null> {
   const raw = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   const signed = readSignedSession(raw);
 
-  if (!signed) return null;
+  if (!signed) {
+    const devContext = readDevContext();
+    return devContext ? findDevSession(devContext) : null;
+  }
 
   let user: {
     id: string;
@@ -89,7 +163,10 @@ export async function getSession(): Promise<Session | null> {
     return null;
   }
 
-  if (!user) return null;
+  if (!user) {
+    const devContext = readDevContext();
+    return devContext ? findDevSession(devContext) : null;
+  }
 
   return {
     userId: user.id,

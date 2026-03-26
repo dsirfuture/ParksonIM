@@ -148,7 +148,11 @@ export default async function ReceiptsPage() {
           <h1 className="text-xl font-bold text-slate-900">
             {lang === "zh" ? "验货单管理" : "Gestión de recepciones"}
           </h1>
-          <p className="mt-2 text-sm text-red-600">{text.sessionError}</p>
+          <p className="mt-2 text-sm text-red-600">
+            {lang === "zh"
+              ? "未获取到当前会话，请重新登录；开发环境可检查 DEV_TENANT_ID / DEV_COMPANY_ID（也兼容 YOGO_SYNC_TENANT_ID / YOGO_SYNC_COMPANY_ID）配置。"
+              : "No se obtuvo la sesion actual. Vuelve a iniciar sesion; en desarrollo revisa DEV_TENANT_ID / DEV_COMPANY_ID o YOGO_SYNC_TENANT_ID / YOGO_SYNC_COMPANY_ID."}
+          </p>
         </div>
       </AppShell>
     );

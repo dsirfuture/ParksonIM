@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 const SESSION_COOKIE_NAME = "parksonim_session";
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function base64UrlToBytes(value: string) {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
@@ -42,6 +44,20 @@ async function hasValidSession(request: NextRequest) {
   }
 }
 
+function hasDevSessionConfig() {
+  if (process.env.NODE_ENV === "production") return false;
+
+  const tenantId =
+    process.env.DEV_TENANT_ID?.trim() || process.env.YOGO_SYNC_TENANT_ID?.trim();
+  const companyId =
+    process.env.DEV_COMPANY_ID?.trim() ||
+    process.env.YOGO_SYNC_COMPANY_ID?.trim();
+
+  return Boolean(
+    tenantId && companyId && UUID_RE.test(tenantId) && UUID_RE.test(companyId),
+  );
+}
+
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next();
 
@@ -59,8 +75,9 @@ export async function middleware(request: NextRequest) {
   const isLoginRoute = pathname === "/login";
   const isRegisterRoute = pathname === "/register";
   const hasSession = await hasValidSession(request);
+  const hasDevSession = hasDevSessionConfig();
 
-  if (!hasSession && !isLoginRoute && !isRegisterRoute) {
+  if (!hasSession && !hasDevSession && !isLoginRoute && !isRegisterRoute) {
     const loginUrl = new URL("/login", request.url);
     if (pathname !== "/") {
       loginUrl.searchParams.set("next", `${pathname}${search}`);
@@ -68,11 +85,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (hasSession && (pathname === "/" || isLoginRoute || isRegisterRoute)) {
+  if ((hasSession || hasDevSession) && (pathname === "/" || isLoginRoute || isRegisterRoute)) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  if (!hasSession && pathname === "/") {
+  if (!hasSession && !hasDevSession && pathname === "/") {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
