@@ -23,6 +23,8 @@ type PermissionState = {
 type SettingsClientProps = {
   isAdmin: boolean;
   currentPermissions: PermissionState;
+  initialTab?: TabKey;
+  visibleTabs?: TabKey[];
 };
 
 type TabKey = "perm" | "supplier" | "customer" | "category" | "doc";
@@ -678,14 +680,15 @@ function paymentEvidenceLooksLikeImage(item: { name?: string; url?: string }) {
   return /\.(png|jpe?g|gif|webp|bmp|svg|avif|heic|heif)(\?|$)/i.test(target);
 }
 
-export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientProps) {
+export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm", visibleTabs }: SettingsClientProps) {
   const SUPPLIER_PAGE_SIZE = 10;
   const SUPPLIER_PRODUCT_PREVIEW_PAGE_SIZE = 12;
   const CUSTOMER_PAGE_SIZE = 11;
   const CUSTOMER_DETAIL_PAGE_SIZE = 4;
   const CUSTOMER_PAYMENT_PAGE_SIZE = 5;
   const [lang, setLang] = useState<"zh" | "es">("zh");
-  const [tab, setTab] = useState<TabKey>("perm");
+  const allowedTabs = visibleTabs && visibleTabs.length > 0 ? TAB_LIST.filter((item) => visibleTabs.includes(item)) : TAB_LIST;
+  const [tab, setTab] = useState<TabKey>(allowedTabs.includes(initialTab) ? initialTab : allowedTabs[0] || "perm");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
@@ -841,6 +844,12 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   const canManageSuppliers = isAdmin || currentPermissions.manageSuppliers;
   const canManageCustomers = isAdmin || currentPermissions.manageCustomers;
   const canManageProducts = isAdmin || currentPermissions.manageProducts;
+
+  useEffect(() => {
+    if (!allowedTabs.includes(tab)) {
+      setTab(allowedTabs[0] || "perm");
+    }
+  }, [allowedTabs, tab]);
 
   useEffect(() => {
     setLang(getClientLang());
@@ -1946,7 +1955,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
     <section className="space-y-4">
       <div className="rounded-2xl border border-slate-200 bg-white">
         <div className="flex flex-wrap gap-2 border-b border-slate-200 px-5 py-4">
-          {TAB_LIST.map((t) => (
+          {allowedTabs.map((t) => (
             <button
               key={t}
               type="button"

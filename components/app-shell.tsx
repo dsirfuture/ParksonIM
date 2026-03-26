@@ -5,6 +5,7 @@ import { LanguageSwitch } from "@/components/language-switch";
 import { getSession } from "@/lib/tenant";
 import { getPermissionState } from "@/lib/permissions";
 import { AvatarMenu } from "@/components/avatar-menu";
+import { AppNavigation } from "@/components/app-navigation";
 
 type AppShellProps = {
   title?: string;
@@ -29,43 +30,62 @@ export async function AppShell({
     }
   }
 
-  const navItems = [
+  const navGroups = [
     {
       href: "/dashboard",
       label: lang === "zh" ? "仪表盘" : "Dash",
       visible: Boolean(session),
+      match: ["/dashboard"],
+    },
+    {
+      href: "/yg-orders",
+      label: lang === "zh" ? "友购数据" : "Yogo",
+      visible:
+        Boolean(session) &&
+        Boolean(perms?.manageProducts || perms?.manageSuppliers || perms?.manageCustomers || perms?.viewAllData),
+      match: ["/yg-orders", "/yg-customers", "/products-management"],
+      children: [
+        {
+          href: "/products-management",
+          label: lang === "zh" ? "友购产品" : "YG Prod",
+        },
+        {
+          href: "/yg-orders",
+          label: lang === "zh" ? "友购订单" : "YG Ord",
+        },
+        {
+          href: "/yg-customers",
+          label: lang === "zh" ? "友购客户" : "YG Cust",
+        },
+      ],
     },
     {
       href: "/receipts",
       label: lang === "zh" ? "验货单" : "Rec",
       visible: Boolean(session) && Boolean(perms?.inspectGoods || perms?.importReceipts),
-    },
-    {
-      href: "/yg-orders",
-      label: lang === "zh" ? "友购订单" : "YG",
-      visible: Boolean(session) && Boolean(perms?.viewAllData || perms?.manageSuppliers),
-    },
-    {
-      href: "/yg-customers",
-      label: lang === "zh" ? "友购客户" : "YG Cust",
-      visible:
-        Boolean(session) &&
-        Boolean(perms?.viewAllData || perms?.manageCustomers || perms?.manageSuppliers),
-    },
-    {
-      href: "/products-management",
-      label: lang === "zh" ? "友购产品" : "YG Prod",
-      visible: Boolean(session) && Boolean(perms?.manageProducts),
+      match: ["/receipts"],
     },
     {
       href: "/billing",
       label: lang === "zh" ? "账单" : "Bill",
-      visible: Boolean(session) && Boolean(perms?.viewReports),
+      visible: Boolean(session) && Boolean(perms?.viewReports || perms?.manageCustomers),
+      match: ["/billing", "/customer-finance"],
+      children: [
+        {
+          href: "/billing",
+          label: lang === "zh" ? "出账单" : "Billing",
+        },
+        {
+          href: "/customer-finance",
+          label: lang === "zh" ? "客户财务" : "Cust Fin",
+        },
+      ],
     },
     {
       href: "/dropshipping",
       label: lang === "zh" ? "一件代发" : "Drops",
       visible: Boolean(session) && Boolean(perms?.viewReports),
+      match: ["/dropshipping"],
     },
   ];
 
@@ -97,30 +117,12 @@ export async function AppShell({
             </div>
           </Link>
 
-          <div className="hidden items-center gap-5 md:flex">
-            <nav className="flex items-center gap-1">
-              {navItems
-                .filter((item) => item.visible !== false)
-                .map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
-                >
-                  {item.label}
-                </Link>
-              ))}
-
-              {!session ? (
-                <Link
-                  href="/login"
-                  className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
-                >
-                  {lang === "zh" ? "登录" : "Acceso"}
-                </Link>
-              ) : null}
-            </nav>
-
+          <div className="hidden items-start gap-5 md:flex">
+            <AppNavigation
+              groups={navGroups}
+              loginLabel={lang === "zh" ? "登录" : "Acceso"}
+              loggedIn={Boolean(session)}
+            />
             {session ? (
               <AvatarMenu
                 avatarUrl={session.avatarUrl}
