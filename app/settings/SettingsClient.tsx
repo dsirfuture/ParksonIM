@@ -1954,7 +1954,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
 
   return (
     <section className="space-y-4">
-      <div className={singleCustomerTabView ? "" : "rounded-2xl border border-slate-200 bg-white"}>
+      <div className="rounded-2xl border border-slate-200 bg-white">
         {!singleCustomerTabView ? (
           <div className="flex flex-wrap gap-2 border-b border-slate-200 px-5 py-4">
             {allowedTabs.map((t) => (
@@ -1972,7 +1972,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
             {saved ? <span className="ml-auto text-sm text-emerald-600">{saved}</span> : null}
           </div>
         ) : saved ? (
-          <div className="text-sm text-emerald-600">{saved}</div>
+          <div className="px-5 pt-4 text-sm text-emerald-600">{saved}</div>
         ) : null}
 
         {error ? <div className="mx-5 mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-600">{error}</div> : null}
@@ -2587,8 +2587,8 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
         ) : null}
 
         {!loading && tab === "customer" ? (
-          <div className={singleCustomerTabView ? "" : "space-y-4 p-5"}>
-            <div className={singleCustomerTabView ? "" : "rounded-2xl border border-slate-200 bg-white"}>
+          <div className="space-y-4 p-5">
+            <div className="rounded-2xl border border-slate-200 bg-white">
               <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
                 <div className="flex items-center gap-6">
                   <h3 className="text-base font-semibold text-slate-900">{tx("客户列表", "Lista cli")}</h3>
