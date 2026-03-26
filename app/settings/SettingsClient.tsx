@@ -2688,7 +2688,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
         ) : null}
 
         {!loading && manualOrderOpen ? (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 px-4">
             <div className="max-h-[90vh] w-full max-w-[980px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
               <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-2.5">
                 <div>
@@ -3111,7 +3111,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
         ) : null}
 
         {!loading && activePaymentDetail ? (
-          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/35 px-4">
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 px-4">
             <div className="max-h-[78vh] w-full max-w-[980px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
               <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
                 <h4 className="text-sm font-semibold text-slate-900">
