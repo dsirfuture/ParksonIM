@@ -2653,7 +2653,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
         {!loading && manualOrderOpen ? (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 px-4">
             <div className="max-h-[90vh] w-full max-w-[980px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
-              <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-2.5">
                 <div>
                   <h3 className="text-base font-semibold text-slate-900">
                     {manualOrderForm.id ? tx("编辑记录", "Editar registro") : tx("新增记录", "Nuevo registro")}
@@ -2801,21 +2801,21 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                 </div>
               </div>
               <div className="p-4">
-                <div className="mb-4 bg-white p-3">
-                  <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="mb-4 bg-white p-2.5">
+                  <div className="mb-2 flex items-center gap-2">
                     <h4 className="text-sm font-semibold text-slate-900">{tx("客户信息", "Info cli")}</h4>
                     <button
                       type="button"
                       onClick={() => void saveDetailCustomerInfo()}
                       disabled={!canManageCustomers || savingDetailCustomerInfo}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 disabled:opacity-40"
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 disabled:opacity-40"
                       aria-label={tx("保存客户信息", "Save customer info")}
                       title={tx("保存客户信息", "Save customer info")}
                     >
-                      <Check className="h-4 w-4" />
+                      <Check className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                  <div className="grid gap-2.5 xl:grid-cols-[minmax(0,230px)_minmax(0,230px)_minmax(0,170px)_minmax(0,170px)_minmax(0,170px)]">
+                  <div className="grid gap-2 xl:grid-cols-[minmax(0,230px)_minmax(0,230px)_minmax(0,170px)_minmax(0,170px)_minmax(0,170px)]">
                     <div className="max-w-[240px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("友购客户名称", "Cliente Yogo")}</label>
                       <ReadonlyCustomerField value={detailCustomerInfoForm.linkedYgName} />
@@ -2856,7 +2856,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       />
                     </div>
                   </div>
-                  <div className="mt-3 grid gap-2.5 xl:grid-cols-[1010px]">
+                  <div className="mt-2.5 grid gap-2 xl:grid-cols-[1010px]">
                     <div className="w-[1010px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("客户地址", "Direccion")}</label>
                       <div className="relative w-[1010px]">
@@ -2879,7 +2879,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       </div>
                     </div>
                   </div>
-                  <div className="mt-3 grid gap-3 xl:grid-cols-5">
+                  <div className="mt-2.5 grid gap-2.5 xl:grid-cols-5">
                     <div className="min-w-0 text-center">
                       <label className="mb-1 block text-center text-xs font-semibold text-slate-700">{tx("VIP等级", "VIP lvl")}</label>
                       <PlainCustomerValue centered>
