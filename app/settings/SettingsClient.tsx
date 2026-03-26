@@ -3095,9 +3095,10 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                 <button
                   type="button"
                   onClick={() => setCustomerPaymentDetailId("")}
-                  className="inline-flex h-9 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700"
+                  aria-label={tx("关闭", "Cerrar")}
                 >
-                  {tx("关闭", "Cerrar")}
+                  <X className="h-4 w-4" />
                 </button>
               </div>
               <div className="p-4">
