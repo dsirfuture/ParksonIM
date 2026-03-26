@@ -747,6 +747,17 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   const [paymentEvidenceItems, setPaymentEvidenceItems] = useState<Record<string, PaymentEvidenceItem[]>>({});
   const [uploadingPaymentEvidenceRowId, setUploadingPaymentEvidenceRowId] = useState("");
   const manualOrderEditorMode = manualOrderForm.sourceType;
+  const manualOrderAutoBillingAmount = useMemo(() => {
+    const orderKey = String(manualOrderForm.ygOrderNo || "").trim().toLowerCase();
+    if (!orderKey) return "";
+    for (const customer of customers) {
+      for (const row of customer.detailRows || []) {
+        if (String(row.orderNo || "").trim().toLowerCase() !== orderKey) continue;
+        return String(row.packingAmountText || "").trim();
+      }
+    }
+    return "";
+  }, [customers, manualOrderForm.ygOrderNo]);
 
   const [catalogConfig, setCatalogConfig] = useState<CatalogConfig>(EMPTY_CATALOG);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -2689,7 +2700,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
 
         {!loading && manualOrderOpen ? (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 px-4">
-            <div className="max-h-[90vh] w-full max-w-[980px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
+            <div className="max-h-[90vh] w-full max-w-[720px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
               <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-2.5">
                 <div>
                   <h3 className="text-base font-semibold text-slate-900">
@@ -2741,9 +2752,10 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                   <div>
                     <label className="mb-1 block text-xs font-medium text-slate-600">备货金额</label>
                     <input
-                      value={manualOrderForm.packingAmount}
-                      onChange={(e) => setManualOrderForm((prev) => ({ ...prev, packingAmount: e.target.value }))}
-                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                      value={manualOrderAutoBillingAmount}
+                      readOnly
+                      placeholder="-"
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500"
                     />
                   </div>
                   <div>
@@ -2783,17 +2795,6 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                     <input
                       value={manualOrderForm.packingAmount}
                       onChange={(e) => setManualOrderForm((prev) => ({ ...prev, packingAmount: e.target.value }))}
-                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
-                    />
-                  </div>
-                </div>
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div className="md:col-start-3">
-                    <label className="mb-1 block text-xs font-medium text-slate-600">{tx("付款日期", "Fecha pago")}</label>
-                    <input
-                      type="date"
-                      value={manualOrderForm.paidAt}
-                      onChange={(e) => setManualOrderForm((prev) => ({ ...prev, paidAt: e.target.value }))}
                       className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
                     />
                   </div>
