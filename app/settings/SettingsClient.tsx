@@ -2783,12 +2783,22 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                   )}
                   <div>
                     <label className="mb-1 block text-xs font-medium text-slate-600">{tx("下单渠道", "Canal")}</label>
-                    <input
+                    <select
                       value={manualOrderEditorMode === "yg" ? tx("友购", "Yogo") : manualOrderForm.orderChannel}
                       onChange={(e) => setManualOrderForm((prev) => ({ ...prev, orderChannel: e.target.value }))}
                       disabled={manualOrderEditorMode === "yg"}
                       className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm disabled:bg-slate-50 disabled:text-slate-500"
-                    />
+                    >
+                      {manualOrderEditorMode === "yg" ? (
+                        <option value={tx("友购", "Yogo")}>{tx("友购", "Yogo")}</option>
+                      ) : (
+                        <>
+                          <option value="">请选择</option>
+                          <option value="微信">微信</option>
+                          <option value="WhatsApp">WhatsApp</option>
+                        </>
+                      )}
+                    </select>
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-medium text-slate-600">{tx("配货金额", "Packing amount")}</label>
