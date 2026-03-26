@@ -30,7 +30,11 @@ export async function POST(request: Request) {
     const profileId = String(body.customerProfileId || "").trim() || null;
     const paymentTermDaysText = String(body.paymentTermDays || "").trim();
     const paymentTermDays = paymentTermDaysText ? Number.parseInt(paymentTermDaysText, 10) : null;
+    const sourceType = String(body.sourceType || "").trim();
     const packingAmountText = String(body.packingAmount || "").replace(/[^0-9.-]/g, "").trim();
+    const billingAmountOverrideText = String(body.billingAmountOverride || "").replace(/[^0-9.-]/g, "").trim();
+    const normalizedBillingAmountOverrideText =
+      billingAmountOverrideText || (sourceType === "yg" ? packingAmountText : "");
 
     const payload = {
       customer_profile_id: profileId,
@@ -38,6 +42,7 @@ export async function POST(request: Request) {
       yg_order_no: String(body.ygOrderNo || "").trim() || null,
       external_order_no: String(body.externalOrderNo || "").trim() || null,
       order_channel: String(body.orderChannel || "").trim() || null,
+      billing_amount_override: normalizedBillingAmountOverrideText || null,
       packing_amount: packingAmountText || null,
       shipped_at: parseOptionalDate(body.shippedAt),
       paid_at: parseOptionalDate(body.paidAt),

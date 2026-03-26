@@ -294,7 +294,7 @@ export async function GET() {
             );
             return sum + (Number.isFinite(lineTotal) ? lineTotal : 0);
           }, 0);
-          const overlayPackingAmountText = normalizeAmountText(overlay?.packing_amount || 0);
+          const overlayPackingAmountText = normalizeAmountText(overlay?.billing_amount_override ?? overlay?.packing_amount ?? 0);
           const billingPackingAmountText = normalizeAmountText(billingPackingAmount);
           const packedAmountText =
             overlay
@@ -644,6 +644,10 @@ export async function GET() {
           ygOrderNo: item.yg_order_no || "",
           externalOrderNo: item.external_order_no || "",
           orderChannel: item.order_channel || "",
+          billingAmountOverrideText:
+            item.billing_amount_override !== null && item.billing_amount_override !== undefined
+              ? normalizeAmountText(item.billing_amount_override)
+              : "",
           packingAmountText: normalizeAmountText(item.packing_amount || 0),
           shippedAtText: formatDateText(item.shipped_at),
           paidAtText: formatDateText(item.paid_at),

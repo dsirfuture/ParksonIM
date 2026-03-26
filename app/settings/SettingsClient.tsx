@@ -108,6 +108,7 @@ type Customer = {
     ygOrderNo: string;
     externalOrderNo: string;
     orderChannel: string;
+    billingAmountOverrideText?: string;
     packingAmountText: string;
     shippedAtText: string;
     paidAtText: string;
@@ -123,6 +124,7 @@ type ManualOrderForm = {
   ygOrderNo: string;
   externalOrderNo: string;
   orderChannel: string;
+  billingAmountOverride: string;
   packingAmount: string;
   shippedAt: string;
   paidAt: string;
@@ -294,6 +296,7 @@ const EMPTY_MANUAL_ORDER_FORM: ManualOrderForm = {
   ygOrderNo: "",
   externalOrderNo: "",
   orderChannel: "",
+  billingAmountOverride: "",
   packingAmount: "",
   shippedAt: "",
   paidAt: "",
@@ -758,6 +761,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
     }
     return "";
   }, [customers, manualOrderForm.ygOrderNo]);
+  const manualOrderBillingAmountValue = manualOrderForm.billingAmountOverride || manualOrderAutoBillingAmount;
 
   const [catalogConfig, setCatalogConfig] = useState<CatalogConfig>(EMPTY_CATALOG);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -1200,6 +1204,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       ygOrderNo: input.ygOrderNo || "",
       externalOrderNo: input.externalOrderNo || "",
       orderChannel: input.orderChannel || "",
+      billingAmountOverride: input.billingAmountOverride || "",
       packingAmount: input.packingAmount || "",
       shippedAt: input.shippedAt || "",
       paidAt: input.paidAt || "",
@@ -1250,6 +1255,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
           ygOrderNo: activePaymentDetail.orderNo || "",
           externalOrderNo: "",
           orderChannel: "YOGO",
+          billingAmountOverride: paymentRowEditForm.payableAmount,
           packingAmount: paymentRowEditForm.payableAmount,
           shippedAt: activePaymentDetail.shippedAtText || "",
           paidAt: paymentRowEditForm.paymentTime,
@@ -1266,6 +1272,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
           ygOrderNo: manualRow.ygOrderNo || "",
           externalOrderNo: manualRow.externalOrderNo || "",
           orderChannel: manualRow.orderChannel || "",
+          billingAmountOverride: manualRow.billingAmountOverrideText || "",
           packingAmount: paymentRowEditForm.payableAmount,
           shippedAt: manualRow.shippedAtText || "",
           paidAt: paymentRowEditForm.paymentTime,
@@ -1299,6 +1306,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
         ygOrderNo: row.orderNo || "",
         externalOrderNo: "",
         orderChannel: "YOGO",
+        billingAmountOverride: row.packingAmountText || "",
         packingAmount: row.packingAmountText || "",
         shippedAt: row.shippedAtText || "",
         paidAt: detailRow?.paidAtText || "",
@@ -1322,6 +1330,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       ygOrderNo: manualRow.ygOrderNo || "",
       externalOrderNo: manualRow.externalOrderNo || "",
       orderChannel: manualRow.orderChannel || "",
+      billingAmountOverride: manualRow.billingAmountOverrideText || "",
       packingAmount: manualRow.packingAmountText || "",
       shippedAt: manualRow.shippedAtText || "",
       paidAt: manualRow.paidAtText || "",
@@ -2752,10 +2761,10 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                   <div>
                     <label className="mb-1 block text-xs font-medium text-slate-600">备货金额</label>
                     <input
-                      value={manualOrderAutoBillingAmount}
-                      readOnly
+                      value={manualOrderBillingAmountValue}
+                      onChange={(e) => setManualOrderForm((prev) => ({ ...prev, billingAmountOverride: e.target.value }))}
                       placeholder="-"
-                      className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500"
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
                     />
                   </div>
                   <div>
