@@ -2705,7 +2705,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
 
         {!loading && detailCustomer ? (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 px-4">
-            <div className="max-h-[86vh] w-full max-w-[1400px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
+            <div className="max-h-[86vh] w-full max-w-[1180px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
               <div className="border-b border-slate-200 px-4 py-3">
                 <h3 className="text-base font-semibold text-slate-900">
                   {tx("客户下单详情", "Detalle de pedidos")} · {detailCustomer.name || "-"}
@@ -2727,39 +2727,39 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                     </button>
                   </div>
                   <div className="grid gap-2.5 xl:grid-cols-4">
-                    <div className="max-w-[360px]">
+                    <div className="max-w-[280px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("友购客户名称", "Cliente Yogo")}</label>
                       <ReadonlyCustomerField value={detailCustomerInfoForm.linkedYgName} />
                     </div>
-                    <div className="max-w-[360px]">
+                    <div className="max-w-[280px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("真实客户名称", "Cliente real")}</label>
                       <input
                         value={detailCustomerInfoForm.name}
                         onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, name: e.target.value }))}
                         disabled={!canManageCustomers}
-                        className="h-11 w-full max-w-[360px] rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
+                        className="h-11 w-full max-w-[280px] rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
                       />
                     </div>
-                    <div className="max-w-[360px]">
+                    <div className="max-w-[280px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("联系人", "Cont")}</label>
                       <ReadonlyCustomerField value={detailCustomerInfoForm.contact} />
                     </div>
-                    <div className="max-w-[360px]">
+                    <div className="max-w-[280px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("手机", "Mob")}</label>
                       <ReadonlyCustomerField value={detailCustomerInfoForm.phone} />
                     </div>
                   </div>
-                  <div className="mt-3 grid gap-2.5 xl:grid-cols-[minmax(0,420px)_minmax(0,260px)]">
-                    <div className="max-w-[420px]">
+                  <div className="mt-3 grid gap-2.5 xl:grid-cols-[minmax(0,340px)_minmax(0,220px)]">
+                    <div className="max-w-[340px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("客户地址", "Direccion")}</label>
                       <input
                         value={detailCustomerInfoForm.cityCountry}
                         onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, cityCountry: e.target.value }))}
                         disabled={!canManageCustomers}
-                        className="h-11 w-full max-w-[420px] rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
+                        className="h-11 w-full max-w-[340px] rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
                       />
                     </div>
-                    <div className="max-w-[260px]">
+                    <div className="max-w-[220px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("门店编号", "Tiendas")}</label>
                       <input
                         value={detailCustomerInfoForm.stores}
@@ -2774,7 +2774,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                         }}
                         onBlur={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, stores: normalizeStoreNumberInput(e.target.value) }))}
                         disabled={!canManageCustomers}
-                        className="h-11 w-full max-w-[260px] rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
+                        className="h-11 w-full max-w-[220px] rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
                       />
                     </div>
                   </div>
@@ -2937,7 +2937,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                     <table className="w-full table-auto text-sm">
                       <thead className="bg-slate-50 text-slate-600">
                         <tr>
-                          <th className="w-[1%] px-3 py-2 text-left whitespace-nowrap">{tx("订单号", "Order no")}</th>
+                          <th className="w-[220px] px-3 py-2 text-left whitespace-nowrap">{tx("订单号", "Order no")}</th>
                           <th className="w-[1%] px-3 py-2 text-left whitespace-nowrap">{tx("渠道", "Canal")}</th>
                           <th className="w-[1%] px-3 py-2 text-left whitespace-nowrap">
                             <button
@@ -2958,12 +2958,12 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       <tbody>
                         {sortedDetailRows.map((item) => (
                           <tr key={item.id} className="border-t border-slate-100">
-                            <td className="w-[1%] px-3 py-2 whitespace-nowrap">
+                            <td className="w-[220px] px-3 py-2 whitespace-nowrap">
                               {detailEditingRowId === item.id && item.sourceType === "manual" ? (
                                 <input
                                   value={detailRowEditForm.displayOrderNo}
                                   onChange={(e) => setDetailRowEditForm((prev) => ({ ...prev, displayOrderNo: e.target.value }))}
-                                  className="h-9 w-[150px] rounded-xl border border-slate-200 px-3 text-sm"
+                                  className="h-9 w-[200px] rounded-xl border border-slate-200 px-3 text-sm"
                                 />
                               ) : (
                                 item.orderNo || "-"
