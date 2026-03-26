@@ -2778,7 +2778,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       />
                     </div>
                   </div>
-                  <div className="mt-3 grid gap-2.5 xl:grid-cols-5">
+                  <div className="mt-3 grid gap-2.5 xl:grid-cols-[minmax(0,120px)_minmax(0,120px)_minmax(0,120px)_minmax(0,170px)_minmax(0,170px)]">
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("VIP等级", "VIP lvl")}</label>
                       <PlainCustomerValue>
@@ -2793,11 +2793,11 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("下单次数", "Order count")}</label>
                       <PlainCustomerValue value={Number(detailCustomer.totalOrderCount || 0) > 0 ? String(detailCustomer.totalOrderCount) : "-"} />
                     </div>
-                    <div>
+                    <div className="max-w-[170px] justify-self-start xl:justify-self-end">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("下单金额", "Order amount")}</label>
                       <PlainCustomerValue value={detailCustomer.totalOrderAmountText ? `$ ${detailCustomer.totalOrderAmountText}` : "-"} />
                     </div>
-                    <div>
+                    <div className="max-w-[170px] justify-self-start xl:justify-self-end">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("累计配货金额", "Packing total")}</label>
                       <PlainCustomerValue value={hasAnyPackingAmount ? `$ ${detailPackingAmountTotal.toFixed(2)}` : "-"} />
                     </div>
