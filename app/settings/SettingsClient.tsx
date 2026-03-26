@@ -132,6 +132,7 @@ type CustomerTimelineRow = {
   orderAmountText: string;
   channelText: string;
   packingAmountText: string;
+  shippedAtText: string;
 };
 
 type CustomerSearchItem = {
@@ -1241,6 +1242,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       orderAmountText: row.orderAmountText,
       channelText: tx("友购", "Yogo"),
       packingAmountText: "",
+      shippedAtText: "",
     }));
     const manualRows = (detailCustomer?.manualOrderRecords || []).map((row) => ({
       id: `manual:${row.id}`,
@@ -1249,6 +1251,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       orderAmountText: row.packingAmountText || "0.00",
       channelText: row.orderChannel || tx("其他渠道", "Canal manual"),
       packingAmountText: row.packingAmountText || "",
+      shippedAtText: row.shippedAtText || "",
     }));
     return [...orderRows, ...manualRows].sort((left, right) => {
       const compareResult = String(left.orderDateText || "").localeCompare(String(right.orderDateText || ""), "zh-CN");
@@ -2303,7 +2306,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                   </div>
                 ) : (
                   <div className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full min-w-[820px] text-sm">
+                    <table className="w-full min-w-[940px] text-sm">
                       <thead className="bg-slate-50 text-slate-600">
                         <tr>
                           <th className="px-3 py-2 text-left">{tx("订单号", "Order no")}</th>
@@ -2320,6 +2323,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                           </th>
                           <th className="px-3 py-2 text-left">{tx("下单金额", "Order amount")}</th>
                           <th className="px-3 py-2 text-left">{tx("配货金额", "Packing amount")}</th>
+                          <th className="px-3 py-2 text-left">{tx("发货日期", "Ship date")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2332,6 +2336,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                             <td className="px-3 py-2">
                               {item.packingAmountText ? `$ ${item.packingAmountText}` : "-"}
                             </td>
+                            <td className="px-3 py-2">{item.shippedAtText || "-"}</td>
                           </tr>
                         ))}
                       </tbody>
