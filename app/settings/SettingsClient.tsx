@@ -2781,13 +2781,24 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                 <h3 className="text-base font-semibold text-slate-900">
                   {tx("客户下单详情", "Detalle de pedidos")} · {detailCustomer.name || "-"}
                 </h3>
-                <button
-                  type="button"
-                  onClick={exportDetailCustomerFile}
-                  className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  {tx("导出文件", "Exportar")}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={exportDetailCustomerFile}
+                    className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    {tx("导出文件", "Exportar")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomerDetailId("")}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    aria-label={tx("关闭", "Close")}
+                    title={tx("关闭", "Close")}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
               <div className="p-4">
                 <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
@@ -2869,27 +2880,27 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                     </div>
                   </div>
                   <div className="mt-3 grid gap-3 xl:grid-cols-5">
-                    <div className="min-w-0">
-                      <label className="mb-1 block text-xs font-semibold text-slate-700">{tx("VIP等级", "VIP lvl")}</label>
-                      <PlainCustomerValue>
+                    <div className="min-w-0 text-center">
+                      <label className="mb-1 block text-center text-xs font-semibold text-slate-700">{tx("VIP等级", "VIP lvl")}</label>
+                      <PlainCustomerValue centered>
                         {isVipCustomer(detailCustomer) ? <span className="inline-flex"><VipBadgeIcon /></span> : "-"}
                       </PlainCustomerValue>
                     </div>
-                    <div className="min-w-0">
-                      <label className="mb-1 block text-xs font-semibold text-slate-700">{tx("信用等级", "Credit")}</label>
-                      <PlainCustomerValue value={detailCustomer.creditLevel} />
+                    <div className="min-w-0 text-center">
+                      <label className="mb-1 block text-center text-xs font-semibold text-slate-700">{tx("信用等级", "Credit")}</label>
+                      <PlainCustomerValue centered value={detailCustomer.creditLevel} />
                     </div>
-                    <div className="min-w-0">
-                      <label className="mb-1 block text-xs font-semibold text-slate-700">{tx("下单次数", "Order count")}</label>
-                      <PlainCustomerValue value={Number(detailCustomer.totalOrderCount || 0) > 0 ? String(detailCustomer.totalOrderCount) : "-"} />
+                    <div className="min-w-0 text-center">
+                      <label className="mb-1 block text-center text-xs font-semibold text-slate-700">{tx("下单次数", "Order count")}</label>
+                      <PlainCustomerValue centered value={Number(detailCustomer.totalOrderCount || 0) > 0 ? String(detailCustomer.totalOrderCount) : "-"} />
                     </div>
-                    <div className="min-w-0">
-                      <label className="mb-1 block text-xs font-semibold text-slate-700">{tx("下单金额", "Order amount")}</label>
-                      <PlainCustomerValue value={detailCustomer.totalOrderAmountText ? `$ ${detailCustomer.totalOrderAmountText}` : "-"} />
+                    <div className="min-w-0 text-center">
+                      <label className="mb-1 block text-center text-xs font-semibold text-slate-700">{tx("下单金额", "Order amount")}</label>
+                      <PlainCustomerValue centered value={detailCustomer.totalOrderAmountText ? `$ ${detailCustomer.totalOrderAmountText}` : "-"} />
                     </div>
-                    <div className="min-w-0">
-                      <label className="mb-1 block text-xs font-semibold text-slate-700">{tx("累计配货金额", "Packing total")}</label>
-                      <PlainCustomerValue value={hasAnyPackingAmount ? `$ ${detailPackingAmountTotal.toFixed(2)}` : "-"} />
+                    <div className="min-w-0 text-center">
+                      <label className="mb-1 block text-center text-xs font-semibold text-slate-700">{tx("累计配货金额", "Packing total")}</label>
+                      <PlainCustomerValue centered value={hasAnyPackingAmount ? `$ ${detailPackingAmountTotal.toFixed(2)}` : "-"} />
                     </div>
                   </div>
                 </div>
@@ -2902,9 +2913,9 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                     <table className="w-full table-auto text-sm">
                       <thead className="bg-slate-50 text-slate-600">
                         <tr>
-                          <th className="w-[240px] px-3 py-2 text-left whitespace-nowrap">{tx("订单号", "Order no")}</th>
-                          <th className="w-[90px] px-3 py-2 text-left whitespace-nowrap">{tx("渠道", "Canal")}</th>
-                          <th className="w-[120px] px-3 py-2 text-left whitespace-nowrap">
+                          <th className="w-[240px] px-3 py-1.5 text-left whitespace-nowrap">{tx("订单号", "Order no")}</th>
+                          <th className="w-[90px] px-3 py-1.5 text-left whitespace-nowrap">{tx("渠道", "Canal")}</th>
+                          <th className="w-[120px] px-3 py-1.5 text-left whitespace-nowrap">
                             <button
                               type="button"
                               onClick={() => setCustomerDetailDateSort((prev) => (prev === "desc" ? "asc" : "desc"))}
@@ -2914,16 +2925,16 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                               {customerDetailDateSort === "desc" ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                             </button>
                           </th>
-                          <th className="w-[120px] px-3 py-2 text-left whitespace-nowrap">{tx("下单金额", "Order amount")}</th>
-                          <th className="w-[120px] px-3 py-2 text-left whitespace-nowrap">{tx("配货金额", "Packing amount")}</th>
-                          <th className="w-[96px] px-3 py-2 text-left whitespace-nowrap">{tx("发货日期", "Ship date")}</th>
-                          <th className="w-[140px] px-3 py-2 text-right whitespace-nowrap">{tx("操作", "Acciones")}</th>
+                          <th className="w-[120px] px-3 py-1.5 text-left whitespace-nowrap">{tx("下单金额", "Order amount")}</th>
+                          <th className="w-[120px] px-3 py-1.5 text-left whitespace-nowrap">{tx("配货金额", "Packing amount")}</th>
+                          <th className="w-[96px] px-3 py-1.5 text-left whitespace-nowrap">{tx("发货日期", "Ship date")}</th>
+                          <th className="w-[140px] px-3 py-1.5 text-right whitespace-nowrap">{tx("操作", "Acciones")}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {pagedDetailRows.map((item) => (
                           <tr key={item.id} className="border-t border-slate-100">
-                            <td className="w-[240px] px-3 py-2 whitespace-nowrap">
+                            <td className="w-[240px] px-3 py-1.5 whitespace-nowrap">
                               {detailEditingRowId === item.id && item.sourceType === "manual" ? (
                                 <input
                                   value={detailRowEditForm.displayOrderNo}
@@ -2934,7 +2945,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                 item.orderNo || "-"
                               )}
                             </td>
-                            <td className="w-[90px] px-3 py-2 whitespace-nowrap">
+                            <td className="w-[90px] px-3 py-1.5 whitespace-nowrap">
                               {detailEditingRowId === item.id && item.sourceType === "manual" ? (
                                 <input
                                   value={detailRowEditForm.orderChannel}
@@ -2945,11 +2956,11 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                 item.channelText || "-"
                               )}
                             </td>
-                            <td className="w-[120px] px-3 py-2 whitespace-nowrap">{item.orderDateText || "-"}</td>
-                            <td className="w-[120px] px-3 py-2 whitespace-nowrap">
+                            <td className="w-[120px] px-3 py-1.5 whitespace-nowrap">{item.orderDateText || "-"}</td>
+                            <td className="w-[120px] px-3 py-1.5 whitespace-nowrap">
                               {item.orderAmountText ? `$ ${item.orderAmountText}` : "-"}
                             </td>
-                            <td className="w-[120px] px-3 py-2 whitespace-nowrap">
+                            <td className="w-[120px] px-3 py-1.5 whitespace-nowrap">
                               {detailEditingRowId === item.id ? (
                                 <input
                                   value={detailRowEditForm.packingAmount}
@@ -2960,7 +2971,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                 item.packingAmountText ? `$ ${item.packingAmountText}` : "-"
                               )}
                             </td>
-                            <td className="w-[96px] px-3 py-2 whitespace-nowrap">
+                            <td className="w-[96px] px-3 py-1.5 whitespace-nowrap">
                               {detailEditingRowId === item.id ? (
                                 <input
                                   type="date"
@@ -2972,12 +2983,12 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                 item.shippedAtText || "-"
                               )}
                             </td>
-                            <td className="w-[140px] px-3 py-2 text-right">
+                            <td className="w-[140px] px-3 py-1.5 text-right">
                               <div className="flex flex-nowrap items-center justify-end gap-2 whitespace-nowrap">
                                 <button
                                   type="button"
                                   onClick={() => handleTimelineRowEdit(item)}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
                                   aria-label={tx("编辑", "Edit")}
                                   title={tx("编辑", "Edit")}
                                 >
@@ -2987,7 +2998,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                   <button
                                     type="button"
                                     onClick={() => void saveInlineDetailRow()}
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
+                                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
                                     aria-label={tx("保存", "Save")}
                                     title={tx("保存", "Save")}
                                   >
@@ -2997,7 +3008,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                 <button
                                   type="button"
                                   onClick={() => setCustomerPaymentDetailId(item.id)}
-                                  className="inline-flex h-8 items-center rounded-xl bg-primary px-3 text-sm font-semibold text-white hover:opacity-95"
+                                  className="inline-flex h-7 items-center rounded-xl bg-primary px-3 text-sm font-semibold text-white hover:opacity-95"
                                 >
                                   {tx("付款", "Pago")}
                                 </button>
@@ -3050,15 +3061,6 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                     ) : null}
                   </div>
                 )}
-              </div>
-              <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-4 py-3">
-                <button
-                  type="button"
-                  onClick={() => setCustomerDetailId("")}
-                  className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
-                >
-                  {tx("关闭", "Cerrar")}
-                </button>
               </div>
             </div>
           </div>
