@@ -36,24 +36,61 @@ function normalizeText(value: string | null | undefined) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
 
-function buildCustomerKey(input: {
+function normalizeKey(value: string | null | undefined) {
+  return normalizeText(value).toLowerCase();
+}
+
+function completenessScore(input: {
   customer_id?: string | null;
-  registered_phone?: string | null;
   company_name?: string | null;
-  relation_no?: string | null;
   relation_name?: string | null;
+  registered_phone?: string | null;
+  province_name?: string | null;
+  region_name?: string | null;
 }) {
-  return (
-    normalizeText(input.customer_id) ||
-    normalizeText(input.registered_phone) ||
-    normalizeText(input.relation_no) ||
-    normalizeText(input.company_name) ||
-    normalizeText(input.relation_name)
-  );
+  return [
+    input.customer_id,
+    input.company_name,
+    input.relation_name,
+    input.registered_phone,
+    input.province_name,
+    input.region_name,
+  ].reduce((sum, value) => sum + (normalizeText(value) ? 1 : 0), 0);
 }
 
 function isExcludedCustomerName(value: string | null | undefined) {
   return normalizeText(value) === "百盛供应链 Parkson";
+}
+
+function groupCustomerRows(rows: any[]) {
+  const grouped = new Map<string, any>();
+  for (const row of rows) {
+    const key = normalizeKey(row.company_name) || normalizeKey(row.customer_key) || normalizeKey(row.customer_id);
+    if (!key) continue;
+    const existing = grouped.get(key);
+    if (!existing) {
+      grouped.set(key, {
+        ...row,
+        _customerIds: new Set<string>(normalizeKey(row.customer_id) ? [normalizeKey(row.customer_id)] : []),
+      });
+      continue;
+    }
+    const existingScore = completenessScore(existing);
+    const nextScore = completenessScore(row);
+    const preferred =
+      nextScore > existingScore ||
+      (nextScore === existingScore && (row.updated_at?.getTime?.() || 0) > (existing.updated_at?.getTime?.() || 0))
+        ? row
+        : existing;
+    grouped.set(key, {
+      ...preferred,
+      _customerIds: new Set<string>([
+        ...Array.from(existing._customerIds || []),
+        ...(normalizeKey(row.customer_id) ? [normalizeKey(row.customer_id)] : []),
+      ]),
+    });
+  }
+  return Array.from(grouped.values());
 }
 
 export default async function YgCustomersPage() {
@@ -91,33 +128,25 @@ export default async function YgCustomersPage() {
     }),
   ]);
 
-  const includedCustomers = customers.filter((row) => !isExcludedCustomerName(row.company_name));
-  const includedCustomerKeys = new Set(
-    includedCustomers.map((row) =>
-      buildCustomerKey({
-        customer_id: row.customer_id,
-        registered_phone: row.registered_phone,
-        company_name: row.company_name,
-        relation_no: row.relation_no,
-        relation_name: row.relation_name,
-      }) || row.customer_key,
-    ),
-  );
+  const includedCustomers = groupCustomerRows(customers.filter((row) => !isExcludedCustomerName(row.company_name)));
 
-  const filteredOrders = orders.filter((order) => {
-    if (isExcludedCustomerName(order.company_name || order.customer_name || order.contact_name)) {
-      return false;
+  const ordersByCustomerId = new Map<string, typeof orders>();
+  const ordersByCompanyName = new Map<string, typeof orders>();
+  for (const order of orders) {
+    if (isExcludedCustomerName(order.company_name || order.customer_name || order.contact_name)) continue;
+    const customerIdKey = normalizeKey(order.customer_id);
+    if (customerIdKey) {
+      const list = ordersByCustomerId.get(customerIdKey) || [];
+      list.push(order);
+      ordersByCustomerId.set(customerIdKey, list);
     }
-    const key =
-      buildCustomerKey({
-        customer_id: order.customer_id,
-        registered_phone: order.contact_phone,
-        company_name: order.company_name || order.customer_name || order.contact_name,
-        relation_no: null,
-        relation_name: order.customer_name || order.contact_name,
-      }) || `fallback::${order.order_no}`;
-    return includedCustomerKeys.has(key);
-  });
+    const companyKey = normalizeKey(order.company_name || order.customer_name);
+    if (companyKey) {
+      const list = ordersByCompanyName.get(companyKey) || [];
+      list.push(order);
+      ordersByCompanyName.set(companyKey, list);
+    }
+  }
 
   const orderGroups = new Map<
     string,
@@ -129,35 +158,39 @@ export default async function YgCustomersPage() {
     }>
   >();
 
-  for (const order of filteredOrders) {
-    const key =
-      buildCustomerKey({
-        customer_id: order.customer_id,
-        registered_phone: order.contact_phone,
-        company_name: order.company_name || order.customer_name || order.contact_name,
-        relation_no: null,
-        relation_name: order.customer_name || order.contact_name,
-      }) || `fallback::${order.order_no}`;
-    const group = orderGroups.get(key) || [];
-    group.push({
-      orderNo: order.order_no,
-      orderDateText: formatDateOnly(order.order_created_at ?? order.updated_at),
-      orderAmount: Number(order.order_amount || 0),
-      latestStatus: normalizeText(order.latest_status) || "-",
-    });
-    orderGroups.set(key, group);
-  }
+  let filteredOrdersCount = 0;
 
   const rows = includedCustomers.map((row) => {
-    const customerKey =
-      buildCustomerKey({
-        customer_id: row.customer_id,
-        registered_phone: row.registered_phone,
-        company_name: row.company_name,
-        relation_no: row.relation_no,
-        relation_name: row.relation_name,
-      }) || row.customer_key;
-    const details = orderGroups.get(customerKey) || [];
+    const customerKey = normalizeKey(row.company_name) || normalizeKey(row.customer_key) || normalizeKey(row.customer_id);
+    const matchedMap = new Map<string, {
+      orderNo: string;
+      orderDateText: string;
+      orderAmount: number;
+      latestStatus: string;
+    }>();
+    for (const customerId of Array.from(row._customerIds || [])) {
+      for (const order of ordersByCustomerId.get(customerId) || []) {
+        matchedMap.set(order.order_no, {
+          orderNo: order.order_no,
+          orderDateText: formatDateOnly(order.order_created_at ?? order.updated_at),
+          orderAmount: Number(order.order_amount || 0),
+          latestStatus: normalizeText(order.latest_status) || "-",
+        });
+      }
+    }
+    if (matchedMap.size === 0) {
+      for (const order of ordersByCompanyName.get(normalizeKey(row.company_name)) || []) {
+        matchedMap.set(order.order_no, {
+          orderNo: order.order_no,
+          orderDateText: formatDateOnly(order.order_created_at ?? order.updated_at),
+          orderAmount: Number(order.order_amount || 0),
+          latestStatus: normalizeText(order.latest_status) || "-",
+        });
+      }
+    }
+    const details = Array.from(matchedMap.values());
+    filteredOrdersCount += details.length;
+    orderGroups.set(customerKey, details);
     const totalAmount = details.reduce((sum, item) => sum + item.orderAmount, 0);
 
     return {
@@ -179,7 +212,7 @@ export default async function YgCustomersPage() {
       lastOrderAtText: formatDateOnly(row.last_order_at),
       lastOrderNo: normalizeText(row.last_order_no),
       syncedAtText: formatDateTime(row.synced_at ?? row.updated_at),
-      detailRows: details.map((detail) => ({
+      detailRows: (orderGroups.get(customerKey) || []).map((detail) => ({
         orderNo: detail.orderNo,
         orderDateText: detail.orderDateText,
         orderAmountText: moneyText(detail.orderAmount),
@@ -218,7 +251,7 @@ export default async function YgCustomersPage() {
         summary={{
           totalCustomers: sortedRows.length,
           customersWithOrders,
-          totalOrders: filteredOrders.length,
+          totalOrders: filteredOrdersCount,
           totalOrderAmountText: moneyText(totalAmount),
           latestSyncedAtText: latestSyncedAt,
           monthlyRegisteredCount,

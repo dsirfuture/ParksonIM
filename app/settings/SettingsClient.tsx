@@ -1,8 +1,9 @@
 ﻿"use client";
 
+import NextImage from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Eye, MapPin, Pencil, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ChevronDown, ChevronUp, Eye, MapPin, Pencil, Trash2 } from "lucide-react";
 import { getClientLang } from "@/lib/lang-client";
 
 type PermissionState = {
@@ -67,7 +68,7 @@ type SupplierProductSourceItem = {
 
 type Customer = {
   id: string;
-  sourceType?: "profile" | "yg";
+  sourceType?: "profile" | "yg" | "manual";
   name: string;
   contact: string;
   phone: string;
@@ -90,6 +91,13 @@ type Customer = {
     latestStatus: string;
   }>;
 };
+
+type CustomerSummary = {
+  totalOrderCount: number;
+  totalOrderAmountText: string;
+};
+
+type CustomerDetailRow = NonNullable<Customer["detailRows"]>[number];
 
 type CustomerSearchItem = {
   id: string;
@@ -150,6 +158,7 @@ const EMPTY_SUPPLIER: Supplier = {
 
 const EMPTY_CUSTOMER: Customer = {
   id: "",
+  sourceType: "manual",
   name: "",
   contact: "",
   phone: "",
@@ -285,6 +294,79 @@ function normalizeCustomerMergeValue(value: unknown) {
   return String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
+function normalizeCustomerPhone(value: unknown) {
+  return String(value || "").replace(/\D+/g, "").trim();
+}
+
+function normalizeCustomerAmount(value: unknown) {
+  const amount = Number(value || 0);
+  return Number.isFinite(amount) ? amount.toFixed(2) : "0.00";
+}
+
+function customerNamesMatch(left: Customer, right: Customer) {
+  const leftName = normalizeCustomerMergeValue(left.name);
+  const rightName = normalizeCustomerMergeValue(right.name);
+  if (!leftName || !rightName) return false;
+  return leftName === rightName;
+}
+
+function customerContactsMatch(left: Customer, right: Customer) {
+  const leftContact = normalizeCustomerMergeValue(left.contact);
+  const rightContact = normalizeCustomerMergeValue(right.contact);
+  if (!leftContact || !rightContact) return false;
+  return leftContact === rightContact;
+}
+
+function customerPhonesMatch(left: Customer, right: Customer) {
+  const leftPhone = normalizeCustomerPhone(left.phone);
+  const rightPhone = normalizeCustomerPhone(right.phone);
+  if (!leftPhone || !rightPhone) return false;
+  return leftPhone === rightPhone;
+}
+
+function customerAmountsMatch(left: Customer, right: Customer) {
+  const leftAmount = normalizeCustomerAmount(left.totalOrderAmountText);
+  const rightAmount = normalizeCustomerAmount(right.totalOrderAmountText);
+  return leftAmount !== "0.00" && leftAmount === rightAmount;
+}
+
+function getCustomerMatchScore(left: Customer, right: Customer) {
+  let score = 0;
+  if (customerNamesMatch(left, right)) score += 1;
+  if (customerContactsMatch(left, right)) score += 1;
+  if (customerPhonesMatch(left, right)) score += 1;
+  if (customerAmountsMatch(left, right)) score += 1;
+  return score;
+}
+
+function getCustomerCompletenessScore(item: Customer) {
+  return [
+    item.name,
+    item.contact,
+    item.phone,
+    item.cityCountry,
+    item.whatsapp,
+    item.email,
+    item.stores,
+    item.creditLevel,
+    item.vipLevel,
+  ].reduce((sum, value) => sum + (String(value || "").trim() ? 1 : 0), 0);
+}
+
+function pickPreferredCustomerRow(left: Customer, right: Customer) {
+  const leftScore = getCustomerCompletenessScore(left);
+  const rightScore = getCustomerCompletenessScore(right);
+  if (rightScore !== leftScore) {
+    return rightScore > leftScore ? right : left;
+  }
+  const leftDetailCount = left.detailRows?.length || 0;
+  const rightDetailCount = right.detailRows?.length || 0;
+  if (rightDetailCount !== leftDetailCount) {
+    return rightDetailCount > leftDetailCount ? right : left;
+  }
+  return left;
+}
+
 function buildCustomerMergeKey(item: Customer) {
   return [
     normalizeCustomerMergeValue(item.name),
@@ -295,70 +377,103 @@ function buildCustomerMergeKey(item: Customer) {
     .join("|");
 }
 
+function mergeTwoCustomerRows(existing: Customer, item: Customer) {
+  const existingDetailMap = new Map<string, CustomerDetailRow>();
+  for (const row of existing.detailRows || []) {
+    existingDetailMap.set(row.orderNo, row);
+  }
+  for (const row of item.detailRows || []) {
+    if (!existingDetailMap.has(row.orderNo)) {
+      existingDetailMap.set(row.orderNo, row);
+    }
+  }
+  const mergedDetailRows = Array.from(existingDetailMap.values()).sort((left, right) =>
+    String(right.orderDateText || "").localeCompare(String(left.orderDateText || ""), "zh-CN"),
+  );
+  const totalOrderAmount = mergedDetailRows.reduce(
+    (sum, row) => sum + Number(row.orderAmountText || 0),
+    0,
+  );
+  const profileRow =
+    existing.sourceType === "profile" ? existing : item.sourceType === "profile" ? item : null;
+  const ygRow =
+    existing.sourceType === "yg" ? existing : item.sourceType === "yg" ? item : null;
+  const preferredRow = pickPreferredCustomerRow(existing, item);
+
+  return {
+    ...preferredRow,
+    name: preferredRow.name || ygRow?.name || profileRow?.name || existing.name || item.name || "",
+    contact: preferredRow.contact || ygRow?.contact || profileRow?.contact || existing.contact || item.contact || "",
+    phone: preferredRow.phone || ygRow?.phone || profileRow?.phone || existing.phone || item.phone || "",
+    whatsapp: preferredRow.whatsapp || ygRow?.whatsapp || profileRow?.whatsapp || existing.whatsapp || item.whatsapp || "",
+    email: preferredRow.email || ygRow?.email || profileRow?.email || existing.email || item.email || "",
+    stores: preferredRow.stores || profileRow?.stores || existing.stores || item.stores || "",
+    cityCountry: preferredRow.cityCountry || ygRow?.cityCountry || profileRow?.cityCountry || existing.cityCountry || item.cityCountry || "",
+    customerType: preferredRow.customerType || profileRow?.customerType || existing.customerType || item.customerType || "",
+    vipLevel: preferredRow.vipLevel || profileRow?.vipLevel || existing.vipLevel || item.vipLevel || "",
+    creditLevel: preferredRow.creditLevel || profileRow?.creditLevel || existing.creditLevel || item.creditLevel || "",
+    tags: preferredRow.tags || profileRow?.tags || existing.tags || item.tags || "",
+    orderStats: String(mergedDetailRows.length || ygRow?.orderStats || profileRow?.orderStats || existing.orderStats || item.orderStats || ""),
+    detailRows: mergedDetailRows,
+    totalOrderCount: mergedDetailRows.length,
+    totalOrderAmountText: totalOrderAmount.toFixed(2),
+    packingAmountText: "",
+  };
+}
+
 function mergeCustomerRows(items: Customer[]) {
-  const mergedMap = new Map<string, Customer>();
+  const mergedByExactKey = new Map<string, Customer>();
 
   for (const item of items) {
     const mergeKey = buildCustomerMergeKey(item) || `${item.sourceType || "profile"}:${item.id}`;
-    const existing = mergedMap.get(mergeKey);
+    const existing = mergedByExactKey.get(mergeKey);
     if (!existing) {
-      mergedMap.set(mergeKey, {
+      mergedByExactKey.set(mergeKey, {
         ...item,
         detailRows: [...(item.detailRows || [])],
       });
       continue;
     }
-
-    const existingDetailMap = new Map<string, Customer["detailRows"][number]>();
-    for (const row of existing.detailRows || []) {
-      existingDetailMap.set(row.orderNo, row);
-    }
-    for (const row of item.detailRows || []) {
-      if (!existingDetailMap.has(row.orderNo)) {
-        existingDetailMap.set(row.orderNo, row);
-      }
-    }
-    const mergedDetailRows = Array.from(existingDetailMap.values()).sort((left, right) =>
-      String(right.orderDateText || "").localeCompare(String(left.orderDateText || ""), "zh-CN"),
-    );
-    const totalOrderAmount = mergedDetailRows.reduce(
-      (sum, row) => sum + Number(row.orderAmountText || 0),
-      0,
-    );
-    const packingAmount = mergedDetailRows.reduce((sum, row) => {
-      const raw = String(row.latestStatus || "").trim().toLowerCase();
-      return raw === "2" || raw === "packing" || raw === "picking" || raw === "配货中"
-        ? sum + Number(row.orderAmountText || 0)
-        : sum;
-    }, 0);
-    const profileRow =
-      existing.sourceType === "profile" ? existing : item.sourceType === "profile" ? item : null;
-    const ygRow =
-      existing.sourceType === "yg" ? existing : item.sourceType === "yg" ? item : null;
-    const baseRow = profileRow || existing;
-
-    mergedMap.set(mergeKey, {
-      ...baseRow,
-      name: ygRow?.name || profileRow?.name || existing.name || item.name || "",
-      contact: ygRow?.contact || profileRow?.contact || existing.contact || item.contact || "",
-      phone: ygRow?.phone || profileRow?.phone || existing.phone || item.phone || "",
-      stores: profileRow?.stores || existing.stores || item.stores || "",
-      cityCountry: ygRow?.cityCountry || profileRow?.cityCountry || existing.cityCountry || item.cityCountry || "",
-      vipLevel: profileRow?.vipLevel || existing.vipLevel || item.vipLevel || "",
-      creditLevel: profileRow?.creditLevel || existing.creditLevel || item.creditLevel || "",
-      orderStats: String(mergedDetailRows.length || ygRow?.orderStats || profileRow?.orderStats || existing.orderStats || item.orderStats || ""),
-      detailRows: mergedDetailRows,
-      totalOrderCount: mergedDetailRows.length,
-      totalOrderAmountText: totalOrderAmount.toFixed(2),
-      packingAmountText: packingAmount.toFixed(2),
-    });
+    mergedByExactKey.set(mergeKey, mergeTwoCustomerRows(existing, item));
   }
 
-  return Array.from(mergedMap.values());
+  const dedupedRows: Customer[] = [];
+  for (const item of mergedByExactKey.values()) {
+    const existingIndex = dedupedRows.findIndex((candidate) => getCustomerMatchScore(candidate, item) >= 2);
+    if (existingIndex === -1) {
+      dedupedRows.push(item);
+      continue;
+    }
+    dedupedRows[existingIndex] = mergeTwoCustomerRows(dedupedRows[existingIndex], item);
+  }
+
+  return dedupedRows;
 }
 
 function isVipCustomer(item: Customer) {
   return Number(item.totalOrderAmountText || 0) >= 100000;
+}
+
+function VipBadgeIcon() {
+  return (
+    <NextImage src="/icons/vip.svg" alt="" aria-hidden="true" width={18} height={18} className="h-[18px] w-[18px] shrink-0" />
+  );
+}
+
+function ReadonlyCustomerField({ value, centered = false, children }: { value?: string; centered?: boolean; children?: ReactNode }) {
+  return (
+    <div className={`flex min-h-9 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 ${centered ? "justify-center text-center" : ""}`}>
+      {children ?? (String(value || "").trim() || "-")}
+    </div>
+  );
+}
+
+function PlainCustomerValue({ value, centered = false, children }: { value?: string; centered?: boolean; children?: ReactNode }) {
+  return (
+    <div className={`flex min-h-9 items-center px-1 text-sm text-slate-700 ${centered ? "justify-center text-center" : ""}`}>
+      {children ?? (String(value || "").trim() || "-")}
+    </div>
+  );
 }
 
 function parseSupplierDiscountRules(input: string): SupplierDiscountRule[] {
@@ -448,6 +563,10 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   });
 
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [manualCustomers, setManualCustomers] = useState<Customer[]>([]);
+  const [manualCustomerOpen, setManualCustomerOpen] = useState(false);
+  const [manualCustomerKeyword, setManualCustomerKeyword] = useState("");
+  const [customerSummary, setCustomerSummary] = useState<CustomerSummary>({ totalOrderCount: 0, totalOrderAmountText: "0.00" });
   const [customerKeyword, setCustomerKeyword] = useState("");
   const [customerVipFilter, setCustomerVipFilter] = useState<"all" | "vip" | "normal">("all");
   const [customerPage, setCustomerPage] = useState(1);
@@ -457,6 +576,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   const [customerSearchLoading, setCustomerSearchLoading] = useState(false);
   const [customerSearchResults, setCustomerSearchResults] = useState<CustomerSearchItem[]>([]);
   const [customerDetailId, setCustomerDetailId] = useState("");
+  const [customerDetailDateSort, setCustomerDetailDateSort] = useState<"desc" | "asc">("desc");
 
   const [catalogConfig, setCatalogConfig] = useState<CatalogConfig>(EMPTY_CATALOG);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -572,7 +692,14 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
           })),
         );
       }
-      if (cRes.ok && cJson?.ok) setCustomers(cJson.items || []);
+      if (cRes.ok && cJson?.ok) {
+        setCustomers(cJson.items || []);
+        setManualCustomers(cJson.manualItems || []);
+        setCustomerSummary({
+          totalOrderCount: Number(cJson.summary?.totalOrderCount || 0),
+          totalOrderAmountText: String(cJson.summary?.totalOrderAmountText || "0.00"),
+        });
+      }
       if (cfgRes.ok && cfgJson?.ok && cfgJson.item) {
         setCatalogConfig({ ...EMPTY_CATALOG, ...cfgJson.item });
       }
@@ -756,6 +883,25 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       await loadAll();
     } catch (e) {
       setError(e instanceof Error ? e.message : tx("保存客户失败", "Save cli fail"));
+    }
+  }
+
+  async function saveManualCustomerRow(item: Customer) {
+    try {
+      setError("");
+      await saveEntity(
+        "/api/settings/customers",
+        {
+          ...item,
+          id: String(item.id || "").startsWith("manual-temp-") ? "" : item.id,
+          sourceType: "manual",
+        },
+        "其他渠道客户已保存",
+        "Manual customer saved",
+      );
+      await loadAll();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : tx("保存其他渠道客户失败", "Save manual customer fail"));
     }
   }
 
@@ -1001,20 +1147,25 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
 
   const filteredCustomers = useMemo(
     () =>
-      mergedCustomers.filter((c) =>
-        [c.name, c.contact, c.phone, c.whatsapp, c.tags]
-          .join(" ")
-          .toLowerCase()
-          .includes(customerKeyword.trim().toLowerCase())
-        && (
-          customerVipFilter === "all"
-          || (customerVipFilter === "vip" && isVipCustomer(c))
-          || (customerVipFilter === "normal" && !isVipCustomer(c))
-        ),
-      ),
+      mergedCustomers
+        .filter((c) =>
+          Number(c.totalOrderAmountText || 0) > 0
+          &&
+          !String(c.name || "").includes("百盛供应链")
+          &&
+          [c.name, c.contact, c.phone, c.whatsapp, c.tags]
+            .join(" ")
+            .toLowerCase()
+            .includes(customerKeyword.trim().toLowerCase())
+          && (
+            customerVipFilter === "all"
+            || (customerVipFilter === "vip" && isVipCustomer(c))
+            || (customerVipFilter === "normal" && !isVipCustomer(c))
+          ),
+        )
+        .sort((left, right) => Number(right.totalOrderAmountText || 0) - Number(left.totalOrderAmountText || 0)),
     [mergedCustomers, customerKeyword, customerVipFilter],
   );
-
   useEffect(() => {
     setCustomerPage(1);
   }, [customerKeyword, customerVipFilter, mergedCustomers.length]);
@@ -1029,10 +1180,42 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       ),
     [filteredCustomers, safeCustomerPage, CUSTOMER_PAGE_SIZE],
   );
+  const filteredManualCustomers = useMemo(
+    () =>
+      manualCustomers.filter((c) =>
+        [c.name, c.contact, c.phone, c.cityCountry, c.vipLevel, c.creditLevel]
+          .join(" ")
+          .toLowerCase()
+          .includes(manualCustomerKeyword.trim().toLowerCase()),
+      ),
+    [manualCustomers, manualCustomerKeyword],
+  );
+
+  function updateManualCustomerRow(id: string, patch: Partial<Customer>) {
+    setManualCustomers((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  }
+
+  function addManualCustomerRow() {
+    setManualCustomers((prev) => [
+      {
+        ...EMPTY_CUSTOMER,
+        id: `manual-temp-${Date.now()}`,
+        sourceType: "manual",
+      },
+      ...prev,
+    ]);
+  }
   const detailCustomer = useMemo(
     () => mergedCustomers.find((item) => item.id === customerDetailId) || null,
     [customerDetailId, mergedCustomers],
   );
+  const sortedDetailRows = useMemo(() => {
+    const rows = detailCustomer?.detailRows || [];
+    return [...rows].sort((left, right) => {
+      const compareResult = String(left.orderDateText || "").localeCompare(String(right.orderDateText || ""), "zh-CN");
+      return customerDetailDateSort === "asc" ? compareResult : -compareResult;
+    });
+  }, [customerDetailDateSort, detailCustomer?.detailRows]);
 
   useEffect(() => {
     if (!customerEditorOpen) {
@@ -1083,7 +1266,6 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       contact: item.relationName || prev.contact,
       phone: item.registeredPhone || prev.phone,
       whatsapp: item.registeredPhone || prev.whatsapp,
-      cityCountry: item.cityCountry || prev.cityCountry,
     }));
     setCustomerSearchOpen(false);
   }
@@ -1616,7 +1798,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
 
         {!loading && supplierEditorOpen ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-            <div className="max-h-[86vh] w-full max-w-[1080px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
+            <div className="max-h-[86vh] w-full max-w-[560px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
               <div className="border-b border-slate-200 px-4 py-3">
                 <h3 className="text-base font-semibold text-slate-900">{tx("供应商信息", "Info prov")}</h3>
                 <p className="mt-1 text-xs text-slate-500">
@@ -1625,7 +1807,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
               </div>
               <div className="space-y-3 p-3">
                 <div className="rounded-xl border border-slate-200 bg-white p-3">
-                  <div className="grid gap-2.5 lg:grid-cols-2">
+                  <div className="grid gap-2.5 sm:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("简称", "Short")}</label>
                       <input value={supplierForm.shortName} onChange={(e) => setSupplierForm((p) => ({ ...p, shortName: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
@@ -1785,8 +1967,24 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
           <div className="space-y-4 p-5">
             <div className="rounded-2xl border border-slate-200 bg-white">
               <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-6">
                   <h3 className="text-base font-semibold text-slate-900">{tx("客户列表", "Lista cli")}</h3>
+                  <span className="text-sm text-slate-500">
+                    {tx("下单客户共计", "Clientes con pedido")}: <span className="font-semibold text-slate-900">{filteredCustomers.length}</span>
+                  </span>
+                  <span className="text-sm text-slate-500">
+                    {tx("累计下单共计", "Pedidos acumulados")}: <span className="font-semibold text-slate-900">{customerSummary.totalOrderCount}</span>
+                  </span>
+                  <span className="text-sm text-slate-500">
+                    {tx("累计下单总金额", "Monto total acumulado")}: <span className="font-semibold text-slate-900">$ {customerSummary.totalOrderAmountText}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setManualCustomerOpen(true)}
+                    className="ml-6 inline-flex h-9 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    {tx("其他渠道下单", "Otros canales")}
+                  </button>
                 </div>
                 <div className="flex items-center gap-2">
                   <select
@@ -1814,9 +2012,9 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       <th className="px-3 py-2 text-left whitespace-nowrap">{tx("联系人", "Cont")}</th>
                       <th className="px-3 py-2 text-left whitespace-nowrap">{tx("手机", "Mob")}</th>
                       <th className="px-3 py-2 text-left whitespace-nowrap">{tx("城市/国家", "City/Ctry")}</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("VIP等级", "VIP lvl")}</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("信用等级", "Credit")}</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("下单次数", "Order count")}</th>
+                      <th className="px-3 py-2 text-center whitespace-nowrap">{tx("VIP等级", "VIP lvl")}</th>
+                      <th className="px-3 py-2 text-center whitespace-nowrap">{tx("信用等级", "Credit")}</th>
+                      <th className="px-3 py-2 text-center whitespace-nowrap">{tx("下单次数", "Order count")}</th>
                       <th className="px-3 py-2 text-left whitespace-nowrap">{tx("下单金额", "Order amount")}</th>
                       <th className="px-3 py-2 text-left whitespace-nowrap">{tx("配货金额", "Packing amount")}</th>
                       <th className="w-[132px] px-3 py-2 text-right"></th>
@@ -1825,20 +2023,23 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                   <tbody>
                     {pagedCustomers.map((c) => (
                       <tr key={c.id} className="border-t border-slate-100">
-                        <td className="px-3 py-1.5 font-semibold">{c.name || "-"}</td>
+                        <td className="px-3 py-1.5">{c.name || "-"}</td>
                         <td className="px-3 py-1.5">{c.contact || "-"}</td>
                         <td className="px-3 py-1.5">{c.phone || "-"}</td>
                         <td className="px-3 py-1.5">{c.cityCountry || "-"}</td>
-                        <td className="px-3 py-1.5">{c.vipLevel || "-"}</td>
-                        <td className="px-3 py-1.5">{c.creditLevel || "-"}</td>
-                        <td className="px-3 py-1.5">{(c.totalOrderCount ?? c.orderStats) || "-"}</td>
+                        <td className="px-3 py-1.5 text-center">{isVipCustomer(c) ? <span className="inline-flex justify-center"><VipBadgeIcon /></span> : ""}</td>
+                        <td className="px-3 py-1.5 text-center">{c.creditLevel || "-"}</td>
+                        <td className="px-3 py-1.5 text-center">{(c.totalOrderCount ?? c.orderStats) || "-"}</td>
                         <td className="px-3 py-1.5">$ {c.totalOrderAmountText || "0.00"}</td>
-                        <td className="px-3 py-1.5">$ {c.packingAmountText || "0.00"}</td>
+                        <td className="px-3 py-1.5">{c.packingAmountText ? `$ ${c.packingAmountText}` : ""}</td>
                         <td className="px-3 py-1.5">
-                          <div className="flex justify-end gap-2">
+                          <div className="flex items-center justify-end gap-3">
                             <button
                               type="button"
-                              onClick={() => setCustomerDetailId(c.id)}
+                              onClick={() => {
+                                setCustomerDetailDateSort("desc");
+                                setCustomerDetailId(c.id);
+                              }}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
                               aria-label={tx("详情", "Detail")}
                             >
@@ -1850,6 +2051,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                 setCustomerForm({
                                   ...c,
                                   id: c.sourceType === "yg" ? "" : c.id,
+                                  cityCountry: "",
                                 });
                                 setCustomerEditorOpen(true);
                               }}
@@ -1857,15 +2059,6 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                               aria-label={tx("编辑", "Edit")}
                             >
                               <Pencil className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              disabled={!canManageCustomers || c.sourceType === "yg"}
-                              onClick={() => void deleteCustomer(c.id, c.name)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 disabled:opacity-40"
-                              aria-label={tx("删除", "Del")}
-                            >
-                              <Trash2 className="h-4 w-4" />
                             </button>
                           </div>
                         </td>
@@ -1919,40 +2112,147 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
           </div>
         ) : null}
 
+        {!loading && manualCustomerOpen ? (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 px-4">
+            <div className="max-h-[90vh] w-full max-w-[1500px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+                <div className="flex items-center gap-4">
+                  <h3 className="text-base font-semibold text-slate-900">{tx("其他渠道下单", "Otros canales")}</h3>
+                  <span className="text-sm text-slate-500">
+                    {tx("客户数", "Clientes")}: <span className="font-semibold text-slate-900">{filteredManualCustomers.length}</span>
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={addManualCustomerRow}
+                    className="inline-flex h-9 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    {tx("新增一行", "Nueva fila")}
+                  </button>
+                  <input
+                    value={manualCustomerKeyword}
+                    onChange={(e) => setManualCustomerKeyword(e.target.value)}
+                    placeholder={tx("搜索客户", "Search cli")}
+                    className="h-10 w-full max-w-[260px] rounded-xl border border-slate-200 px-3 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="max-h-[640px] overflow-auto">
+                <table className="w-full min-w-[1450px] text-sm">
+                  <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600">
+                    <tr>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("客户", "Client")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("联系人", "Cont")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("手机", "Mob")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("城市/国家", "City/Ctry")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("VIP等级", "VIP lvl")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("信用等级", "Credit")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("下单次数", "Order count")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("下单金额", "Order amount")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("配货金额", "Packing amount")}</th>
+                      <th className="w-[156px] px-3 py-2 text-right"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredManualCustomers.map((c) => (
+                      <tr key={c.id} className="border-t border-slate-100">
+                        <td className="px-3 py-1.5"><input value={c.name} onChange={(e) => updateManualCustomerRow(c.id, { name: e.target.value })} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" /></td>
+                        <td className="px-3 py-1.5"><input value={c.contact} onChange={(e) => updateManualCustomerRow(c.id, { contact: e.target.value })} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" /></td>
+                        <td className="px-3 py-1.5"><input value={c.phone} onChange={(e) => updateManualCustomerRow(c.id, { phone: e.target.value })} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" /></td>
+                        <td className="px-3 py-1.5"><input value={c.cityCountry} onChange={(e) => updateManualCustomerRow(c.id, { cityCountry: e.target.value })} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" /></td>
+                        <td className="px-3 py-1.5"><input value={c.vipLevel} onChange={(e) => updateManualCustomerRow(c.id, { vipLevel: e.target.value })} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" /></td>
+                        <td className="px-3 py-1.5"><input value={c.creditLevel} onChange={(e) => updateManualCustomerRow(c.id, { creditLevel: e.target.value })} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" /></td>
+                        <td className="px-3 py-1.5"><input value={c.orderStats} onChange={(e) => updateManualCustomerRow(c.id, { orderStats: e.target.value })} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" /></td>
+                        <td className="px-3 py-1.5"><input value={c.totalOrderAmountText || ""} onChange={(e) => updateManualCustomerRow(c.id, { totalOrderAmountText: e.target.value })} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" /></td>
+                        <td className="px-3 py-1.5"><input value={c.packingAmountText || ""} onChange={(e) => updateManualCustomerRow(c.id, { packingAmountText: e.target.value })} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" /></td>
+                        <td className="px-3 py-1.5">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void saveManualCustomerRow(c)}
+                              className="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                            >
+                              {tx("保存", "Save")}
+                            </button>
+                            {!!c.id && !String(c.id).startsWith("manual-temp-") ? (
+                              <button
+                                type="button"
+                                onClick={() => void deleteCustomer(c.id, c.name)}
+                                className="inline-flex h-8 items-center rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-600 hover:bg-rose-100"
+                              >
+                                {tx("删除", "Delete")}
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManualCustomerOpen(false);
+                    setManualCustomerKeyword("");
+                  }}
+                  className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
+                >
+                  {tx("关闭", "Cerrar")}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {!loading && detailCustomer ? (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 px-4">
             <div className="max-h-[86vh] w-full max-w-[980px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
-              <div className="border-b border-slate-200 px-4 py-3">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
                 <h3 className="text-base font-semibold text-slate-900">
                   {tx("客户下单详情", "Detalle de pedidos")} · {detailCustomer.name || "-"}
                 </h3>
-                <p className="mt-1 text-xs text-slate-500">
-                  {tx("查看该客户所有已匹配的友购下单记录。", "Ver todos los pedidos YG vinculados a este cliente.")}
-                </p>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">
+                    {tx("下单次数", "Order count")}: <span className="font-semibold text-slate-900">{detailCustomer.totalOrderCount ?? sortedDetailRows.length}</span>
+                  </span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">
+                    {tx("下单金额", "Order amount")}: <span className="font-semibold text-slate-900">$ {detailCustomer.totalOrderAmountText || "0.00"}</span>
+                  </span>
+                </div>
               </div>
               <div className="p-4">
-                {!detailCustomer.detailRows || detailCustomer.detailRows.length === 0 ? (
+                {sortedDetailRows.length === 0 ? (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
                     {tx("当前没有匹配到下单记录", "No hay pedidos vinculados")}
                   </div>
                 ) : (
                   <div className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full min-w-[640px] text-sm">
+                    <table className="w-full min-w-[560px] text-sm">
                       <thead className="bg-slate-50 text-slate-600">
                         <tr>
                           <th className="px-3 py-2 text-left">{tx("订单号", "Order no")}</th>
-                          <th className="px-3 py-2 text-left">{tx("下单日期", "Order date")}</th>
-                          <th className="px-3 py-2 text-left">{tx("订单金额", "Order amount")}</th>
-                          <th className="px-3 py-2 text-left">{tx("状态", "Status")}</th>
+                          <th className="px-3 py-2 text-left">
+                            <button
+                              type="button"
+                              onClick={() => setCustomerDetailDateSort((prev) => (prev === "desc" ? "asc" : "desc"))}
+                              className="inline-flex items-center gap-1 font-medium text-slate-600 hover:text-slate-900"
+                            >
+                              <span>{tx("下单日期", "Order date")}</span>
+                              {customerDetailDateSort === "desc" ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                            </button>
+                          </th>
+                          <th className="px-3 py-2 text-left">{tx("下单金额", "Order amount")}</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {detailCustomer.detailRows.map((item) => (
+                        {sortedDetailRows.map((item) => (
                           <tr key={`${detailCustomer.id}-${item.orderNo}`} className="border-t border-slate-100">
                             <td className="px-3 py-2 font-semibold">{item.orderNo || "-"}</td>
                             <td className="px-3 py-2">{item.orderDateText || "-"}</td>
                             <td className="px-3 py-2">$ {item.orderAmountText || "0.00"}</td>
-                            <td className="px-3 py-2">{item.latestStatus || "-"}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1975,101 +2275,45 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
 
         {!loading && customerEditorOpen ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-            <div className="max-h-[86vh] w-full max-w-[1080px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
+            <div className="max-h-[86vh] w-full max-w-[560px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
               <div className="border-b border-slate-200 px-4 py-3">
                 <h3 className="text-base font-semibold text-slate-900">{tx("客户信息", "Info cli")}</h3>
-                <p className="mt-1 text-xs text-slate-500">
-                  {tx("用于新增、编辑和维护客户基础资料。", "Alta, edicion y mantenimiento de datos base del cliente.")}
-                </p>
               </div>
               <div className="space-y-3 p-3">
                 <div className="rounded-xl border border-slate-200 bg-white p-3">
-                  <div className="grid gap-2.5 lg:grid-cols-[1.5fr_1fr_0.92fr_1fr]">
+                  <div className="grid gap-2.5 sm:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("客户名称", "Client")}</label>
-                      <div className="space-y-2">
-                        <input
-                          value={customerForm.name}
-                          onChange={(e) => {
-                            setCustomerForm((p) => ({ ...p, name: e.target.value }));
-                            setCustomerSearchOpen(true);
-                          }}
-                          onFocus={() => setCustomerSearchOpen(true)}
-                          onBlur={() => window.setTimeout(() => setCustomerSearchOpen(false), 120)}
-                          className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm"
-                        />
-                        {customerSearchOpen && customerForm.name.trim() ? (
-                          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
-                            {customerSearchLoading ? (
-                              <div className="px-3 py-3 text-sm text-slate-500">{tx("正在加载友购客户...", "Cargando clientes YG...")}</div>
-                            ) : customerSearchResults.length > 0 ? (
-                              <div className="max-h-64 overflow-y-auto py-1">
-                                {customerSearchResults.map((item) => (
-                                  <button
-                                    key={item.id}
-                                    type="button"
-                                    onMouseDown={() => handleCustomerSearchSelect(item)}
-                                    className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50"
-                                  >
-                                    <div className="min-w-0">
-                                      <div className="truncate font-medium text-slate-900">{item.companyName || "-"}</div>
-                                      <div className="truncate text-xs text-slate-500">
-                                        {[item.relationName || "-", item.registeredPhone || "-", item.cityCountry || "-"].join(" / ")}
-                                      </div>
-                                    </div>
-                                  </button>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="px-3 py-3 text-sm text-slate-500">{tx("未找到匹配友购客户，请继续输入或换个关键词", "No se encontraron clientes YG")}</div>
-                            )}
-                          </div>
-                        ) : null}
-                      </div>
+                      <ReadonlyCustomerField value={customerForm.name} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("账单客户名称", "Billing client")}</label>
+                      <input value={customerForm.cityCountry} onChange={(e) => setCustomerForm((p) => ({ ...p, cityCountry: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("联系人", "Cont")}</label>
-                      <input value={customerForm.contact} onChange={(e) => setCustomerForm((p) => ({ ...p, contact: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                      <ReadonlyCustomerField value={customerForm.contact} />
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("手机", "Mob")}</label>
-                      <input value={customerForm.phone} onChange={(e) => setCustomerForm((p) => ({ ...p, phone: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("城市/国家", "City/Ctry")}</label>
-                      <input value={customerForm.cityCountry} onChange={(e) => setCustomerForm((p) => ({ ...p, cityCountry: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                      <ReadonlyCustomerField value={customerForm.phone} />
                     </div>
                   </div>
 
-                  <div className="mt-2.5">
-                    <label className="mb-1 block text-xs font-medium text-slate-600">{tx("门店地址", "Stores")}</label>
-                    <div className="flex items-center gap-2">
-                      <input value={customerForm.stores} onChange={(e) => setCustomerForm((p) => ({ ...p, stores: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
-                      <a
-                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(customerForm.stores || "")}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50"
-                        title="Google Maps"
-                        aria-label="Google Maps"
-                      >
-                        <MapPin className="h-4 w-4" />
-                      </a>
-                    </div>
-                  </div>
-
-                  <div className="mt-2.5 grid gap-2.5 lg:grid-cols-[1fr_1fr_1.2fr]">
+                  <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("VIP等级", "VIP lvl")}</label>
-                      <input value={customerForm.vipLevel} onChange={(e) => setCustomerForm((p) => ({ ...p, vipLevel: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                      <PlainCustomerValue>
+                        {isVipCustomer(customerForm) ? <span className="inline-flex"><VipBadgeIcon /></span> : "-"}
+                      </PlainCustomerValue>
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("信用等级", "Credit")}</label>
-                      <input value={customerForm.creditLevel} onChange={(e) => setCustomerForm((p) => ({ ...p, creditLevel: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                      <PlainCustomerValue value={customerForm.creditLevel} />
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("下单次数", "Order count")}</label>
-                      <input value={customerForm.orderStats} onChange={(e) => setCustomerForm((p) => ({ ...p, orderStats: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                      <PlainCustomerValue value={Number(customerForm.totalOrderCount || 0) > 0 ? String(customerForm.totalOrderCount) : "-"} />
                     </div>
                   </div>
                 </div>

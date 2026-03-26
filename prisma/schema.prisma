@@ -263,6 +263,9 @@ model CustomerProfile {
   credit_level    String?
   tag_text        String?
   order_stat_text String?
+  manual_order_count  Int?
+  manual_order_amount Decimal? @db.Decimal(18, 2)
+  manual_packing_amount Decimal? @db.Decimal(18, 2)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
