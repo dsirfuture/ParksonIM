@@ -3062,7 +3062,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                         ))}
                       </tbody>
                     </table>
-                    {sortedDetailRows.length > 0 ? (
+                    {customerDetailTotalPages > 1 ? (
                       <div className="border-t border-slate-200 px-4 py-3">
                         <div className="flex flex-nowrap items-center justify-center gap-2 overflow-x-auto">
                           <button
@@ -3250,9 +3250,6 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                             </div>
                             <div className="mt-1 text-xs text-slate-500">
                               {uploadingPaymentEvidenceRowId === row.id ? tx("上传中...", "Uploading...") : ""}
-                              {!uploadingPaymentEvidenceRowId && paymentEvidenceItems[row.id]?.length
-                                ? `${paymentEvidenceItems[row.id].length} ${tx("个已上传", "uploaded")}`
-                                : ""}
                             </div>
                           </td>
                         </tr>
@@ -3260,45 +3257,47 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                     </tbody>
                   </table>
                 </div>
-                <div className="border-x border-b border-slate-200 px-4 py-3">
-                  <div className="flex flex-nowrap items-center justify-center gap-2 overflow-x-auto">
-                    <button
-                      type="button"
-                      onClick={() => setCustomerPaymentPage(1)}
-                      disabled={safeCustomerPaymentPage <= 1}
-                      className="inline-flex h-8 items-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-500 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {tx("回到首页", "Ini")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCustomerPaymentPage((prev) => Math.max(1, prev - 1))}
-                      disabled={safeCustomerPaymentPage <= 1}
-                      className="inline-flex h-9 min-w-[40px] items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {tx("上一页", "Ant")}
-                    </button>
-                    <div className="inline-flex h-9 min-w-[72px] items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700">
-                      {safeCustomerPaymentPage} / {customerPaymentTotalPages}
+                {customerPaymentTotalPages > 1 ? (
+                  <div className="border-x border-b border-slate-200 px-4 py-3">
+                    <div className="flex flex-nowrap items-center justify-center gap-2 overflow-x-auto">
+                      <button
+                        type="button"
+                        onClick={() => setCustomerPaymentPage(1)}
+                        disabled={safeCustomerPaymentPage <= 1}
+                        className="inline-flex h-8 items-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-500 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {tx("回到首页", "Ini")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCustomerPaymentPage((prev) => Math.max(1, prev - 1))}
+                        disabled={safeCustomerPaymentPage <= 1}
+                        className="inline-flex h-9 min-w-[40px] items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {tx("上一页", "Ant")}
+                      </button>
+                      <div className="inline-flex h-9 min-w-[72px] items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700">
+                        {safeCustomerPaymentPage} / {customerPaymentTotalPages}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setCustomerPaymentPage((prev) => Math.min(customerPaymentTotalPages, prev + 1))}
+                        disabled={safeCustomerPaymentPage >= customerPaymentTotalPages}
+                        className="inline-flex h-9 min-w-[40px] items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {tx("下一页", "Sig")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCustomerPaymentPage(customerPaymentTotalPages)}
+                        disabled={safeCustomerPaymentPage >= customerPaymentTotalPages}
+                        className="inline-flex h-8 items-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-500 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {tx("去最后页", "Fin")}
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setCustomerPaymentPage((prev) => Math.min(customerPaymentTotalPages, prev + 1))}
-                      disabled={safeCustomerPaymentPage >= customerPaymentTotalPages}
-                      className="inline-flex h-9 min-w-[40px] items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {tx("下一页", "Sig")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCustomerPaymentPage(customerPaymentTotalPages)}
-                      disabled={safeCustomerPaymentPage >= customerPaymentTotalPages}
-                      className="inline-flex h-8 items-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-500 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {tx("去最后页", "Fin")}
-                    </button>
                   </div>
-                </div>
+                ) : null}
               </div>
             </div>
           </div>
