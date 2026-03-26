@@ -2937,9 +2937,9 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                     <table className="w-full table-auto text-sm">
                       <thead className="bg-slate-50 text-slate-600">
                         <tr>
-                          <th className="w-[220px] px-3 py-2 text-left whitespace-nowrap">{tx("订单号", "Order no")}</th>
-                          <th className="w-[1%] px-3 py-2 text-left whitespace-nowrap">{tx("渠道", "Canal")}</th>
-                          <th className="w-[1%] px-3 py-2 text-left whitespace-nowrap">
+                          <th className="w-[240px] px-3 py-2 text-left whitespace-nowrap">{tx("订单号", "Order no")}</th>
+                          <th className="w-[90px] px-3 py-2 text-left whitespace-nowrap">{tx("渠道", "Canal")}</th>
+                          <th className="w-[120px] px-3 py-2 text-left whitespace-nowrap">
                             <button
                               type="button"
                               onClick={() => setCustomerDetailDateSort((prev) => (prev === "desc" ? "asc" : "desc"))}
@@ -2949,16 +2949,16 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                               {customerDetailDateSort === "desc" ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                             </button>
                           </th>
-                          <th className="w-[1%] px-3 py-2 text-left whitespace-nowrap">{tx("下单金额", "Order amount")}</th>
-                          <th className="w-[1%] px-3 py-2 text-left whitespace-nowrap">{tx("配货金额", "Packing amount")}</th>
-                          <th className="w-[1%] px-3 py-2 text-left whitespace-nowrap">{tx("发货日期", "Ship date")}</th>
-                          <th className="px-3 py-2 text-right whitespace-nowrap">{tx("操作", "Acciones")}</th>
+                          <th className="w-[120px] px-3 py-2 text-left whitespace-nowrap">{tx("下单金额", "Order amount")}</th>
+                          <th className="w-[120px] px-3 py-2 text-left whitespace-nowrap">{tx("配货金额", "Packing amount")}</th>
+                          <th className="w-[96px] px-3 py-2 text-left whitespace-nowrap">{tx("发货日期", "Ship date")}</th>
+                          <th className="w-[120px] px-3 py-2 text-right whitespace-nowrap">{tx("操作", "Acciones")}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {sortedDetailRows.map((item) => (
                           <tr key={item.id} className="border-t border-slate-100">
-                            <td className="w-[220px] px-3 py-2 whitespace-nowrap">
+                            <td className="w-[240px] px-3 py-2 whitespace-nowrap">
                               {detailEditingRowId === item.id && item.sourceType === "manual" ? (
                                 <input
                                   value={detailRowEditForm.displayOrderNo}
@@ -2969,7 +2969,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                 item.orderNo || "-"
                               )}
                             </td>
-                            <td className="w-[1%] px-3 py-2 whitespace-nowrap">
+                            <td className="w-[90px] px-3 py-2 whitespace-nowrap">
                               {detailEditingRowId === item.id && item.sourceType === "manual" ? (
                                 <input
                                   value={detailRowEditForm.orderChannel}
@@ -2980,11 +2980,11 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                 item.channelText || "-"
                               )}
                             </td>
-                            <td className="w-[1%] px-3 py-2 whitespace-nowrap">{item.orderDateText || "-"}</td>
-                            <td className="w-[1%] px-3 py-2 whitespace-nowrap">
+                            <td className="w-[120px] px-3 py-2 whitespace-nowrap">{item.orderDateText || "-"}</td>
+                            <td className="w-[120px] px-3 py-2 whitespace-nowrap">
                               {item.orderAmountText ? `$ ${item.orderAmountText}` : "-"}
                             </td>
-                            <td className="w-[1%] px-3 py-2 whitespace-nowrap">
+                            <td className="w-[120px] px-3 py-2 whitespace-nowrap">
                               {detailEditingRowId === item.id ? (
                                 <input
                                   value={detailRowEditForm.packingAmount}
@@ -2995,19 +2995,19 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                 item.packingAmountText ? `$ ${item.packingAmountText}` : "-"
                               )}
                             </td>
-                            <td className="w-[1%] px-3 py-2 whitespace-nowrap">
+                            <td className="w-[96px] px-3 py-2 whitespace-nowrap">
                               {detailEditingRowId === item.id ? (
                                 <input
                                   type="date"
                                   value={detailRowEditForm.shippedAt}
                                   onChange={(e) => setDetailRowEditForm((prev) => ({ ...prev, shippedAt: e.target.value }))}
-                                  className="h-9 w-[132px] rounded-xl border border-slate-200 px-3 text-sm"
+                                  className="h-9 w-[110px] rounded-xl border border-slate-200 px-3 text-sm"
                                 />
                               ) : (
                                 item.shippedAtText || "-"
                               )}
                             </td>
-                            <td className="px-3 py-2 text-right">
+                            <td className="w-[120px] px-3 py-2 text-right">
                               <div className="flex flex-nowrap items-center justify-end gap-2 whitespace-nowrap">
                                 <button
                                   type="button"
