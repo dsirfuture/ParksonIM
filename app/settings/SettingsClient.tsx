@@ -2801,7 +2801,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                 </div>
               </div>
               <div className="p-4">
-                <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
+                <div className="mb-4 bg-white p-3">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <h4 className="text-sm font-semibold text-slate-900">{tx("客户信息", "Info cli")}</h4>
                     <button
