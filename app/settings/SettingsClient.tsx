@@ -4,6 +4,7 @@ import NextImage from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronDown, ChevronUp, Eye, MapPin, Paperclip, Pencil, Trash2, X } from "lucide-react";
+import * as XLSX from "xlsx";
 import { getClientLang } from "@/lib/lang-client";
 
 type PermissionState = {
@@ -672,7 +673,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   const SUPPLIER_PAGE_SIZE = 10;
   const SUPPLIER_PRODUCT_PREVIEW_PAGE_SIZE = 12;
   const CUSTOMER_PAGE_SIZE = 11;
-  const CUSTOMER_DETAIL_PAGE_SIZE = 8;
+  const CUSTOMER_DETAIL_PAGE_SIZE = 4;
   const [lang, setLang] = useState<"zh" | "es">("zh");
   const [tab, setTab] = useState<TabKey>("perm");
   const [loading, setLoading] = useState(true);
@@ -1106,6 +1107,53 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
     } finally {
       setSavingDetailCustomerInfo(false);
     }
+  }
+
+  function exportDetailCustomerFile() {
+    if (!detailCustomer) return;
+
+    const customerInfoRows = [
+      ["客户下单详情", detailCustomer.name || "-"],
+      [],
+      ["字段", "内容"],
+      ["友购客户名称", detailCustomerInfoForm.linkedYgName || "-"],
+      ["真实客户名称", detailCustomerInfoForm.name || "-"],
+      ["联系人", detailCustomerInfoForm.contact || "-"],
+      ["手机", detailCustomerInfoForm.phone || "-"],
+      ["门店编号", detailCustomerInfoForm.stores || "-"],
+      ["客户地址", detailCustomerInfoForm.cityCountry || "-"],
+      ["VIP等级", isVipCustomer(detailCustomer) ? "VIP" : "-"],
+      ["信用等级", detailCustomer.creditLevel || "-"],
+      ["下单次数", Number(detailCustomer.totalOrderCount || 0) > 0 ? String(detailCustomer.totalOrderCount) : "-"],
+      ["下单金额", detailCustomer.totalOrderAmountText ? `$ ${detailCustomer.totalOrderAmountText}` : "-"],
+      ["累计配货金额", hasAnyPackingAmount ? `$ ${detailPackingAmountTotal.toFixed(2)}` : "-"],
+      [],
+      ["订单列表"],
+      ["订单号", "渠道", "下单日期", "下单金额", "配货金额", "发货日期"],
+      ...sortedDetailRows.map((item) => [
+        item.orderNo || "-",
+        item.channelText || "-",
+        item.orderDateText || "-",
+        item.orderAmountText ? `$ ${item.orderAmountText}` : "-",
+        item.packingAmountText ? `$ ${item.packingAmountText}` : "-",
+        item.shippedAtText || "-",
+      ]),
+    ];
+
+    const worksheet = XLSX.utils.aoa_to_sheet(customerInfoRows);
+    worksheet["!cols"] = [
+      { wch: 20 },
+      { wch: 44 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 14 },
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "客户详情");
+    const safeCustomerName = String(detailCustomer.name || "customer-detail").replace(/[\\/:*?"<>|]+/g, "_");
+    XLSX.writeFile(workbook, `${safeCustomerName}-客户详情.xlsx`);
   }
 
   async function saveManualOrder() {
@@ -2729,10 +2777,17 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
         {!loading && detailCustomer ? (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 px-4">
             <div className="max-h-[86vh] w-full max-w-[1080px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
-              <div className="border-b border-slate-200 px-4 py-3">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
                 <h3 className="text-base font-semibold text-slate-900">
                   {tx("客户下单详情", "Detalle de pedidos")} · {detailCustomer.name || "-"}
                 </h3>
+                <button
+                  type="button"
+                  onClick={exportDetailCustomerFile}
+                  className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  {tx("导出文件", "Exportar")}
+                </button>
               </div>
               <div className="p-4">
                 <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
