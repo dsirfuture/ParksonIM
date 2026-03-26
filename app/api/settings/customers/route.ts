@@ -378,9 +378,17 @@ export async function GET() {
       const totalPackingAmount = rows.reduce((sum, item) => sum + Number(item.packing_amount || 0), 0);
       const unpaidAmount = rows.reduce((sum, item) => sum + (item.paid_at ? 0 : Number(item.packing_amount || 0)), 0);
       const latestTermDays = rows.find((item) => Number.isFinite(Number(item.payment_term_days)))?.payment_term_days;
+      const manualChannelText = Array.from(
+        new Set(
+          manualRows
+            .map((item) => String(item.order_channel || "").trim())
+            .filter(Boolean),
+        ),
+      ).join(" / ");
 
       return {
         manualOrderCount: manualRows.length,
+        manualChannelText,
         manualPackingAmountText: normalizeAmountText(totalPackingAmount),
         manualDebtAmountText: normalizeAmountText(unpaidAmount),
         paymentTermText: latestTermDays ? String(latestTermDays) : "",
@@ -440,7 +448,7 @@ export async function GET() {
         vipLevel: row.vip_level || "",
         creditLevel: row.credit_level || "",
         tags: row.tag_text || "",
-        channelText: manualSummary.manualOrderCount > 0 ? "友购 / 其他渠道" : "友购",
+        channelText: manualSummary.manualChannelText ? `友购 / ${manualSummary.manualChannelText}` : "友购",
         orderStats: String(orderSummary.totalOrderCount + manualSummary.manualOrderCount || row.order_stat_text || ""),
         totalOrderCount: orderSummary.totalOrderCount + manualSummary.manualOrderCount,
         totalOrderAmountText: orderSummary.totalOrderAmountText,
@@ -507,6 +515,7 @@ export async function GET() {
               customerName: row.name || row.company_name,
             });
             return {
+              channelText: manualSummary.manualChannelText ? `友购 / ${manualSummary.manualChannelText}` : "友购",
               orderStats: String(orderSummary.totalOrderCount + manualSummary.manualOrderCount),
               totalOrderCount: orderSummary.totalOrderCount + manualSummary.manualOrderCount,
               totalOrderAmountText: orderSummary.totalOrderAmountText,
