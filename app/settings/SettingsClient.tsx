@@ -2486,7 +2486,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
 
         {!loading && detailCustomer ? (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 px-4">
-            <div className="max-h-[86vh] w-full max-w-[980px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
+            <div className="max-h-[86vh] w-full max-w-[1400px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
               <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
                 <h3 className="text-base font-semibold text-slate-900">
                   {tx("客户下单详情", "Detalle de pedidos")} · {detailCustomer.name || "-"}
