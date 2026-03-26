@@ -3106,7 +3106,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                                 <button
                                   type="button"
                                   onClick={() => setCustomerPaymentDetailId(item.id)}
-                                  className="inline-flex h-7 items-center rounded-xl bg-primary px-2.5 text-sm font-normal text-white hover:opacity-95"
+                                  className="inline-flex h-7 items-center rounded-xl bg-primary px-2.5 text-xs font-normal text-white hover:opacity-95"
                                 >
                                   {tx("付款", "Pago")}
                                 </button>
