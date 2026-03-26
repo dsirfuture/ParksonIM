@@ -2695,9 +2695,6 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                   <h3 className="text-base font-semibold text-slate-900">
                     {manualOrderForm.id ? tx("编辑记录", "Editar registro") : tx("新增记录", "Nuevo registro")}
                   </h3>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {tx("录入其他渠道订单信息，并用于客户列表统计。", "Registrar pedidos de otros canales para estadisticas de clientes.")}
-                  </p>
                 </div>
                 <button
                   type="button"
@@ -2723,14 +2720,15 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600">{tx("下单渠道", "Canal")}</label>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">{tx("账期", "Term")}</label>
                     <input
-                      value={manualOrderEditorMode === "yg" ? tx("友购", "Yogo") : manualOrderForm.orderChannel}
-                      onChange={(e) => setManualOrderForm((prev) => ({ ...prev, orderChannel: e.target.value }))}
-                      disabled={manualOrderEditorMode === "yg"}
-                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm disabled:bg-slate-50 disabled:text-slate-500"
+                      value={manualOrderForm.paymentTermDays}
+                      onChange={(e) => setManualOrderForm((prev) => ({ ...prev, paymentTermDays: e.target.value.replace(/[^\d]/g, "") }))}
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
                     />
                   </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
                   <div>
                     <label className="mb-1 block text-xs font-medium text-slate-600">{tx("友购订单号", "Pedido YG")}</label>
                     <input
@@ -2740,34 +2738,14 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm disabled:bg-slate-50 disabled:text-slate-500"
                     />
                   </div>
-                  {manualOrderEditorMode === "manual" ? (
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("其他订单号", "Pedido externo")}</label>
-                      <input
-                        value={manualOrderForm.externalOrderNo}
-                        onChange={(e) => setManualOrderForm((prev) => ({ ...prev, externalOrderNo: e.target.value }))}
-                        className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
-                      />
-                    </div>
-                  ) : null}
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600">{tx("配货金额", "Packing amount")}</label>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">备货金额</label>
                     <input
                       value={manualOrderForm.packingAmount}
                       onChange={(e) => setManualOrderForm((prev) => ({ ...prev, packingAmount: e.target.value }))}
                       className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
                     />
                   </div>
-                  {manualOrderEditorMode === "manual" ? (
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("账期", "Term")}</label>
-                      <input
-                        value={manualOrderForm.paymentTermDays}
-                        onChange={(e) => setManualOrderForm((prev) => ({ ...prev, paymentTermDays: e.target.value.replace(/[^\d]/g, "") }))}
-                        className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
-                      />
-                    </div>
-                  ) : null}
                   <div>
                     <label className="mb-1 block text-xs font-medium text-slate-600">{tx("发货日期", "Fecha envio")}</label>
                     <input
@@ -2777,7 +2755,40 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
                     />
                   </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  {manualOrderEditorMode === "manual" ? (
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("其他订单号", "Pedido externo")}</label>
+                      <input
+                        value={manualOrderForm.externalOrderNo}
+                        onChange={(e) => setManualOrderForm((prev) => ({ ...prev, externalOrderNo: e.target.value }))}
+                        className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                      />
+                    </div>
+                  ) : (
+                    <div />
+                  )}
                   <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">{tx("下单渠道", "Canal")}</label>
+                    <input
+                      value={manualOrderEditorMode === "yg" ? tx("友购", "Yogo") : manualOrderForm.orderChannel}
+                      onChange={(e) => setManualOrderForm((prev) => ({ ...prev, orderChannel: e.target.value }))}
+                      disabled={manualOrderEditorMode === "yg"}
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm disabled:bg-slate-50 disabled:text-slate-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">{tx("配货金额", "Packing amount")}</label>
+                    <input
+                      value={manualOrderForm.packingAmount}
+                      onChange={(e) => setManualOrderForm((prev) => ({ ...prev, packingAmount: e.target.value }))}
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="md:col-start-3">
                     <label className="mb-1 block text-xs font-medium text-slate-600">{tx("付款日期", "Fecha pago")}</label>
                     <input
                       type="date"
