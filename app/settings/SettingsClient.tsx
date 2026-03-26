@@ -137,6 +137,17 @@ type PaymentRowEditForm = {
   paymentTime: string;
 };
 
+type DetailCustomerInfoForm = {
+  id: string;
+  sourceType: "profile" | "yg" | "manual";
+  linkedYgName: string;
+  name: string;
+  contact: string;
+  phone: string;
+  stores: string;
+  cityCountry: string;
+};
+
 type PaymentEvidenceItem = {
   name: string;
   url: string;
@@ -296,6 +307,17 @@ const EMPTY_DETAIL_ROW_EDIT_FORM: DetailRowEditForm = {
 const EMPTY_PAYMENT_ROW_EDIT_FORM: PaymentRowEditForm = {
   payableAmount: "",
   paymentTime: "",
+};
+
+const EMPTY_DETAIL_CUSTOMER_INFO_FORM: DetailCustomerInfoForm = {
+  id: "",
+  sourceType: "manual",
+  linkedYgName: "",
+  name: "",
+  contact: "",
+  phone: "",
+  stores: "",
+  cityCountry: "",
 };
 
 const EMPTY_CATEGORY_MAP: CategoryMapForm = {
@@ -690,6 +712,8 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   const [detailRowEditForm, setDetailRowEditForm] = useState<DetailRowEditForm>(EMPTY_DETAIL_ROW_EDIT_FORM);
   const [paymentEditingRowId, setPaymentEditingRowId] = useState("");
   const [paymentRowEditForm, setPaymentRowEditForm] = useState<PaymentRowEditForm>(EMPTY_PAYMENT_ROW_EDIT_FORM);
+  const [detailCustomerInfoForm, setDetailCustomerInfoForm] = useState<DetailCustomerInfoForm>(EMPTY_DETAIL_CUSTOMER_INFO_FORM);
+  const [savingDetailCustomerInfo, setSavingDetailCustomerInfo] = useState(false);
   const paymentEvidenceInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [paymentEvidenceItems, setPaymentEvidenceItems] = useState<Record<string, PaymentEvidenceItem[]>>({});
   const [uploadingPaymentEvidenceRowId, setUploadingPaymentEvidenceRowId] = useState("");
@@ -1008,11 +1032,61 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
     if (!res.ok || !json?.ok) {
       throw new Error(json?.error || tx("加载客户失败", "Load customers fail"));
     }
-    setCustomers(json.items || []);
+    const nextItems = json.items || [];
+    setCustomers(nextItems);
     setCustomerSummary({
       totalOrderCount: Number(json.summary?.totalOrderCount || 0),
       totalOrderAmountText: String(json.summary?.totalOrderAmountText || "0.00"),
     });
+    return nextItems as Customer[];
+  }
+
+  async function saveDetailCustomerInfo() {
+    try {
+      setError("");
+      setSavingDetailCustomerInfo(true);
+      await saveEntity(
+        "/api/settings/customers",
+        {
+          id:
+            detailCustomerInfoForm.sourceType === "profile" || detailCustomerInfoForm.sourceType === "manual"
+              ? detailCustomerInfoForm.id
+              : "",
+          sourceType: detailCustomerInfoForm.sourceType,
+          linkedYgName: detailCustomerInfoForm.linkedYgName,
+          name: detailCustomerInfoForm.name,
+          contact: detailCustomerInfoForm.contact,
+          phone: detailCustomerInfoForm.phone,
+          stores: detailCustomerInfoForm.stores,
+          cityCountry: detailCustomerInfoForm.cityCountry,
+        },
+        "客户已保存",
+        "Cli saved",
+      );
+      const nextItems = await refreshCustomersSilently();
+      const nextMerged = mergeCustomerRows(nextItems);
+      const nextDetailCustomer =
+        nextMerged.find((item) => detailCustomerInfoForm.id && item.id === detailCustomerInfoForm.id)
+        || nextMerged.find((item) =>
+          item.name === detailCustomerInfoForm.name
+          && item.linkedYgName === detailCustomerInfoForm.linkedYgName
+          && item.contact === detailCustomerInfoForm.contact
+          && item.phone === detailCustomerInfoForm.phone,
+        )
+        || nextMerged.find((item) =>
+          item.name === detailCustomerInfoForm.name
+          && item.contact === detailCustomerInfoForm.contact
+          && item.phone === detailCustomerInfoForm.phone,
+        )
+        || null;
+      if (nextDetailCustomer?.id) {
+        setCustomerDetailId(nextDetailCustomer.id);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : tx("保存客户失败", "Save cli fail"));
+    } finally {
+      setSavingDetailCustomerInfo(false);
+    }
   }
 
   async function saveManualOrder() {
@@ -1573,7 +1647,20 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       setCustomerPaymentDetailId("");
       setDetailEditingRowId("");
       setDetailRowEditForm(EMPTY_DETAIL_ROW_EDIT_FORM);
+      setDetailCustomerInfoForm(EMPTY_DETAIL_CUSTOMER_INFO_FORM);
+      setSavingDetailCustomerInfo(false);
+      return;
     }
+    setDetailCustomerInfoForm({
+      id: detailCustomer.id || "",
+      sourceType: detailCustomer.sourceType || "manual",
+      linkedYgName: detailCustomer.linkedYgName || detailCustomer.name || "",
+      name: detailCustomer.name || "",
+      contact: detailCustomer.contact || "",
+      phone: detailCustomer.phone || "",
+      stores: detailCustomer.stores || "",
+      cityCountry: detailCustomer.cityCountry || "",
+    });
   }, [detailCustomer]);
   useEffect(() => {
     if (!activePaymentDetail) {
@@ -2626,28 +2713,63 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
               </div>
               <div className="p-4">
                 <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
-                  <div className="mb-3">
+                  <div className="mb-3 flex items-center justify-between gap-3">
                     <h4 className="text-sm font-semibold text-slate-900">{tx("客户信息", "Info cli")}</h4>
+                    <button
+                      type="button"
+                      onClick={() => void saveDetailCustomerInfo()}
+                      disabled={!canManageCustomers || savingDetailCustomerInfo}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 disabled:opacity-40"
+                      aria-label={tx("保存客户信息", "Save customer info")}
+                      title={tx("保存客户信息", "Save customer info")}
+                    >
+                      <Check className="h-4 w-4" />
+                    </button>
                   </div>
-                  <div className="grid gap-2.5 sm:grid-cols-2">
+                  <div className="grid gap-2.5 xl:grid-cols-4">
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("友购客户名称", "Cliente Yogo")}</label>
-                      <ReadonlyCustomerField value={detailCustomer.linkedYgName || detailCustomer.name} />
+                      <ReadonlyCustomerField value={detailCustomerInfoForm.linkedYgName} />
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("真实客户名称", "Cliente real")}</label>
-                      <ReadonlyCustomerField value={detailCustomer.name} />
+                      <input
+                        value={detailCustomerInfoForm.name}
+                        onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, name: e.target.value }))}
+                        disabled={!canManageCustomers}
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
+                      />
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("联系人", "Cont")}</label>
-                      <ReadonlyCustomerField value={detailCustomer.contact} />
+                      <ReadonlyCustomerField value={detailCustomerInfoForm.contact} />
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("手机", "Mob")}</label>
-                      <ReadonlyCustomerField value={detailCustomer.phone} />
+                      <ReadonlyCustomerField value={detailCustomerInfoForm.phone} />
                     </div>
                   </div>
-                  <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
+                  <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("客户地址", "Direccion")}</label>
+                      <input
+                        value={detailCustomerInfoForm.cityCountry}
+                        onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, cityCountry: e.target.value }))}
+                        disabled={!canManageCustomers}
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("门店编号", "Tiendas")}</label>
+                      <input
+                        value={detailCustomerInfoForm.stores}
+                        onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, stores: e.target.value }))}
+                        disabled={!canManageCustomers}
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-3 grid gap-2.5 xl:grid-cols-5">
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("VIP等级", "VIP lvl")}</label>
                       <PlainCustomerValue>
@@ -2661,6 +2783,14 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("下单次数", "Order count")}</label>
                       <PlainCustomerValue value={Number(detailCustomer.totalOrderCount || 0) > 0 ? String(detailCustomer.totalOrderCount) : "-"} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("下单金额", "Order amount")}</label>
+                      <PlainCustomerValue value={detailCustomer.totalOrderAmountText ? `$ ${detailCustomer.totalOrderAmountText}` : "-"} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("累计配货金额", "Packing total")}</label>
+                      <PlainCustomerValue value={hasAnyPackingAmount ? `$ ${detailPackingAmountTotal.toFixed(2)}` : "-"} />
                     </div>
                   </div>
                 </div>

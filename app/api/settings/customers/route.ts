@@ -376,10 +376,7 @@ export async function GET() {
         whatsapp: row.whatsapp || "",
         email: row.email || "",
         stores: row.store_addresses || "",
-        cityCountry:
-          [matchedYg?.province_name, matchedYg?.region_name].filter(Boolean).join(" / ")
-          || row.city_country
-          || "",
+        cityCountry: row.city_country || "",
         customerType: row.customer_type || "",
         vipLevel: row.vip_level || "",
         creditLevel: row.credit_level || "",
@@ -436,7 +433,7 @@ export async function GET() {
           whatsapp: "",
           email: "",
           stores: "",
-          cityCountry: [row.province_name, row.region_name].filter(Boolean).join(" / "),
+          cityCountry: "",
           customerType: "",
           vipLevel: "",
           creditLevel: "",
