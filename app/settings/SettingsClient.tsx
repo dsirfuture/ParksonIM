@@ -672,6 +672,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   const SUPPLIER_PAGE_SIZE = 10;
   const SUPPLIER_PRODUCT_PREVIEW_PAGE_SIZE = 12;
   const CUSTOMER_PAGE_SIZE = 11;
+  const CUSTOMER_DETAIL_PAGE_SIZE = 8;
   const [lang, setLang] = useState<"zh" | "es">("zh");
   const [tab, setTab] = useState<TabKey>("perm");
   const [loading, setLoading] = useState(true);
@@ -723,6 +724,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   const [customerSearchLoading, setCustomerSearchLoading] = useState(false);
   const [customerSearchResults, setCustomerSearchResults] = useState<CustomerSearchItem[]>([]);
   const [customerDetailId, setCustomerDetailId] = useState("");
+  const [customerDetailPage, setCustomerDetailPage] = useState(1);
   const [customerPaymentDetailId, setCustomerPaymentDetailId] = useState("");
   const [customerDetailDateSort, setCustomerDetailDateSort] = useState<"desc" | "asc">("desc");
   const [detailEditingRowId, setDetailEditingRowId] = useState("");
@@ -1647,6 +1649,16 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
     () => sortedDetailRows.find((row) => row.id === customerPaymentDetailId) || null,
     [customerPaymentDetailId, sortedDetailRows],
   );
+  const customerDetailTotalPages = Math.max(1, Math.ceil(sortedDetailRows.length / CUSTOMER_DETAIL_PAGE_SIZE));
+  const safeCustomerDetailPage = Math.min(customerDetailPage, customerDetailTotalPages);
+  const pagedDetailRows = useMemo(
+    () =>
+      sortedDetailRows.slice(
+        (safeCustomerDetailPage - 1) * CUSTOMER_DETAIL_PAGE_SIZE,
+        safeCustomerDetailPage * CUSTOMER_DETAIL_PAGE_SIZE,
+      ),
+    [sortedDetailRows, safeCustomerDetailPage, CUSTOMER_DETAIL_PAGE_SIZE],
+  );
   const detailPackingAmountTotal = useMemo(
     () =>
       sortedDetailRows.reduce((sum, row) => {
@@ -1662,12 +1674,14 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   useEffect(() => {
     if (!detailCustomer) {
       setCustomerPaymentDetailId("");
+      setCustomerDetailPage(1);
       setDetailEditingRowId("");
       setDetailRowEditForm(EMPTY_DETAIL_ROW_EDIT_FORM);
       setDetailCustomerInfoForm(EMPTY_DETAIL_CUSTOMER_INFO_FORM);
       setSavingDetailCustomerInfo(false);
       return;
     }
+    setCustomerDetailPage(1);
     setDetailCustomerInfoForm({
       id: detailCustomer.id || "",
       sourceType: detailCustomer.sourceType || "manual",
@@ -1679,6 +1693,9 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       cityCountry: detailCustomer.cityCountry || "",
     });
   }, [detailCustomer]);
+  useEffect(() => {
+    setCustomerDetailPage(1);
+  }, [customerDetailDateSort]);
   useEffect(() => {
     if (!activePaymentDetail) {
       setPaymentEditingRowId("");
@@ -2974,7 +2991,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                         </tr>
                       </thead>
                       <tbody>
-                        {sortedDetailRows.map((item) => (
+                        {pagedDetailRows.map((item) => (
                           <tr key={item.id} className="border-t border-slate-100">
                             <td className="w-[240px] px-3 py-2 whitespace-nowrap">
                               {detailEditingRowId === item.id && item.sourceType === "manual" ? (
@@ -3060,6 +3077,47 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                         ))}
                       </tbody>
                     </table>
+                    {sortedDetailRows.length > 0 ? (
+                      <div className="border-t border-slate-200 px-4 py-3">
+                        <div className="flex flex-nowrap items-center justify-center gap-2 overflow-x-auto">
+                          <button
+                            type="button"
+                            onClick={() => setCustomerDetailPage(1)}
+                            disabled={safeCustomerDetailPage <= 1}
+                            className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            {tx("回到首页", "Ini")}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCustomerDetailPage((prev) => Math.max(prev - 1, 1))}
+                            disabled={safeCustomerDetailPage <= 1}
+                            className="inline-flex h-9 min-w-[40px] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            {tx("上一页", "Ant")}
+                          </button>
+                          <div className="inline-flex h-9 min-w-[72px] items-center justify-center rounded-lg border border-slate-300 bg-slate-50 px-3 text-sm font-semibold text-slate-700">
+                            {safeCustomerDetailPage} / {customerDetailTotalPages}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setCustomerDetailPage((prev) => Math.min(prev + 1, customerDetailTotalPages))}
+                            disabled={safeCustomerDetailPage >= customerDetailTotalPages}
+                            className="inline-flex h-9 min-w-[40px] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            {tx("下一页", "Sig")}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCustomerDetailPage(customerDetailTotalPages)}
+                            disabled={safeCustomerDetailPage >= customerDetailTotalPages}
+                            className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            {tx("去最后页", "Fin")}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 )}
               </div>
