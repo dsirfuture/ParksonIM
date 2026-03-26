@@ -591,6 +591,17 @@ function VipBadgeIcon() {
   );
 }
 
+function normalizeStoreNumberInput(value: string) {
+  return value
+    .replace(/[\r\n]+/g, ",")
+    .replace(/，/g, ",")
+    .replace(/\s+/g, ",")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .join(",");
+}
+
 function ReadonlyCustomerField({ value, centered = false, children }: { value?: string; centered?: boolean; children?: ReactNode }) {
   return (
     <div className={`flex min-h-9 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 ${centered ? "justify-center text-center" : ""}`}>
@@ -2695,21 +2706,10 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
         {!loading && detailCustomer ? (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 px-4">
             <div className="max-h-[86vh] w-full max-w-[1400px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
-              <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+              <div className="border-b border-slate-200 px-4 py-3">
                 <h3 className="text-base font-semibold text-slate-900">
                   {tx("客户下单详情", "Detalle de pedidos")} · {detailCustomer.name || "-"}
                 </h3>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">
-                    {tx("下单次数", "Order count")}: <span className="font-semibold text-slate-900">{detailCustomer.totalOrderCount ?? sortedDetailRows.length}</span>
-                  </span>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">
-                    {tx("下单金额", "Order amount")}: <span className="font-semibold text-slate-900">{detailCustomer.totalOrderAmountText ? `$ ${detailCustomer.totalOrderAmountText}` : "-"}</span>
-                  </span>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">
-                    {tx("累计配货金额", "Packing total")}: <span className="font-semibold text-slate-900">{hasAnyPackingAmount ? `$ ${detailPackingAmountTotal.toFixed(2)}` : "-"}</span>
-                  </span>
-                </div>
               </div>
               <div className="p-4">
                 <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
@@ -2727,45 +2727,54 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                     </button>
                   </div>
                   <div className="grid gap-2.5 xl:grid-cols-4">
-                    <div>
+                    <div className="max-w-[360px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("友购客户名称", "Cliente Yogo")}</label>
                       <ReadonlyCustomerField value={detailCustomerInfoForm.linkedYgName} />
                     </div>
-                    <div>
+                    <div className="max-w-[360px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("真实客户名称", "Cliente real")}</label>
                       <input
                         value={detailCustomerInfoForm.name}
                         onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, name: e.target.value }))}
                         disabled={!canManageCustomers}
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
+                        className="h-11 w-full max-w-[360px] rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
                       />
                     </div>
-                    <div>
+                    <div className="max-w-[360px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("联系人", "Cont")}</label>
                       <ReadonlyCustomerField value={detailCustomerInfoForm.contact} />
                     </div>
-                    <div>
+                    <div className="max-w-[360px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("手机", "Mob")}</label>
                       <ReadonlyCustomerField value={detailCustomerInfoForm.phone} />
                     </div>
                   </div>
-                  <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
-                    <div>
+                  <div className="mt-3 grid gap-2.5 xl:grid-cols-[minmax(0,420px)_minmax(0,260px)]">
+                    <div className="max-w-[420px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("客户地址", "Direccion")}</label>
                       <input
                         value={detailCustomerInfoForm.cityCountry}
                         onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, cityCountry: e.target.value }))}
                         disabled={!canManageCustomers}
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
+                        className="h-11 w-full max-w-[420px] rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
                       />
                     </div>
-                    <div>
+                    <div className="max-w-[260px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("门店编号", "Tiendas")}</label>
                       <input
                         value={detailCustomerInfoForm.stores}
-                        onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, stores: e.target.value }))}
+                        onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, stores: normalizeStoreNumberInput(e.target.value) }))}
+                        onKeyDown={(e) => {
+                          if (e.key !== "Enter") return;
+                          e.preventDefault();
+                          setDetailCustomerInfoForm((prev) => ({
+                            ...prev,
+                            stores: prev.stores ? `${normalizeStoreNumberInput(prev.stores)},` : "",
+                          }));
+                        }}
+                        onBlur={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, stores: normalizeStoreNumberInput(e.target.value) }))}
                         disabled={!canManageCustomers}
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
+                        className="h-11 w-full max-w-[260px] rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
                       />
                     </div>
                   </div>
@@ -2928,9 +2937,9 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                     <table className="w-full table-auto text-sm">
                       <thead className="bg-slate-50 text-slate-600">
                         <tr>
-                          <th className="px-3 py-2 text-left">{tx("订单号", "Order no")}</th>
-                          <th className="px-3 py-2 text-left whitespace-nowrap">{tx("渠道", "Canal")}</th>
-                          <th className="px-3 py-2 text-left whitespace-nowrap">
+                          <th className="w-[1%] px-3 py-2 text-left whitespace-nowrap">{tx("订单号", "Order no")}</th>
+                          <th className="w-[1%] px-3 py-2 text-left whitespace-nowrap">{tx("渠道", "Canal")}</th>
+                          <th className="w-[1%] px-3 py-2 text-left whitespace-nowrap">
                             <button
                               type="button"
                               onClick={() => setCustomerDetailDateSort((prev) => (prev === "desc" ? "asc" : "desc"))}
@@ -2940,27 +2949,27 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                               {customerDetailDateSort === "desc" ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                             </button>
                           </th>
-                          <th className="px-3 py-2 text-left whitespace-nowrap">{tx("下单金额", "Order amount")}</th>
-                          <th className="px-3 py-2 text-left whitespace-nowrap">{tx("配货金额", "Packing amount")}</th>
-                          <th className="px-3 py-2 text-left whitespace-nowrap">{tx("发货日期", "Ship date")}</th>
+                          <th className="w-[1%] px-3 py-2 text-left whitespace-nowrap">{tx("下单金额", "Order amount")}</th>
+                          <th className="w-[1%] px-3 py-2 text-left whitespace-nowrap">{tx("配货金额", "Packing amount")}</th>
+                          <th className="w-[1%] px-3 py-2 text-left whitespace-nowrap">{tx("发货日期", "Ship date")}</th>
                           <th className="px-3 py-2 text-right whitespace-nowrap">{tx("操作", "Acciones")}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {sortedDetailRows.map((item) => (
                           <tr key={item.id} className="border-t border-slate-100">
-                            <td className="px-3 py-2 whitespace-nowrap">
+                            <td className="w-[1%] px-3 py-2 whitespace-nowrap">
                               {detailEditingRowId === item.id && item.sourceType === "manual" ? (
                                 <input
                                   value={detailRowEditForm.displayOrderNo}
                                   onChange={(e) => setDetailRowEditForm((prev) => ({ ...prev, displayOrderNo: e.target.value }))}
-                                  className="h-9 w-[180px] rounded-xl border border-slate-200 px-3 text-sm"
+                                  className="h-9 w-[150px] rounded-xl border border-slate-200 px-3 text-sm"
                                 />
                               ) : (
                                 item.orderNo || "-"
                               )}
                             </td>
-                            <td className="px-3 py-2 whitespace-nowrap">
+                            <td className="w-[1%] px-3 py-2 whitespace-nowrap">
                               {detailEditingRowId === item.id && item.sourceType === "manual" ? (
                                 <input
                                   value={detailRowEditForm.orderChannel}
@@ -2971,28 +2980,28 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                 item.channelText || "-"
                               )}
                             </td>
-                            <td className="px-3 py-2 whitespace-nowrap">{item.orderDateText || "-"}</td>
-                            <td className="px-3 py-2 whitespace-nowrap">
+                            <td className="w-[1%] px-3 py-2 whitespace-nowrap">{item.orderDateText || "-"}</td>
+                            <td className="w-[1%] px-3 py-2 whitespace-nowrap">
                               {item.orderAmountText ? `$ ${item.orderAmountText}` : "-"}
                             </td>
-                            <td className="px-3 py-2 whitespace-nowrap">
+                            <td className="w-[1%] px-3 py-2 whitespace-nowrap">
                               {detailEditingRowId === item.id ? (
                                 <input
                                   value={detailRowEditForm.packingAmount}
                                   onChange={(e) => setDetailRowEditForm((prev) => ({ ...prev, packingAmount: e.target.value }))}
-                                  className="h-9 w-[136px] rounded-xl border border-slate-200 px-3 text-sm"
+                                  className="h-9 w-[120px] rounded-xl border border-slate-200 px-3 text-sm"
                                 />
                               ) : (
                                 item.packingAmountText ? `$ ${item.packingAmountText}` : "-"
                               )}
                             </td>
-                            <td className="px-3 py-2 whitespace-nowrap">
+                            <td className="w-[1%] px-3 py-2 whitespace-nowrap">
                               {detailEditingRowId === item.id ? (
                                 <input
                                   type="date"
                                   value={detailRowEditForm.shippedAt}
                                   onChange={(e) => setDetailRowEditForm((prev) => ({ ...prev, shippedAt: e.target.value }))}
-                                  className="h-9 w-full min-w-[136px] rounded-xl border border-slate-200 px-3 text-sm"
+                                  className="h-9 w-[132px] rounded-xl border border-slate-200 px-3 text-sm"
                                 />
                               ) : (
                                 item.shippedAtText || "-"
