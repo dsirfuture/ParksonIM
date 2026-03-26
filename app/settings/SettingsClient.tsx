@@ -127,6 +127,11 @@ type ManualOrderForm = {
   paymentTermDays: string;
 };
 
+type DetailRowEditForm = ManualOrderForm & {
+  displayOrderNo: string;
+  displayOrderNoField: "ygOrderNo" | "externalOrderNo";
+};
+
 type CustomerSummary = {
   totalOrderCount: number;
   totalOrderAmountText: string;
@@ -268,6 +273,12 @@ const EMPTY_MANUAL_ORDER_FORM: ManualOrderForm = {
   shippedAt: "",
   paidAt: "",
   paymentTermDays: "",
+};
+
+const EMPTY_DETAIL_ROW_EDIT_FORM: DetailRowEditForm = {
+  ...EMPTY_MANUAL_ORDER_FORM,
+  displayOrderNo: "",
+  displayOrderNoField: "externalOrderNo",
 };
 
 const EMPTY_CATEGORY_MAP: CategoryMapForm = {
@@ -658,6 +669,8 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   const [customerDetailId, setCustomerDetailId] = useState("");
   const [customerPaymentDetailId, setCustomerPaymentDetailId] = useState("");
   const [customerDetailDateSort, setCustomerDetailDateSort] = useState<"desc" | "asc">("desc");
+  const [detailEditingRowId, setDetailEditingRowId] = useState("");
+  const [detailRowEditForm, setDetailRowEditForm] = useState<DetailRowEditForm>(EMPTY_DETAIL_ROW_EDIT_FORM);
   const paymentEvidenceInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [paymentEvidenceNames, setPaymentEvidenceNames] = useState<Record<string, string[]>>({});
   const manualOrderEditorMode = manualOrderForm.sourceType;
@@ -981,20 +994,11 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
     }
   }
 
-  function openManualOrderEditor(input: {
-    id?: string;
-    sourceType?: "yg" | "manual";
-    customerProfileId?: string;
-    customerName?: string;
-    ygOrderNo?: string;
-    externalOrderNo?: string;
-    orderChannel?: string;
-    packingAmount?: string;
-    shippedAt?: string;
-    paidAt?: string;
-    paymentTermDays?: string;
-  }) {
-    setManualOrderForm({
+  function startInlineRowEdit(input: Partial<DetailRowEditForm> & { rowId: string }) {
+    setDetailEditingRowId(input.rowId);
+    setDetailRowEditForm({
+      ...EMPTY_DETAIL_ROW_EDIT_FORM,
+      ...input,
       id: input.id || "",
       sourceType: input.sourceType || "manual",
       customerProfileId: input.customerProfileId || "",
@@ -1006,15 +1010,39 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       shippedAt: input.shippedAt || "",
       paidAt: input.paidAt || "",
       paymentTermDays: input.paymentTermDays || "",
+      displayOrderNo: input.displayOrderNo || "",
+      displayOrderNoField: input.displayOrderNoField || "externalOrderNo",
     });
-    setManualOrderOpen(true);
+  }
+
+  async function saveInlineDetailRow() {
+    try {
+      setError("");
+      const nextPayload: ManualOrderForm = {
+        ...detailRowEditForm,
+        ygOrderNo: detailRowEditForm.displayOrderNoField === "ygOrderNo" ? detailRowEditForm.displayOrderNo : "",
+        externalOrderNo: detailRowEditForm.displayOrderNoField === "externalOrderNo" ? detailRowEditForm.displayOrderNo : "",
+      };
+      await saveEntity("/api/settings/customers/manual-orders", nextPayload, "记录已保存", "Record saved");
+      setDetailEditingRowId("");
+      setDetailRowEditForm(EMPTY_DETAIL_ROW_EDIT_FORM);
+      await loadAll();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : tx("保存记录失败", "Save record fail"));
+    }
   }
 
   function handleTimelineRowEdit(row: CustomerTimelineRow) {
     setCustomerPaymentDetailId("");
+    if (detailEditingRowId === row.id) {
+      setDetailEditingRowId("");
+      setDetailRowEditForm(EMPTY_DETAIL_ROW_EDIT_FORM);
+      return;
+    }
     if (row.sourceType === "yg") {
       const detailRow = detailCustomer?.detailRows?.find((item) => item.orderNo === row.orderNo);
-      openManualOrderEditor({
+      startInlineRowEdit({
+        rowId: row.id,
         id: detailRow?.overlayRecordId || row.manualRecordId || "",
         sourceType: "yg",
         customerProfileId: detailCustomer?.sourceType === "profile" ? detailCustomer.id : "",
@@ -1026,6 +1054,8 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
         shippedAt: row.shippedAtText || "",
         paidAt: detailRow?.paidAtText || "",
         paymentTermDays: detailRow?.paymentTermText || "",
+        displayOrderNo: row.orderNo || "",
+        displayOrderNoField: "ygOrderNo",
       });
       return;
     }
@@ -1034,7 +1064,8 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       setError(tx("未找到可编辑记录。", "Editable record not found."));
       return;
     }
-    openManualOrderEditor({
+    startInlineRowEdit({
+      rowId: row.id,
       id: manualRow.id,
       sourceType: "manual",
       customerProfileId: manualRow.customerProfileId || (detailCustomer?.sourceType === "profile" ? detailCustomer.id : ""),
@@ -1046,6 +1077,8 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       shippedAt: manualRow.shippedAtText || "",
       paidAt: manualRow.paidAtText || "",
       paymentTermDays: manualRow.paymentTermText || "",
+      displayOrderNo: manualRow.ygOrderNo || manualRow.externalOrderNo || "",
+      displayOrderNoField: manualRow.ygOrderNo ? "ygOrderNo" : "externalOrderNo",
     });
   }
 
@@ -1419,6 +1452,8 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   useEffect(() => {
     if (!detailCustomer) {
       setCustomerPaymentDetailId("");
+      setDetailEditingRowId("");
+      setDetailRowEditForm(EMPTY_DETAIL_ROW_EDIT_FORM);
     }
   }, [detailCustomer]);
   useEffect(() => {
@@ -2499,18 +2534,65 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       <tbody>
                         {sortedDetailRows.map((item) => (
                           <tr key={item.id} className="border-t border-slate-100">
-                            <td className="px-3 py-2 font-semibold break-all whitespace-normal">{item.orderNo || "-"}</td>
-                            <td className="px-3 py-2 whitespace-nowrap">{item.channelText || "-"}</td>
+                            <td className="px-3 py-2 font-semibold break-all whitespace-normal">
+                              {detailEditingRowId === item.id && item.sourceType === "manual" ? (
+                                <input
+                                  value={detailRowEditForm.displayOrderNo}
+                                  onChange={(e) => setDetailRowEditForm((prev) => ({ ...prev, displayOrderNo: e.target.value }))}
+                                  className="h-9 w-full min-w-[160px] rounded-xl border border-slate-200 px-3 text-sm"
+                                />
+                              ) : (
+                                item.orderNo || "-"
+                              )}
+                            </td>
+                            <td className="px-3 py-2 whitespace-nowrap">
+                              {detailEditingRowId === item.id && item.sourceType === "manual" ? (
+                                <input
+                                  value={detailRowEditForm.orderChannel}
+                                  onChange={(e) => setDetailRowEditForm((prev) => ({ ...prev, orderChannel: e.target.value }))}
+                                  className="h-9 w-full min-w-[96px] rounded-xl border border-slate-200 px-3 text-sm"
+                                />
+                              ) : (
+                                item.channelText || "-"
+                              )}
+                            </td>
                             <td className="px-3 py-2 whitespace-nowrap">{item.orderDateText || "-"}</td>
                             <td className="px-3 py-2 whitespace-nowrap">
                               {item.orderAmountText ? `$ ${item.orderAmountText}` : "-"}
                             </td>
                             <td className="px-3 py-2 whitespace-nowrap">
-                              {item.packingAmountText ? `$ ${item.packingAmountText}` : "-"}
+                              {detailEditingRowId === item.id ? (
+                                <input
+                                  value={detailRowEditForm.packingAmount}
+                                  onChange={(e) => setDetailRowEditForm((prev) => ({ ...prev, packingAmount: e.target.value }))}
+                                  className="h-9 w-full min-w-[120px] rounded-xl border border-slate-200 px-3 text-sm"
+                                />
+                              ) : (
+                                item.packingAmountText ? `$ ${item.packingAmountText}` : "-"
+                              )}
                             </td>
-                            <td className="px-3 py-2 whitespace-nowrap">{item.shippedAtText || "-"}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">
+                              {detailEditingRowId === item.id ? (
+                                <input
+                                  type="date"
+                                  value={detailRowEditForm.shippedAt}
+                                  onChange={(e) => setDetailRowEditForm((prev) => ({ ...prev, shippedAt: e.target.value }))}
+                                  className="h-9 w-full min-w-[136px] rounded-xl border border-slate-200 px-3 text-sm"
+                                />
+                              ) : (
+                                item.shippedAtText || "-"
+                              )}
+                            </td>
                             <td className="px-3 py-2 text-right">
                               <div className="flex items-center justify-end gap-2">
+                                {detailEditingRowId === item.id ? (
+                                  <input
+                                    type="date"
+                                    value={detailRowEditForm.paidAt}
+                                    onChange={(e) => setDetailRowEditForm((prev) => ({ ...prev, paidAt: e.target.value }))}
+                                    className="h-9 w-[140px] rounded-xl border border-slate-200 px-3 text-sm"
+                                  />
+                                ) : null}
                                 <button
                                   type="button"
                                   onClick={() => handleTimelineRowEdit(item)}
@@ -2520,6 +2602,15 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                 >
                                   <Pencil className="h-4 w-4" />
                                 </button>
+                                {detailEditingRowId === item.id ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => void saveInlineDetailRow()}
+                                    className="inline-flex h-8 items-center rounded-xl bg-primary px-3 text-sm font-semibold text-white hover:opacity-95"
+                                  >
+                                    {tx("保存", "Guardar")}
+                                  </button>
+                                ) : null}
                                 <button
                                   type="button"
                                   onClick={() => setCustomerPaymentDetailId(item.id)}
