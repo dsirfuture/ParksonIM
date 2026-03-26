@@ -1248,7 +1248,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       id: `manual:${row.id}`,
       orderNo: row.ygOrderNo || row.externalOrderNo || "-",
       orderDateText: row.shippedAtText || row.paidAtText || "-",
-      orderAmountText: row.packingAmountText || "0.00",
+      orderAmountText: "",
       channelText: row.orderChannel || tx("其他渠道", "Canal manual"),
       packingAmountText: row.packingAmountText || "",
       shippedAtText: row.shippedAtText || "",
