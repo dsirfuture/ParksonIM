@@ -133,6 +133,15 @@ type CustomerTimelineRow = {
   channelText: string;
   packingAmountText: string;
   shippedAtText: string;
+  paymentRows: Array<{
+    id: string;
+    payableAmountText: string;
+    paidAmountText: string;
+    paymentTimeText: string;
+    paymentMethodText: string;
+    paymentTargetText: string;
+    unpaidAmountText: string;
+  }>;
 };
 
 type CustomerSearchItem = {
@@ -509,7 +518,7 @@ function isVipCustomer(item: Customer) {
   return Number(item.totalOrderAmountText || 0) >= 100000;
 }
 
-function getCustomerChannelLabel(item: Customer, t: typeof tx) {
+function getCustomerChannelLabel(item: Customer, t: (zh: string, es: string) => string) {
   return item.sourceType === "manual" ? t("其他渠道", "Canal manual") : t("友购", "Yogo");
 }
 
@@ -634,6 +643,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   const [customerSearchLoading, setCustomerSearchLoading] = useState(false);
   const [customerSearchResults, setCustomerSearchResults] = useState<CustomerSearchItem[]>([]);
   const [customerDetailId, setCustomerDetailId] = useState("");
+  const [customerPaymentDetailId, setCustomerPaymentDetailId] = useState("");
   const [customerDetailDateSort, setCustomerDetailDateSort] = useState<"desc" | "asc">("desc");
 
   const [catalogConfig, setCatalogConfig] = useState<CatalogConfig>(EMPTY_CATALOG);
@@ -1243,6 +1253,17 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       channelText: tx("友购", "Yogo"),
       packingAmountText: "",
       shippedAtText: "",
+      paymentRows: [
+        {
+          id: `detail:${row.orderNo}:payment`,
+          payableAmountText: row.orderAmountText || "",
+          paidAmountText: "",
+          paymentTimeText: "",
+          paymentMethodText: "",
+          paymentTargetText: "",
+          unpaidAmountText: "",
+        },
+      ],
     }));
     const manualRows = (detailCustomer?.manualOrderRecords || []).map((row) => ({
       id: `manual:${row.id}`,
@@ -1252,12 +1273,27 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       channelText: row.orderChannel || tx("其他渠道", "Canal manual"),
       packingAmountText: row.packingAmountText || "",
       shippedAtText: row.shippedAtText || "",
+      paymentRows: [
+        {
+          id: `manual:${row.id}:payment`,
+          payableAmountText: row.packingAmountText || "",
+          paidAmountText: row.paidAtText && row.packingAmountText ? row.packingAmountText : "",
+          paymentTimeText: row.paidAtText || "",
+          paymentMethodText: "",
+          paymentTargetText: "",
+          unpaidAmountText: row.packingAmountText ? (row.paidAtText ? "0.00" : row.packingAmountText) : "",
+        },
+      ],
     }));
     return [...orderRows, ...manualRows].sort((left, right) => {
       const compareResult = String(left.orderDateText || "").localeCompare(String(right.orderDateText || ""), "zh-CN");
       return customerDetailDateSort === "asc" ? compareResult : -compareResult;
     });
-  }, [customerDetailDateSort, detailCustomer?.detailRows, detailCustomer?.manualOrderRecords, lang]);
+  }, [customerDetailDateSort, detailCustomer?.detailRows, detailCustomer?.manualOrderRecords, lang, tx]);
+  const activePaymentDetail = useMemo(
+    () => sortedDetailRows.find((row) => row.id === customerPaymentDetailId) || null,
+    [customerPaymentDetailId, sortedDetailRows],
+  );
   const detailPackingAmountTotal = useMemo(
     () =>
       sortedDetailRows.reduce((sum, row) => {
@@ -1270,6 +1306,11 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
     () => sortedDetailRows.some((row) => Boolean(String(row.packingAmountText || "").trim())),
     [sortedDetailRows],
   );
+  useEffect(() => {
+    if (!detailCustomer) {
+      setCustomerPaymentDetailId("");
+    }
+  }, [detailCustomer]);
 
   useEffect(() => {
     if (!customerEditorOpen) {
@@ -2310,7 +2351,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                   </div>
                 ) : (
                   <div className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full min-w-[940px] text-sm">
+                    <table className="w-full min-w-[1080px] text-sm">
                       <thead className="bg-slate-50 text-slate-600">
                         <tr>
                           <th className="px-3 py-2 text-left">{tx("订单号", "Order no")}</th>
@@ -2328,6 +2369,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                           <th className="px-3 py-2 text-left">{tx("下单金额", "Order amount")}</th>
                           <th className="px-3 py-2 text-left">{tx("配货金额", "Packing amount")}</th>
                           <th className="px-3 py-2 text-left">{tx("发货日期", "Ship date")}</th>
+                          <th className="px-3 py-2 text-right">{tx("付款", "Pago")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2343,6 +2385,15 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                               {item.packingAmountText ? `$ ${item.packingAmountText}` : "-"}
                             </td>
                             <td className="px-3 py-2">{item.shippedAtText || "-"}</td>
+                            <td className="px-3 py-2 text-right">
+                              <button
+                                type="button"
+                                onClick={() => setCustomerPaymentDetailId(item.id)}
+                                className="inline-flex h-8 items-center rounded-xl bg-primary px-3 text-sm font-semibold text-white hover:opacity-95"
+                              >
+                                {tx("付款", "Pago")}
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -2354,6 +2405,55 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                 <button
                   type="button"
                   onClick={() => setCustomerDetailId("")}
+                  className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
+                >
+                  {tx("关闭", "Cerrar")}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {!loading && detailCustomer && activePaymentDetail ? (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/45 px-4">
+            <div className="max-h-[80vh] w-full max-w-[860px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+                <h3 className="text-base font-semibold text-slate-900">
+                  {tx("付款详情", "Detalle de pago")} · {activePaymentDetail.orderNo || "-"}
+                </h3>
+              </div>
+              <div className="p-4">
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full min-w-[760px] text-sm">
+                    <thead className="bg-slate-50 text-slate-600">
+                      <tr>
+                        <th className="px-3 py-2 text-left">{tx("需付金额", "Monto por pagar")}</th>
+                        <th className="px-3 py-2 text-left">{tx("已付金额", "Monto pagado")}</th>
+                        <th className="px-3 py-2 text-left">{tx("付款时间", "Fecha pago")}</th>
+                        <th className="px-3 py-2 text-left">{tx("付款方式", "Metodo pago")}</th>
+                        <th className="px-3 py-2 text-left">{tx("付款对象", "Destinatario")}</th>
+                        <th className="px-3 py-2 text-left">{tx("未付金额", "Monto pendiente")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activePaymentDetail.paymentRows.map((row) => (
+                        <tr key={row.id} className="border-t border-slate-100">
+                          <td className="px-3 py-2">{row.payableAmountText ? `$ ${row.payableAmountText}` : "-"}</td>
+                          <td className="px-3 py-2">{row.paidAmountText ? `$ ${row.paidAmountText}` : "-"}</td>
+                          <td className="px-3 py-2">{row.paymentTimeText || "-"}</td>
+                          <td className="px-3 py-2">{row.paymentMethodText || "-"}</td>
+                          <td className="px-3 py-2">{row.paymentTargetText || "-"}</td>
+                          <td className="px-3 py-2">{row.unpaidAmountText ? `$ ${row.unpaidAmountText}` : "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() => setCustomerPaymentDetailId("")}
                   className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
                 >
                   {tx("关闭", "Cerrar")}
