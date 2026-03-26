@@ -2726,25 +2726,25 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       <Check className="h-4 w-4" />
                     </button>
                   </div>
-                  <div className="grid gap-2.5 xl:grid-cols-4">
-                    <div className="max-w-[280px]">
+                  <div className="grid gap-2.5 xl:grid-cols-[minmax(0,240px)_minmax(0,240px)_minmax(0,180px)_minmax(0,180px)]">
+                    <div className="max-w-[240px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("友购客户名称", "Cliente Yogo")}</label>
                       <ReadonlyCustomerField value={detailCustomerInfoForm.linkedYgName} />
                     </div>
-                    <div className="max-w-[280px]">
+                    <div className="max-w-[240px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("真实客户名称", "Cliente real")}</label>
                       <input
                         value={detailCustomerInfoForm.name}
                         onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, name: e.target.value }))}
                         disabled={!canManageCustomers}
-                        className="h-11 w-full max-w-[280px] rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
+                        className="h-11 w-full max-w-[240px] rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
                       />
                     </div>
-                    <div className="max-w-[280px]">
+                    <div className="max-w-[180px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("联系人", "Cont")}</label>
                       <ReadonlyCustomerField value={detailCustomerInfoForm.contact} />
                     </div>
-                    <div className="max-w-[280px]">
+                    <div className="max-w-[180px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("手机", "Mob")}</label>
                       <ReadonlyCustomerField value={detailCustomerInfoForm.phone} />
                     </div>
