@@ -2767,14 +2767,14 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       />
                     </div>
                   </div>
-                  <div className="mt-3 grid gap-2.5 xl:grid-cols-[340px]">
-                    <div className="w-[340px]">
+                  <div className="mt-3 grid gap-2.5 xl:grid-cols-[470px]">
+                    <div className="w-[470px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("客户地址", "Direccion")}</label>
                       <input
                         value={detailCustomerInfoForm.cityCountry}
                         onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, cityCountry: e.target.value }))}
                         disabled={!canManageCustomers}
-                        className="h-11 w-[340px] rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
+                        className="h-11 w-[470px] rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
                       />
                     </div>
                   </div>
