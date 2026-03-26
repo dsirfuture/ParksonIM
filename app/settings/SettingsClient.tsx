@@ -610,7 +610,7 @@ function mapSearchUrl(address: string) {
 
 function ReadonlyCustomerField({ value, centered = false, children }: { value?: string; centered?: boolean; children?: ReactNode }) {
   return (
-    <div className={`flex min-h-9 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 ${centered ? "justify-center text-center" : ""}`}>
+    <div className={`flex h-11 items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 ${centered ? "justify-center text-center" : ""}`}>
       {children ?? (String(value || "").trim() || "-")}
     </div>
   );
@@ -618,7 +618,7 @@ function ReadonlyCustomerField({ value, centered = false, children }: { value?: 
 
 function PlainCustomerValue({ value, centered = false, children }: { value?: string; centered?: boolean; children?: ReactNode }) {
   return (
-    <div className={`flex min-h-9 items-center px-1 text-sm text-slate-700 ${centered ? "justify-center text-center" : ""}`}>
+    <div className={`flex h-11 items-center rounded-2xl px-1 text-sm text-slate-700 ${centered ? "justify-center text-center" : ""}`}>
       {children ?? (String(value || "").trim() || "-")}
     </div>
   );
