@@ -137,6 +137,13 @@ type PaymentRowEditForm = {
   paymentTime: string;
 };
 
+type PaymentEvidenceItem = {
+  name: string;
+  url: string;
+  sizeBytes?: number;
+  uploadedAt?: string;
+};
+
 type CustomerSummary = {
   totalOrderCount: number;
   totalOrderAmountText: string;
@@ -684,7 +691,8 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   const [paymentEditingRowId, setPaymentEditingRowId] = useState("");
   const [paymentRowEditForm, setPaymentRowEditForm] = useState<PaymentRowEditForm>(EMPTY_PAYMENT_ROW_EDIT_FORM);
   const paymentEvidenceInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
-  const [paymentEvidenceNames, setPaymentEvidenceNames] = useState<Record<string, string[]>>({});
+  const [paymentEvidenceItems, setPaymentEvidenceItems] = useState<Record<string, PaymentEvidenceItem[]>>({});
+  const [uploadingPaymentEvidenceRowId, setUploadingPaymentEvidenceRowId] = useState("");
   const manualOrderEditorMode = manualOrderForm.sourceType;
 
   const [catalogConfig, setCatalogConfig] = useState<CatalogConfig>(EMPTY_CATALOG);
@@ -1166,13 +1174,48 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
     paymentEvidenceInputRefs.current[paymentRowId]?.click();
   }
 
-  function handlePaymentEvidenceSelected(paymentRowId: string, files: FileList | null) {
-    const nextNames = Array.from(files || [])
-      .map((file) => String(file.name || "").trim())
-      .filter(Boolean);
-    setPaymentEvidenceNames((prev) => ({ ...prev, [paymentRowId]: nextNames }));
-    if (nextNames.length > 0) {
-      showSaved(tx("付款证据已加入待上传列表", "Payment evidence added to pending list"));
+  async function loadPaymentEvidenceItems(rowId: string, sourceType: "yg" | "manual", orderNo: string, recordId: string) {
+    const params = new URLSearchParams({
+      sourceType,
+      orderNo,
+      recordId,
+    });
+    const res = await fetch(`/api/settings/customers/payment-evidences?${params.toString()}`);
+    const json = await readJsonSafe<{ ok?: boolean; items?: PaymentEvidenceItem[]; error?: string }>(res);
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.error || tx("加载付款证据失败", "Load payment evidence fail"));
+    }
+    setPaymentEvidenceItems((prev) => ({ ...prev, [rowId]: Array.isArray(json.items) ? json.items : [] }));
+  }
+
+  async function handlePaymentEvidenceSelected(paymentRowId: string, files: FileList | null) {
+    if (!activePaymentDetail) return;
+    const uploadFiles = Array.from(files || []).filter((file) => file.size > 0);
+    if (uploadFiles.length === 0) return;
+    try {
+      setError("");
+      setUploadingPaymentEvidenceRowId(paymentRowId);
+      const formData = new FormData();
+      formData.set("sourceType", activePaymentDetail.sourceType);
+      formData.set("orderNo", activePaymentDetail.orderNo || "");
+      formData.set("recordId", activePaymentDetail.manualRecordId || "");
+      for (const file of uploadFiles) {
+        formData.append("files", file);
+      }
+      const res = await fetch("/api/settings/customers/payment-evidences", {
+        method: "POST",
+        body: formData,
+      });
+      const json = await readJsonSafe<{ ok?: boolean; items?: PaymentEvidenceItem[]; error?: string }>(res);
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || tx("上传付款证据失败", "Upload payment evidence fail"));
+      }
+      setPaymentEvidenceItems((prev) => ({ ...prev, [paymentRowId]: Array.isArray(json.items) ? json.items : [] }));
+      showSaved(tx("付款证据已上传", "Payment evidence uploaded"));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : tx("上传付款证据失败", "Upload payment evidence fail"));
+    } finally {
+      setUploadingPaymentEvidenceRowId("");
     }
   }
 
@@ -1540,8 +1583,21 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   }, [activePaymentDetail]);
   useEffect(() => {
     if (!activePaymentDetail) {
-      setPaymentEvidenceNames({});
+      setPaymentEvidenceItems({});
     }
+  }, [activePaymentDetail]);
+  useEffect(() => {
+    if (!activePaymentDetail) return;
+    const paymentRow = activePaymentDetail.paymentRows[0];
+    if (!paymentRow) return;
+    void loadPaymentEvidenceItems(
+      paymentRow.id,
+      activePaymentDetail.sourceType,
+      activePaymentDetail.orderNo || "",
+      activePaymentDetail.manualRecordId || "",
+    ).catch((error) => {
+      setError(error instanceof Error ? error.message : tx("加载付款证据失败", "Load payment evidence fail"));
+    });
   }, [activePaymentDetail]);
 
   useEffect(() => {
@@ -2788,6 +2844,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                 className="inline-flex h-8 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                                 title={tx("上传付款证据", "Upload payment evidence")}
                                 aria-label={tx("上传付款证据", "Upload payment evidence")}
+                                disabled={uploadingPaymentEvidenceRowId === row.id}
                               >
                                 <Paperclip className="h-4 w-4" />
                               </button>
@@ -2813,7 +2870,24 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                               ) : null}
                             </div>
                             <div className="mt-1 text-xs text-slate-500">
-                              {paymentEvidenceNames[row.id]?.length ? `${paymentEvidenceNames[row.id].length} ${tx("个文件待上传", "files pending")}` : ""}
+                              {uploadingPaymentEvidenceRowId === row.id ? tx("上传中...", "Uploading...") : ""}
+                              {!uploadingPaymentEvidenceRowId && paymentEvidenceItems[row.id]?.length
+                                ? `${paymentEvidenceItems[row.id].length} ${tx("个已上传", "uploaded")}`
+                                : ""}
+                            </div>
+                            <div className="mt-1 flex flex-wrap justify-end gap-2">
+                              {(paymentEvidenceItems[row.id] || []).map((item) => (
+                                <a
+                                  key={item.url}
+                                  href={item.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex max-w-[220px] truncate rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-slate-900"
+                                  title={item.name}
+                                >
+                                  {item.name}
+                                </a>
+                              ))}
                             </div>
                           </td>
                         </tr>
