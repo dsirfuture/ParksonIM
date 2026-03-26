@@ -2534,12 +2534,12 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       <tbody>
                         {sortedDetailRows.map((item) => (
                           <tr key={item.id} className="border-t border-slate-100">
-                            <td className="px-3 py-2 font-semibold break-all whitespace-normal">
+                            <td className="px-3 py-2 font-semibold whitespace-nowrap">
                               {detailEditingRowId === item.id && item.sourceType === "manual" ? (
                                 <input
                                   value={detailRowEditForm.displayOrderNo}
                                   onChange={(e) => setDetailRowEditForm((prev) => ({ ...prev, displayOrderNo: e.target.value }))}
-                                  className="h-9 w-full min-w-[160px] rounded-xl border border-slate-200 px-3 text-sm"
+                                  className="h-9 w-[180px] rounded-xl border border-slate-200 px-3 text-sm"
                                 />
                               ) : (
                                 item.orderNo || "-"
@@ -2550,7 +2550,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                 <input
                                   value={detailRowEditForm.orderChannel}
                                   onChange={(e) => setDetailRowEditForm((prev) => ({ ...prev, orderChannel: e.target.value }))}
-                                  className="h-9 w-full min-w-[96px] rounded-xl border border-slate-200 px-3 text-sm"
+                                  className="h-9 w-[96px] rounded-xl border border-slate-200 px-3 text-sm"
                                 />
                               ) : (
                                 item.channelText || "-"
@@ -2565,7 +2565,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                 <input
                                   value={detailRowEditForm.packingAmount}
                                   onChange={(e) => setDetailRowEditForm((prev) => ({ ...prev, packingAmount: e.target.value }))}
-                                  className="h-9 w-full min-w-[120px] rounded-xl border border-slate-200 px-3 text-sm"
+                                  className="h-9 w-[136px] rounded-xl border border-slate-200 px-3 text-sm"
                                 />
                               ) : (
                                 item.packingAmountText ? `$ ${item.packingAmountText}` : "-"
@@ -2590,7 +2590,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                     type="date"
                                     value={detailRowEditForm.paidAt}
                                     onChange={(e) => setDetailRowEditForm((prev) => ({ ...prev, paidAt: e.target.value }))}
-                                    className="h-9 w-[140px] rounded-xl border border-slate-200 px-3 text-sm"
+                                    className="h-9 w-[136px] rounded-xl border border-slate-200 px-3 text-sm"
                                   />
                                 ) : null}
                                 <button
@@ -2672,7 +2672,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                           <td className="px-3 py-2 break-words whitespace-normal">{row.paymentTargetText || "-"}</td>
                           <td className="px-3 py-2 whitespace-nowrap">{row.unpaidAmountText ? `$ ${row.unpaidAmountText}` : "-"}</td>
                           <td className="px-3 py-2 text-right">
-                            <div className="flex items-center justify-end gap-2">
+                              <div className="flex flex-nowrap items-center justify-end gap-2 whitespace-nowrap">
                               <input
                                 ref={(node) => {
                                   paymentEvidenceInputRefs.current[row.id] = node;
