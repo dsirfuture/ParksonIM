@@ -2705,7 +2705,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
 
         {!loading && detailCustomer ? (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 px-4">
-            <div className="max-h-[86vh] w-full max-w-[1180px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
+            <div className="max-h-[86vh] w-full max-w-[1080px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
               <div className="border-b border-slate-200 px-4 py-3">
                 <h3 className="text-base font-semibold text-slate-900">
                   {tx("客户下单详情", "Detalle de pedidos")} · {detailCustomer.name || "-"}
@@ -2952,7 +2952,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                           <th className="w-[120px] px-3 py-2 text-left whitespace-nowrap">{tx("下单金额", "Order amount")}</th>
                           <th className="w-[120px] px-3 py-2 text-left whitespace-nowrap">{tx("配货金额", "Packing amount")}</th>
                           <th className="w-[96px] px-3 py-2 text-left whitespace-nowrap">{tx("发货日期", "Ship date")}</th>
-                          <th className="w-[170px] px-3 py-2 text-right whitespace-nowrap">{tx("操作", "Acciones")}</th>
+                          <th className="w-[140px] px-3 py-2 text-right whitespace-nowrap">{tx("操作", "Acciones")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3007,7 +3007,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                 item.shippedAtText || "-"
                               )}
                             </td>
-                            <td className="w-[170px] px-3 py-2 text-right">
+                            <td className="w-[140px] px-3 py-2 text-right">
                               <div className="flex flex-nowrap items-center justify-end gap-2 whitespace-nowrap">
                                 <button
                                   type="button"
