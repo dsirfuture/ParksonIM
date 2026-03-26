@@ -125,6 +125,13 @@ type CustomerSummary = {
 };
 
 type CustomerDetailRow = NonNullable<Customer["detailRows"]>[number];
+type CustomerTimelineRow = {
+  id: string;
+  orderNo: string;
+  orderDateText: string;
+  orderAmountText: string;
+  channelText: string;
+};
 
 type CustomerSearchItem = {
   id: string;
@@ -1225,13 +1232,26 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
     () => mergedCustomers.find((item) => item.id === customerDetailId) || null,
     [customerDetailId, mergedCustomers],
   );
-  const sortedDetailRows = useMemo(() => {
-    const rows = detailCustomer?.detailRows || [];
-    return [...rows].sort((left, right) => {
+  const sortedDetailRows = useMemo<CustomerTimelineRow[]>(() => {
+    const orderRows = (detailCustomer?.detailRows || []).map((row) => ({
+      id: `detail:${row.orderNo}`,
+      orderNo: row.orderNo,
+      orderDateText: row.orderDateText,
+      orderAmountText: row.orderAmountText,
+      channelText: tx("友购", "Yogo"),
+    }));
+    const manualRows = (detailCustomer?.manualOrderRecords || []).map((row) => ({
+      id: `manual:${row.id}`,
+      orderNo: row.ygOrderNo || row.externalOrderNo || "-",
+      orderDateText: row.shippedAtText || row.paidAtText || "-",
+      orderAmountText: row.packingAmountText || "0.00",
+      channelText: row.orderChannel || tx("其他渠道", "Canal manual"),
+    }));
+    return [...orderRows, ...manualRows].sort((left, right) => {
       const compareResult = String(left.orderDateText || "").localeCompare(String(right.orderDateText || ""), "zh-CN");
       return customerDetailDateSort === "asc" ? compareResult : -compareResult;
     });
-  }, [customerDetailDateSort, detailCustomer?.detailRows]);
+  }, [customerDetailDateSort, detailCustomer?.detailRows, detailCustomer?.manualOrderRecords, lang]);
 
   useEffect(() => {
     if (!customerEditorOpen) {
@@ -2269,10 +2289,11 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                   </div>
                 ) : (
                   <div className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full min-w-[560px] text-sm">
+                    <table className="w-full min-w-[680px] text-sm">
                       <thead className="bg-slate-50 text-slate-600">
                         <tr>
                           <th className="px-3 py-2 text-left">{tx("订单号", "Order no")}</th>
+                          <th className="px-3 py-2 text-left">{tx("渠道", "Canal")}</th>
                           <th className="px-3 py-2 text-left">
                             <button
                               type="button"
@@ -2287,9 +2308,10 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                         </tr>
                       </thead>
                       <tbody>
-                        {sortedDetailRows.map((item) => (
-                          <tr key={`${detailCustomer.id}-${item.orderNo}`} className="border-t border-slate-100">
+                          {sortedDetailRows.map((item) => (
+                          <tr key={item.id} className="border-t border-slate-100">
                             <td className="px-3 py-2 font-semibold">{item.orderNo || "-"}</td>
+                            <td className="px-3 py-2">{item.channelText || "-"}</td>
                             <td className="px-3 py-2">{item.orderDateText || "-"}</td>
                             <td className="px-3 py-2">$ {item.orderAmountText || "0.00"}</td>
                           </tr>
