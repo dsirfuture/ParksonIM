@@ -131,6 +131,7 @@ type CustomerTimelineRow = {
   orderDateText: string;
   orderAmountText: string;
   channelText: string;
+  packingAmountText: string;
 };
 
 type CustomerSearchItem = {
@@ -1239,6 +1240,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       orderDateText: row.orderDateText,
       orderAmountText: row.orderAmountText,
       channelText: tx("友购", "Yogo"),
+      packingAmountText: "",
     }));
     const manualRows = (detailCustomer?.manualOrderRecords || []).map((row) => ({
       id: `manual:${row.id}`,
@@ -1246,12 +1248,21 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       orderDateText: row.shippedAtText || row.paidAtText || "-",
       orderAmountText: row.packingAmountText || "0.00",
       channelText: row.orderChannel || tx("其他渠道", "Canal manual"),
+      packingAmountText: row.packingAmountText || "",
     }));
     return [...orderRows, ...manualRows].sort((left, right) => {
       const compareResult = String(left.orderDateText || "").localeCompare(String(right.orderDateText || ""), "zh-CN");
       return customerDetailDateSort === "asc" ? compareResult : -compareResult;
     });
   }, [customerDetailDateSort, detailCustomer?.detailRows, detailCustomer?.manualOrderRecords, lang]);
+  const detailPackingAmountTotal = useMemo(
+    () =>
+      sortedDetailRows.reduce((sum, row) => {
+        const value = Number(row.packingAmountText || 0);
+        return Number.isFinite(value) ? sum + value : sum;
+      }, 0),
+    [sortedDetailRows],
+  );
 
   useEffect(() => {
     if (!customerEditorOpen) {
@@ -2280,6 +2291,9 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                   <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">
                     {tx("下单金额", "Order amount")}: <span className="font-semibold text-slate-900">$ {detailCustomer.totalOrderAmountText || "0.00"}</span>
                   </span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">
+                    {tx("累计配货金额", "Packing total")}: <span className="font-semibold text-slate-900">$ {detailPackingAmountTotal.toFixed(2)}</span>
+                  </span>
                 </div>
               </div>
               <div className="p-4">
@@ -2289,7 +2303,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                   </div>
                 ) : (
                   <div className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full min-w-[680px] text-sm">
+                    <table className="w-full min-w-[820px] text-sm">
                       <thead className="bg-slate-50 text-slate-600">
                         <tr>
                           <th className="px-3 py-2 text-left">{tx("订单号", "Order no")}</th>
@@ -2305,6 +2319,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                             </button>
                           </th>
                           <th className="px-3 py-2 text-left">{tx("下单金额", "Order amount")}</th>
+                          <th className="px-3 py-2 text-left">{tx("配货金额", "Packing amount")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2314,6 +2329,9 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                             <td className="px-3 py-2">{item.channelText || "-"}</td>
                             <td className="px-3 py-2">{item.orderDateText || "-"}</td>
                             <td className="px-3 py-2">$ {item.orderAmountText || "0.00"}</td>
+                            <td className="px-3 py-2">
+                              {item.packingAmountText ? `$ ${item.packingAmountText}` : "-"}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
