@@ -1266,6 +1266,10 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       }, 0),
     [sortedDetailRows],
   );
+  const hasAnyPackingAmount = useMemo(
+    () => sortedDetailRows.some((row) => Boolean(String(row.packingAmountText || "").trim())),
+    [sortedDetailRows],
+  );
 
   useEffect(() => {
     if (!customerEditorOpen) {
@@ -2292,10 +2296,10 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                     {tx("下单次数", "Order count")}: <span className="font-semibold text-slate-900">{detailCustomer.totalOrderCount ?? sortedDetailRows.length}</span>
                   </span>
                   <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">
-                    {tx("下单金额", "Order amount")}: <span className="font-semibold text-slate-900">$ {detailCustomer.totalOrderAmountText || "0.00"}</span>
+                    {tx("下单金额", "Order amount")}: <span className="font-semibold text-slate-900">{detailCustomer.totalOrderAmountText ? `$ ${detailCustomer.totalOrderAmountText}` : "-"}</span>
                   </span>
                   <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">
-                    {tx("累计配货金额", "Packing total")}: <span className="font-semibold text-slate-900">$ {detailPackingAmountTotal.toFixed(2)}</span>
+                    {tx("累计配货金额", "Packing total")}: <span className="font-semibold text-slate-900">{hasAnyPackingAmount ? `$ ${detailPackingAmountTotal.toFixed(2)}` : "-"}</span>
                   </span>
                 </div>
               </div>
@@ -2332,7 +2336,9 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                             <td className="px-3 py-2 font-semibold">{item.orderNo || "-"}</td>
                             <td className="px-3 py-2">{item.channelText || "-"}</td>
                             <td className="px-3 py-2">{item.orderDateText || "-"}</td>
-                            <td className="px-3 py-2">$ {item.orderAmountText || "0.00"}</td>
+                            <td className="px-3 py-2">
+                              {item.orderAmountText ? `$ ${item.orderAmountText}` : "-"}
+                            </td>
                             <td className="px-3 py-2">
                               {item.packingAmountText ? `$ ${item.packingAmountText}` : "-"}
                             </td>
