@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
 type NavChild = {
@@ -33,28 +32,21 @@ function isChildActive(href: string, pathname: string, search: URLSearchParams) 
 export function AppNavigation({ groups, loginLabel, loggedIn }: AppNavigationProps) {
   const pathname = usePathname();
   const search = useSearchParams();
-  const [hoveredGroupHref, setHoveredGroupHref] = useState<string | null>(null);
 
   const visibleGroups = groups.filter((group) => group.visible !== false);
   const activeGroup =
     visibleGroups.find((group) => group.match.some((item) => pathname.startsWith(item))) || null;
-  const openGroupHref =
-    hoveredGroupHref ||
-    (activeGroup?.children && activeGroup.children.length > 0 ? activeGroup.href : null);
 
   return (
     <div className="hidden min-w-0 flex-1 items-start justify-end md:flex">
       <nav className="flex items-center gap-1">
         {visibleGroups.map((group) => {
           const active = activeGroup?.href === group.href;
-          const showChildren =
-            Boolean(group.children?.length) && openGroupHref === group.href;
+          const showChildren = Boolean(group.children?.length) && active;
           return (
             <div
               key={group.href}
               className="relative flex items-center justify-center"
-              onMouseEnter={() => setHoveredGroupHref(group.href)}
-              onMouseLeave={() => setHoveredGroupHref(null)}
             >
               <Link
                 href={group.href}
@@ -63,8 +55,6 @@ export function AppNavigation({ groups, loginLabel, loggedIn }: AppNavigationPro
                     ? "bg-[#f7d8dc] text-primary shadow-sm ring-1 ring-[#efc8cd]"
                     : "text-slate-600 hover:bg-secondary-accent/70 hover:text-primary"
                 }`}
-                onFocus={() => setHoveredGroupHref(group.href)}
-                onBlur={() => setHoveredGroupHref(null)}
               >
                 {group.label}
               </Link>
