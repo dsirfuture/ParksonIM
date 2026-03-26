@@ -266,7 +266,7 @@ export async function GET() {
 
     function buildManualOrderSummary(input: {
       profileId?: string | null;
-      companyName?: string | null;
+      customerName?: string | null;
     }) {
       const matchedMap = new Map<string, any>();
       const profileIdKey = normalizeKey(input.profileId);
@@ -275,9 +275,9 @@ export async function GET() {
           matchedMap.set(row.id, row);
         }
       }
-      const companyKey = normalizeKey(input.companyName);
-      if (companyKey) {
-        for (const row of manualRecordsByCustomerName.get(companyKey) || []) {
+      const customerKey = normalizeKey(input.customerName);
+      if (customerKey) {
+        for (const row of manualRecordsByCustomerName.get(customerKey) || []) {
           matchedMap.set(row.id, row);
         }
       }
@@ -322,20 +322,24 @@ export async function GET() {
       if (buildYgGroupKey(matchedYg)) {
         matchedYgCustomerKeys.add(buildYgGroupKey(matchedYg));
       }
+      const linkedYgName =
+        matchedYg?.company_name ||
+        String(row.contact_name || "").trim() ||
+        "";
       const orderSummary = buildOrderSummary({
         customerIds: Array.from(matchedYg?._customerIds || []),
-        companyName: matchedYg?.company_name || row.name,
+        companyName: linkedYgName || row.name,
       });
       const manualSummary = buildManualOrderSummary({
         profileId: row.id,
-        companyName: matchedYg?.company_name || row.name,
+        customerName: row.name,
       });
 
       return {
         id: row.id,
         sourceType: "profile",
         name: row.name || matchedYg?.company_name || "",
-        linkedYgName: matchedYg?.company_name || "",
+        linkedYgName,
         contact: matchedYg?.relation_name || row.contact_name || "",
         phone: matchedYg?.registered_phone || row.mobile || "",
         whatsapp: row.whatsapp || "",
@@ -413,7 +417,7 @@ export async function GET() {
               companyName: row.company_name,
             });
             const manualSummary = buildManualOrderSummary({
-              companyName: row.company_name,
+              customerName: row.name || row.company_name,
             });
             return {
               orderStats: String(orderSummary.totalOrderCount + manualSummary.manualOrderCount),
