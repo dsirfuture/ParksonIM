@@ -2726,7 +2726,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       <Check className="h-4 w-4" />
                     </button>
                   </div>
-                  <div className="grid gap-2.5 xl:grid-cols-[minmax(0,240px)_minmax(0,240px)_minmax(0,180px)_minmax(0,180px)]">
+                  <div className="grid gap-2.5 xl:grid-cols-[minmax(0,230px)_minmax(0,230px)_minmax(0,170px)_minmax(0,170px)_minmax(0,170px)]">
                     <div className="max-w-[240px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("友购客户名称", "Cliente Yogo")}</label>
                       <ReadonlyCustomerField value={detailCustomerInfoForm.linkedYgName} />
@@ -2748,18 +2748,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("手机", "Mob")}</label>
                       <ReadonlyCustomerField value={detailCustomerInfoForm.phone} />
                     </div>
-                  </div>
-                  <div className="mt-3 grid gap-2.5 xl:grid-cols-[minmax(0,340px)_minmax(0,220px)]">
-                    <div className="max-w-[340px]">
-                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("客户地址", "Direccion")}</label>
-                      <input
-                        value={detailCustomerInfoForm.cityCountry}
-                        onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, cityCountry: e.target.value }))}
-                        disabled={!canManageCustomers}
-                        className="h-11 w-full max-w-[340px] rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
-                      />
-                    </div>
-                    <div className="max-w-[220px]">
+                    <div className="max-w-[170px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("门店编号", "Tiendas")}</label>
                       <input
                         value={detailCustomerInfoForm.stores}
@@ -2774,7 +2763,18 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                         }}
                         onBlur={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, stores: normalizeStoreNumberInput(e.target.value) }))}
                         disabled={!canManageCustomers}
-                        className="h-11 w-full max-w-[220px] rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
+                        className="h-11 w-full max-w-[170px] rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-3 grid gap-2.5 xl:grid-cols-[minmax(0,340px)]">
+                    <div className="max-w-[340px]">
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("客户地址", "Direccion")}</label>
+                      <input
+                        value={detailCustomerInfoForm.cityCountry}
+                        onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, cityCountry: e.target.value }))}
+                        disabled={!canManageCustomers}
+                        className="h-11 w-full max-w-[340px] rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
                       />
                     </div>
                   </div>
