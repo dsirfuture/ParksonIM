@@ -602,6 +602,12 @@ function normalizeStoreNumberInput(value: string) {
     .join(",");
 }
 
+function mapSearchUrl(address: string) {
+  const text = (address || "").trim();
+  if (!text) return "";
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(text)}`;
+}
+
 function ReadonlyCustomerField({ value, centered = false, children }: { value?: string; centered?: boolean; children?: ReactNode }) {
   return (
     <div className={`flex min-h-9 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 ${centered ? "justify-center text-center" : ""}`}>
@@ -2767,15 +2773,27 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       />
                     </div>
                   </div>
-                  <div className="mt-3 grid gap-2.5 xl:grid-cols-[470px]">
-                    <div className="w-[470px]">
+                  <div className="mt-3 grid gap-2.5 xl:grid-cols-[1010px]">
+                    <div className="w-[1010px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("客户地址", "Direccion")}</label>
-                      <input
-                        value={detailCustomerInfoForm.cityCountry}
-                        onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, cityCountry: e.target.value }))}
-                        disabled={!canManageCustomers}
-                        className="h-11 w-[470px] rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
-                      />
+                      <div className="relative w-[1010px]">
+                        <input
+                          value={detailCustomerInfoForm.cityCountry}
+                          onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, cityCountry: e.target.value }))}
+                          disabled={!canManageCustomers}
+                          className="h-11 w-[1010px] rounded-2xl border border-slate-200 bg-white px-4 pr-12 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
+                        />
+                        <a
+                          href={mapSearchUrl(detailCustomerInfoForm.cityCountry)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={`absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 ${detailCustomerInfoForm.cityCountry.trim() ? "" : "pointer-events-none opacity-40"}`}
+                          title="Google Maps"
+                          aria-label="Google Maps"
+                        >
+                          <MapPin className="h-4 w-4" />
+                        </a>
+                      </div>
                     </div>
                   </div>
                   <div className="mt-3 grid gap-2.5 xl:grid-cols-[minmax(0,120px)_minmax(0,120px)_minmax(0,120px)_minmax(0,170px)_minmax(0,170px)]">
