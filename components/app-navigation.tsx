@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
 type NavChild = {
@@ -32,6 +33,7 @@ function isChildActive(href: string, pathname: string, search: URLSearchParams) 
 export function AppNavigation({ groups, loginLabel, loggedIn }: AppNavigationProps) {
   const pathname = usePathname();
   const search = useSearchParams();
+  const [hoveredGroupHref, setHoveredGroupHref] = useState<string | null>(null);
 
   const visibleGroups = groups.filter((group) => group.visible !== false);
   const activeGroup =
@@ -42,11 +44,13 @@ export function AppNavigation({ groups, loginLabel, loggedIn }: AppNavigationPro
       <nav className="flex items-center gap-1">
         {visibleGroups.map((group) => {
           const active = activeGroup?.href === group.href;
-          const showChildren = Boolean(group.children?.length) && active;
+          const showChildren = Boolean(group.children?.length) && hoveredGroupHref === group.href;
           return (
             <div
               key={group.href}
               className="relative flex items-center justify-center"
+              onMouseEnter={() => setHoveredGroupHref(group.href)}
+              onMouseLeave={() => setHoveredGroupHref((current) => (current === group.href ? null : current))}
             >
               <Link
                 href={group.href}
@@ -55,29 +59,33 @@ export function AppNavigation({ groups, loginLabel, loggedIn }: AppNavigationPro
                     ? "bg-[#f7d8dc] text-primary shadow-sm ring-1 ring-[#efc8cd]"
                     : "text-slate-600 hover:bg-secondary-accent/70 hover:text-primary"
                 }`}
+                onFocus={() => setHoveredGroupHref(group.href)}
+                onBlur={() => setHoveredGroupHref((current) => (current === group.href ? null : current))}
               >
                 {group.label}
               </Link>
 
               {showChildren ? (
-                <nav className="absolute left-1/2 top-full z-20 mt-2 flex min-w-[136px] -translate-x-1/2 flex-col items-stretch gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-[0_10px_30px_rgba(15,23,42,0.12)]">
-                  {group.children!.map((item) => {
-                    const childActive = isChildActive(item.href, pathname, search);
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        className={`rounded-md px-3 py-1.5 text-center text-xs font-semibold transition ${
-                          childActive
-                            ? "bg-[#f7d8dc] text-primary shadow-sm ring-1 ring-[#efc8cd]"
-                            : "text-slate-500 hover:bg-secondary-accent/70 hover:text-primary"
-                        }`}
-                      >
-                        {item.label}
-                      </Link>
-                    );
-                  })}
-                </nav>
+                <div className="absolute left-1/2 top-full z-20 -translate-x-1/2 pt-2">
+                  <nav className="flex min-w-[136px] flex-col items-stretch gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-[0_10px_30px_rgba(15,23,42,0.12)]">
+                    {group.children!.map((item) => {
+                      const childActive = isChildActive(item.href, pathname, search);
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className={`rounded-md px-3 py-1.5 text-center text-xs font-semibold transition ${
+                            childActive
+                              ? "bg-[#f7d8dc] text-primary shadow-sm ring-1 ring-[#efc8cd]"
+                              : "text-slate-500 hover:bg-secondary-accent/70 hover:text-primary"
+                          }`}
+                        >
+                          {item.label}
+                        </Link>
+                      );
+                    })}
+                  </nav>
+                </div>
               ) : null}
             </div>
           );
