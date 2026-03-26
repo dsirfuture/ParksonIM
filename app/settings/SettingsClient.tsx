@@ -2900,15 +2900,15 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       />
                     </div>
                   </div>
-                  <div className="mt-3.5 grid gap-2.5 xl:grid-cols-[970px]">
-                    <div className="w-[970px]">
+                  <div className="mt-3.5 grid gap-2.5 xl:grid-cols-[1002px]">
+                    <div className="w-[1002px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("客户地址", "Direccion")}</label>
-                      <div className="relative w-[970px]">
+                      <div className="relative w-[1002px]">
                         <input
                           value={detailCustomerInfoForm.cityCountry}
                           onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, cityCountry: e.target.value }))}
                           disabled={!canManageCustomers}
-                          className="h-11 w-[970px] rounded-2xl border border-slate-200 bg-white px-4 pr-12 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
+                          className="h-11 w-[1002px] rounded-2xl border border-slate-200 bg-white px-4 pr-12 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
                         />
                         <a
                           href={mapSearchUrl(detailCustomerInfoForm.cityCountry)}
