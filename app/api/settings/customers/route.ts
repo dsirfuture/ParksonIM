@@ -113,6 +113,11 @@ function formatDateText(value: Date | null | undefined) {
   }).format(value);
 }
 
+function normalizeAmountText(value: unknown) {
+  const amount = Number(value || 0);
+  return Number.isFinite(amount) ? amount.toFixed(2) : "0.00";
+}
+
 export async function GET() {
   try {
     const session = await getSession();
@@ -120,7 +125,7 @@ export async function GET() {
     const allowed = await hasPermission(session, "manageCustomers");
     if (!allowed) return NextResponse.json({ ok: false, error: "无权限" }, { status: 403 });
 
-    const [profiles, rawYgCustomers, orders] = await Promise.all([
+    const [profiles, rawYgCustomers, orders, manualRecords] = await Promise.all([
       withPrismaRetry(() =>
         prisma.customerProfile.findMany({
           where: { tenant_id: session.tenantId, company_id: session.companyId },
@@ -149,6 +154,12 @@ export async function GET() {
             order_created_at: true,
             updated_at: true,
           },
+        }),
+      ),
+      withPrismaRetry(() =>
+        prisma.customerManualOrderRecord.findMany({
+          where: { tenant_id: session.tenantId, company_id: session.companyId },
+          orderBy: [{ shipped_at: "desc" }, { created_at: "desc" }],
         }),
       ),
     ]);
@@ -236,6 +247,69 @@ export async function GET() {
       };
     }
 
+    const manualRecordsByProfileId = new Map<string, any[]>();
+    const manualRecordsByCustomerName = new Map<string, any[]>();
+    for (const row of manualRecords) {
+      const profileKey = normalizeKey(row.customer_profile_id);
+      if (profileKey) {
+        const list = manualRecordsByProfileId.get(profileKey) || [];
+        list.push(row);
+        manualRecordsByProfileId.set(profileKey, list);
+      }
+      const nameKey = normalizeKey(row.customer_name);
+      if (nameKey) {
+        const list = manualRecordsByCustomerName.get(nameKey) || [];
+        list.push(row);
+        manualRecordsByCustomerName.set(nameKey, list);
+      }
+    }
+
+    function buildManualOrderSummary(input: {
+      profileId?: string | null;
+      companyName?: string | null;
+    }) {
+      const matchedMap = new Map<string, any>();
+      const profileIdKey = normalizeKey(input.profileId);
+      if (profileIdKey) {
+        for (const row of manualRecordsByProfileId.get(profileIdKey) || []) {
+          matchedMap.set(row.id, row);
+        }
+      }
+      const companyKey = normalizeKey(input.companyName);
+      if (companyKey) {
+        for (const row of manualRecordsByCustomerName.get(companyKey) || []) {
+          matchedMap.set(row.id, row);
+        }
+      }
+
+      const rows = Array.from(matchedMap.values()).sort((left, right) => {
+        const leftTime = new Date(left.shipped_at || left.created_at || 0).getTime();
+        const rightTime = new Date(right.shipped_at || right.created_at || 0).getTime();
+        return rightTime - leftTime;
+      });
+      const totalPackingAmount = rows.reduce((sum, item) => sum + Number(item.packing_amount || 0), 0);
+      const unpaidAmount = rows.reduce((sum, item) => sum + (item.paid_at ? 0 : Number(item.packing_amount || 0)), 0);
+      const latestTermDays = rows.find((item) => Number.isFinite(Number(item.payment_term_days)))?.payment_term_days;
+
+      return {
+        manualOrderCount: rows.length,
+        manualPackingAmountText: normalizeAmountText(totalPackingAmount),
+        manualDebtAmountText: normalizeAmountText(unpaidAmount),
+        paymentTermText: latestTermDays ? String(latestTermDays) : "",
+        manualDetailRows: rows.map((item) => ({
+          id: item.id,
+          customerName: item.customer_name || "",
+          ygOrderNo: item.yg_order_no || "",
+          externalOrderNo: item.external_order_no || "",
+          orderChannel: item.order_channel || "",
+          packingAmountText: normalizeAmountText(item.packing_amount || 0),
+          shippedAtText: formatDateText(item.shipped_at),
+          paidAtText: formatDateText(item.paid_at),
+          paymentTermText: item.payment_term_days ? String(item.payment_term_days) : "",
+        })),
+      };
+    }
+
     const matchedYgCustomerKeys = new Set<string>();
     const profileRows = profiles.map((row) => {
       const profileKeys = buildCandidateKeys({
@@ -252,11 +326,16 @@ export async function GET() {
         customerIds: Array.from(matchedYg?._customerIds || []),
         companyName: matchedYg?.company_name || row.name,
       });
+      const manualSummary = buildManualOrderSummary({
+        profileId: row.id,
+        companyName: matchedYg?.company_name || row.name,
+      });
 
       return {
         id: row.id,
         sourceType: "profile",
-        name: matchedYg?.company_name || row.name || "",
+        name: row.name || matchedYg?.company_name || "",
+        linkedYgName: matchedYg?.company_name || "",
         contact: matchedYg?.relation_name || row.contact_name || "",
         phone: matchedYg?.registered_phone || row.mobile || "",
         whatsapp: row.whatsapp || "",
@@ -270,8 +349,15 @@ export async function GET() {
         vipLevel: row.vip_level || "",
         creditLevel: row.credit_level || "",
         tags: row.tag_text || "",
-        orderStats: String(orderSummary.totalOrderCount || row.order_stat_text || ""),
-        ...orderSummary,
+        channelText: manualSummary.manualOrderCount > 0 ? "友购 / 其他渠道" : "友购",
+        orderStats: String(orderSummary.totalOrderCount + manualSummary.manualOrderCount || row.order_stat_text || ""),
+        totalOrderCount: orderSummary.totalOrderCount + manualSummary.manualOrderCount,
+        totalOrderAmountText: orderSummary.totalOrderAmountText,
+        packingAmountText: manualSummary.manualPackingAmountText !== "0.00" ? manualSummary.manualPackingAmountText : "",
+        debtAmountText: manualSummary.manualDebtAmountText !== "0.00" ? manualSummary.manualDebtAmountText : "",
+        paymentTermText: manualSummary.paymentTermText,
+        detailRows: orderSummary.detailRows,
+        manualOrderRecords: manualSummary.manualDetailRows,
       };
     });
 
@@ -290,11 +376,15 @@ export async function GET() {
         vipLevel: row.vip_level || "",
         creditLevel: row.credit_level || "",
         tags: row.tag_text || "",
+        channelText: "其他渠道",
         orderStats: row.manual_order_count ? String(row.manual_order_count) : "",
         totalOrderCount: Number(row.manual_order_count || 0),
         totalOrderAmountText: row.manual_order_amount ? Number(row.manual_order_amount).toFixed(2) : "",
         packingAmountText: row.manual_packing_amount ? Number(row.manual_packing_amount).toFixed(2) : "",
+        debtAmountText: row.manual_packing_amount ? Number(row.manual_packing_amount).toFixed(2) : "",
+        paymentTermText: "",
         detailRows: [],
+        manualOrderRecords: [],
       }))
       .sort((left, right) => Number(right.totalOrderAmountText || 0) - Number(left.totalOrderAmountText || 0));
 
@@ -305,6 +395,7 @@ export async function GET() {
           id: `yg:${buildYgGroupKey(row)}`,
           sourceType: "yg",
           name: row.company_name || "",
+          linkedYgName: row.company_name || "",
           contact: row.relation_name || "",
           phone: row.registered_phone || "",
           whatsapp: "",
@@ -315,17 +406,165 @@ export async function GET() {
           vipLevel: "",
           creditLevel: "",
           tags: "",
-          orderStats: "",
-          ...buildOrderSummary({
-            customerIds: Array.from(row._customerIds || []),
-            companyName: row.company_name,
-          }),
+          channelText: "友购",
+          ...(() => {
+            const orderSummary = buildOrderSummary({
+              customerIds: Array.from(row._customerIds || []),
+              companyName: row.company_name,
+            });
+            const manualSummary = buildManualOrderSummary({
+              companyName: row.company_name,
+            });
+            return {
+              orderStats: String(orderSummary.totalOrderCount + manualSummary.manualOrderCount),
+              totalOrderCount: orderSummary.totalOrderCount + manualSummary.manualOrderCount,
+              totalOrderAmountText: orderSummary.totalOrderAmountText,
+              packingAmountText: manualSummary.manualPackingAmountText !== "0.00" ? manualSummary.manualPackingAmountText : "",
+              debtAmountText: manualSummary.manualDebtAmountText !== "0.00" ? manualSummary.manualDebtAmountText : "",
+              paymentTermText: manualSummary.paymentTermText,
+              detailRows: orderSummary.detailRows,
+              manualOrderRecords: manualSummary.manualDetailRows,
+            };
+          })(),
         };
       });
 
+    const seenOrderNos = new Set<string>();
+    for (const row of [...profileRows, ...syncedOnlyRows]) {
+      for (const detail of row.detailRows || []) {
+        if (detail.orderNo) {
+          seenOrderNos.add(detail.orderNo);
+        }
+      }
+    }
+
+    const remainingOrderGroups = new Map<string, any[]>();
+    for (const order of includedOrders) {
+      if (seenOrderNos.has(order.order_no)) continue;
+      const groupKey =
+        normalizeKey(order.customer_id)
+        || normalizeKey(order.company_name || order.customer_name)
+        || normalizeKey(order.order_no);
+      if (!groupKey) continue;
+      const list = remainingOrderGroups.get(groupKey) || [];
+      list.push(order);
+      remainingOrderGroups.set(groupKey, list);
+    }
+
+    const orderOnlyRows = Array.from(remainingOrderGroups.entries()).map(([groupKey, groupOrders]) => {
+      const sortedOrders = [...groupOrders].sort((left, right) => {
+        const leftTime = new Date(left.order_created_at || left.updated_at || 0).getTime();
+        const rightTime = new Date(right.order_created_at || right.updated_at || 0).getTime();
+        return rightTime - leftTime;
+      });
+      const detailRows = sortedOrders.map((order) => ({
+        orderNo: order.order_no,
+        orderDateText: formatDateText(order.order_created_at || order.updated_at),
+        orderAmountText: Number(order.order_amount || 0).toFixed(2),
+        latestStatus: String(order.latest_status || "").trim() || "-",
+      }));
+      const totalOrderAmount = detailRows.reduce((sum, item) => sum + Number(item.orderAmountText || 0), 0);
+
+      return {
+        id: `order:${groupKey}`,
+        sourceType: "yg",
+        name: sortedOrders[0]?.company_name || sortedOrders[0]?.customer_name || "",
+        linkedYgName: sortedOrders[0]?.company_name || sortedOrders[0]?.customer_name || "",
+        contact: sortedOrders[0]?.contact_name || "",
+        phone: sortedOrders[0]?.contact_phone || "",
+        whatsapp: "",
+        email: "",
+        stores: "",
+        cityCountry: "",
+        customerType: "",
+        vipLevel: "",
+        creditLevel: "",
+        tags: "",
+        channelText: "友购",
+        orderStats: String(detailRows.length),
+        totalOrderAmountText: totalOrderAmount.toFixed(2),
+        packingAmountText: "",
+        debtAmountText: "",
+        paymentTermText: "",
+        totalOrderCount: detailRows.length,
+        detailRows,
+        manualOrderRecords: [],
+      };
+    });
+
+    const seenManualRecordIds = new Set<string>();
+    for (const row of [...profileRows, ...syncedOnlyRows, ...orderOnlyRows]) {
+      for (const detail of row.manualOrderRecords || []) {
+        if (detail.id) {
+          seenManualRecordIds.add(detail.id);
+        }
+      }
+    }
+
+    const manualOnlyGroups = new Map<string, any[]>();
+    for (const row of manualRecords) {
+      if (seenManualRecordIds.has(row.id)) continue;
+      const key =
+        normalizeKey(row.customer_profile_id)
+        || normalizeKey(row.customer_name)
+        || normalizeKey(row.external_order_no)
+        || normalizeKey(row.id);
+      if (!key) continue;
+      const list = manualOnlyGroups.get(key) || [];
+      list.push(row);
+      manualOnlyGroups.set(key, list);
+    }
+
+    const manualOnlyRows = Array.from(manualOnlyGroups.entries()).map(([groupKey, rows]) => {
+      const sortedRows = [...rows].sort((left, right) => {
+        const leftTime = new Date(left.shipped_at || left.created_at || 0).getTime();
+        const rightTime = new Date(right.shipped_at || right.created_at || 0).getTime();
+        return rightTime - leftTime;
+      });
+      const totalPackingAmount = sortedRows.reduce((sum, item) => sum + Number(item.packing_amount || 0), 0);
+      const unpaidAmount = sortedRows.reduce((sum, item) => sum + (item.paid_at ? 0 : Number(item.packing_amount || 0)), 0);
+      const latestTermDays = sortedRows.find((item) => Number.isFinite(Number(item.payment_term_days)))?.payment_term_days;
+
+      return {
+        id: `manual:${groupKey}`,
+        sourceType: "manual",
+        name: sortedRows[0]?.customer_name || "",
+        linkedYgName: "",
+        contact: "",
+        phone: "",
+        whatsapp: "",
+        email: "",
+        stores: "",
+        cityCountry: "",
+        customerType: "",
+        vipLevel: "",
+        creditLevel: "",
+        tags: "",
+        channelText: "其他渠道",
+        orderStats: String(sortedRows.length),
+        totalOrderCount: sortedRows.length,
+        totalOrderAmountText: "0.00",
+        packingAmountText: normalizeAmountText(totalPackingAmount),
+        debtAmountText: normalizeAmountText(unpaidAmount),
+        paymentTermText: latestTermDays ? String(latestTermDays) : "",
+        detailRows: [],
+        manualOrderRecords: sortedRows.map((item) => ({
+          id: item.id,
+          customerName: item.customer_name || "",
+          ygOrderNo: item.yg_order_no || "",
+          externalOrderNo: item.external_order_no || "",
+          orderChannel: item.order_channel || "",
+          packingAmountText: normalizeAmountText(item.packing_amount || 0),
+          shippedAtText: formatDateText(item.shipped_at),
+          paidAtText: formatDateText(item.paid_at),
+          paymentTermText: item.payment_term_days ? String(item.payment_term_days) : "",
+        })),
+      };
+    });
+
     return NextResponse.json({
       ok: true,
-      items: [...profileRows, ...syncedOnlyRows],
+      items: [...profileRows, ...syncedOnlyRows, ...orderOnlyRows, ...manualOnlyRows],
       manualItems,
       summary: {
         totalOrderCount: uniqueIncludedOrderMap.size,

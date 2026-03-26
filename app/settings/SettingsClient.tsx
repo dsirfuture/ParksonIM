@@ -3,7 +3,7 @@
 import NextImage from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronUp, Eye, MapPin, Pencil, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Eye, MapPin, Pencil, Trash2, X } from "lucide-react";
 import { getClientLang } from "@/lib/lang-client";
 
 type PermissionState = {
@@ -70,6 +70,7 @@ type Customer = {
   id: string;
   sourceType?: "profile" | "yg" | "manual";
   name: string;
+  linkedYgName?: string;
   contact: string;
   phone: string;
   whatsapp: string;
@@ -81,8 +82,11 @@ type Customer = {
   creditLevel: string;
   tags: string;
   orderStats: string;
+  channelText?: string;
   totalOrderAmountText?: string;
   packingAmountText?: string;
+  debtAmountText?: string;
+  paymentTermText?: string;
   totalOrderCount?: number;
   detailRows?: Array<{
     orderNo: string;
@@ -90,6 +94,29 @@ type Customer = {
     orderAmountText: string;
     latestStatus: string;
   }>;
+  manualOrderRecords?: Array<{
+    id: string;
+    customerName: string;
+    ygOrderNo: string;
+    externalOrderNo: string;
+    orderChannel: string;
+    packingAmountText: string;
+    shippedAtText: string;
+    paidAtText: string;
+    paymentTermText: string;
+  }>;
+};
+
+type ManualOrderForm = {
+  customerProfileId: string;
+  customerName: string;
+  ygOrderNo: string;
+  externalOrderNo: string;
+  orderChannel: string;
+  packingAmount: string;
+  shippedAt: string;
+  paidAt: string;
+  paymentTermDays: string;
 };
 
 type CustomerSummary = {
@@ -160,6 +187,7 @@ const EMPTY_CUSTOMER: Customer = {
   id: "",
   sourceType: "manual",
   name: "",
+  linkedYgName: "",
   contact: "",
   phone: "",
   whatsapp: "",
@@ -197,6 +225,18 @@ const EMPTY_CATALOG: CatalogConfig = {
   docShowHeader: true,
   docShowFooter: true,
   docShowLogo: false,
+};
+
+const EMPTY_MANUAL_ORDER_FORM: ManualOrderForm = {
+  customerProfileId: "",
+  customerName: "",
+  ygOrderNo: "",
+  externalOrderNo: "",
+  orderChannel: "",
+  packingAmount: "",
+  shippedAt: "",
+  paidAt: "",
+  paymentTermDays: "",
 };
 
 const EMPTY_CATEGORY_MAP: CategoryMapForm = {
@@ -403,6 +443,12 @@ function mergeTwoCustomerRows(existing: Customer, item: Customer) {
   return {
     ...preferredRow,
     name: preferredRow.name || ygRow?.name || profileRow?.name || existing.name || item.name || "",
+    linkedYgName:
+      existing.linkedYgName ||
+      item.linkedYgName ||
+      ygRow?.linkedYgName ||
+      ygRow?.name ||
+      "",
     contact: preferredRow.contact || ygRow?.contact || profileRow?.contact || existing.contact || item.contact || "",
     phone: preferredRow.phone || ygRow?.phone || profileRow?.phone || existing.phone || item.phone || "",
     whatsapp: preferredRow.whatsapp || ygRow?.whatsapp || profileRow?.whatsapp || existing.whatsapp || item.whatsapp || "",
@@ -452,6 +498,10 @@ function mergeCustomerRows(items: Customer[]) {
 
 function isVipCustomer(item: Customer) {
   return Number(item.totalOrderAmountText || 0) >= 100000;
+}
+
+function getCustomerChannelLabel(item: Customer, t: typeof tx) {
+  return item.sourceType === "manual" ? t("其他渠道", "Canal manual") : t("友购", "Yogo");
 }
 
 function VipBadgeIcon() {
@@ -563,9 +613,8 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   });
 
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [manualCustomers, setManualCustomers] = useState<Customer[]>([]);
-  const [manualCustomerOpen, setManualCustomerOpen] = useState(false);
-  const [manualCustomerKeyword, setManualCustomerKeyword] = useState("");
+  const [manualOrderOpen, setManualOrderOpen] = useState(false);
+  const [manualOrderForm, setManualOrderForm] = useState<ManualOrderForm>(EMPTY_MANUAL_ORDER_FORM);
   const [customerSummary, setCustomerSummary] = useState<CustomerSummary>({ totalOrderCount: 0, totalOrderAmountText: "0.00" });
   const [customerKeyword, setCustomerKeyword] = useState("");
   const [customerVipFilter, setCustomerVipFilter] = useState<"all" | "vip" | "normal">("all");
@@ -694,7 +743,6 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       }
       if (cRes.ok && cJson?.ok) {
         setCustomers(cJson.items || []);
-        setManualCustomers(cJson.manualItems || []);
         setCustomerSummary({
           totalOrderCount: Number(cJson.summary?.totalOrderCount || 0),
           totalOrderAmountText: String(cJson.summary?.totalOrderAmountText || "0.00"),
@@ -886,22 +934,15 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
     }
   }
 
-  async function saveManualCustomerRow(item: Customer) {
+  async function saveManualOrder() {
     try {
       setError("");
-      await saveEntity(
-        "/api/settings/customers",
-        {
-          ...item,
-          id: String(item.id || "").startsWith("manual-temp-") ? "" : item.id,
-          sourceType: "manual",
-        },
-        "其他渠道客户已保存",
-        "Manual customer saved",
-      );
+      await saveEntity("/api/settings/customers/manual-orders", manualOrderForm, "记录已保存", "Record saved");
+      setManualOrderOpen(false);
+      setManualOrderForm(EMPTY_MANUAL_ORDER_FORM);
       await loadAll();
     } catch (e) {
-      setError(e instanceof Error ? e.message : tx("保存其他渠道客户失败", "Save manual customer fail"));
+      setError(e instanceof Error ? e.message : tx("保存记录失败", "Save record fail"));
     }
   }
 
@@ -1180,31 +1221,6 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       ),
     [filteredCustomers, safeCustomerPage, CUSTOMER_PAGE_SIZE],
   );
-  const filteredManualCustomers = useMemo(
-    () =>
-      manualCustomers.filter((c) =>
-        [c.name, c.contact, c.phone, c.cityCountry, c.vipLevel, c.creditLevel]
-          .join(" ")
-          .toLowerCase()
-          .includes(manualCustomerKeyword.trim().toLowerCase()),
-      ),
-    [manualCustomers, manualCustomerKeyword],
-  );
-
-  function updateManualCustomerRow(id: string, patch: Partial<Customer>) {
-    setManualCustomers((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
-  }
-
-  function addManualCustomerRow() {
-    setManualCustomers((prev) => [
-      {
-        ...EMPTY_CUSTOMER,
-        id: `manual-temp-${Date.now()}`,
-        sourceType: "manual",
-      },
-      ...prev,
-    ]);
-  }
   const detailCustomer = useMemo(
     () => mergedCustomers.find((item) => item.id === customerDetailId) || null,
     [customerDetailId, mergedCustomers],
@@ -1980,10 +1996,13 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                   </span>
                   <button
                     type="button"
-                    onClick={() => setManualCustomerOpen(true)}
+                    onClick={() => {
+                      setManualOrderForm(EMPTY_MANUAL_ORDER_FORM);
+                      setManualOrderOpen(true);
+                    }}
                     className="ml-6 inline-flex h-9 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                   >
-                    {tx("其他渠道下单", "Otros canales")}
+                    {tx("新增记录", "Nuevo registro")}
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
@@ -2009,58 +2028,58 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                   <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600">
                     <tr>
                       <th className="px-3 py-2 text-left whitespace-nowrap">{tx("客户", "Client")}</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("联系人", "Cont")}</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("手机", "Mob")}</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("城市/国家", "City/Ctry")}</th>
-                      <th className="px-3 py-2 text-center whitespace-nowrap">{tx("VIP等级", "VIP lvl")}</th>
-                      <th className="px-3 py-2 text-center whitespace-nowrap">{tx("信用等级", "Credit")}</th>
-                      <th className="px-3 py-2 text-center whitespace-nowrap">{tx("下单次数", "Order count")}</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("下单金额", "Order amount")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("下单渠道", "Canal")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("全渠道下单", "Total amount")}</th>
+                      <th className="px-3 py-2 text-center whitespace-nowrap">{tx("全渠道次数", "Total count")}</th>
                       <th className="px-3 py-2 text-left whitespace-nowrap">{tx("配货金额", "Packing amount")}</th>
-                      <th className="w-[132px] px-3 py-2 text-right"></th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("欠款金额", "Debt amount")}</th>
+                      <th className="px-3 py-2 text-center whitespace-nowrap">{tx("VIP", "VIP")}</th>
+                      <th className="px-3 py-2 text-center whitespace-nowrap">{tx("信用", "Credit")}</th>
+                      <th className="px-3 py-2 text-center whitespace-nowrap">{tx("账期", "Term")}</th>
+                      <th className="w-[66px] px-3 py-2 text-center whitespace-nowrap">{tx("详情", "Detail")}</th>
+                      <th className="w-[66px] px-3 py-2 text-center whitespace-nowrap">{tx("编辑", "Edit")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pagedCustomers.map((c) => (
                       <tr key={c.id} className="border-t border-slate-100">
                         <td className="px-3 py-1.5">{c.name || "-"}</td>
-                        <td className="px-3 py-1.5">{c.contact || "-"}</td>
-                        <td className="px-3 py-1.5">{c.phone || "-"}</td>
-                        <td className="px-3 py-1.5">{c.cityCountry || "-"}</td>
+                        <td className="px-3 py-1.5">{c.channelText || getCustomerChannelLabel(c, tx)}</td>
+                        <td className="px-3 py-1.5">$ {c.totalOrderAmountText || "0.00"}</td>
+                        <td className="px-3 py-1.5 text-center">{(c.totalOrderCount ?? c.orderStats) || "-"}</td>
+                        <td className="px-3 py-1.5">{c.packingAmountText ? `$ ${c.packingAmountText}` : "-"}</td>
+                        <td className="px-3 py-1.5">{c.debtAmountText ? `$ ${c.debtAmountText}` : "-"}</td>
                         <td className="px-3 py-1.5 text-center">{isVipCustomer(c) ? <span className="inline-flex justify-center"><VipBadgeIcon /></span> : ""}</td>
                         <td className="px-3 py-1.5 text-center">{c.creditLevel || "-"}</td>
-                        <td className="px-3 py-1.5 text-center">{(c.totalOrderCount ?? c.orderStats) || "-"}</td>
-                        <td className="px-3 py-1.5">$ {c.totalOrderAmountText || "0.00"}</td>
-                        <td className="px-3 py-1.5">{c.packingAmountText ? `$ ${c.packingAmountText}` : ""}</td>
-                        <td className="px-3 py-1.5">
-                          <div className="flex items-center justify-end gap-3">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCustomerDetailDateSort("desc");
-                                setCustomerDetailId(c.id);
-                              }}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
-                              aria-label={tx("详情", "Detail")}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCustomerForm({
-                                  ...c,
-                                  id: c.sourceType === "yg" ? "" : c.id,
-                                  cityCountry: "",
-                                });
-                                setCustomerEditorOpen(true);
-                              }}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
-                              aria-label={tx("编辑", "Edit")}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </button>
-                          </div>
+                        <td className="px-3 py-1.5 text-center">{c.paymentTermText || "-"}</td>
+                        <td className="px-3 py-1.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCustomerDetailDateSort("desc");
+                              setCustomerDetailId(c.id);
+                            }}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
+                            aria-label={tx("详情", "Detail")}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
+                        </td>
+                        <td className="px-3 py-1.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCustomerForm({
+                                ...c,
+                                id: c.sourceType === "yg" ? "" : c.id,
+                              });
+                              setCustomerEditorOpen(true);
+                            }}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
+                            aria-label={tx("编辑", "Edit")}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -2112,95 +2131,115 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
           </div>
         ) : null}
 
-        {!loading && manualCustomerOpen ? (
+        {!loading && manualOrderOpen ? (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 px-4">
-            <div className="max-h-[90vh] w-full max-w-[1500px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
+            <div className="max-h-[90vh] w-full max-w-[980px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
               <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
-                <div className="flex items-center gap-4">
-                  <h3 className="text-base font-semibold text-slate-900">{tx("其他渠道下单", "Otros canales")}</h3>
-                  <span className="text-sm text-slate-500">
-                    {tx("客户数", "Clientes")}: <span className="font-semibold text-slate-900">{filteredManualCustomers.length}</span>
-                  </span>
+                <div>
+                  <h3 className="text-base font-semibold text-slate-900">{tx("新增记录", "Nuevo registro")}</h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {tx("录入其他渠道订单信息，并用于客户列表统计。", "Registrar pedidos de otros canales para estadisticas de clientes.")}
+                  </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={addManualCustomerRow}
-                    className="inline-flex h-9 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                  >
-                    {tx("新增一行", "Nueva fila")}
-                  </button>
-                  <input
-                    value={manualCustomerKeyword}
-                    onChange={(e) => setManualCustomerKeyword(e.target.value)}
-                    placeholder={tx("搜索客户", "Search cli")}
-                    className="h-10 w-full max-w-[260px] rounded-xl border border-slate-200 px-3 text-sm"
-                  />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManualOrderOpen(false);
+                    setManualOrderForm(EMPTY_MANUAL_ORDER_FORM);
+                  }}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50"
+                  aria-label={tx("关闭", "Close")}
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-              <div className="max-h-[640px] overflow-auto">
-                <table className="w-full min-w-[1450px] text-sm">
-                  <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600">
-                    <tr>
-                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("客户", "Client")}</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("联系人", "Cont")}</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("手机", "Mob")}</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("城市/国家", "City/Ctry")}</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("VIP等级", "VIP lvl")}</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("信用等级", "Credit")}</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("下单次数", "Order count")}</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("下单金额", "Order amount")}</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("配货金额", "Packing amount")}</th>
-                      <th className="w-[156px] px-3 py-2 text-right"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredManualCustomers.map((c) => (
-                      <tr key={c.id} className="border-t border-slate-100">
-                        <td className="px-3 py-1.5"><input value={c.name} onChange={(e) => updateManualCustomerRow(c.id, { name: e.target.value })} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" /></td>
-                        <td className="px-3 py-1.5"><input value={c.contact} onChange={(e) => updateManualCustomerRow(c.id, { contact: e.target.value })} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" /></td>
-                        <td className="px-3 py-1.5"><input value={c.phone} onChange={(e) => updateManualCustomerRow(c.id, { phone: e.target.value })} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" /></td>
-                        <td className="px-3 py-1.5"><input value={c.cityCountry} onChange={(e) => updateManualCustomerRow(c.id, { cityCountry: e.target.value })} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" /></td>
-                        <td className="px-3 py-1.5"><input value={c.vipLevel} onChange={(e) => updateManualCustomerRow(c.id, { vipLevel: e.target.value })} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" /></td>
-                        <td className="px-3 py-1.5"><input value={c.creditLevel} onChange={(e) => updateManualCustomerRow(c.id, { creditLevel: e.target.value })} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" /></td>
-                        <td className="px-3 py-1.5"><input value={c.orderStats} onChange={(e) => updateManualCustomerRow(c.id, { orderStats: e.target.value })} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" /></td>
-                        <td className="px-3 py-1.5"><input value={c.totalOrderAmountText || ""} onChange={(e) => updateManualCustomerRow(c.id, { totalOrderAmountText: e.target.value })} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" /></td>
-                        <td className="px-3 py-1.5"><input value={c.packingAmountText || ""} onChange={(e) => updateManualCustomerRow(c.id, { packingAmountText: e.target.value })} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" /></td>
-                        <td className="px-3 py-1.5">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => void saveManualCustomerRow(c)}
-                              className="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                            >
-                              {tx("保存", "Save")}
-                            </button>
-                            {!!c.id && !String(c.id).startsWith("manual-temp-") ? (
-                              <button
-                                type="button"
-                                onClick={() => void deleteCustomer(c.id, c.name)}
-                                className="inline-flex h-8 items-center rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-600 hover:bg-rose-100"
-                              >
-                                {tx("删除", "Delete")}
-                              </button>
-                            ) : null}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-4 p-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">{tx("真实客户名称", "Cliente real")}</label>
+                    <input
+                      value={manualOrderForm.customerName}
+                      onChange={(e) => setManualOrderForm((prev) => ({ ...prev, customerName: e.target.value }))}
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">{tx("下单渠道", "Canal")}</label>
+                    <input
+                      value={manualOrderForm.orderChannel}
+                      onChange={(e) => setManualOrderForm((prev) => ({ ...prev, orderChannel: e.target.value }))}
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">{tx("友购订单号", "Pedido YG")}</label>
+                    <input
+                      value={manualOrderForm.ygOrderNo}
+                      onChange={(e) => setManualOrderForm((prev) => ({ ...prev, ygOrderNo: e.target.value }))}
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">{tx("其他订单号", "Pedido externo")}</label>
+                    <input
+                      value={manualOrderForm.externalOrderNo}
+                      onChange={(e) => setManualOrderForm((prev) => ({ ...prev, externalOrderNo: e.target.value }))}
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">{tx("配货金额", "Packing amount")}</label>
+                    <input
+                      value={manualOrderForm.packingAmount}
+                      onChange={(e) => setManualOrderForm((prev) => ({ ...prev, packingAmount: e.target.value }))}
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">{tx("账期", "Term")}</label>
+                    <input
+                      value={manualOrderForm.paymentTermDays}
+                      onChange={(e) => setManualOrderForm((prev) => ({ ...prev, paymentTermDays: e.target.value.replace(/[^\d]/g, "") }))}
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">{tx("发货日期", "Fecha envio")}</label>
+                    <input
+                      type="date"
+                      value={manualOrderForm.shippedAt}
+                      onChange={(e) => setManualOrderForm((prev) => ({ ...prev, shippedAt: e.target.value }))}
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">{tx("付款日期", "Fecha pago")}</label>
+                    <input
+                      type="date"
+                      value={manualOrderForm.paidAt}
+                      onChange={(e) => setManualOrderForm((prev) => ({ ...prev, paidAt: e.target.value }))}
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                    />
+                  </div>
+                </div>
               </div>
               <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-4 py-3">
                 <button
                   type="button"
                   onClick={() => {
-                    setManualCustomerOpen(false);
-                    setManualCustomerKeyword("");
+                    setManualOrderOpen(false);
+                    setManualOrderForm(EMPTY_MANUAL_ORDER_FORM);
                   }}
                   className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
                 >
-                  {tx("关闭", "Cerrar")}
+                  {tx("取消", "Cancelar")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveManualOrder()}
+                  className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-white"
+                >
+                  {tx("保存记录", "Guardar")}
                 </button>
               </div>
             </div>
@@ -2283,12 +2322,16 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                 <div className="rounded-xl border border-slate-200 bg-white p-3">
                   <div className="grid gap-2.5 sm:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("客户名称", "Client")}</label>
-                      <ReadonlyCustomerField value={customerForm.name} />
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("友购客户名称", "Cliente Yogo")}</label>
+                      <ReadonlyCustomerField value={customerForm.linkedYgName || customerForm.name} />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("账单客户名称", "Billing client")}</label>
-                      <input value={customerForm.cityCountry} onChange={(e) => setCustomerForm((p) => ({ ...p, cityCountry: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("真实客户名称", "Cliente real")}</label>
+                      <input
+                        value={customerForm.name}
+                        onChange={(e) => setCustomerForm((p) => ({ ...p, name: e.target.value }))}
+                        className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                      />
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("联系人", "Cont")}</label>
