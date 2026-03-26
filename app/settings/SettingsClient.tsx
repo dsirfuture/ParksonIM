@@ -3,7 +3,7 @@
 import NextImage from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronUp, Eye, MapPin, Paperclip, Pencil, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Eye, MapPin, Paperclip, Pencil, Trash2, X } from "lucide-react";
 import { getClientLang } from "@/lib/lang-client";
 
 type PermissionState = {
@@ -2598,9 +2598,11 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                   <button
                                     type="button"
                                     onClick={() => void saveInlineDetailRow()}
-                                    className="inline-flex h-8 items-center rounded-xl bg-primary px-3 text-sm font-semibold text-white hover:opacity-95"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
+                                    aria-label={tx("保存", "Save")}
+                                    title={tx("保存", "Save")}
                                   >
-                                    {tx("保存", "Guardar")}
+                                    <Check className="h-4 w-4" />
                                   </button>
                                 ) : null}
                                 <button
