@@ -207,6 +207,24 @@ export async function GET() {
       }
     }
 
+    function isYgOverlayRecord(row: any) {
+      const channelKey = normalizeKey(row?.order_channel);
+      return Boolean(normalizeKey(row?.yg_order_no)) && channelKey === normalizeKey("yogo");
+    }
+
+    const overlayByOrderNo = new Map<string, any>();
+    for (const row of manualRecords) {
+      if (!isYgOverlayRecord(row)) continue;
+      const orderKey = normalizeKey(row.yg_order_no);
+      if (!orderKey) continue;
+      const current = overlayByOrderNo.get(orderKey);
+      const currentTime = current ? new Date(current.updated_at || current.created_at || 0).getTime() : 0;
+      const nextTime = new Date(row.updated_at || row.created_at || 0).getTime();
+      if (!current || nextTime >= currentTime) {
+        overlayByOrderNo.set(orderKey, row);
+      }
+    }
+
     function buildOrderSummary(input: { customerIds?: string[]; companyName?: string | null }) {
       const matchedMap = new Map<string, any>();
 
@@ -231,12 +249,21 @@ export async function GET() {
           const rightTime = new Date(right.order_created_at || right.updated_at || 0).getTime();
           return rightTime - leftTime;
         })
-        .map((order) => ({
-          orderNo: order.order_no,
-          orderDateText: formatDateText(order.order_created_at || order.updated_at),
-          orderAmountText: Number(order.order_amount || 0).toFixed(2),
-          latestStatus: String(order.latest_status || "").trim() || "-",
-        }));
+        .map((order) => {
+          const overlay = overlayByOrderNo.get(normalizeKey(order.order_no));
+          const packingAmountText = normalizeAmountText(overlay?.packing_amount || 0);
+          return {
+            overlayRecordId: overlay?.id || "",
+            orderNo: order.order_no,
+            orderDateText: formatDateText(order.order_created_at || order.updated_at),
+            orderAmountText: Number(order.order_amount || 0).toFixed(2),
+            packingAmountText: packingAmountText !== "0.00" ? packingAmountText : "",
+            shippedAtText: formatDateText(overlay?.shipped_at),
+            paidAtText: formatDateText(overlay?.paid_at),
+            paymentTermText: overlay?.payment_term_days ? String(overlay.payment_term_days) : "",
+            latestStatus: String(order.latest_status || "").trim() || "-",
+          };
+        });
 
       const totalOrderAmount = detailRows.reduce((sum, item) => sum + Number(item.orderAmountText || 0), 0);
       return {
@@ -287,16 +314,19 @@ export async function GET() {
         const rightTime = new Date(right.shipped_at || right.created_at || 0).getTime();
         return rightTime - leftTime;
       });
+      const overlayRows = rows.filter((item) => isYgOverlayRecord(item));
+      const manualRows = rows.filter((item) => !isYgOverlayRecord(item));
       const totalPackingAmount = rows.reduce((sum, item) => sum + Number(item.packing_amount || 0), 0);
       const unpaidAmount = rows.reduce((sum, item) => sum + (item.paid_at ? 0 : Number(item.packing_amount || 0)), 0);
       const latestTermDays = rows.find((item) => Number.isFinite(Number(item.payment_term_days)))?.payment_term_days;
 
       return {
-        manualOrderCount: rows.length,
+        manualOrderCount: manualRows.length,
         manualPackingAmountText: normalizeAmountText(totalPackingAmount),
         manualDebtAmountText: normalizeAmountText(unpaidAmount),
         paymentTermText: latestTermDays ? String(latestTermDays) : "",
-        manualDetailRows: rows.map((item) => ({
+        overlayRows,
+        manualDetailRows: manualRows.map((item) => ({
           id: item.id,
           customerName: item.customer_name || "",
           customerProfileId: item.customer_profile_id || "",

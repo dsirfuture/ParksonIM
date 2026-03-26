@@ -89,9 +89,14 @@ type Customer = {
   paymentTermText?: string;
   totalOrderCount?: number;
   detailRows?: Array<{
+    overlayRecordId?: string;
     orderNo: string;
     orderDateText: string;
     orderAmountText: string;
+    packingAmountText?: string;
+    shippedAtText?: string;
+    paidAtText?: string;
+    paymentTermText?: string;
     latestStatus: string;
   }>;
   manualOrderRecords?: Array<{
@@ -110,6 +115,7 @@ type Customer = {
 
 type ManualOrderForm = {
   id: string;
+  sourceType: "yg" | "manual";
   customerProfileId: string;
   customerName: string;
   ygOrderNo: string;
@@ -252,6 +258,7 @@ const EMPTY_CATALOG: CatalogConfig = {
 
 const EMPTY_MANUAL_ORDER_FORM: ManualOrderForm = {
   id: "",
+  sourceType: "manual",
   customerProfileId: "",
   customerName: "",
   ygOrderNo: "",
@@ -653,6 +660,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   const [customerDetailDateSort, setCustomerDetailDateSort] = useState<"desc" | "asc">("desc");
   const paymentEvidenceInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [paymentEvidenceNames, setPaymentEvidenceNames] = useState<Record<string, string[]>>({});
+  const manualOrderEditorMode = manualOrderForm.sourceType;
 
   const [catalogConfig, setCatalogConfig] = useState<CatalogConfig>(EMPTY_CATALOG);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -975,6 +983,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
 
   function openManualOrderEditor(input: {
     id?: string;
+    sourceType?: "yg" | "manual";
     customerProfileId?: string;
     customerName?: string;
     ygOrderNo?: string;
@@ -987,6 +996,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   }) {
     setManualOrderForm({
       id: input.id || "",
+      sourceType: input.sourceType || "manual",
       customerProfileId: input.customerProfileId || "",
       customerName: input.customerName || "",
       ygOrderNo: input.ygOrderNo || "",
@@ -1002,8 +1012,21 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
 
   function handleTimelineRowEdit(row: CustomerTimelineRow) {
     setCustomerPaymentDetailId("");
-    if (row.sourceType !== "manual") {
-      setError(tx("友购订单暂不支持在这里直接编辑。", "Yogo orders cannot be edited here yet."));
+    if (row.sourceType === "yg") {
+      const detailRow = detailCustomer?.detailRows?.find((item) => item.orderNo === row.orderNo);
+      openManualOrderEditor({
+        id: detailRow?.overlayRecordId || row.manualRecordId || "",
+        sourceType: "yg",
+        customerProfileId: detailCustomer?.sourceType === "profile" ? detailCustomer.id : "",
+        customerName: detailCustomer?.name || "",
+        ygOrderNo: row.orderNo || "",
+        externalOrderNo: "",
+        orderChannel: "YOGO",
+        packingAmount: row.packingAmountText || "",
+        shippedAt: row.shippedAtText || "",
+        paidAt: detailRow?.paidAtText || "",
+        paymentTermDays: detailRow?.paymentTermText || "",
+      });
       return;
     }
     const manualRow = detailCustomer?.manualOrderRecords?.find((item) => item.id === row.manualRecordId);
@@ -1013,6 +1036,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
     }
     openManualOrderEditor({
       id: manualRow.id,
+      sourceType: "manual",
       customerProfileId: manualRow.customerProfileId || (detailCustomer?.sourceType === "profile" ? detailCustomer.id : ""),
       customerName: manualRow.customerName || detailCustomer?.name || "",
       ygOrderNo: manualRow.ygOrderNo || "",
@@ -1030,10 +1054,6 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   }
 
   function handlePaymentEvidenceUpload(paymentRowId: string, sourceType: "yg" | "manual") {
-    if (sourceType !== "manual") {
-      setError(tx("友购订单付款证据上传尚未接通。", "Payment evidence upload is not connected for Yogo orders yet."));
-      return;
-    }
     paymentEvidenceInputRefs.current[paymentRowId]?.click();
   }
 
@@ -1330,23 +1350,25 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
     const orderRows = (detailCustomer?.detailRows || []).map((row) => ({
       id: `detail:${row.orderNo}`,
       sourceType: "yg" as const,
-      manualRecordId: "",
+      manualRecordId: row.overlayRecordId || "",
       orderNo: row.orderNo,
       orderDateText: row.orderDateText,
       orderAmountText: row.orderAmountText,
       channelText: tx("友购", "Yogo"),
-      packingAmountText: "",
-      shippedAtText: "",
+      packingAmountText: row.packingAmountText || "",
+      shippedAtText: row.shippedAtText || "",
       paymentRows: [
         {
           id: `detail:${row.orderNo}:payment`,
           sourceType: "yg" as const,
-          payableAmountText: row.orderAmountText || "",
-          paidAmountText: "",
-          paymentTimeText: "",
+          payableAmountText: row.packingAmountText || row.orderAmountText || "",
+          paidAmountText: row.paidAtText && (row.packingAmountText || row.orderAmountText) ? row.packingAmountText || row.orderAmountText : "",
+          paymentTimeText: row.paidAtText || "",
           paymentMethodText: "",
           paymentTargetText: "",
-          unpaidAmountText: "",
+          unpaidAmountText: (row.packingAmountText || row.orderAmountText)
+            ? (row.paidAtText ? "0.00" : row.packingAmountText || row.orderAmountText)
+            : "",
         },
       ],
     }));
@@ -2334,15 +2356,17 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                     <input
                       value={manualOrderForm.customerName}
                       onChange={(e) => setManualOrderForm((prev) => ({ ...prev, customerName: e.target.value }))}
-                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                      disabled={manualOrderEditorMode === "yg"}
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm disabled:bg-slate-50 disabled:text-slate-500"
                     />
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-medium text-slate-600">{tx("下单渠道", "Canal")}</label>
                     <input
-                      value={manualOrderForm.orderChannel}
+                      value={manualOrderEditorMode === "yg" ? tx("友购", "Yogo") : manualOrderForm.orderChannel}
                       onChange={(e) => setManualOrderForm((prev) => ({ ...prev, orderChannel: e.target.value }))}
-                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                      disabled={manualOrderEditorMode === "yg"}
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm disabled:bg-slate-50 disabled:text-slate-500"
                     />
                   </div>
                   <div>
@@ -2350,17 +2374,20 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                     <input
                       value={manualOrderForm.ygOrderNo}
                       onChange={(e) => setManualOrderForm((prev) => ({ ...prev, ygOrderNo: e.target.value }))}
-                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                      disabled={manualOrderEditorMode === "yg"}
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm disabled:bg-slate-50 disabled:text-slate-500"
                     />
                   </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600">{tx("其他订单号", "Pedido externo")}</label>
-                    <input
-                      value={manualOrderForm.externalOrderNo}
-                      onChange={(e) => setManualOrderForm((prev) => ({ ...prev, externalOrderNo: e.target.value }))}
-                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
-                    />
-                  </div>
+                  {manualOrderEditorMode === "manual" ? (
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("其他订单号", "Pedido externo")}</label>
+                      <input
+                        value={manualOrderForm.externalOrderNo}
+                        onChange={(e) => setManualOrderForm((prev) => ({ ...prev, externalOrderNo: e.target.value }))}
+                        className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                      />
+                    </div>
+                  ) : null}
                   <div>
                     <label className="mb-1 block text-xs font-medium text-slate-600">{tx("配货金额", "Packing amount")}</label>
                     <input
@@ -2369,14 +2396,16 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
                     />
                   </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600">{tx("账期", "Term")}</label>
-                    <input
-                      value={manualOrderForm.paymentTermDays}
-                      onChange={(e) => setManualOrderForm((prev) => ({ ...prev, paymentTermDays: e.target.value.replace(/[^\d]/g, "") }))}
-                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
-                    />
-                  </div>
+                  {manualOrderEditorMode === "manual" ? (
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("账期", "Term")}</label>
+                      <input
+                        value={manualOrderForm.paymentTermDays}
+                        onChange={(e) => setManualOrderForm((prev) => ({ ...prev, paymentTermDays: e.target.value.replace(/[^\d]/g, "") }))}
+                        className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                      />
+                    </div>
+                  ) : null}
                   <div>
                     <label className="mb-1 block text-xs font-medium text-slate-600">{tx("发货日期", "Fecha envio")}</label>
                     <input
