@@ -2979,25 +2979,25 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                   </div>
                   <div className="mt-3.5 grid gap-3 xl:grid-cols-5">
                     <div className="min-w-0 text-center">
-                      <label className="mb-1 block text-center text-xs font-semibold text-slate-700">{tx("VIP等级", "VIP lvl")}</label>
+                      <label className="mb-1 block text-center text-sm font-semibold text-slate-700">{tx("VIP等级", "VIP lvl")}</label>
                       <PlainCustomerValue centered>
                         {isVipCustomer(detailCustomer) ? <span className="inline-flex"><VipBadgeIcon /></span> : "-"}
                       </PlainCustomerValue>
                     </div>
                     <div className="min-w-0 text-center">
-                      <label className="mb-1 block text-center text-xs font-semibold text-slate-700">{tx("信用等级", "Credit")}</label>
+                      <label className="mb-1 block text-center text-sm font-semibold text-slate-700">{tx("信用等级", "Credit")}</label>
                       <PlainCustomerValue centered value={detailCustomer.creditLevel} />
                     </div>
                     <div className="min-w-0 text-center">
-                      <label className="mb-1 block text-center text-xs font-semibold text-slate-700">{tx("下单次数", "Order count")}</label>
+                      <label className="mb-1 block text-center text-sm font-semibold text-slate-700">{tx("下单次数", "Order count")}</label>
                       <PlainCustomerValue centered value={Number(detailCustomer.totalOrderCount || 0) > 0 ? String(detailCustomer.totalOrderCount) : "-"} />
                     </div>
                     <div className="min-w-0 text-center">
-                      <label className="mb-1 block text-center text-xs font-semibold text-slate-700">{tx("下单金额", "Order amount")}</label>
+                      <label className="mb-1 block text-center text-sm font-semibold text-slate-700">{tx("下单金额", "Order amount")}</label>
                       <PlainCustomerValue centered value={detailCustomer.totalOrderAmountText ? `$ ${detailCustomer.totalOrderAmountText}` : "-"} />
                     </div>
                     <div className="min-w-0 text-center">
-                      <label className="mb-1 block text-center text-xs font-semibold text-slate-700">{tx("累计配货金额", "Packing total")}</label>
+                      <label className="mb-1 block text-center text-sm font-semibold text-slate-700">{tx("累计配货金额", "Packing total")}</label>
                       <PlainCustomerValue centered value={hasAnyPackingAmount ? `$ ${detailPackingAmountTotal.toFixed(2)}` : "-"} />
                     </div>
                   </div>
