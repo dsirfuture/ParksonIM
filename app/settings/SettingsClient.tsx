@@ -2777,7 +2777,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                     />
                   </div>
                 </div>
-                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.82fr)_minmax(0,0.82fr)]">
+                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.92fr)]">
                   {manualOrderEditorMode === "manual" ? (
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("其他订单号", "Pedido externo")}</label>
@@ -2814,6 +2814,15 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                     <input
                       value={manualOrderForm.packingAmount}
                       onChange={(e) => setManualOrderForm((prev) => ({ ...prev, packingAmount: e.target.value }))}
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">{tx("发货日期", "Fecha envio")}</label>
+                    <input
+                      type="date"
+                      value={manualOrderForm.shippedAt}
+                      onChange={(e) => setManualOrderForm((prev) => ({ ...prev, shippedAt: e.target.value }))}
                       className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
                     />
                   </div>
