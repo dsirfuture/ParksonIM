@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronDown, ChevronUp, Eye, MapPin, Paperclip, Pencil, Trash2, X } from "lucide-react";
 import * as XLSX from "xlsx";
+import { ImageLightbox } from "@/components/image-lightbox";
 import { getClientLang } from "@/lib/lang-client";
 
 type PermissionState = {
@@ -669,6 +670,11 @@ function formatYogoCodeDraft(value: string) {
   return normalizeYogoCodeInput(value).replace(/,/g, " ");
 }
 
+function paymentEvidenceLooksLikeImage(item: { name?: string; url?: string }) {
+  const target = `${item.name || ""} ${item.url || ""}`.toLowerCase();
+  return /\.(png|jpe?g|gif|webp|bmp|svg|avif|heic|heif)(\?|$)/i.test(target);
+}
+
 export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientProps) {
   const SUPPLIER_PAGE_SIZE = 10;
   const SUPPLIER_PRODUCT_PREVIEW_PAGE_SIZE = 12;
@@ -734,6 +740,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   const [detailRowEditForm, setDetailRowEditForm] = useState<DetailRowEditForm>(EMPTY_DETAIL_ROW_EDIT_FORM);
   const [paymentEditingRowId, setPaymentEditingRowId] = useState("");
   const [paymentRowEditForm, setPaymentRowEditForm] = useState<PaymentRowEditForm>(EMPTY_PAYMENT_ROW_EDIT_FORM);
+  const [paymentEvidencePreview, setPaymentEvidencePreview] = useState<{ src: string; title: string } | null>(null);
   const [detailCustomerInfoForm, setDetailCustomerInfoForm] = useState<DetailCustomerInfoForm>(EMPTY_DETAIL_CUSTOMER_INFO_FORM);
   const [savingDetailCustomerInfo, setSavingDetailCustomerInfo] = useState(false);
   const paymentEvidenceInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -3112,6 +3119,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                         <th className="px-3 py-2 text-left whitespace-nowrap">{tx("付款方式", "Metodo pago")}</th>
                         <th className="px-3 py-2 text-left whitespace-nowrap">{tx("付款对象", "Destinatario")}</th>
                         <th className="px-3 py-2 text-left whitespace-nowrap">{tx("未付金额", "Monto pendiente")}</th>
+                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("付款证据", "Evidencia pago")}</th>
                         <th className="px-3 py-2 text-right whitespace-nowrap">{tx("操作", "Acciones")}</th>
                       </tr>
                     </thead>
@@ -3145,6 +3153,38 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                           <td className="px-3 py-1.5 break-words whitespace-normal">{row.paymentMethodText || "-"}</td>
                           <td className="px-3 py-1.5 break-words whitespace-normal">{row.paymentTargetText || "-"}</td>
                           <td className="px-3 py-1.5 whitespace-nowrap">{row.unpaidAmountText ? `$ ${row.unpaidAmountText}` : "-"}</td>
+                          <td className="px-3 py-1.5">
+                            {(paymentEvidenceItems[row.id] || []).length ? (
+                              <div className="flex flex-wrap items-center gap-2">
+                                {(paymentEvidenceItems[row.id] || []).map((item) =>
+                                  paymentEvidenceLooksLikeImage(item) ? (
+                                    <button
+                                      key={item.url}
+                                      type="button"
+                                      onClick={() => setPaymentEvidencePreview({ src: item.url, title: item.name || tx("付款证据", "Evidencia pago") })}
+                                      className="group relative h-12 w-12 overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
+                                      title={item.name}
+                                    >
+                                      <img src={item.url} alt={item.name || "payment-evidence"} className="h-full w-full object-cover transition group-hover:scale-105" />
+                                    </button>
+                                  ) : (
+                                    <a
+                                      key={item.url}
+                                      href={item.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex max-w-[180px] truncate rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-slate-900"
+                                      title={item.name}
+                                    >
+                                      {item.name}
+                                    </a>
+                                  ),
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-sm text-slate-400">-</span>
+                            )}
+                          </td>
                           <td className="px-3 py-1.5 text-right">
                             <div className="flex flex-nowrap items-center justify-end gap-2 whitespace-nowrap">
                               <input
@@ -3196,20 +3236,6 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                 ? `${paymentEvidenceItems[row.id].length} ${tx("个已上传", "uploaded")}`
                                 : ""}
                             </div>
-                            <div className="mt-1 flex flex-wrap justify-end gap-2">
-                              {(paymentEvidenceItems[row.id] || []).map((item) => (
-                                <a
-                                  key={item.url}
-                                  href={item.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex max-w-[220px] truncate rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-slate-900"
-                                  title={item.name}
-                                >
-                                  {item.name}
-                                </a>
-                              ))}
-                            </div>
                           </td>
                         </tr>
                       ))}
@@ -3259,6 +3285,13 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
             </div>
           </div>
         ) : null}
+
+        <ImageLightbox
+          open={Boolean(paymentEvidencePreview)}
+          src={paymentEvidencePreview?.src || ""}
+          title={paymentEvidencePreview?.title || ""}
+          onClose={() => setPaymentEvidencePreview(null)}
+        />
 
         {!loading && customerEditorOpen ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
