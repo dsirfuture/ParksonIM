@@ -2391,7 +2391,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                 </div>
               </div>
               <div className="max-h-[540px] overflow-auto">
-                <table className="w-full min-w-[1300px] text-sm">
+                <table className="w-full min-w-[1220px] text-sm">
                   <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600">
                     <tr>
                       <th className="px-3 py-2 text-left whitespace-nowrap">{tx("客户", "Client")}</th>
@@ -2404,7 +2404,6 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       <th className="px-3 py-2 text-center whitespace-nowrap">{tx("信用", "Credit")}</th>
                       <th className="px-3 py-2 text-center whitespace-nowrap">{tx("账期", "Term")}</th>
                       <th className="w-[66px] px-3 py-2 text-center whitespace-nowrap">{tx("详情", "Detail")}</th>
-                      <th className="w-[66px] px-3 py-2 text-center whitespace-nowrap">{tx("编辑", "Edit")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2430,22 +2429,6 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                             aria-label={tx("详情", "Detail")}
                           >
                             <Eye className="h-4 w-4" />
-                          </button>
-                        </td>
-                        <td className="px-3 py-1.5 text-center">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCustomerForm({
-                                ...c,
-                                id: c.sourceType === "yg" ? "" : c.id,
-                              });
-                              setCustomerEditorOpen(true);
-                            }}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
-                            aria-label={tx("编辑", "Edit")}
-                          >
-                            <Pencil className="h-4 w-4" />
                           </button>
                         </td>
                       </tr>
@@ -2642,6 +2625,170 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                 </div>
               </div>
               <div className="p-4">
+                <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="mb-3">
+                    <h4 className="text-sm font-semibold text-slate-900">{tx("客户信息", "Info cli")}</h4>
+                  </div>
+                  <div className="grid gap-2.5 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("友购客户名称", "Cliente Yogo")}</label>
+                      <ReadonlyCustomerField value={detailCustomer.linkedYgName || detailCustomer.name} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("真实客户名称", "Cliente real")}</label>
+                      <ReadonlyCustomerField value={detailCustomer.name} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("联系人", "Cont")}</label>
+                      <ReadonlyCustomerField value={detailCustomer.contact} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("手机", "Mob")}</label>
+                      <ReadonlyCustomerField value={detailCustomer.phone} />
+                    </div>
+                  </div>
+                  <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("VIP等级", "VIP lvl")}</label>
+                      <PlainCustomerValue>
+                        {isVipCustomer(detailCustomer) ? <span className="inline-flex"><VipBadgeIcon /></span> : "-"}
+                      </PlainCustomerValue>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("信用等级", "Credit")}</label>
+                      <PlainCustomerValue value={detailCustomer.creditLevel} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("下单次数", "Order count")}</label>
+                      <PlainCustomerValue value={Number(detailCustomer.totalOrderCount || 0) > 0 ? String(detailCustomer.totalOrderCount) : "-"} />
+                    </div>
+                  </div>
+                </div>
+                {activePaymentDetail ? (
+                  <div className="mb-4 rounded-xl border border-slate-200 bg-white">
+                    <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+                      <h4 className="text-sm font-semibold text-slate-900">
+                        {tx("付款详情", "Detalle de pago")} · {activePaymentDetail.orderNo || "-"}
+                      </h4>
+                    </div>
+                    <div className="p-4">
+                      <div className="rounded-xl border border-slate-200">
+                        <table className="w-full table-auto text-sm">
+                          <thead className="bg-slate-50 text-slate-600">
+                            <tr>
+                              <th className="px-3 py-2 text-left whitespace-nowrap">{tx("需付金额", "Monto por pagar")}</th>
+                              <th className="px-3 py-2 text-left whitespace-nowrap">{tx("已付金额", "Monto pagado")}</th>
+                              <th className="px-3 py-2 text-left whitespace-nowrap">{tx("付款时间", "Fecha pago")}</th>
+                              <th className="px-3 py-2 text-left whitespace-nowrap">{tx("付款方式", "Metodo pago")}</th>
+                              <th className="px-3 py-2 text-left whitespace-nowrap">{tx("付款对象", "Destinatario")}</th>
+                              <th className="px-3 py-2 text-left whitespace-nowrap">{tx("未付金额", "Monto pendiente")}</th>
+                              <th className="px-3 py-2 text-right whitespace-nowrap">{tx("操作", "Acciones")}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {activePaymentDetail.paymentRows.map((row) => (
+                              <tr key={row.id} className="border-t border-slate-100">
+                                <td className="px-3 py-2 whitespace-nowrap">
+                                  {paymentEditingRowId === row.id ? (
+                                    <input
+                                      value={paymentRowEditForm.payableAmount}
+                                      onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, payableAmount: e.target.value }))}
+                                      className="h-9 w-[140px] rounded-xl border border-slate-200 px-3 text-sm"
+                                    />
+                                  ) : (
+                                    row.payableAmountText ? `$ ${row.payableAmountText}` : "-"
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap">{row.paidAmountText ? `$ ${row.paidAmountText}` : "-"}</td>
+                                <td className="px-3 py-2 whitespace-nowrap">
+                                  {paymentEditingRowId === row.id ? (
+                                    <input
+                                      type="date"
+                                      value={paymentRowEditForm.paymentTime}
+                                      onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, paymentTime: e.target.value }))}
+                                      className="h-9 w-[136px] rounded-xl border border-slate-200 px-3 text-sm"
+                                    />
+                                  ) : (
+                                    row.paymentTimeText || "-"
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 break-words whitespace-normal">{row.paymentMethodText || "-"}</td>
+                                <td className="px-3 py-2 break-words whitespace-normal">{row.paymentTargetText || "-"}</td>
+                                <td className="px-3 py-2 whitespace-nowrap">{row.unpaidAmountText ? `$ ${row.unpaidAmountText}` : "-"}</td>
+                                <td className="px-3 py-2 text-right">
+                                  <div className="flex flex-nowrap items-center justify-end gap-2 whitespace-nowrap">
+                                    <input
+                                      ref={(node) => {
+                                        paymentEvidenceInputRefs.current[row.id] = node;
+                                      }}
+                                      type="file"
+                                      multiple
+                                      className="hidden"
+                                      onChange={(event) => {
+                                        void handlePaymentEvidenceSelected(row.id, event.target.files);
+                                        event.currentTarget.value = "";
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handlePaymentEvidenceUpload(row.id, row.sourceType)}
+                                      className="inline-flex h-8 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                      title={tx("上传付款证据", "Upload payment evidence")}
+                                      aria-label={tx("上传付款证据", "Upload payment evidence")}
+                                      disabled={uploadingPaymentEvidenceRowId === row.id}
+                                    >
+                                      <Paperclip className="h-4 w-4" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handlePaymentRowEdit(activePaymentDetail)}
+                                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
+                                      title={tx("编辑", "Edit")}
+                                      aria-label={tx("编辑", "Edit")}
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                    </button>
+                                    {paymentEditingRowId === row.id ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => void saveInlinePaymentRow()}
+                                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
+                                        title={tx("保存", "Save")}
+                                        aria-label={tx("保存", "Save")}
+                                      >
+                                        <Check className="h-4 w-4" />
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                  <div className="mt-1 text-xs text-slate-500">
+                                    {uploadingPaymentEvidenceRowId === row.id ? tx("上传中...", "Uploading...") : ""}
+                                    {!uploadingPaymentEvidenceRowId && paymentEvidenceItems[row.id]?.length
+                                      ? `${paymentEvidenceItems[row.id].length} ${tx("个已上传", "uploaded")}`
+                                      : ""}
+                                  </div>
+                                  <div className="mt-1 flex flex-wrap justify-end gap-2">
+                                    {(paymentEvidenceItems[row.id] || []).map((item) => (
+                                      <a
+                                        key={item.url}
+                                        href={item.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex max-w-[220px] truncate rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-slate-900"
+                                        title={item.name}
+                                      >
+                                        {item.name}
+                                      </a>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
                 {sortedDetailRows.length === 0 ? (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
                     {tx("当前没有匹配到下单记录", "No hay pedidos vinculados")}
@@ -2763,143 +2910,6 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                 <button
                   type="button"
                   onClick={() => setCustomerDetailId("")}
-                  className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
-                >
-                  {tx("关闭", "Cerrar")}
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {!loading && detailCustomer && activePaymentDetail ? (
-          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/45 px-4">
-            <div className="max-h-[80vh] w-full max-w-[860px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
-              <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
-                <h3 className="text-base font-semibold text-slate-900">
-                  {tx("付款详情", "Detalle de pago")} · {activePaymentDetail.orderNo || "-"}
-                </h3>
-              </div>
-              <div className="p-4">
-                <div className="rounded-xl border border-slate-200">
-                  <table className="w-full table-auto text-sm">
-                    <thead className="bg-slate-50 text-slate-600">
-                      <tr>
-                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("需付金额", "Monto por pagar")}</th>
-                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("已付金额", "Monto pagado")}</th>
-                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("付款时间", "Fecha pago")}</th>
-                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("付款方式", "Metodo pago")}</th>
-                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("付款对象", "Destinatario")}</th>
-                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("未付金额", "Monto pendiente")}</th>
-                        <th className="px-3 py-2 text-right whitespace-nowrap">{tx("操作", "Acciones")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activePaymentDetail.paymentRows.map((row) => (
-                        <tr key={row.id} className="border-t border-slate-100">
-                          <td className="px-3 py-2 whitespace-nowrap">
-                            {paymentEditingRowId === row.id ? (
-                              <input
-                                value={paymentRowEditForm.payableAmount}
-                                onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, payableAmount: e.target.value }))}
-                                className="h-9 w-[140px] rounded-xl border border-slate-200 px-3 text-sm"
-                              />
-                            ) : (
-                              row.payableAmountText ? `$ ${row.payableAmountText}` : "-"
-                            )}
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap">{row.paidAmountText ? `$ ${row.paidAmountText}` : "-"}</td>
-                          <td className="px-3 py-2 whitespace-nowrap">
-                            {paymentEditingRowId === row.id ? (
-                              <input
-                                type="date"
-                                value={paymentRowEditForm.paymentTime}
-                                onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, paymentTime: e.target.value }))}
-                                className="h-9 w-[136px] rounded-xl border border-slate-200 px-3 text-sm"
-                              />
-                            ) : (
-                              row.paymentTimeText || "-"
-                            )}
-                          </td>
-                          <td className="px-3 py-2 break-words whitespace-normal">{row.paymentMethodText || "-"}</td>
-                          <td className="px-3 py-2 break-words whitespace-normal">{row.paymentTargetText || "-"}</td>
-                          <td className="px-3 py-2 whitespace-nowrap">{row.unpaidAmountText ? `$ ${row.unpaidAmountText}` : "-"}</td>
-                          <td className="px-3 py-2 text-right">
-                              <div className="flex flex-nowrap items-center justify-end gap-2 whitespace-nowrap">
-                              <input
-                                ref={(node) => {
-                                  paymentEvidenceInputRefs.current[row.id] = node;
-                                }}
-                                type="file"
-                                multiple
-                                className="hidden"
-                                onChange={(event) => {
-                                  handlePaymentEvidenceSelected(row.id, event.target.files);
-                                  event.currentTarget.value = "";
-                                }}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => handlePaymentEvidenceUpload(row.id, row.sourceType)}
-                                className="inline-flex h-8 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                                title={tx("上传付款证据", "Upload payment evidence")}
-                                aria-label={tx("上传付款证据", "Upload payment evidence")}
-                                disabled={uploadingPaymentEvidenceRowId === row.id}
-                              >
-                                <Paperclip className="h-4 w-4" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handlePaymentRowEdit(activePaymentDetail)}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
-                                title={tx("编辑", "Edit")}
-                                aria-label={tx("编辑", "Edit")}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </button>
-                              {paymentEditingRowId === row.id ? (
-                                <button
-                                  type="button"
-                                  onClick={() => void saveInlinePaymentRow()}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
-                                  title={tx("保存", "Save")}
-                                  aria-label={tx("保存", "Save")}
-                                >
-                                  <Check className="h-4 w-4" />
-                                </button>
-                              ) : null}
-                            </div>
-                            <div className="mt-1 text-xs text-slate-500">
-                              {uploadingPaymentEvidenceRowId === row.id ? tx("上传中...", "Uploading...") : ""}
-                              {!uploadingPaymentEvidenceRowId && paymentEvidenceItems[row.id]?.length
-                                ? `${paymentEvidenceItems[row.id].length} ${tx("个已上传", "uploaded")}`
-                                : ""}
-                            </div>
-                            <div className="mt-1 flex flex-wrap justify-end gap-2">
-                              {(paymentEvidenceItems[row.id] || []).map((item) => (
-                                <a
-                                  key={item.url}
-                                  href={item.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex max-w-[220px] truncate rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-slate-900"
-                                  title={item.name}
-                                >
-                                  {item.name}
-                                </a>
-                              ))}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-4 py-3">
-                <button
-                  type="button"
-                  onClick={() => setCustomerPaymentDetailId("")}
                   className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
                 >
                   {tx("关闭", "Cerrar")}
