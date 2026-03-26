@@ -299,6 +299,7 @@ export async function GET() {
         manualDetailRows: rows.map((item) => ({
           id: item.id,
           customerName: item.customer_name || "",
+          customerProfileId: item.customer_profile_id || "",
           ygOrderNo: item.yg_order_no || "",
           externalOrderNo: item.external_order_no || "",
           orderChannel: item.order_channel || "",
@@ -555,6 +556,7 @@ export async function GET() {
         manualOrderRecords: sortedRows.map((item) => ({
           id: item.id,
           customerName: item.customer_name || "",
+          customerProfileId: item.customer_profile_id || "",
           ygOrderNo: item.yg_order_no || "",
           externalOrderNo: item.external_order_no || "",
           orderChannel: item.order_channel || "",

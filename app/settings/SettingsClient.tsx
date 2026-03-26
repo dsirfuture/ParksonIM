@@ -3,7 +3,7 @@
 import NextImage from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronUp, Eye, MapPin, Pencil, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Eye, MapPin, Paperclip, Pencil, Trash2, X } from "lucide-react";
 import { getClientLang } from "@/lib/lang-client";
 
 type PermissionState = {
@@ -97,6 +97,7 @@ type Customer = {
   manualOrderRecords?: Array<{
     id: string;
     customerName: string;
+    customerProfileId?: string;
     ygOrderNo: string;
     externalOrderNo: string;
     orderChannel: string;
@@ -108,6 +109,7 @@ type Customer = {
 };
 
 type ManualOrderForm = {
+  id: string;
   customerProfileId: string;
   customerName: string;
   ygOrderNo: string;
@@ -127,6 +129,8 @@ type CustomerSummary = {
 type CustomerDetailRow = NonNullable<Customer["detailRows"]>[number];
 type CustomerTimelineRow = {
   id: string;
+  sourceType: "yg" | "manual";
+  manualRecordId: string;
   orderNo: string;
   orderDateText: string;
   orderAmountText: string;
@@ -135,6 +139,7 @@ type CustomerTimelineRow = {
   shippedAtText: string;
   paymentRows: Array<{
     id: string;
+    sourceType: "yg" | "manual";
     payableAmountText: string;
     paidAmountText: string;
     paymentTimeText: string;
@@ -246,6 +251,7 @@ const EMPTY_CATALOG: CatalogConfig = {
 };
 
 const EMPTY_MANUAL_ORDER_FORM: ManualOrderForm = {
+  id: "",
   customerProfileId: "",
   customerName: "",
   ygOrderNo: "",
@@ -645,6 +651,8 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   const [customerDetailId, setCustomerDetailId] = useState("");
   const [customerPaymentDetailId, setCustomerPaymentDetailId] = useState("");
   const [customerDetailDateSort, setCustomerDetailDateSort] = useState<"desc" | "asc">("desc");
+  const paymentEvidenceInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const [paymentEvidenceNames, setPaymentEvidenceNames] = useState<Record<string, string[]>>({});
 
   const [catalogConfig, setCatalogConfig] = useState<CatalogConfig>(EMPTY_CATALOG);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -965,6 +973,80 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
     }
   }
 
+  function openManualOrderEditor(input: {
+    id?: string;
+    customerProfileId?: string;
+    customerName?: string;
+    ygOrderNo?: string;
+    externalOrderNo?: string;
+    orderChannel?: string;
+    packingAmount?: string;
+    shippedAt?: string;
+    paidAt?: string;
+    paymentTermDays?: string;
+  }) {
+    setManualOrderForm({
+      id: input.id || "",
+      customerProfileId: input.customerProfileId || "",
+      customerName: input.customerName || "",
+      ygOrderNo: input.ygOrderNo || "",
+      externalOrderNo: input.externalOrderNo || "",
+      orderChannel: input.orderChannel || "",
+      packingAmount: input.packingAmount || "",
+      shippedAt: input.shippedAt || "",
+      paidAt: input.paidAt || "",
+      paymentTermDays: input.paymentTermDays || "",
+    });
+    setManualOrderOpen(true);
+  }
+
+  function handleTimelineRowEdit(row: CustomerTimelineRow) {
+    setCustomerPaymentDetailId("");
+    if (row.sourceType !== "manual") {
+      setError(tx("友购订单暂不支持在这里直接编辑。", "Yogo orders cannot be edited here yet."));
+      return;
+    }
+    const manualRow = detailCustomer?.manualOrderRecords?.find((item) => item.id === row.manualRecordId);
+    if (!manualRow) {
+      setError(tx("未找到可编辑记录。", "Editable record not found."));
+      return;
+    }
+    openManualOrderEditor({
+      id: manualRow.id,
+      customerProfileId: manualRow.customerProfileId || (detailCustomer?.sourceType === "profile" ? detailCustomer.id : ""),
+      customerName: manualRow.customerName || detailCustomer?.name || "",
+      ygOrderNo: manualRow.ygOrderNo || "",
+      externalOrderNo: manualRow.externalOrderNo || "",
+      orderChannel: manualRow.orderChannel || "",
+      packingAmount: manualRow.packingAmountText || "",
+      shippedAt: manualRow.shippedAtText || "",
+      paidAt: manualRow.paidAtText || "",
+      paymentTermDays: manualRow.paymentTermText || "",
+    });
+  }
+
+  function handlePaymentRowEdit(row: CustomerTimelineRow) {
+    handleTimelineRowEdit(row);
+  }
+
+  function handlePaymentEvidenceUpload(paymentRowId: string, sourceType: "yg" | "manual") {
+    if (sourceType !== "manual") {
+      setError(tx("友购订单付款证据上传尚未接通。", "Payment evidence upload is not connected for Yogo orders yet."));
+      return;
+    }
+    paymentEvidenceInputRefs.current[paymentRowId]?.click();
+  }
+
+  function handlePaymentEvidenceSelected(paymentRowId: string, files: FileList | null) {
+    const nextNames = Array.from(files || [])
+      .map((file) => String(file.name || "").trim())
+      .filter(Boolean);
+    setPaymentEvidenceNames((prev) => ({ ...prev, [paymentRowId]: nextNames }));
+    if (nextNames.length > 0) {
+      showSaved(tx("付款证据已加入待上传列表", "Payment evidence added to pending list"));
+    }
+  }
+
   async function deleteCustomer(id: string, customerName: string) {
     try {
       setError("");
@@ -1247,6 +1329,8 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
   const sortedDetailRows = useMemo<CustomerTimelineRow[]>(() => {
     const orderRows = (detailCustomer?.detailRows || []).map((row) => ({
       id: `detail:${row.orderNo}`,
+      sourceType: "yg" as const,
+      manualRecordId: "",
       orderNo: row.orderNo,
       orderDateText: row.orderDateText,
       orderAmountText: row.orderAmountText,
@@ -1256,6 +1340,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       paymentRows: [
         {
           id: `detail:${row.orderNo}:payment`,
+          sourceType: "yg" as const,
           payableAmountText: row.orderAmountText || "",
           paidAmountText: "",
           paymentTimeText: "",
@@ -1267,6 +1352,8 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
     }));
     const manualRows = (detailCustomer?.manualOrderRecords || []).map((row) => ({
       id: `manual:${row.id}`,
+      sourceType: "manual" as const,
+      manualRecordId: row.id,
       orderNo: row.ygOrderNo || row.externalOrderNo || "-",
       orderDateText: row.shippedAtText || row.paidAtText || "-",
       orderAmountText: "",
@@ -1276,6 +1363,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       paymentRows: [
         {
           id: `manual:${row.id}:payment`,
+          sourceType: "manual" as const,
           payableAmountText: row.packingAmountText || "",
           paidAmountText: row.paidAtText && row.packingAmountText ? row.packingAmountText : "",
           paymentTimeText: row.paidAtText || "",
@@ -1311,6 +1399,11 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       setCustomerPaymentDetailId("");
     }
   }, [detailCustomer]);
+  useEffect(() => {
+    if (!activePaymentDetail) {
+      setPaymentEvidenceNames({});
+    }
+  }, [activePaymentDetail]);
 
   useEffect(() => {
     if (!customerEditorOpen) {
@@ -2215,7 +2308,9 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
             <div className="max-h-[90vh] w-full max-w-[980px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
               <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
                 <div>
-                  <h3 className="text-base font-semibold text-slate-900">{tx("新增记录", "Nuevo registro")}</h3>
+                  <h3 className="text-base font-semibold text-slate-900">
+                    {manualOrderForm.id ? tx("编辑记录", "Editar registro") : tx("新增记录", "Nuevo registro")}
+                  </h3>
                   <p className="mt-1 text-xs text-slate-500">
                     {tx("录入其他渠道订单信息，并用于客户列表统计。", "Registrar pedidos de otros canales para estadisticas de clientes.")}
                   </p>
@@ -2318,7 +2413,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                   onClick={() => void saveManualOrder()}
                   className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-white"
                 >
-                  {tx("保存记录", "Guardar")}
+                  {manualOrderForm.id ? tx("保存修改", "Guardar cambios") : tx("保存记录", "Guardar")}
                 </button>
               </div>
             </div>
@@ -2350,13 +2445,13 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                     {tx("当前没有匹配到下单记录", "No hay pedidos vinculados")}
                   </div>
                 ) : (
-                  <div className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full min-w-[1080px] text-sm">
+                  <div className="rounded-xl border border-slate-200">
+                    <table className="w-full table-auto text-sm">
                       <thead className="bg-slate-50 text-slate-600">
                         <tr>
                           <th className="px-3 py-2 text-left">{tx("订单号", "Order no")}</th>
-                          <th className="px-3 py-2 text-left">{tx("渠道", "Canal")}</th>
-                          <th className="px-3 py-2 text-left">
+                          <th className="px-3 py-2 text-left whitespace-nowrap">{tx("渠道", "Canal")}</th>
+                          <th className="px-3 py-2 text-left whitespace-nowrap">
                             <button
                               type="button"
                               onClick={() => setCustomerDetailDateSort((prev) => (prev === "desc" ? "asc" : "desc"))}
@@ -2366,33 +2461,44 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                               {customerDetailDateSort === "desc" ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                             </button>
                           </th>
-                          <th className="px-3 py-2 text-left">{tx("下单金额", "Order amount")}</th>
-                          <th className="px-3 py-2 text-left">{tx("配货金额", "Packing amount")}</th>
-                          <th className="px-3 py-2 text-left">{tx("发货日期", "Ship date")}</th>
-                          <th className="px-3 py-2 text-right">{tx("付款", "Pago")}</th>
+                          <th className="px-3 py-2 text-left whitespace-nowrap">{tx("下单金额", "Order amount")}</th>
+                          <th className="px-3 py-2 text-left whitespace-nowrap">{tx("配货金额", "Packing amount")}</th>
+                          <th className="px-3 py-2 text-left whitespace-nowrap">{tx("发货日期", "Ship date")}</th>
+                          <th className="px-3 py-2 text-right whitespace-nowrap">{tx("操作", "Acciones")}</th>
                         </tr>
                       </thead>
                       <tbody>
-                          {sortedDetailRows.map((item) => (
+                        {sortedDetailRows.map((item) => (
                           <tr key={item.id} className="border-t border-slate-100">
-                            <td className="px-3 py-2 font-semibold">{item.orderNo || "-"}</td>
-                            <td className="px-3 py-2">{item.channelText || "-"}</td>
-                            <td className="px-3 py-2">{item.orderDateText || "-"}</td>
-                            <td className="px-3 py-2">
+                            <td className="px-3 py-2 font-semibold break-all whitespace-normal">{item.orderNo || "-"}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{item.channelText || "-"}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{item.orderDateText || "-"}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">
                               {item.orderAmountText ? `$ ${item.orderAmountText}` : "-"}
                             </td>
-                            <td className="px-3 py-2">
+                            <td className="px-3 py-2 whitespace-nowrap">
                               {item.packingAmountText ? `$ ${item.packingAmountText}` : "-"}
                             </td>
-                            <td className="px-3 py-2">{item.shippedAtText || "-"}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{item.shippedAtText || "-"}</td>
                             <td className="px-3 py-2 text-right">
-                              <button
-                                type="button"
-                                onClick={() => setCustomerPaymentDetailId(item.id)}
-                                className="inline-flex h-8 items-center rounded-xl bg-primary px-3 text-sm font-semibold text-white hover:opacity-95"
-                              >
-                                {tx("付款", "Pago")}
-                              </button>
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleTimelineRowEdit(item)}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
+                                  aria-label={tx("编辑", "Edit")}
+                                  title={tx("编辑", "Edit")}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setCustomerPaymentDetailId(item.id)}
+                                  className="inline-flex h-8 items-center rounded-xl bg-primary px-3 text-sm font-semibold text-white hover:opacity-95"
+                                >
+                                  {tx("付款", "Pago")}
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -2423,27 +2529,65 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                 </h3>
               </div>
               <div className="p-4">
-                <div className="overflow-x-auto rounded-xl border border-slate-200">
-                  <table className="w-full min-w-[760px] text-sm">
+                <div className="rounded-xl border border-slate-200">
+                  <table className="w-full table-auto text-sm">
                     <thead className="bg-slate-50 text-slate-600">
                       <tr>
-                        <th className="px-3 py-2 text-left">{tx("需付金额", "Monto por pagar")}</th>
-                        <th className="px-3 py-2 text-left">{tx("已付金额", "Monto pagado")}</th>
-                        <th className="px-3 py-2 text-left">{tx("付款时间", "Fecha pago")}</th>
-                        <th className="px-3 py-2 text-left">{tx("付款方式", "Metodo pago")}</th>
-                        <th className="px-3 py-2 text-left">{tx("付款对象", "Destinatario")}</th>
-                        <th className="px-3 py-2 text-left">{tx("未付金额", "Monto pendiente")}</th>
+                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("需付金额", "Monto por pagar")}</th>
+                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("已付金额", "Monto pagado")}</th>
+                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("付款时间", "Fecha pago")}</th>
+                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("付款方式", "Metodo pago")}</th>
+                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("付款对象", "Destinatario")}</th>
+                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("未付金额", "Monto pendiente")}</th>
+                        <th className="px-3 py-2 text-right whitespace-nowrap">{tx("操作", "Acciones")}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {activePaymentDetail.paymentRows.map((row) => (
                         <tr key={row.id} className="border-t border-slate-100">
-                          <td className="px-3 py-2">{row.payableAmountText ? `$ ${row.payableAmountText}` : "-"}</td>
-                          <td className="px-3 py-2">{row.paidAmountText ? `$ ${row.paidAmountText}` : "-"}</td>
-                          <td className="px-3 py-2">{row.paymentTimeText || "-"}</td>
-                          <td className="px-3 py-2">{row.paymentMethodText || "-"}</td>
-                          <td className="px-3 py-2">{row.paymentTargetText || "-"}</td>
-                          <td className="px-3 py-2">{row.unpaidAmountText ? `$ ${row.unpaidAmountText}` : "-"}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">{row.payableAmountText ? `$ ${row.payableAmountText}` : "-"}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">{row.paidAmountText ? `$ ${row.paidAmountText}` : "-"}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">{row.paymentTimeText || "-"}</td>
+                          <td className="px-3 py-2 break-words whitespace-normal">{row.paymentMethodText || "-"}</td>
+                          <td className="px-3 py-2 break-words whitespace-normal">{row.paymentTargetText || "-"}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">{row.unpaidAmountText ? `$ ${row.unpaidAmountText}` : "-"}</td>
+                          <td className="px-3 py-2 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <input
+                                ref={(node) => {
+                                  paymentEvidenceInputRefs.current[row.id] = node;
+                                }}
+                                type="file"
+                                multiple
+                                className="hidden"
+                                onChange={(event) => {
+                                  handlePaymentEvidenceSelected(row.id, event.target.files);
+                                  event.currentTarget.value = "";
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handlePaymentEvidenceUpload(row.id, row.sourceType)}
+                                className="inline-flex h-8 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                title={tx("上传付款证据", "Upload payment evidence")}
+                                aria-label={tx("上传付款证据", "Upload payment evidence")}
+                              >
+                                <Paperclip className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handlePaymentRowEdit(activePaymentDetail)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
+                                title={tx("编辑", "Edit")}
+                                aria-label={tx("编辑", "Edit")}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                            </div>
+                            <div className="mt-1 text-xs text-slate-500">
+                              {paymentEvidenceNames[row.id]?.length ? `${paymentEvidenceNames[row.id].length} ${tx("个文件待上传", "files pending")}` : ""}
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
