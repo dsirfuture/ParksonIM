@@ -2800,19 +2800,19 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                   </button>
                 </div>
               </div>
-              <div className="p-4">
-                <div className="mb-4 bg-white p-2.5">
-                  <div className="mb-2 flex items-center gap-2">
+              <div className="p-3 pt-2">
+                <div className="mb-3 bg-white p-2">
+                  <div className="mb-1.5 flex items-center gap-1.5">
                     <h4 className="text-sm font-semibold text-slate-900">{tx("客户信息", "Info cli")}</h4>
                     <button
                       type="button"
                       onClick={() => void saveDetailCustomerInfo()}
                       disabled={!canManageCustomers || savingDetailCustomerInfo}
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 disabled:opacity-40"
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 disabled:opacity-40"
                       aria-label={tx("保存客户信息", "Save customer info")}
                       title={tx("保存客户信息", "Save customer info")}
                     >
-                      <Check className="h-3.5 w-3.5" />
+                      <Check className="h-3 w-3" />
                     </button>
                   </div>
                   <div className="grid gap-2 xl:grid-cols-[minmax(0,230px)_minmax(0,230px)_minmax(0,170px)_minmax(0,170px)_minmax(0,170px)]">
