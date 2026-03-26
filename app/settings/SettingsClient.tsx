@@ -688,6 +688,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
   const CUSTOMER_PAYMENT_PAGE_SIZE = 5;
   const [lang, setLang] = useState<"zh" | "es">("zh");
   const allowedTabs = visibleTabs && visibleTabs.length > 0 ? TAB_LIST.filter((item) => visibleTabs.includes(item)) : TAB_LIST;
+  const singleCustomerTabView = allowedTabs.length === 1 && allowedTabs[0] === "customer";
   const [tab, setTab] = useState<TabKey>(allowedTabs.includes(initialTab) ? initialTab : allowedTabs[0] || "perm");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1953,22 +1954,26 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
 
   return (
     <section className="space-y-4">
-      <div className="rounded-2xl border border-slate-200 bg-white">
-        <div className="flex flex-wrap gap-2 border-b border-slate-200 px-5 py-4">
-          {allowedTabs.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTab(t)}
-              className={`inline-flex h-9 items-center rounded-xl px-3 text-sm font-semibold ${
-                tab === t ? "bg-primary text-white" : "border border-slate-200 bg-white text-slate-700"
-              }`}
-            >
-              {tabText(t)}
-            </button>
-          ))}
-          {saved ? <span className="ml-auto text-sm text-emerald-600">{saved}</span> : null}
-        </div>
+      <div className={singleCustomerTabView ? "" : "rounded-2xl border border-slate-200 bg-white"}>
+        {!singleCustomerTabView ? (
+          <div className="flex flex-wrap gap-2 border-b border-slate-200 px-5 py-4">
+            {allowedTabs.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTab(t)}
+                className={`inline-flex h-9 items-center rounded-xl px-3 text-sm font-semibold ${
+                  tab === t ? "bg-primary text-white" : "border border-slate-200 bg-white text-slate-700"
+                }`}
+              >
+                {tabText(t)}
+              </button>
+            ))}
+            {saved ? <span className="ml-auto text-sm text-emerald-600">{saved}</span> : null}
+          </div>
+        ) : saved ? (
+          <div className="text-sm text-emerald-600">{saved}</div>
+        ) : null}
 
         {error ? <div className="mx-5 mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-600">{error}</div> : null}
         {loading ? <div className="p-5 text-sm text-slate-500">{tx("加载中...", "Load...")}</div> : null}
@@ -2582,8 +2587,8 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
         ) : null}
 
         {!loading && tab === "customer" ? (
-          <div className="space-y-4 p-5">
-            <div className="rounded-2xl border border-slate-200 bg-white">
+          <div className={singleCustomerTabView ? "" : "space-y-4 p-5"}>
+            <div className={singleCustomerTabView ? "" : "rounded-2xl border border-slate-200 bg-white"}>
               <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
                 <div className="flex items-center gap-6">
                   <h3 className="text-base font-semibold text-slate-900">{tx("客户列表", "Lista cli")}</h3>
