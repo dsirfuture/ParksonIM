@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { hasPermission } from "@/lib/permissions";
 import { withPrismaRetry } from "@/lib/prisma-retry";
 import { getSession } from "@/lib/tenant";
+import { parseBillingBooleanFlag, parseBillingRemark, parseBillingSnapshot } from "@/lib/billing-meta";
 
 function normalizeKey(value: unknown) {
   return String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
@@ -118,6 +119,34 @@ function normalizeAmountText(value: unknown) {
   return Number.isFinite(amount) ? amount.toFixed(2) : "0.00";
 }
 
+function trimText(value: unknown) {
+  return String(value || "").trim();
+}
+
+function normalizeDateInputText(value: unknown) {
+  const text = trimText(value);
+  return text ? text.replace(/[.]/g, "-").replace(/\//g, "-") : "";
+}
+
+function toDiscountFactor(value: number | null | undefined) {
+  if (value === null || value === undefined) return null;
+  if (!Number.isFinite(value) || value < 0) return null;
+  return value > 1 ? value / 100 : value;
+}
+
+function computeBillingLineTotal(
+  qty: number,
+  unitPrice: number,
+  normalDiscount: number | null,
+  vipDiscount: number | null,
+  vipEnabled: boolean,
+) {
+  let factor = 1;
+  if (normalDiscount !== null) factor *= 1 - normalDiscount;
+  if (vipEnabled && vipDiscount !== null) factor *= 1 - vipDiscount;
+  return qty * unitPrice * factor;
+}
+
 export async function GET() {
   try {
     const session = await getSession();
@@ -149,7 +178,9 @@ export async function GET() {
             customer_name: true,
             contact_name: true,
             contact_phone: true,
+            address_text: true,
             order_amount: true,
+            order_remark: true,
             latest_status: true,
             order_created_at: true,
             updated_at: true,
@@ -251,24 +282,52 @@ export async function GET() {
         })
         .map((order) => {
           const overlay = overlayByOrderNo.get(normalizeKey(order.order_no));
-          const packingAmountText = normalizeAmountText(overlay?.packing_amount || 0);
+          const parsedRemark = parseBillingRemark(order.order_remark);
+          const billingSnapshot = parseBillingSnapshot(parsedRemark.meta.billingSnapshot);
+          const billingPackingAmount = billingSnapshot.reduce((sum, item) => {
+            const lineTotal = computeBillingLineTotal(
+              Number(item.qty || 0),
+              Number(item.unitPrice || 0),
+              toDiscountFactor(item.normalDiscount),
+              toDiscountFactor(item.vipDiscount),
+              parseBillingBooleanFlag(parsedRemark.meta.generatedVipEnabled),
+            );
+            return sum + (Number.isFinite(lineTotal) ? lineTotal : 0);
+          }, 0);
+          const overlayPackingAmountText = normalizeAmountText(overlay?.packing_amount || 0);
+          const billingPackingAmountText = normalizeAmountText(billingPackingAmount);
+          const packedAmountText =
+            overlay
+              ? (overlayPackingAmountText !== "0.00" ? overlayPackingAmountText : "")
+              : billingPackingAmountText !== "0.00"
+                ? billingPackingAmountText
+                : "";
+          const billingShipDateText = normalizeDateInputText(parsedRemark.meta.shipDate);
+          const billingPaidAtText = normalizeDateInputText(parsedRemark.meta.paidAt);
+          const billingPaymentTermText = trimText(parsedRemark.meta.paymentTerm);
+          const deliveryAddressText = trimText(order.address_text);
           return {
             overlayRecordId: overlay?.id || "",
             orderNo: order.order_no,
             orderDateText: formatDateText(order.order_created_at || order.updated_at),
             orderAmountText: Number(order.order_amount || 0).toFixed(2),
-            packingAmountText: packingAmountText !== "0.00" ? packingAmountText : "",
-            shippedAtText: formatDateText(overlay?.shipped_at),
-            paidAtText: formatDateText(overlay?.paid_at),
-            paymentTermText: overlay?.payment_term_days ? String(overlay.payment_term_days) : "",
+            packingAmountText: packedAmountText,
+            shippedAtText: formatDateText(overlay?.shipped_at) || billingShipDateText,
+            paidAtText: formatDateText(overlay?.paid_at) || billingPaidAtText,
+            paymentTermText: overlay?.payment_term_days ? String(overlay.payment_term_days) : billingPaymentTermText,
+            deliveryAddressText,
             latestStatus: String(order.latest_status || "").trim() || "-",
           };
         });
 
       const totalOrderAmount = detailRows.reduce((sum, item) => sum + Number(item.orderAmountText || 0), 0);
+      const latestAddressText = detailRows.find((item) => trimText(item.deliveryAddressText))?.deliveryAddressText || "";
+      const latestPaymentTermText = detailRows.find((item) => trimText(item.paymentTermText))?.paymentTermText || "";
       return {
         totalOrderAmountText: totalOrderAmount.toFixed(2),
         packingAmountText: "",
+        primaryAddressText: latestAddressText,
+        paymentTermText: latestPaymentTermText,
         totalOrderCount: detailRows.length,
         detailRows,
       };
@@ -376,7 +435,7 @@ export async function GET() {
         whatsapp: row.whatsapp || "",
         email: row.email || "",
         stores: row.store_addresses || "",
-        cityCountry: row.city_country || "",
+        cityCountry: row.city_country || orderSummary.primaryAddressText || "",
         customerType: row.customer_type || "",
         vipLevel: row.vip_level || "",
         creditLevel: row.credit_level || "",
@@ -387,7 +446,7 @@ export async function GET() {
         totalOrderAmountText: orderSummary.totalOrderAmountText,
         packingAmountText: manualSummary.manualPackingAmountText !== "0.00" ? manualSummary.manualPackingAmountText : "",
         debtAmountText: manualSummary.manualDebtAmountText !== "0.00" ? manualSummary.manualDebtAmountText : "",
-        paymentTermText: manualSummary.paymentTermText,
+        paymentTermText: manualSummary.paymentTermText || orderSummary.paymentTermText,
         detailRows: orderSummary.detailRows,
         manualOrderRecords: manualSummary.manualDetailRows,
       };
@@ -453,7 +512,8 @@ export async function GET() {
               totalOrderAmountText: orderSummary.totalOrderAmountText,
               packingAmountText: manualSummary.manualPackingAmountText !== "0.00" ? manualSummary.manualPackingAmountText : "",
               debtAmountText: manualSummary.manualDebtAmountText !== "0.00" ? manualSummary.manualDebtAmountText : "",
-              paymentTermText: manualSummary.paymentTermText,
+              paymentTermText: manualSummary.paymentTermText || orderSummary.paymentTermText,
+              cityCountry: orderSummary.primaryAddressText || "",
               detailRows: orderSummary.detailRows,
               manualOrderRecords: manualSummary.manualDetailRows,
             };
@@ -489,13 +549,10 @@ export async function GET() {
         const rightTime = new Date(right.order_created_at || right.updated_at || 0).getTime();
         return rightTime - leftTime;
       });
-      const detailRows = sortedOrders.map((order) => ({
-        orderNo: order.order_no,
-        orderDateText: formatDateText(order.order_created_at || order.updated_at),
-        orderAmountText: Number(order.order_amount || 0).toFixed(2),
-        latestStatus: String(order.latest_status || "").trim() || "-",
-      }));
-      const totalOrderAmount = detailRows.reduce((sum, item) => sum + Number(item.orderAmountText || 0), 0);
+      const orderSummary = buildOrderSummary({
+        customerIds: sortedOrders[0]?.customer_id ? [sortedOrders[0].customer_id] : [],
+        companyName: sortedOrders[0]?.company_name || sortedOrders[0]?.customer_name || "",
+      });
 
       return {
         id: `order:${groupKey}`,
@@ -507,19 +564,19 @@ export async function GET() {
         whatsapp: "",
         email: "",
         stores: "",
-        cityCountry: "",
+        cityCountry: orderSummary.primaryAddressText || "",
         customerType: "",
         vipLevel: "",
         creditLevel: "",
         tags: "",
         channelText: "友购",
-        orderStats: String(detailRows.length),
-        totalOrderAmountText: totalOrderAmount.toFixed(2),
+        orderStats: String(orderSummary.totalOrderCount),
+        totalOrderAmountText: orderSummary.totalOrderAmountText,
         packingAmountText: "",
         debtAmountText: "",
-        paymentTermText: "",
-        totalOrderCount: detailRows.length,
-        detailRows,
+        paymentTermText: orderSummary.paymentTermText,
+        totalOrderCount: orderSummary.totalOrderCount,
+        detailRows: orderSummary.detailRows,
         manualOrderRecords: [],
       };
     });
