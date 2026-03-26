@@ -49,7 +49,7 @@ export function AppNavigation({ groups, loginLabel, loggedIn }: AppNavigationPro
               href={group.href}
               className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
                 active
-                  ? "bg-secondary-accent text-primary"
+                  ? "bg-[#f7d8dc] text-primary shadow-sm ring-1 ring-[#efc8cd]"
                   : "text-slate-600 hover:bg-secondary-accent/70 hover:text-primary"
               }`}
             >
@@ -78,7 +78,7 @@ export function AppNavigation({ groups, loginLabel, loggedIn }: AppNavigationPro
                 href={item.href}
                 className={`rounded-md px-3 py-1.5 text-center text-xs font-semibold transition ${
                   active
-                    ? "bg-primary text-white"
+                    ? "bg-[#f7d8dc] text-primary shadow-sm ring-1 ring-[#efc8cd]"
                     : "text-slate-500 hover:bg-secondary-accent/70 hover:text-primary"
                 }`}
               >
