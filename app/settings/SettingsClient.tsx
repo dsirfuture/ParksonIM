@@ -2813,7 +2813,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
 
         {!loading && detailCustomer ? (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 px-4">
-            <div className="max-h-[86vh] w-full max-w-[1080px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
+            <div className="max-h-[86vh] w-full max-w-[1040px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
               <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
                 <h3 className="text-base font-semibold text-slate-900">
                   {tx("客户下单详情", "Detalle de pedidos")} · {detailCustomer.name || "-"}
@@ -2900,15 +2900,15 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       />
                     </div>
                   </div>
-                  <div className="mt-3.5 grid gap-2.5 xl:grid-cols-[1010px]">
-                    <div className="w-[1010px]">
+                  <div className="mt-3.5 grid gap-2.5 xl:grid-cols-[970px]">
+                    <div className="w-[970px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("客户地址", "Direccion")}</label>
-                      <div className="relative w-[1010px]">
+                      <div className="relative w-[970px]">
                         <input
                           value={detailCustomerInfoForm.cityCountry}
                           onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, cityCountry: e.target.value }))}
                           disabled={!canManageCustomers}
-                          className="h-11 w-[1010px] rounded-2xl border border-slate-200 bg-white px-4 pr-12 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
+                          className="h-11 w-[970px] rounded-2xl border border-slate-200 bg-white px-4 pr-12 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
                         />
                         <a
                           href={mapSearchUrl(detailCustomerInfoForm.cityCountry)}
@@ -2972,7 +2972,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                           <th className="w-[120px] px-3 py-1.5 text-left whitespace-nowrap">{tx("下单金额", "Order amount")}</th>
                           <th className="w-[120px] px-3 py-1.5 text-left whitespace-nowrap">{tx("配货金额", "Packing amount")}</th>
                           <th className="w-[96px] px-3 py-1.5 text-left whitespace-nowrap">{tx("发货日期", "Ship date")}</th>
-                          <th className="w-[140px] px-3 py-1.5 text-right whitespace-nowrap">{tx("操作", "Acciones")}</th>
+                          <th className="w-[118px] px-3 py-1.5 text-right whitespace-nowrap">{tx("操作", "Acciones")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3027,7 +3027,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                 item.shippedAtText || "-"
                               )}
                             </td>
-                            <td className="w-[140px] px-3 py-1.5 text-right">
+                            <td className="w-[118px] px-3 py-1.5 text-right">
                               <div className="flex flex-nowrap items-center justify-end gap-2 whitespace-nowrap">
                                 <button
                                   type="button"
@@ -3052,7 +3052,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                 <button
                                   type="button"
                                   onClick={() => setCustomerPaymentDetailId(item.id)}
-                                  className="inline-flex h-7 items-center rounded-xl bg-primary px-3 text-sm font-semibold text-white hover:opacity-95"
+                                  className="inline-flex h-7 items-center rounded-xl bg-primary px-2.5 text-sm font-semibold text-white hover:opacity-95"
                                 >
                                   {tx("付款", "Pago")}
                                 </button>
