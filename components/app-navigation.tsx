@@ -49,8 +49,8 @@ export function AppNavigation({ groups, loginLabel, loggedIn }: AppNavigationPro
               href={group.href}
               className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
                 active
-                  ? "bg-slate-100 text-slate-900"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  ? "bg-secondary-accent text-primary"
+                  : "text-slate-600 hover:bg-secondary-accent/70 hover:text-primary"
               }`}
             >
               {group.label}
@@ -61,7 +61,7 @@ export function AppNavigation({ groups, loginLabel, loggedIn }: AppNavigationPro
         {!loggedIn ? (
           <Link
             href="/login"
-            className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+            className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-secondary-accent/70 hover:text-primary"
           >
             {loginLabel}
           </Link>
@@ -69,17 +69,17 @@ export function AppNavigation({ groups, loginLabel, loggedIn }: AppNavigationPro
       </nav>
 
       {secondaryItems.length > 0 ? (
-        <nav className="mt-1.5 flex items-center gap-1">
+        <nav className="mt-1.5 flex min-w-[132px] flex-col items-stretch gap-1">
           {secondaryItems.map((item) => {
             const active = isChildActive(item.href, pathname, search);
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+                className={`rounded-md px-3 py-1.5 text-center text-xs font-semibold transition ${
                   active
                     ? "bg-primary text-white"
-                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                    : "text-slate-500 hover:bg-secondary-accent/70 hover:text-primary"
                 }`}
               >
                 {item.label}
