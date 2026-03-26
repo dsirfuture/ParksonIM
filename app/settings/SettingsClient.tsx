@@ -1737,6 +1737,17 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
       }, 0),
     [sortedDetailRows],
   );
+  const hasPendingDetailCustomerInfoChanges = useMemo(() => {
+    if (!detailCustomer) return false;
+    return (
+      (detailCustomerInfoForm.linkedYgName || "") !== (detailCustomer.linkedYgName || detailCustomer.name || "")
+      || (detailCustomerInfoForm.name || "") !== (detailCustomer.name || "")
+      || (detailCustomerInfoForm.contact || "") !== (detailCustomer.contact || "")
+      || (detailCustomerInfoForm.phone || "") !== (detailCustomer.phone || "")
+      || (detailCustomerInfoForm.stores || "") !== (detailCustomer.stores || "")
+      || (detailCustomerInfoForm.cityCountry || "") !== (detailCustomer.cityCountry || "")
+    );
+  }, [detailCustomer, detailCustomerInfoForm]);
   const hasAnyPackingAmount = useMemo(
     () => sortedDetailRows.some((row) => Boolean(String(row.packingAmountText || "").trim())),
     [sortedDetailRows],
@@ -2828,20 +2839,27 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
               </div>
               <div className="p-3 pt-2">
                 <div className="mb-3 bg-white p-2">
-                  <div className="mb-1.5 flex items-center gap-1.5">
+                  <div className="mb-2.5 flex items-center gap-1.5">
                     <h4 className="text-sm font-semibold text-slate-900">{tx("客户信息", "Info cli")}</h4>
                     <button
                       type="button"
                       onClick={() => void saveDetailCustomerInfo()}
-                      disabled={!canManageCustomers || savingDetailCustomerInfo}
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 disabled:opacity-40"
+                      disabled={!canManageCustomers || savingDetailCustomerInfo || !hasPendingDetailCustomerInfoChanges}
+                      className={`inline-flex h-5 w-5 items-center justify-center rounded-md border transition disabled:opacity-40 ${
+                        hasPendingDetailCustomerInfoChanges
+                          ? "border-primary bg-primary text-white"
+                          : "border-slate-200 bg-white text-slate-700"
+                      }`}
                       aria-label={tx("保存客户信息", "Save customer info")}
                       title={tx("保存客户信息", "Save customer info")}
                     >
                       <Check className="h-3 w-3" />
                     </button>
+                    {hasPendingDetailCustomerInfoChanges ? (
+                      <span className="text-[11px] font-medium text-red-500">{tx("请点击保存编辑", "Haz clic para guardar")}</span>
+                    ) : null}
                   </div>
-                  <div className="grid gap-2 xl:grid-cols-[minmax(0,230px)_minmax(0,230px)_minmax(0,170px)_minmax(0,170px)_minmax(0,170px)]">
+                  <div className="grid gap-x-2 gap-y-3 xl:grid-cols-[minmax(0,230px)_minmax(0,230px)_minmax(0,170px)_minmax(0,170px)_minmax(0,170px)]">
                     <div className="max-w-[240px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("友购客户名称", "Cliente Yogo")}</label>
                       <ReadonlyCustomerField value={detailCustomerInfoForm.linkedYgName} />
@@ -2882,7 +2900,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       />
                     </div>
                   </div>
-                  <div className="mt-2.5 grid gap-2 xl:grid-cols-[1010px]">
+                  <div className="mt-3.5 grid gap-2.5 xl:grid-cols-[1010px]">
                     <div className="w-[1010px]">
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("客户地址", "Direccion")}</label>
                       <div className="relative w-[1010px]">
@@ -2905,7 +2923,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       </div>
                     </div>
                   </div>
-                  <div className="mt-2.5 grid gap-2.5 xl:grid-cols-5">
+                  <div className="mt-3.5 grid gap-3 xl:grid-cols-5">
                     <div className="min-w-0 text-center">
                       <label className="mb-1 block text-center text-xs font-semibold text-slate-700">{tx("VIP等级", "VIP lvl")}</label>
                       <PlainCustomerValue centered>
