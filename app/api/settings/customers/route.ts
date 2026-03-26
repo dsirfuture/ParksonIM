@@ -298,7 +298,7 @@ export async function GET() {
           const billingPackingAmountText = normalizeAmountText(billingPackingAmount);
           const packedAmountText =
             overlay
-              ? (overlayPackingAmountText !== "0.00" ? overlayPackingAmountText : "")
+              ? overlayPackingAmountText
               : billingPackingAmountText !== "0.00"
                 ? billingPackingAmountText
                 : "";
