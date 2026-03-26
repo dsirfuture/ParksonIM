@@ -2534,7 +2534,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                       <tbody>
                         {sortedDetailRows.map((item) => (
                           <tr key={item.id} className="border-t border-slate-100">
-                            <td className="px-3 py-2 font-semibold whitespace-nowrap">
+                            <td className="px-3 py-2 whitespace-nowrap">
                               {detailEditingRowId === item.id && item.sourceType === "manual" ? (
                                 <input
                                   value={detailRowEditForm.displayOrderNo}
@@ -2584,15 +2584,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                               )}
                             </td>
                             <td className="px-3 py-2 text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                {detailEditingRowId === item.id ? (
-                                  <input
-                                    type="date"
-                                    value={detailRowEditForm.paidAt}
-                                    onChange={(e) => setDetailRowEditForm((prev) => ({ ...prev, paidAt: e.target.value }))}
-                                    className="h-9 w-[136px] rounded-xl border border-slate-200 px-3 text-sm"
-                                  />
-                                ) : null}
+                              <div className="flex flex-nowrap items-center justify-end gap-2 whitespace-nowrap">
                                 <button
                                   type="button"
                                   onClick={() => handleTimelineRowEdit(item)}
