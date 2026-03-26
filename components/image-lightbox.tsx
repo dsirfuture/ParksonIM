@@ -8,6 +8,7 @@ type ImageLightboxProps = {
   fallbackSources?: string[];
   alt?: string;
   title?: string;
+  overlayClassName?: string;
   onClose: () => void;
 };
 
@@ -17,6 +18,7 @@ export function ImageLightbox({
   fallbackSources = [],
   alt,
   title,
+  overlayClassName,
   onClose,
 }: ImageLightboxProps) {
   const [rotation, setRotation] = useState(0);
@@ -48,7 +50,7 @@ export function ImageLightbox({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 px-4"
+      className={`fixed inset-0 flex items-center justify-center bg-slate-950/70 px-4 ${overlayClassName || "z-[60]"}`}
       onClick={onClose}
     >
       <div

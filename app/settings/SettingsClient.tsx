@@ -3180,7 +3180,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
                                       key={item.url}
                                       type="button"
                                       onClick={() => setPaymentEvidencePreview({ src: item.url, title: item.name || tx("付款证据", "Evidencia pago") })}
-                                      className="group relative h-12 w-12 overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
+                                      className="group relative h-10 w-10 overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
                                       title={item.name}
                                     >
                                       <img src={item.url} alt={item.name || "payment-evidence"} className="h-full w-full object-cover transition group-hover:scale-105" />
@@ -3308,6 +3308,7 @@ export function SettingsClient({ isAdmin, currentPermissions }: SettingsClientPr
           open={Boolean(paymentEvidencePreview)}
           src={paymentEvidencePreview?.src || ""}
           title={paymentEvidencePreview?.title || ""}
+          overlayClassName="z-[95]"
           onClose={() => setPaymentEvidencePreview(null)}
         />
 
