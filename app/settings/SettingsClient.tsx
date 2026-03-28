@@ -4,7 +4,6 @@ import NextImage from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronDown, ChevronUp, Eye, MapPin, Paperclip, Pencil, Trash2, X } from "lucide-react";
-import * as XLSX from "xlsx";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { getClientLang } from "@/lib/lang-client";
 
@@ -1143,51 +1142,56 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
     }
   }
 
-  function exportDetailCustomerFile() {
+  async function exportDetailCustomerFile() {
     if (!detailCustomer) return;
 
-    const customerInfoRows = [
-      ["客户下单详情", detailCustomer.name || "-"],
-      [],
-      ["字段", "内容"],
-      ["友购客户名称", detailCustomerInfoForm.linkedYgName || "-"],
-      ["真实客户名称", detailCustomerInfoForm.name || "-"],
-      ["联系人", detailCustomerInfoForm.contact || "-"],
-      ["手机", detailCustomerInfoForm.phone || "-"],
-      ["门店编号", detailCustomerInfoForm.stores || "-"],
-      ["客户地址", detailCustomerInfoForm.cityCountry || "-"],
-      ["VIP等级", isVipCustomer(detailCustomer) ? "VIP" : "-"],
-      ["信用等级", detailCustomer.creditLevel || "-"],
-      ["下单次数", Number(detailCustomer.totalOrderCount || 0) > 0 ? String(detailCustomer.totalOrderCount) : "-"],
-      ["下单金额", detailCustomer.totalOrderAmountText ? `$ ${detailCustomer.totalOrderAmountText}` : "-"],
-      ["累计配货金额", hasAnyPackingAmount ? `$ ${detailPackingAmountTotal.toFixed(2)}` : "-"],
-      [],
-      ["订单列表"],
-      ["订单号", "渠道", "下单日期", "下单金额", "配货金额", "发货日期"],
-      ...sortedDetailRows.map((item) => [
-        item.orderNo || "-",
-        item.channelText || "-",
-        item.orderDateText || "-",
-        item.orderAmountText ? `$ ${item.orderAmountText}` : "-",
-        item.packingAmountText ? `$ ${item.packingAmountText}` : "-",
-        item.shippedAtText || "-",
-      ]),
-    ];
+    try {
+      setError("");
+      const res = await fetch("/api/settings/customers/export/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerName: detailCustomer.name || "-",
+          linkedYgName: detailCustomerInfoForm.linkedYgName || "-",
+          realName: detailCustomerInfoForm.name || "-",
+          contact: detailCustomerInfoForm.contact || "-",
+          phone: detailCustomerInfoForm.phone || "-",
+          stores: detailCustomerInfoForm.stores || "-",
+          address: detailCustomerInfoForm.cityCountry || "-",
+          vipLevel: isVipCustomer(detailCustomer) ? "VIP" : "-",
+          creditLevel: detailCustomer.creditLevel || "-",
+          totalOrderCount: Number(detailCustomer.totalOrderCount || 0) > 0 ? String(detailCustomer.totalOrderCount) : "-",
+          totalOrderAmountText: detailCustomer.totalOrderAmountText ? `$ ${detailCustomer.totalOrderAmountText}` : "-",
+          totalPackingAmountText: hasAnyPackingAmount ? `$ ${detailPackingAmountTotal.toFixed(2)}` : "-",
+          orderRows: sortedDetailRows.map((item) => ({
+            orderNo: item.orderNo || "-",
+            channelText: item.channelText || "-",
+            orderDateText: item.orderDateText || "-",
+            orderAmountText: item.orderAmountText ? `$ ${item.orderAmountText}` : "-",
+            packingAmountText: item.packingAmountText ? `$ ${item.packingAmountText}` : "-",
+            shippedAtText: item.shippedAtText || "-",
+          })),
+        }),
+      });
 
-    const worksheet = XLSX.utils.aoa_to_sheet(customerInfoRows);
-    worksheet["!cols"] = [
-      { wch: 20 },
-      { wch: 44 },
-      { wch: 14 },
-      { wch: 14 },
-      { wch: 14 },
-      { wch: 14 },
-    ];
+      if (!res.ok) {
+        const json = await readJsonSafe<{ error?: string }>(res);
+        throw new Error(json?.error || tx("导出 PDF 失败", "Export PDF fail"));
+      }
 
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "客户详情");
-    const safeCustomerName = String(detailCustomer.name || "customer-detail").replace(/[\\/:*?"<>|]+/g, "_");
-    XLSX.writeFile(workbook, `${safeCustomerName}-客户详情.xlsx`);
+      const blob = await res.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const safeCustomerName = String(detailCustomer.name || "customer-finance").replace(/[\\/:*?"<>|]+/g, "_");
+      const anchor = document.createElement("a");
+      anchor.href = downloadUrl;
+      anchor.download = `${safeCustomerName}-客户财务.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(downloadUrl);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : tx("导出 PDF 失败", "Export PDF fail"));
+    }
   }
 
   async function saveManualOrder() {
