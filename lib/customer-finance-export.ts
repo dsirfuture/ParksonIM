@@ -43,9 +43,10 @@ const PAGE_PADDING_BOTTOM = 28;
 const PRIMARY_COLOR = rgb(47 / 255, 60 / 255, 127 / 255);
 const BORDER_COLOR = rgb(226 / 255, 232 / 255, 240 / 255);
 const HEADER_FILL = rgb(248 / 255, 250 / 255, 252 / 255);
-const SUBTLE_FILL = rgb(251 / 255, 234 / 255, 235 / 255);
 const TEXT_COLOR = rgb(51 / 255, 65 / 255, 85 / 255);
 const MUTED_COLOR = rgb(100 / 255, 116 / 255, 139 / 255);
+const VIP_COLOR = rgb(187 / 255, 163 / 255, 20 / 255);
+const VIP_ICON_PATH = "M17.42 3a2 2 0 0 1 1.649.868l.087.14L22.49 9.84a2 2 0 0 1-.208 2.283l-.114.123l-9.283 9.283a1.25 1.25 0 0 1-1.666.091l-.102-.09l-9.283-9.284a2 2 0 0 1-.4-2.257l.078-.15l3.333-5.832a2 2 0 0 1 1.572-1.001L6.58 3zM7.293 9.293a1 1 0 0 0 0 1.414l3.823 3.823a1.25 1.25 0 0 0 1.768 0l3.823-3.823a1 1 0 1 0-1.414-1.414L12 12.586L8.707 9.293a1 1 0 0 0-1.414 0";
 
 function sanitizeFileName(value: string) {
   return String(value || "customer-finance")
@@ -214,6 +215,7 @@ function drawSummaryCard(page: PDFPage, fonts: EmbeddedFonts, input: {
   width: number;
   label: string;
   value: string;
+  vipIcon?: boolean;
 }) {
   const cardHeight = 52;
   drawRoundedRect(page, input.x, input.y - cardHeight, input.width, cardHeight, HEADER_FILL);
@@ -224,6 +226,15 @@ function drawSummaryCard(page: PDFPage, fonts: EmbeddedFonts, input: {
     color: MUTED_COLOR,
     bold: true,
   });
+  if (input.vipIcon) {
+    page.drawSvgPath(VIP_ICON_PATH, {
+      x: input.x + input.width / 2 - 8,
+      y: input.y - 39,
+      scale: 0.66,
+      color: VIP_COLOR,
+    });
+    return;
+  }
   const font = getFont(fonts, input.value, false);
   drawText(page, fonts, input.value, {
     x: input.x + input.width / 2 - font.widthOfTextAtSize(input.value, 11) / 2,
@@ -262,13 +273,6 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
   };
 
   drawText(page, fonts, "PARKSONMX", { x: PAGE_PADDING_X, y: cursorY, size: 20, color: PRIMARY_COLOR, bold: true });
-  drawText(page, fonts, payload.customerName || "-", {
-    x: PAGE_PADDING_X,
-    y: cursorY - 20,
-    size: 13,
-    color: TEXT_COLOR,
-    bold: false,
-  });
   const exportDate = `导出日期 ${formatDateLabel()}`;
   const exportDateFont = getFont(fonts, exportDate, false);
   drawText(page, fonts, exportDate, {
@@ -278,17 +282,16 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
     color: MUTED_COLOR,
     bold: false,
   });
-  cursorY -= 38;
+  cursorY -= 18;
 
   cursorY -= 6;
 
   drawSectionTitle("客户信息");
 
-  const infoFieldWidth = [145, 145, 120, 120, 120];
+  const infoFieldWidth = [153, 153, 130, 130, 130];
   let infoX = PAGE_PADDING_X;
   [
-    ["友购客户名称", payload.linkedYgName],
-    ["真实客户名称", payload.realName],
+    ["客户名称", payload.realName],
     ["联系人", payload.contact],
     ["手机", payload.phone],
     ["门店编号", payload.stores],
@@ -321,13 +324,14 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
     ["下单次数", payload.totalOrderCount],
     ["下单金额", payload.totalOrderAmountText],
     ["累计配货金额", payload.totalPackingAmountText],
-  ].forEach(([label, value]) => {
+  ].forEach(([label, value], index) => {
     drawSummaryCard(page, fonts, {
       x: summaryX,
       y: cursorY,
       width: summaryWidth,
       label,
       value,
+      vipIcon: index === 0 && String(payload.vipLevel || "").trim().toUpperCase() === "VIP",
     });
     summaryX += summaryWidth + 8;
   });
