@@ -229,7 +229,7 @@ function drawSummaryCard(page: PDFPage, fonts: EmbeddedFonts, input: {
   if (input.vipIcon) {
     page.drawSvgPath(VIP_ICON_PATH, {
       x: input.x + input.width / 2 - 8,
-      y: input.y - 35,
+      y: input.y - 31,
       scale: 0.66,
       color: VIP_COLOR,
     });
@@ -297,7 +297,8 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
   cursorY -= 6;
   drawSectionDivider();
 
-  const infoFieldWidth = [194, 194, 194, 194];
+  const infoFieldGap = 8;
+  const infoFieldWidth = (PAGE_WIDTH - PAGE_PADDING_X * 2 - infoFieldGap * 3) / 4;
   let infoX = PAGE_PADDING_X;
   [
     ["客户名称", payload.realName],
@@ -308,11 +309,11 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
     drawFieldCard(page, fonts, {
       x: infoX,
       y: cursorY,
-      width: infoFieldWidth[index]!,
+      width: infoFieldWidth,
       label,
       value,
     });
-    infoX += infoFieldWidth[index]! + 8;
+    infoX += infoFieldWidth + infoFieldGap;
   });
   cursorY -= 62;
 
