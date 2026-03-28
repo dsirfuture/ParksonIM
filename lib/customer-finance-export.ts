@@ -350,12 +350,12 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
   drawSectionTitle("订单列表");
 
   const columns = [
-    { key: "orderNo", label: "订单号", width: 266 },
-    { key: "channelText", label: "渠道", width: 112 },
-    { key: "orderDateText", label: "下单日期", width: 114 },
-    { key: "orderAmountText", label: "下单金额", width: 128 },
-    { key: "packingAmountText", label: "配货金额", width: 128 },
-    { key: "shippedAtText", label: "发货日期", width: 128 },
+    { key: "orderNo", label: "订单号", width: 248 },
+    { key: "channelText", label: "渠道", width: 94 },
+    { key: "orderDateText", label: "下单日期", width: 102 },
+    { key: "orderAmountText", label: "下单金额", width: 110 },
+    { key: "packingAmountText", label: "配货金额", width: 110 },
+    { key: "shippedAtText", label: "发货日期", width: 110 },
   ] as const;
 
   const drawTableHeader = () => {
