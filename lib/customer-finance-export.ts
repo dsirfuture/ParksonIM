@@ -235,7 +235,7 @@ function drawSummaryCard(page: PDFPage, fonts: EmbeddedFonts, input: {
 }
 
 export function buildCustomerFinancePdfFileName(customerName: string) {
-  return `${sanitizeFileName(customerName || "customer-finance")}-客户财务.pdf`;
+  return `${sanitizeFileName(customerName || "customer-finance")}-PARKSONMX.pdf`;
 }
 
 export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDetailExportPayload) {
@@ -261,7 +261,7 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
     cursorY -= 14;
   };
 
-  drawText(page, fonts, "客户财务", { x: PAGE_PADDING_X, y: cursorY, size: 20, color: PRIMARY_COLOR, bold: true });
+  drawText(page, fonts, "PARKSONMX", { x: PAGE_PADDING_X, y: cursorY, size: 20, color: PRIMARY_COLOR, bold: true });
   drawText(page, fonts, payload.customerName || "-", {
     x: PAGE_PADDING_X,
     y: cursorY - 20,
@@ -280,22 +280,7 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
   });
   cursorY -= 38;
 
-  const badgeText = "ParksonIM Customer Finance";
-  page.drawRectangle({
-    x: PAGE_PADDING_X,
-    y: cursorY - 18,
-    width: 180,
-    height: 20,
-    color: SUBTLE_FILL,
-  });
-  drawText(page, fonts, badgeText, {
-    x: PAGE_PADDING_X + 10,
-    y: cursorY - 11,
-    size: 9,
-    color: PRIMARY_COLOR,
-    bold: true,
-  });
-  cursorY -= 30;
+  cursorY -= 6;
 
   drawSectionTitle("客户信息");
 
@@ -459,7 +444,7 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
   const pageCount = pdfDoc.getPageCount();
   for (let i = 0; i < pageCount; i += 1) {
     const targetPage = pdfDoc.getPage(i);
-    const footer = `ParksonIM · 客户财务 · ${i + 1}/${pageCount}`;
+    const footer = `PARKSONMX · ${i + 1}/${pageCount}`;
     const footerFont = getFont(fonts, footer, false);
     targetPage.drawText(footer, {
       x: PAGE_WIDTH - PAGE_PADDING_X - footerFont.widthOfTextAtSize(footer, 8),
