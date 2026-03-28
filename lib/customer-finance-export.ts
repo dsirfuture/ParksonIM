@@ -229,7 +229,7 @@ function drawSummaryCard(page: PDFPage, fonts: EmbeddedFonts, input: {
   if (input.vipIcon) {
     page.drawSvgPath(VIP_ICON_PATH, {
       x: input.x + input.width / 2 - 8,
-      y: input.y - 39,
+      y: input.y - 35,
       scale: 0.66,
       color: VIP_COLOR,
     });
@@ -272,6 +272,16 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
     cursorY -= 14;
   };
 
+  const drawSectionDivider = () => {
+    page.drawLine({
+      start: { x: PAGE_PADDING_X, y: cursorY },
+      end: { x: PAGE_WIDTH - PAGE_PADDING_X, y: cursorY },
+      color: BORDER_COLOR,
+      thickness: 1,
+    });
+    cursorY -= 14;
+  };
+
   drawText(page, fonts, "PARKSONMX", { x: PAGE_PADDING_X, y: cursorY, size: 20, color: PRIMARY_COLOR, bold: true });
   const exportDate = `导出日期 ${formatDateLabel()}`;
   const exportDateFont = getFont(fonts, exportDate, false);
@@ -285,10 +295,9 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
   cursorY -= 18;
 
   cursorY -= 6;
+  drawSectionDivider();
 
-  drawSectionTitle("客户信息");
-
-  const infoFieldWidth = [153, 153, 130, 130, 130];
+  const infoFieldWidth = [194, 194, 194, 194];
   let infoX = PAGE_PADDING_X;
   [
     ["客户名称", payload.realName],
