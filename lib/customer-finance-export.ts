@@ -358,7 +358,7 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
   });
   cursorY -= 74;
 
-  drawSectionTitle("订单列表");
+  drawSectionTitle("订单总览");
 
   const columns = [
     { key: "orderNo", label: "订单号", width: 248 },
@@ -407,7 +407,7 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
   const ensureTableSpace = (neededHeight: number) => {
     if (cursorY - neededHeight >= PAGE_PADDING_BOTTOM) return;
     addNewPage();
-    drawSectionTitle("订单列表");
+    drawSectionTitle("订单总览");
     drawTableHeader();
   };
 
@@ -477,7 +477,7 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
   }
 
   cursorY -= 18;
-  drawSectionTitle("付款详情列表");
+  drawSectionTitle("付款详情");
 
   const drawPaymentTableHeader = () => {
     let colX = PAGE_PADDING_X;
@@ -507,7 +507,7 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
   const ensurePaymentTableSpace = (neededHeight: number) => {
     if (cursorY - neededHeight >= PAGE_PADDING_BOTTOM) return;
     addNewPage();
-    drawSectionTitle("付款详情列表");
+    drawSectionTitle("付款详情");
     drawPaymentTableHeader();
   };
 
