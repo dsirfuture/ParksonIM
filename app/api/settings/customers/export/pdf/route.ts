@@ -43,6 +43,17 @@ export async function POST(request: Request) {
             shippedAtText: normalizeValue(item?.shippedAtText),
           }))
         : [],
+      paymentRows: Array.isArray(body.paymentRows)
+        ? body.paymentRows.map((item) => ({
+            orderNo: normalizeValue(item?.orderNo),
+            payableAmountText: normalizeValue(item?.payableAmountText),
+            paidAmountText: normalizeValue(item?.paidAmountText),
+            paymentTimeText: normalizeValue(item?.paymentTimeText),
+            paymentMethodText: normalizeValue(item?.paymentMethodText),
+            paymentTargetText: normalizeValue(item?.paymentTargetText),
+            unpaidAmountText: normalizeValue(item?.unpaidAmountText),
+          }))
+        : [],
     };
 
     const pdfBytes = await buildCustomerFinanceDetailPdf(payload);

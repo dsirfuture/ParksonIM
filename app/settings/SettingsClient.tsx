@@ -1171,6 +1171,17 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
             packingAmountText: item.packingAmountText ? `$ ${item.packingAmountText}` : "-",
             shippedAtText: item.shippedAtText || "-",
           })),
+          paymentRows: sortedDetailRows.flatMap((item) =>
+            (item.paymentRows || []).map((paymentRow) => ({
+              orderNo: item.orderNo || "-",
+              payableAmountText: paymentRow.payableAmountText ? `$ ${paymentRow.payableAmountText}` : "-",
+              paidAmountText: paymentRow.paidAmountText ? `$ ${paymentRow.paidAmountText}` : "-",
+              paymentTimeText: paymentRow.paymentTimeText || "-",
+              paymentMethodText: paymentRow.paymentMethodText || "-",
+              paymentTargetText: paymentRow.paymentTargetText || "-",
+              unpaidAmountText: paymentRow.unpaidAmountText ? `$ ${paymentRow.unpaidAmountText}` : "-",
+            })),
+          ),
         }),
       });
 

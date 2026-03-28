@@ -12,6 +12,16 @@ export type CustomerFinanceOrderExportRow = {
   shippedAtText: string;
 };
 
+export type CustomerFinancePaymentExportRow = {
+  orderNo: string;
+  payableAmountText: string;
+  paidAmountText: string;
+  paymentTimeText: string;
+  paymentMethodText: string;
+  paymentTargetText: string;
+  unpaidAmountText: string;
+};
+
 export type CustomerFinanceDetailExportPayload = {
   customerName: string;
   linkedYgName: string;
@@ -26,6 +36,7 @@ export type CustomerFinanceDetailExportPayload = {
   totalOrderAmountText: string;
   totalPackingAmountText: string;
   orderRows: CustomerFinanceOrderExportRow[];
+  paymentRows: CustomerFinancePaymentExportRow[];
 };
 
 type EmbeddedFonts = {
@@ -358,6 +369,16 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
     { key: "shippedAtText", label: "发货日期", width: 110 },
   ] as const;
 
+  const paymentColumns = [
+    { key: "orderNo", label: "订单号", width: 180 },
+    { key: "payableAmountText", label: "需付金额", width: 90 },
+    { key: "paidAmountText", label: "已付金额", width: 90 },
+    { key: "paymentTimeText", label: "付款时间", width: 116 },
+    { key: "paymentMethodText", label: "付款方式", width: 96 },
+    { key: "paymentTargetText", label: "付款对象", width: 108 },
+    { key: "unpaidAmountText", label: "未付金额", width: 94 },
+  ] as const;
+
   const drawTableHeader = () => {
     let colX = PAGE_PADDING_X;
     const headerHeight = 24;
@@ -446,6 +467,107 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
       borderWidth: 1,
     });
     drawText(page, fonts, "当前没有匹配到下单记录", {
+      x: PAGE_PADDING_X + 12,
+      y: cursorY - 20,
+      size: 9,
+      color: MUTED_COLOR,
+      bold: false,
+    });
+    cursorY -= emptyHeight;
+  }
+
+  cursorY -= 18;
+  drawSectionTitle("付款详情列表");
+
+  const drawPaymentTableHeader = () => {
+    let colX = PAGE_PADDING_X;
+    const headerHeight = 24;
+    page.drawRectangle({
+      x: PAGE_PADDING_X,
+      y: cursorY - headerHeight,
+      width: PAGE_WIDTH - PAGE_PADDING_X * 2,
+      height: headerHeight,
+      color: HEADER_FILL,
+      borderColor: BORDER_COLOR,
+      borderWidth: 1,
+    });
+    for (const column of paymentColumns) {
+      drawText(page, fonts, column.label, {
+        x: colX + 8,
+        y: cursorY - 16,
+        size: 9,
+        color: MUTED_COLOR,
+        bold: true,
+      });
+      colX += column.width;
+    }
+    cursorY -= headerHeight;
+  };
+
+  const ensurePaymentTableSpace = (neededHeight: number) => {
+    if (cursorY - neededHeight >= PAGE_PADDING_BOTTOM) return;
+    addNewPage();
+    drawSectionTitle("付款详情列表");
+    drawPaymentTableHeader();
+  };
+
+  drawPaymentTableHeader();
+
+  for (const row of payload.paymentRows) {
+    const rowValues = [
+      row.orderNo || "-",
+      row.payableAmountText || "-",
+      row.paidAmountText || "-",
+      row.paymentTimeText || "-",
+      row.paymentMethodText || "-",
+      row.paymentTargetText || "-",
+      row.unpaidAmountText || "-",
+    ];
+    const wrapped = rowValues.map((value, index) =>
+      wrapText(value, paymentColumns[index]!.width - 16, getFont(fonts, value, false), 9),
+    );
+    const lineCount = Math.max(...wrapped.map((lines) => lines.length), 1);
+    const rowHeight = Math.max(24, 8 + lineCount * 11);
+    ensurePaymentTableSpace(rowHeight);
+
+    page.drawRectangle({
+      x: PAGE_PADDING_X,
+      y: cursorY - rowHeight,
+      width: PAGE_WIDTH - PAGE_PADDING_X * 2,
+      height: rowHeight,
+      borderColor: BORDER_COLOR,
+      borderWidth: 1,
+    });
+
+    let colX = PAGE_PADDING_X;
+    wrapped.forEach((lines, index) => {
+      lines.forEach((line, lineIndex) => {
+        drawText(page, fonts, line, {
+          x: colX + 8,
+          y: cursorY - 16 - lineIndex * 10,
+          size: 9,
+          color: TEXT_COLOR,
+          bold: false,
+        });
+      });
+      colX += paymentColumns[index]!.width;
+    });
+
+    cursorY -= rowHeight;
+  }
+
+  if (payload.paymentRows.length === 0) {
+    const emptyHeight = 32;
+    ensurePaymentTableSpace(emptyHeight);
+    page.drawRectangle({
+      x: PAGE_PADDING_X,
+      y: cursorY - emptyHeight,
+      width: PAGE_WIDTH - PAGE_PADDING_X * 2,
+      height: emptyHeight,
+      borderColor: BORDER_COLOR,
+      borderWidth: 1,
+    });
+    drawText(page, fonts, "当前没有付款详情记录", {
       x: PAGE_PADDING_X + 12,
       y: cursorY - 20,
       size: 9,
