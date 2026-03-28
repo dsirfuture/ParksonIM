@@ -617,7 +617,7 @@ function mapSearchUrl(address: string) {
 
 function ReadonlyCustomerField({ value, centered = false, children }: { value?: string; centered?: boolean; children?: ReactNode }) {
   return (
-    <div className={`flex h-11 items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 ${centered ? "justify-center text-center" : ""}`}>
+    <div className={`flex h-11 items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 text-xs font-normal text-slate-700 ${centered ? "justify-center text-center" : ""}`}>
       {children ?? (String(value || "").trim() || "-")}
     </div>
   );
@@ -625,7 +625,7 @@ function ReadonlyCustomerField({ value, centered = false, children }: { value?: 
 
 function PlainCustomerValue({ value, centered = false, children }: { value?: string; centered?: boolean; children?: ReactNode }) {
   return (
-    <div className={`flex h-11 items-center rounded-2xl px-1 text-sm text-slate-700 ${centered ? "justify-center text-center" : ""}`}>
+    <div className={`flex h-11 items-center rounded-2xl px-1 text-xs font-normal text-slate-700 ${centered ? "justify-center text-center" : ""}`}>
       {children ?? (String(value || "").trim() || "-")}
     </div>
   );
@@ -2924,7 +2924,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                         value={detailCustomerInfoForm.name}
                         onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, name: e.target.value }))}
                         disabled={!canManageCustomers}
-                        className="h-11 w-full max-w-[240px] rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
+                        className="h-11 w-full max-w-[240px] rounded-2xl border border-slate-200 bg-white px-4 text-xs font-normal text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
                       />
                     </div>
                     <div className="max-w-[180px]">
@@ -2950,7 +2950,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                         }}
                         onBlur={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, stores: normalizeStoreNumberInput(e.target.value) }))}
                         disabled={!canManageCustomers}
-                        className="h-11 w-full max-w-[170px] rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
+                        className="h-11 w-full max-w-[170px] rounded-2xl border border-slate-200 bg-white px-4 text-xs font-normal text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
                       />
                     </div>
                   </div>
@@ -2962,7 +2962,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                           value={detailCustomerInfoForm.cityCountry}
                           onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, cityCountry: e.target.value }))}
                           disabled={!canManageCustomers}
-                          className="h-11 w-[1002px] rounded-2xl border border-slate-200 bg-white px-4 pr-12 text-sm text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
+                          className="h-11 w-[1002px] rounded-2xl border border-slate-200 bg-white px-4 pr-12 text-xs font-normal text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
                         />
                         <a
                           href={mapSearchUrl(detailCustomerInfoForm.cityCountry)}
@@ -3008,7 +3008,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                   </div>
                 ) : (
                   <div className="rounded-xl border border-slate-200">
-                    <table className="w-full table-auto text-sm">
+                    <table className="w-full table-auto text-xs">
                       <thead className="bg-slate-50 text-slate-600">
                         <tr>
                           <th className="w-[240px] px-3 py-1.5 text-left whitespace-nowrap">{tx("订单号", "Order no")}</th>
@@ -3037,7 +3037,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                                 <input
                                   value={detailRowEditForm.displayOrderNo}
                                   onChange={(e) => setDetailRowEditForm((prev) => ({ ...prev, displayOrderNo: e.target.value }))}
-                                  className="h-9 w-[200px] rounded-xl border border-slate-200 px-3 text-sm"
+                                  className="h-9 w-[200px] rounded-xl border border-slate-200 px-3 text-xs font-normal"
                                 />
                               ) : (
                                 item.orderNo || "-"
@@ -3048,7 +3048,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                                 <input
                                   value={detailRowEditForm.orderChannel}
                                   onChange={(e) => setDetailRowEditForm((prev) => ({ ...prev, orderChannel: e.target.value }))}
-                                  className="h-9 w-[96px] rounded-xl border border-slate-200 px-3 text-sm"
+                                  className="h-9 w-[96px] rounded-xl border border-slate-200 px-3 text-xs font-normal"
                                 />
                               ) : (
                                 item.channelText || "-"
@@ -3063,7 +3063,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                                 <input
                                   value={detailRowEditForm.packingAmount}
                                   onChange={(e) => setDetailRowEditForm((prev) => ({ ...prev, packingAmount: e.target.value }))}
-                                  className="h-9 w-[120px] rounded-xl border border-slate-200 px-3 text-sm"
+                                  className="h-9 w-[120px] rounded-xl border border-slate-200 px-3 text-xs font-normal"
                                 />
                               ) : (
                                 item.packingAmountText ? `$ ${item.packingAmountText}` : "-"
@@ -3075,7 +3075,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                                   type="date"
                                   value={detailRowEditForm.shippedAt}
                                   onChange={(e) => setDetailRowEditForm((prev) => ({ ...prev, shippedAt: e.target.value }))}
-                                  className="h-9 w-[110px] rounded-xl border border-slate-200 px-3 text-sm"
+                                  className="h-9 w-[110px] rounded-xl border border-slate-200 px-3 text-xs font-normal"
                                 />
                               ) : (
                                 item.shippedAtText || "-"
