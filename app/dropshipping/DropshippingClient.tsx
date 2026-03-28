@@ -5754,7 +5754,31 @@ export function DropshippingClient({
     if (inventoryExport.status !== "all") searchParams.set("status", inventoryExport.status);
     if (inventoryExport.skuKeyword.trim()) searchParams.set("sku", inventoryExport.skuKeyword.trim());
     if (!inventoryExport.includeAllShipped) searchParams.set("allShipped", "0");
+    if (inventoryCustomerFilter !== "all") searchParams.set("customer", inventoryCustomerFilter);
     triggerBrowserDownload(`/api/dropshipping/inventory/export/${kind}?${searchParams.toString()}`);
+  }
+
+  function exportStockTagInventoryPdf() {
+    const normalizedKeyword = inventoryKeyword.trim().toLowerCase();
+    const hasStockTagRows = inventory.some((row) => {
+      const customerHit = inventoryCustomerFilter === "all" || row.customerName === inventoryCustomerFilter;
+      const keywordHit =
+        !normalizedKeyword
+        || [row.customerName, row.sku, row.productNameZh, row.productNameEs]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedKeyword);
+      return customerHit && keywordHit && row.isStocked;
+    });
+    if (!hasStockTagRows) {
+      setError(lang === "zh" ? "当前客户没有可导出的备标签数据" : "No hay datos con etiqueta stock");
+      return;
+    }
+    setError("");
+    const searchParams = new URLSearchParams();
+    if (inventoryCustomerFilter !== "all") searchParams.set("customer", inventoryCustomerFilter);
+    if (inventoryKeyword.trim()) searchParams.set("sku", inventoryKeyword.trim());
+    triggerBrowserDownload(`/api/dropshipping/inventory/export/stock-tag-pdf?${searchParams.toString()}`);
   }
 
   function pickInventoryProduct(option: InventoryProductOption) {
@@ -7376,6 +7400,13 @@ export function DropshippingClient({
           }
           right={
             <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-end lg:w-auto">
+              <button
+                type="button"
+                onClick={exportStockTagInventoryPdf}
+                className="inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                <span className="whitespace-nowrap">{lang === "zh" ? "选择客户导出备货数据" : "Exportar stock por cliente"}</span>
+              </button>
               <button
                 type="button"
                 onClick={openInventoryExport}

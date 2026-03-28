@@ -98,6 +98,12 @@ function toNumber(value: unknown) {
   return 0;
 }
 
+function parseDateTime(value: string | null | undefined) {
+  if (!value) return Number.POSITIVE_INFINITY;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : Number.POSITIVE_INFINITY;
+}
+
 function stripTrailingUnitPrice(name: string | null | undefined) {
   const text = String(name || "").trim();
   if (!text) return "";
@@ -1717,7 +1723,6 @@ export async function getInventoryRows(session: Session) {
       || pairInventories.find((entry) => !entry.linked_order_id)
       || pairInventories[0]
       || null;
-    const remainingQty = aggregateRemainingQty;
     const normalizedSku = normalizeProductCode(row.product.sku);
     const catalog = catalogBySku.get(normalizedSku);
     const yogoSource = yogoSourceBySku.get(normalizedSku);
@@ -1739,6 +1744,14 @@ export async function getInventoryRows(session: Session) {
     const shippedAt = row.shipped_at?.toISOString() || null;
     const assignedOrderId = assignedInventory ? exactAssignedOrderByInventoryId.get(assignedInventory.id) : null;
     const showsStockDetails = Boolean(assignedInventory?.is_stocked) && assignedOrderId === row.id;
+    const inventoryShippedQty = assignedInventory?.id
+      ? (assignedShippedQtyByInventoryId.get(assignedInventory.id) || 0)
+      : row.quantity;
+    // All stocked rows for the same customer+product share one aggregate
+    // remaining/status view, so every row with the "备" tag stays in sync.
+    const remainingQty = showsStockDetails
+      ? aggregateRemainingQty
+      : aggregateRemainingQty;
     if (showsStockDetails && assignedInventory?.id) {
       representedStockedInventoryIds.add(assignedInventory.id);
     }
@@ -1759,12 +1772,12 @@ export async function getInventoryRows(session: Session) {
       warehouse: editableInventory?.warehouse || row.warehouse || row.product.default_warehouse || "",
       isStocked: showsStockDetails,
       stockedQty: assignedInventory?.stocked_qty ?? editableInventory?.stocked_qty ?? 0,
-      shippedQty: row.quantity,
+      shippedQty: showsStockDetails ? inventoryShippedQty : row.quantity,
       remainingQty,
       unitPrice,
       discountRate,
       stockAmount: showsStockDetails ? computeStockAmount(unitPrice, assignedInventory?.stocked_qty ?? 0, discountRate) : 0,
-      status: deriveInventoryStatus(Math.max(aggregateRemainingQty, 0)),
+      status: deriveInventoryStatus(Math.max(remainingQty, 0)),
     };
   });
 
@@ -1809,6 +1822,9 @@ export async function getInventoryRows(session: Session) {
       );
       const discountRate = Math.abs(rawDiscountRate) <= 1 ? rawDiscountRate : rawDiscountRate / 100;
 
+      const inventoryShippedQty = assignedShippedQtyByInventoryId.get(inventory.id) || 0;
+      const inventoryRemainingQty = aggregateRemainingQty;
+
       extraStockRows.push({
         rowKey: `inventory:${inventory.id}`,
         orderId: anchorOrder.id,
@@ -1826,17 +1842,271 @@ export async function getInventoryRows(session: Session) {
         warehouse: inventory.warehouse || anchorOrder.warehouse || anchorOrder.product.default_warehouse || "",
         isStocked: true,
         stockedQty: inventory.stocked_qty,
-        shippedQty: anchorOrder.quantity,
-        remainingQty: aggregateRemainingQty,
+        shippedQty: inventoryShippedQty,
+        remainingQty: inventoryRemainingQty,
         unitPrice,
         discountRate,
         stockAmount: computeStockAmount(unitPrice, inventory.stocked_qty, discountRate),
-        status: deriveInventoryStatus(Math.max(aggregateRemainingQty, 0)),
+        status: deriveInventoryStatus(Math.max(inventoryRemainingQty, 0)),
       });
     }
   }
 
   return [...baseRows, ...extraStockRows];
+}
+
+export async function getStockTagExportRows(
+  session: Session,
+  options?: {
+    customerName?: string;
+    skuKeyword?: string;
+    status?: "all" | DsInventoryStatus;
+  },
+) {
+  const customerFilter = String(options?.customerName || "").trim().toLowerCase();
+  const skuFilter = String(options?.skuKeyword || "").trim().toLowerCase();
+  const statusFilter = options?.status || "all";
+
+  const shippedOrders = await prisma.dropshippingOrder.findMany({
+    where: {
+      tenant_id: session.tenantId,
+      company_id: session.companyId,
+      shipping_status: "shipped",
+    },
+    include: {
+      customer: true,
+      product: true,
+    },
+    orderBy: [{ shipped_at: "desc" }, { created_at: "desc" }],
+  });
+
+  const inventories = await prisma.dropshippingCustomerInventory.findMany({
+    where: {
+      tenant_id: session.tenantId,
+      company_id: session.companyId,
+      is_stocked: true,
+      stocked_qty: { gt: 0 },
+    },
+    include: {
+      customer: true,
+      product: true,
+    },
+    orderBy: [{ stocked_at: "desc" }, { created_at: "desc" }],
+  });
+
+  const filteredInventories = inventories.filter((row) => {
+    const customerHit =
+      !customerFilter
+      || String(row.customer?.name || "").trim().toLowerCase() === customerFilter;
+    const skuHit =
+      !skuFilter
+      || String(row.product?.sku || "").trim().toLowerCase().includes(skuFilter);
+    return customerHit && skuHit;
+  });
+
+  const pairKeys = new Set(
+    filteredInventories.map((row) => `${row.customer_id}::${row.product_id}`),
+  );
+  const relevantOrders = shippedOrders.filter((row) => {
+    const pairKey = `${row.customer_id}::${row.product_id}`;
+    if (!pairKeys.has(pairKey)) return false;
+    const customerHit =
+      !customerFilter
+      || String(row.customer?.name || "").trim().toLowerCase() === customerFilter;
+    const skuHit =
+      !skuFilter
+      || String(row.product?.sku || "").trim().toLowerCase().includes(skuFilter);
+    return customerHit && skuHit;
+  });
+
+  const normalizedSkus = [...new Set(
+    [...filteredInventories, ...relevantOrders]
+      .map((row) => row.product?.sku?.trim())
+      .filter(Boolean),
+  )];
+
+  const catalogRows = await prisma.productCatalog.findMany({
+    where: {
+      tenant_id: session.tenantId,
+      company_id: session.companyId,
+      ...(normalizedSkus.length
+        ? {
+            OR: normalizedSkus.map((sku) => ({
+              sku: { equals: sku, mode: "insensitive" as const },
+            })),
+          }
+        : {}),
+    },
+    select: {
+      sku: true,
+      name_zh: true,
+      name_es: true,
+      price: true,
+      normal_discount: true,
+    },
+  });
+
+  const yogoSourceRows = await prisma.yogoProductSource.findMany({
+    where: {
+      tenant_id: session.tenantId,
+      company_id: session.companyId,
+      ...(normalizedSkus.length
+        ? {
+            OR: normalizedSkus.map((sku) => ({
+              product_code: { equals: sku, mode: "insensitive" as const },
+            })),
+          }
+        : {}),
+    },
+    select: {
+      product_code: true,
+      name_cn: true,
+      name_es: true,
+      source_price: true,
+      source_discount: true,
+    },
+  });
+
+  const inventoriesByPair = new Map<string, typeof filteredInventories>();
+  for (const inventory of filteredInventories) {
+    const key = `${inventory.customer_id}::${inventory.product_id}`;
+    const current = inventoriesByPair.get(key) || [];
+    current.push(inventory);
+    inventoriesByPair.set(key, current);
+  }
+
+  const ordersByPair = new Map<string, typeof relevantOrders>();
+  for (const row of relevantOrders) {
+    const key = `${row.customer_id}::${row.product_id}`;
+    const current = ordersByPair.get(key) || [];
+    current.push(row);
+    ordersByPair.set(key, current);
+  }
+
+  const assignedShippedQtyByInventoryId = new Map<string, number>();
+  const assignedLatestShippedAtByInventoryId = new Map<string, string | null>();
+  const remainingCapacityByInventoryId = new Map<string, number>();
+
+  for (const inventory of filteredInventories) {
+    remainingCapacityByInventoryId.set(inventory.id, Math.max(inventory.stocked_qty || 0, 0));
+  }
+
+  for (const row of relevantOrders) {
+    const pairKey = `${row.customer_id}::${row.product_id}`;
+    const candidates = inventoriesByPair.get(pairKey) || [];
+    const shippedDate = row.shipped_at?.toISOString()?.slice(0, 10) || "";
+    const linkedInventory = candidates.find((inventory) => inventory.linked_order_id === row.id) || null;
+    const matchedInventory =
+      (linkedInventory && (remainingCapacityByInventoryId.get(linkedInventory.id) || 0) >= row.quantity
+        ? linkedInventory
+        : null)
+      || candidates.find((inventory) => {
+        const remainingCapacity = remainingCapacityByInventoryId.get(inventory.id) || 0;
+        if (remainingCapacity < row.quantity) return false;
+        const stockedDate = inventory.stocked_at?.toISOString()?.slice(0, 10) || "";
+        return Boolean(stockedDate) && stockedDate === shippedDate;
+      })
+      || candidates.find((inventory) => {
+        const remainingCapacity = remainingCapacityByInventoryId.get(inventory.id) || 0;
+        return remainingCapacity >= row.quantity;
+      })
+      || null;
+
+    if (!matchedInventory) continue;
+
+    assignedShippedQtyByInventoryId.set(
+      matchedInventory.id,
+      (assignedShippedQtyByInventoryId.get(matchedInventory.id) || 0) + Math.max(row.quantity, 0),
+    );
+    remainingCapacityByInventoryId.set(
+      matchedInventory.id,
+      Math.max((remainingCapacityByInventoryId.get(matchedInventory.id) || 0) - Math.max(row.quantity, 0), 0),
+    );
+    const prev = assignedLatestShippedAtByInventoryId.get(matchedInventory.id);
+    const current = row.shipped_at?.toISOString() || null;
+    if (!prev || (current && new Date(current).getTime() > new Date(prev).getTime())) {
+      assignedLatestShippedAtByInventoryId.set(matchedInventory.id, current);
+    }
+  }
+
+  const catalogBySku = new Map(
+    catalogRows.map((row) => [normalizeProductCode(row.sku), row]),
+  );
+  const yogoSourceBySku = new Map(
+    yogoSourceRows.map((row) => [normalizeProductCode(row.product_code), row]),
+  );
+
+  function pickPreferredNumber(...values: Array<number | null | undefined>) {
+    for (const value of values) {
+      if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
+    }
+    for (const value of values) {
+      if (typeof value === "number" && Number.isFinite(value)) return value;
+    }
+    return 0;
+  }
+
+  return filteredInventories
+    .map((inventory): DsInventoryRow => {
+      const pairKey = `${inventory.customer_id}::${inventory.product_id}`;
+      const pairOrders = ordersByPair.get(pairKey) || [];
+      const anchorOrder =
+        pairOrders.find((row) => row.id === inventory.linked_order_id)
+        || pairOrders[0]
+        || null;
+      const normalizedSku = normalizeProductCode(inventory.product.sku);
+      const catalog = catalogBySku.get(normalizedSku);
+      const yogoSource = yogoSourceBySku.get(normalizedSku);
+      const matchedSku = catalog?.sku?.trim() || yogoSource?.product_code?.trim() || inventory.product.sku;
+      const unitPrice = pickPreferredNumber(
+        toOptionalNumber(inventory.locked_unit_price),
+        toOptionalNumber(yogoSource?.source_price),
+        toOptionalNumber(catalog?.price),
+        toOptionalNumber(inventory.product.unit_price),
+      );
+      const rawDiscountRate = pickPreferredNumber(
+        toOptionalNumber(inventory.locked_discount_rate),
+        toOptionalNumber(yogoSource?.source_discount),
+        toOptionalNumber(catalog?.normal_discount),
+        toOptionalNumber(inventory.product.discount_rate),
+      );
+      const discountRate = Math.abs(rawDiscountRate) <= 1 ? rawDiscountRate : rawDiscountRate / 100;
+      const shippedQty = assignedShippedQtyByInventoryId.get(inventory.id) || 0;
+      const remainingQty = Math.max(remainingCapacityByInventoryId.get(inventory.id) || 0, 0);
+      const status = deriveInventoryStatus(remainingQty);
+      return {
+        rowKey: `stock-tag:${inventory.id}`,
+        orderId: inventory.linked_order_id || anchorOrder?.id || "",
+        inventoryId: inventory.id,
+        customerId: inventory.customer_id,
+        customerName: inventory.customer.name,
+        productId: inventory.product_id,
+        sku: inventory.product.sku,
+        productNameZh: stripTrailingUnitPrice(catalog?.name_zh?.trim() || inventory.product.name_zh),
+        productNameEs: catalog?.name_es?.trim() || inventory.product.name_es || "",
+        productImageUrl: inventory.product.image_url || buildProductImageUrl(matchedSku, "jpg"),
+        stockedAt: inventory.stocked_at?.toISOString() || null,
+        shippedAt: assignedLatestShippedAtByInventoryId.get(inventory.id) || anchorOrder?.shipped_at?.toISOString() || null,
+        trackingNo: anchorOrder?.tracking_no || "",
+        warehouse: inventory.warehouse || anchorOrder?.warehouse || inventory.product.default_warehouse || "",
+        isStocked: true,
+        stockedQty: Math.max(inventory.stocked_qty || 0, 0),
+        shippedQty,
+        remainingQty,
+        unitPrice,
+        discountRate,
+        stockAmount: computeStockAmount(unitPrice, Math.max(inventory.stocked_qty || 0, 0), discountRate),
+        status,
+      };
+    })
+    .filter((row) => statusFilter === "all" || row.status === statusFilter)
+    .sort((a, b) => {
+      const stockedCompare = parseDateTime(b.stockedAt) - parseDateTime(a.stockedAt);
+      if (stockedCompare !== 0) return stockedCompare;
+      const shippedCompare = parseDateTime(b.shippedAt) - parseDateTime(a.shippedAt);
+      if (shippedCompare !== 0) return shippedCompare;
+      return a.sku.localeCompare(b.sku, "en");
+    });
 }
 
 export async function getDropshippingCustomerOptions(session: Session) {

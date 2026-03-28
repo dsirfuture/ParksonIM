@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { getInventoryRows } from "@/lib/dropshipping";
+import { getStockTagExportRows } from "@/lib/dropshipping";
 import {
-  buildDropshippingInventoryExportBaseName,
-  buildDropshippingInventoryPdf,
-  filterInventoryExportRows,
+  buildDropshippingStockTagPdf,
+  buildDropshippingStockTagPdfName,
   type InventoryExportFilters,
 } from "@/lib/dropshipping-inventory-export";
 import { hasPermission } from "@/lib/permissions";
@@ -12,13 +11,11 @@ import { getSession } from "@/lib/tenant";
 export const runtime = "nodejs";
 
 function getFilters(searchParams: URLSearchParams): InventoryExportFilters {
-  const stocked = searchParams.get("stocked");
-  const status = searchParams.get("status");
   return {
-    stocked: stocked === "stocked" || stocked === "unstocked" ? stocked : "all",
-    status: status === "healthy" || status === "low" || status === "empty" ? status : "all",
+    stocked: "stocked",
+    status: "all",
     skuKeyword: searchParams.get("sku")?.trim() || "",
-    includeAllShipped: searchParams.get("allShipped") !== "0",
+    includeAllShipped: true,
     customerName: searchParams.get("customer")?.trim() || "",
   };
 }
@@ -32,9 +29,16 @@ export async function GET(request: Request) {
     }
 
     const filters = getFilters(new URL(request.url).searchParams);
-    const rows = filterInventoryExportRows(await getInventoryRows(session), filters);
-    const buffer = await buildDropshippingInventoryPdf(rows);
-    const fileName = `${buildDropshippingInventoryExportBaseName()}.pdf`;
+    const rows = await getStockTagExportRows(session, {
+      customerName: filters.customerName,
+      skuKeyword: filters.skuKeyword,
+      status: filters.status,
+    });
+    if (rows.length === 0) {
+      return NextResponse.json({ ok: false, error: "当前没有可导出的备标签数据" }, { status: 400 });
+    }
+    const buffer = await buildDropshippingStockTagPdf(rows, filters.customerName || null);
+    const fileName = `${buildDropshippingStockTagPdfName(filters.customerName)}.pdf`;
 
     return new NextResponse(buffer, {
       status: 200,
@@ -45,7 +49,7 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "导出 PDF 失败" },
+      { ok: false, error: error instanceof Error ? error.message : "导出备标签 PDF 失败" },
       { status: 500 },
     );
   }

@@ -19,6 +19,7 @@ function getFilters(searchParams: URLSearchParams): InventoryExportFilters {
     status: status === "healthy" || status === "low" || status === "empty" ? status : "all",
     skuKeyword: searchParams.get("sku")?.trim() || "",
     includeAllShipped: searchParams.get("allShipped") !== "0",
+    customerName: searchParams.get("customer")?.trim() || "",
   };
 }
 
