@@ -683,7 +683,7 @@ function paymentEvidenceLooksLikeImage(item: { name?: string; url?: string }) {
 export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm", visibleTabs }: SettingsClientProps) {
   const SUPPLIER_PAGE_SIZE = 10;
   const SUPPLIER_PRODUCT_PREVIEW_PAGE_SIZE = 12;
-  const CUSTOMER_PAGE_SIZE = 11;
+  const CUSTOMER_PAGE_SIZE = 14;
   const CUSTOMER_DETAIL_PAGE_SIZE = 4;
   const CUSTOMER_PAYMENT_PAGE_SIZE = 5;
   const [lang, setLang] = useState<"zh" | "es">("zh");
@@ -2630,7 +2630,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                   />
                 </div>
               </div>
-              <div className="max-h-[540px] overflow-auto">
+              <div className="overflow-x-auto">
                 <table className="w-full min-w-[1220px] text-sm">
                   <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600">
                     <tr>
