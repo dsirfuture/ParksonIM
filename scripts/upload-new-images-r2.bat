@@ -8,16 +8,6 @@ if not exist "%PS1%" (
   exit /b 1
 )
 
-set "PSHOST="
-if exist "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" set "PSHOST=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
-if not defined PSHOST for /f "delims=" %%I in ('where powershell.exe 2^>nul') do if not defined PSHOST set "PSHOST=%%I"
-if not defined PSHOST for /f "delims=" %%I in ('where pwsh.exe 2^>nul') do if not defined PSHOST set "PSHOST=%%I"
-if not defined PSHOST (
-  echo [ERROR] PowerShell not found. Install Windows PowerShell or PowerShell 7 first.
-  pause
-  exit /b 1
-)
-
 set "MODE=%~1"
 set "ARG2=%~2"
 
@@ -60,25 +50,28 @@ set "MODE=dryrun"
 goto :dryrun
 
 :single
+call :ensure_token
 if "%ARG2%"=="" (
   echo [ERROR] Missing file path.
   echo Example: upload-new-images-r2.bat single "Y:\projects\ParksonIM-main\public\products\07921.jpg"
   pause
   exit /b 1
 )
-"%PSHOST%" -ExecutionPolicy Bypass -File "%PS1%" -FilePath "%ARG2%"
+powershell -ExecutionPolicy Bypass -File "%PS1%" -FilePath "%ARG2%"
 goto :end
 
 :recent
+call :ensure_token
 set "HOURS=%ARG2%"
 if "%HOURS%"=="" set "HOURS=24"
-"%PSHOST%" -ExecutionPolicy Bypass -File "%PS1%" -SinceHours %HOURS%
+powershell -ExecutionPolicy Bypass -File "%PS1%" -SinceHours %HOURS%
 goto :end
 
 :dryrun
+call :ensure_token
 set "HOURS=%ARG2%"
 if "%HOURS%"=="" set "HOURS=24"
-"%PSHOST%" -ExecutionPolicy Bypass -File "%PS1%" -SinceHours %HOURS% -DryRun
+powershell -ExecutionPolicy Bypass -File "%PS1%" -SinceHours %HOURS% -DryRun
 goto :end
 
 :help
@@ -92,6 +85,13 @@ echo   upload-new-images-r2.bat single "Y:\projects\ParksonIM-main\public\produc
 echo   upload-new-images-r2.bat recent 24
 echo   upload-new-images-r2.bat dryrun 24
 goto :end
+
+:ensure_token
+if "%CLOUDFLARE_API_TOKEN%"=="" (
+  echo CLOUDFLARE_API_TOKEN is not set.
+  set /p CLOUDFLARE_API_TOKEN=Paste your Cloudflare API token: 
+)
+exit /b 0
 
 :end
 echo.
