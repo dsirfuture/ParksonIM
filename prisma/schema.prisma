@@ -72,6 +72,7 @@ model Tenant {
   productImportBatches ProductImportBatch[]
   yogoProductSources   YogoProductSource[]
   yogoProductSyncLogs  YogoProductSyncLog[]
+  ygOrderSyncLogs      YgOrderSyncLog[]
   supplierProductSources SupplierProductSource[]
   userPermissions      UserPermission[]
   suppliers            SupplierProfile[]
@@ -118,6 +119,7 @@ model Company {
   productImportBatches ProductImportBatch[]
   yogoProductSources   YogoProductSource[]
   yogoProductSyncLogs  YogoProductSyncLog[]
+  ygOrderSyncLogs      YgOrderSyncLog[]
   supplierProductSources SupplierProductSource[]
   userPermissions      UserPermission[]
   suppliers            SupplierProfile[]
@@ -1157,4 +1159,30 @@ model YogoProductSyncLog {
   @@index([tenant_id, company_id])
   @@index([created_at])
   @@map("yogo_product_sync_logs")
+}
+
+model YgOrderSyncLog {
+  id         String @id @default(uuid()) @db.Uuid
+  tenant_id  String @db.Uuid
+  company_id String @db.Uuid
+
+  source        String?
+  request_id    String
+  total_count   Int    @default(0)
+  created_count Int    @default(0)
+  updated_count Int    @default(0)
+  failed_count  Int    @default(0)
+  status        String @default("success")
+  error_message String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@unique([request_id])
+  @@index([tenant_id, company_id])
+  @@index([created_at])
+  @@map("yg_order_sync_logs")
 }

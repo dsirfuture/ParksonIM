@@ -135,17 +135,17 @@ export default async function ProductsManagementPage() {
     if (!tail3) return true;
     return !blockedTail3Set.has(tail3);
   });
-  // For "latest sync to website", always use synced_at first (all rows in tenant/company scope).
-  const latestSyncedAt = maxDate(yogoRows.map((row) => row.synced_at));
-  const fallbackSourceUpdatedAt = maxDate(yogoRows.map((row) => row.source_updated_at));
+  // Show the latest time ParksonIM actually received and stored product data.
+  const latestReceivedAt = maxDate(yogoRows.map((row) => row.last_received_at));
   const fallbackUpdatedAt = maxDate(yogoRows.map((row) => row.updated_at));
+  const fallbackSourceUpdatedAt = maxDate(yogoRows.map((row) => row.source_updated_at));
   let yogoLastUpdatedText = "最近一次友购产品更新时间是：暂无";
-  if (latestSyncedAt) {
-    yogoLastUpdatedText = `最近一次友购产品更新时间是：${formatZhDateTime(latestSyncedAt)}`;
-  } else if (fallbackSourceUpdatedAt) {
-    yogoLastUpdatedText = `最近一次友购产品更新时间是：${formatZhDateTime(fallbackSourceUpdatedAt)}（回退：source_updated_at）`;
+  if (latestReceivedAt) {
+    yogoLastUpdatedText = `最近一次友购产品更新时间是：${formatZhDateTime(latestReceivedAt)}`;
   } else if (fallbackUpdatedAt) {
     yogoLastUpdatedText = `最近一次友购产品更新时间是：${formatZhDateTime(fallbackUpdatedAt)}（回退：updated_at）`;
+  } else if (fallbackSourceUpdatedAt) {
+    yogoLastUpdatedText = `最近一次友购产品更新时间是：${formatZhDateTime(fallbackSourceUpdatedAt)}（回退：source_updated_at）`;
   }
   const categoryCodeMap = new Map<string, string>();
   for (const item of categoryMapRows) {

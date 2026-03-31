@@ -176,9 +176,7 @@ export default async function YgOrdersPage() {
   }
 
   const hasHeaderUpdatedAt = await columnExists("header_updated_at");
-  const latestUpdatedExpr = hasHeaderUpdatedAt
-    ? "COALESCE(MAX(header_updated_at), MAX(updated_at))"
-    : "MAX(updated_at)";
+  const latestUpdatedExpr = "MAX(updated_at)";
 
   const [summaryRows, customerCountRows, periodRows] = await Promise.all([
     prisma.$queryRawUnsafe<
@@ -566,4 +564,3 @@ export default async function YgOrdersPage() {
     </AppShell>
   );
 }
-

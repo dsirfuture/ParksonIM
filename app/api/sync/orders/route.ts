@@ -896,6 +896,10 @@ export async function POST(request: Request) {
   const expectedApiKey = process.env.YOGO_SYNC_API_KEY?.trim() || "";
   const tenantId = process.env.YOGO_SYNC_TENANT_ID?.trim() || "";
   const companyId = process.env.YOGO_SYNC_COMPANY_ID?.trim() || "";
+  const requestId = randomUUID();
+  let totalCount = 0;
+  let createdCount = 0;
+  let updatedCount = 0;
 
   if (!expectedApiKey) {
     return NextResponse.json(
@@ -933,6 +937,19 @@ export async function POST(request: Request) {
       }
     }
     const orders = Array.from(deduped.values());
+    totalCount = orders.length;
+
+    const existing = await prisma.ygOrderImport.findMany({
+      where: {
+        tenant_id: tenantId,
+        company_id: companyId,
+        order_no: { in: orders.map((order) => order.orderNo) },
+      },
+      select: { order_no: true },
+    });
+    const existingOrderNoSet = new Set(existing.map((item) => item.order_no));
+    createdCount = orders.filter((order) => !existingOrderNoSet.has(order.orderNo)).length;
+    updatedCount = orders.length - createdCount;
 
     await ensurePreviewStatusColumns();
 
@@ -1155,18 +1172,52 @@ export async function POST(request: Request) {
       }
     }
 
+    await prisma.ygOrderSyncLog.create({
+      data: {
+        tenant_id: tenantId,
+        company_id: companyId,
+        source: "yogo",
+        request_id: requestId,
+        total_count: orders.length,
+        created_count: createdCount,
+        updated_count: updatedCount,
+        failed_count: 0,
+        status: "success",
+        error_message: null,
+      },
+    });
+
     return NextResponse.json({
       ok: true,
-      requestId: randomUUID(),
+      requestId,
       summary: {
         totalCount: orders.length,
+        createdCount,
+        updatedCount,
         detectedLocationKeys: Array.from(detectedLocationKeys),
         detectedAmountKeys: Array.from(detectedAmountKeys),
       },
     });
   } catch (error) {
+    await prisma.ygOrderSyncLog
+      .create({
+        data: {
+          tenant_id: tenantId,
+          company_id: companyId,
+          source: "yogo",
+          request_id: requestId,
+          total_count: totalCount,
+          created_count: createdCount,
+          updated_count: updatedCount,
+          failed_count: totalCount || 1,
+          status: "failed",
+          error_message: error instanceof Error ? error.message : "Unknown error",
+        },
+      })
+      .catch(() => null);
+
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Sync failed" },
+      { ok: false, error: error instanceof Error ? error.message : "Sync failed", requestId },
       { status: 400 },
     );
   }
