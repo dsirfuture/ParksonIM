@@ -78,6 +78,7 @@ model Tenant {
   suppliers            SupplierProfile[]
   customers            CustomerProfile[]
   customerManualOrderRecords CustomerManualOrderRecord[]
+  customerPaymentRecords CustomerPaymentRecord[]
   catalogConfigs       CatalogConfig[]
   categoryMaps         ProductCategoryMap[]
   dsCustomers          DropshippingCustomer[]
@@ -125,6 +126,7 @@ model Company {
   suppliers            SupplierProfile[]
   customers            CustomerProfile[]
   customerManualOrderRecords CustomerManualOrderRecord[]
+  customerPaymentRecords CustomerPaymentRecord[]
   catalogConfigs       CatalogConfig[]
   categoryMaps         ProductCategoryMap[]
   dsCustomers          DropshippingCustomer[]
@@ -265,6 +267,7 @@ model CustomerProfile {
   customer_type   String?
   vip_level       String?
   credit_level    String?
+  payment_term_days Int?
   tag_text        String?
   order_stat_text String?
   manual_order_count  Int?
@@ -277,6 +280,7 @@ model CustomerProfile {
   tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
   manual_order_records CustomerManualOrderRecord[]
+  payment_records CustomerPaymentRecord[]
 
   @@index([tenant_id, company_id])
   @@index([name])
@@ -305,11 +309,43 @@ model CustomerManualOrderRecord {
   tenant          Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   company         Company         @relation(fields: [company_id], references: [id], onDelete: Cascade)
   customerProfile CustomerProfile? @relation(fields: [customer_profile_id], references: [id], onDelete: SetNull)
+  payment_records CustomerPaymentRecord[]
 
   @@index([tenant_id, company_id])
   @@index([customer_profile_id])
   @@index([customer_name])
   @@map("customer_manual_order_records")
+}
+
+model CustomerPaymentRecord {
+  id         String @id @default(uuid()) @db.Uuid
+  tenant_id  String @db.Uuid
+  company_id String @db.Uuid
+
+  customer_profile_id    String? @db.Uuid
+  manual_order_record_id String? @db.Uuid
+  source_type            String
+  customer_name          String
+  order_no               String
+  payment_amount         Decimal? @db.Decimal(18, 2)
+  paid_at                DateTime?
+  payment_method         String?
+  payment_target         String?
+  note                   String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant            Tenant                   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company           Company                  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  customerProfile   CustomerProfile?         @relation(fields: [customer_profile_id], references: [id], onDelete: SetNull)
+  manualOrderRecord CustomerManualOrderRecord? @relation(fields: [manual_order_record_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, company_id])
+  @@index([customer_profile_id])
+  @@index([manual_order_record_id])
+  @@index([source_type, order_no])
+  @@map("customer_payment_records")
 }
 
 model CatalogConfig {

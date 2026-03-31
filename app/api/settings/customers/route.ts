@@ -128,6 +128,10 @@ function normalizeDateInputText(value: unknown) {
   return text ? text.replace(/[.]/g, "-").replace(/\//g, "-") : "";
 }
 
+function buildPaymentGroupKey(sourceType: string, key: string) {
+  return `${normalizeKey(sourceType)}:${normalizeKey(key)}`;
+}
+
 function toDiscountFactor(value: number | null | undefined) {
   if (value === null || value === undefined) return null;
   if (!Number.isFinite(value) || value < 0) return null;
@@ -154,7 +158,7 @@ export async function GET() {
     const allowed = await hasPermission(session, "manageCustomers");
     if (!allowed) return NextResponse.json({ ok: false, error: "无权限" }, { status: 403 });
 
-    const [profiles, rawYgCustomers, orders, manualRecords] = await Promise.all([
+    const [profiles, rawYgCustomers, orders, manualRecords, paymentRecords] = await Promise.all([
       withPrismaRetry(() =>
         prisma.customerProfile.findMany({
           where: { tenant_id: session.tenantId, company_id: session.companyId },
@@ -191,6 +195,12 @@ export async function GET() {
         prisma.customerManualOrderRecord.findMany({
           where: { tenant_id: session.tenantId, company_id: session.companyId },
           orderBy: [{ shipped_at: "desc" }, { created_at: "desc" }],
+        }),
+      ),
+      withPrismaRetry(() =>
+        prisma.customerPaymentRecord.findMany({
+          where: { tenant_id: session.tenantId, company_id: session.companyId },
+          orderBy: [{ paid_at: "asc" }, { created_at: "asc" }],
         }),
       ),
     ]);
@@ -256,6 +266,22 @@ export async function GET() {
       }
     }
 
+    const paymentRecordsByOrderKey = new Map<string, any[]>();
+    const paymentRecordsByManualRecordId = new Map<string, any[]>();
+    for (const row of paymentRecords) {
+      const orderKey = buildPaymentGroupKey(row.source_type, row.order_no);
+      const orderList = paymentRecordsByOrderKey.get(orderKey) || [];
+      orderList.push(row);
+      paymentRecordsByOrderKey.set(orderKey, orderList);
+
+      const manualRecordKey = normalizeKey(row.manual_order_record_id);
+      if (manualRecordKey) {
+        const manualList = paymentRecordsByManualRecordId.get(manualRecordKey) || [];
+        manualList.push(row);
+        paymentRecordsByManualRecordId.set(manualRecordKey, manualList);
+      }
+    }
+
     function buildOrderSummary(input: { customerIds?: string[]; companyName?: string | null }) {
       const matchedMap = new Map<string, any>();
 
@@ -294,11 +320,21 @@ export async function GET() {
             );
             return sum + (Number.isFinite(lineTotal) ? lineTotal : 0);
           }, 0);
-          const overlayPackingAmountText = normalizeAmountText(overlay?.billing_amount_override ?? overlay?.packing_amount ?? 0);
+          const hasPackingAmountOverride =
+            overlay?.packing_amount !== null && overlay?.packing_amount !== undefined;
+          const overlayPackingAmountText = hasPackingAmountOverride
+            ? normalizeAmountText(overlay.packing_amount)
+            : "";
           const billingPackingAmountText = normalizeAmountText(billingPackingAmount);
           const packedAmountText =
-            overlay
+            hasPackingAmountOverride
               ? overlayPackingAmountText
+              : billingPackingAmountText !== "0.00"
+                ? billingPackingAmountText
+                : "";
+          const payableAmountText =
+            overlay?.billing_amount_override !== null && overlay?.billing_amount_override !== undefined
+              ? normalizeAmountText(overlay.billing_amount_override)
               : billingPackingAmountText !== "0.00"
                 ? billingPackingAmountText
                 : "";
@@ -306,17 +342,37 @@ export async function GET() {
           const billingPaidAtText = normalizeDateInputText(parsedRemark.meta.paidAt);
           const billingPaymentTermText = trimText(parsedRemark.meta.paymentTerm);
           const deliveryAddressText = trimText(order.address_text);
+          const paymentRows = (paymentRecordsByOrderKey.get(buildPaymentGroupKey("yg", order.order_no)) || []).map((payment) => ({
+            id: payment.id,
+            paymentAmountText: normalizeAmountText(payment.payment_amount || 0),
+            paymentTimeText: formatDateText(payment.paid_at),
+            paymentMethodText: trimText(payment.payment_method),
+            paymentTargetText: trimText(payment.payment_target),
+            noteText: trimText(payment.note),
+          }));
+          if (paymentRows.length === 0 && overlay?.paid_at && payableAmountText) {
+            paymentRows.push({
+              id: `legacy:${order.order_no}`,
+              paymentAmountText: payableAmountText,
+              paymentTimeText: formatDateText(overlay.paid_at),
+              paymentMethodText: "",
+              paymentTargetText: "",
+              noteText: "",
+            });
+          }
           return {
             overlayRecordId: overlay?.id || "",
             orderNo: order.order_no,
             orderDateText: formatDateText(order.order_created_at || order.updated_at),
             orderAmountText: Number(order.order_amount || 0).toFixed(2),
+            payableAmountText,
             packingAmountText: packedAmountText,
             shippedAtText: formatDateText(overlay?.shipped_at) || billingShipDateText,
             paidAtText: formatDateText(overlay?.paid_at) || billingPaidAtText,
             paymentTermText: overlay?.payment_term_days ? String(overlay.payment_term_days) : billingPaymentTermText,
             deliveryAddressText,
             latestStatus: String(order.latest_status || "").trim() || "-",
+            paymentRows,
           };
         });
 
@@ -393,18 +449,39 @@ export async function GET() {
         manualDebtAmountText: normalizeAmountText(unpaidAmount),
         paymentTermText: latestTermDays ? String(latestTermDays) : "",
         overlayRows,
-        manualDetailRows: manualRows.map((item) => ({
-          id: item.id,
-          customerName: item.customer_name || "",
-          customerProfileId: item.customer_profile_id || "",
-          ygOrderNo: item.yg_order_no || "",
-          externalOrderNo: item.external_order_no || "",
-          orderChannel: item.order_channel || "",
-          packingAmountText: normalizeAmountText(item.packing_amount || 0),
-          shippedAtText: formatDateText(item.shipped_at),
-          paidAtText: formatDateText(item.paid_at),
-          paymentTermText: item.payment_term_days ? String(item.payment_term_days) : "",
-        })),
+        manualDetailRows: manualRows.map((item) => {
+          const paymentRows = (paymentRecordsByManualRecordId.get(normalizeKey(item.id)) || []).map((payment) => ({
+            id: payment.id,
+            paymentAmountText: normalizeAmountText(payment.payment_amount || 0),
+            paymentTimeText: formatDateText(payment.paid_at),
+            paymentMethodText: trimText(payment.payment_method),
+            paymentTargetText: trimText(payment.payment_target),
+            noteText: trimText(payment.note),
+          }));
+          if (paymentRows.length === 0 && item.paid_at && Number(item.packing_amount || 0) > 0) {
+            paymentRows.push({
+              id: `legacy:${item.id}`,
+              paymentAmountText: normalizeAmountText(item.packing_amount || 0),
+              paymentTimeText: formatDateText(item.paid_at),
+              paymentMethodText: "",
+              paymentTargetText: "",
+              noteText: "",
+            });
+          }
+          return {
+            id: item.id,
+            customerName: item.customer_name || "",
+            customerProfileId: item.customer_profile_id || "",
+            ygOrderNo: item.yg_order_no || "",
+            externalOrderNo: item.external_order_no || "",
+            orderChannel: item.order_channel || "",
+            packingAmountText: normalizeAmountText(item.packing_amount || 0),
+            shippedAtText: formatDateText(item.shipped_at),
+            paidAtText: formatDateText(item.paid_at),
+            paymentTermText: item.payment_term_days ? String(item.payment_term_days) : "",
+            paymentRows,
+          };
+        }),
       };
     }
 
@@ -454,7 +531,10 @@ export async function GET() {
         totalOrderAmountText: orderSummary.totalOrderAmountText,
         packingAmountText: manualSummary.manualPackingAmountText !== "0.00" ? manualSummary.manualPackingAmountText : "",
         debtAmountText: manualSummary.manualDebtAmountText !== "0.00" ? manualSummary.manualDebtAmountText : "",
-        paymentTermText: manualSummary.paymentTermText || orderSummary.paymentTermText,
+        paymentTermText:
+          manualSummary.paymentTermText
+          || orderSummary.paymentTermText
+          || (row.payment_term_days ? String(row.payment_term_days) : ""),
         detailRows: orderSummary.detailRows,
         manualOrderRecords: manualSummary.manualDetailRows,
       };
@@ -481,7 +561,7 @@ export async function GET() {
         totalOrderAmountText: row.manual_order_amount ? Number(row.manual_order_amount).toFixed(2) : "",
         packingAmountText: row.manual_packing_amount ? Number(row.manual_packing_amount).toFixed(2) : "",
         debtAmountText: row.manual_packing_amount ? Number(row.manual_packing_amount).toFixed(2) : "",
-        paymentTermText: "",
+        paymentTermText: row.payment_term_days ? String(row.payment_term_days) : "",
         detailRows: [],
         manualOrderRecords: [],
       }))
@@ -646,22 +726,43 @@ export async function GET() {
         debtAmountText: normalizeAmountText(unpaidAmount),
         paymentTermText: latestTermDays ? String(latestTermDays) : "",
         detailRows: [],
-        manualOrderRecords: sortedRows.map((item) => ({
-          id: item.id,
-          customerName: item.customer_name || "",
-          customerProfileId: item.customer_profile_id || "",
-          ygOrderNo: item.yg_order_no || "",
-          externalOrderNo: item.external_order_no || "",
-          orderChannel: item.order_channel || "",
-          billingAmountOverrideText:
-            item.billing_amount_override !== null && item.billing_amount_override !== undefined
-              ? normalizeAmountText(item.billing_amount_override)
-              : "",
-          packingAmountText: normalizeAmountText(item.packing_amount || 0),
-          shippedAtText: formatDateText(item.shipped_at),
-          paidAtText: formatDateText(item.paid_at),
-          paymentTermText: item.payment_term_days ? String(item.payment_term_days) : "",
-        })),
+        manualOrderRecords: sortedRows.map((item) => {
+          const paymentRows = (paymentRecordsByManualRecordId.get(normalizeKey(item.id)) || []).map((payment) => ({
+            id: payment.id,
+            paymentAmountText: normalizeAmountText(payment.payment_amount || 0),
+            paymentTimeText: formatDateText(payment.paid_at),
+            paymentMethodText: trimText(payment.payment_method),
+            paymentTargetText: trimText(payment.payment_target),
+            noteText: trimText(payment.note),
+          }));
+          if (paymentRows.length === 0 && item.paid_at && Number(item.packing_amount || 0) > 0) {
+            paymentRows.push({
+              id: `legacy:${item.id}`,
+              paymentAmountText: normalizeAmountText(item.packing_amount || 0),
+              paymentTimeText: formatDateText(item.paid_at),
+              paymentMethodText: "",
+              paymentTargetText: "",
+              noteText: "",
+            });
+          }
+          return {
+            id: item.id,
+            customerName: item.customer_name || "",
+            customerProfileId: item.customer_profile_id || "",
+            ygOrderNo: item.yg_order_no || "",
+            externalOrderNo: item.external_order_no || "",
+            orderChannel: item.order_channel || "",
+            billingAmountOverrideText:
+              item.billing_amount_override !== null && item.billing_amount_override !== undefined
+                ? normalizeAmountText(item.billing_amount_override)
+                : "",
+            packingAmountText: normalizeAmountText(item.packing_amount || 0),
+            shippedAtText: formatDateText(item.shipped_at),
+            paidAtText: formatDateText(item.paid_at),
+            paymentTermText: item.payment_term_days ? String(item.payment_term_days) : "",
+            paymentRows,
+          };
+        }),
       };
     });
 
@@ -699,6 +800,8 @@ export async function POST(request: Request) {
     const manualOrderCount = manualOrderCountRaw ? Number.parseInt(manualOrderCountRaw, 10) : null;
     const manualOrderAmountRaw = String(body.totalOrderAmountText || "").replace(/[^0-9.-]/g, "").trim();
     const manualPackingAmountRaw = String(body.packingAmountText || "").replace(/[^0-9.-]/g, "").trim();
+    const paymentTermRaw = String(body.paymentTermText || "").replace(/[^\d-]/g, "").trim();
+    const paymentTermDays = paymentTermRaw ? Number.parseInt(paymentTermRaw, 10) : null;
     const manualData =
       sourceType === "manual"
         ? {
@@ -719,6 +822,7 @@ export async function POST(request: Request) {
       customer_type: String(body.customerType || "").trim() || null,
       vip_level: String(body.vipLevel || "").trim() || null,
       credit_level: String(body.creditLevel || "").trim() || null,
+      payment_term_days: Number.isFinite(paymentTermDays as number) ? paymentTermDays : null,
       tag_text: String(body.tags || "").trim() || null,
       order_stat_text: String(body.orderStats || "").trim() || null,
       ...manualData,

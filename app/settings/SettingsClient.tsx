@@ -96,11 +96,20 @@ type Customer = {
     orderNo: string;
     orderDateText: string;
     orderAmountText: string;
+    payableAmountText?: string;
     packingAmountText?: string;
     shippedAtText?: string;
     paidAtText?: string;
     paymentTermText?: string;
     latestStatus: string;
+    paymentRows?: Array<{
+      id: string;
+      paymentAmountText: string;
+      paymentTimeText: string;
+      paymentMethodText: string;
+      paymentTargetText: string;
+      noteText: string;
+    }>;
   }>;
   manualOrderRecords?: Array<{
     id: string;
@@ -114,6 +123,14 @@ type Customer = {
     shippedAtText: string;
     paidAtText: string;
     paymentTermText: string;
+    paymentRows?: Array<{
+      id: string;
+      paymentAmountText: string;
+      paymentTimeText: string;
+      paymentMethodText: string;
+      paymentTargetText: string;
+      noteText: string;
+    }>;
   }>;
 };
 
@@ -138,8 +155,13 @@ type DetailRowEditForm = ManualOrderForm & {
 };
 
 type PaymentRowEditForm = {
+  id: string;
   payableAmount: string;
+  currentPaymentAmount: string;
   paymentTime: string;
+  paymentMethod: string;
+  paymentTarget: string;
+  note: string;
 };
 
 type DetailCustomerInfoForm = {
@@ -176,17 +198,26 @@ type CustomerTimelineRow = {
   channelText: string;
   packingAmountText: string;
   shippedAtText: string;
+  payableAmountText: string;
+  paidAmountText: string;
+  unpaidAmountText: string;
+  dueDateText: string;
+  statusKey: PaymentStatusKey;
   paymentRows: Array<{
     id: string;
     sourceType: "yg" | "manual";
     payableAmountText: string;
+    currentPaymentAmountText: string;
     paidAmountText: string;
     paymentTimeText: string;
     paymentMethodText: string;
     paymentTargetText: string;
     unpaidAmountText: string;
+    noteText: string;
   }>;
 };
+
+type PaymentStatusKey = "paid" | "partial" | "overdue" | "unpaid";
 
 type CustomerSearchItem = {
   id: string;
@@ -311,8 +342,13 @@ const EMPTY_DETAIL_ROW_EDIT_FORM: DetailRowEditForm = {
 };
 
 const EMPTY_PAYMENT_ROW_EDIT_FORM: PaymentRowEditForm = {
+  id: "",
   payableAmount: "",
+  currentPaymentAmount: "",
   paymentTime: "",
+  paymentMethod: "",
+  paymentTarget: "",
+  note: "",
 };
 
 const EMPTY_DETAIL_CUSTOMER_INFO_FORM: DetailCustomerInfoForm = {
@@ -545,6 +581,13 @@ function mergeTwoCustomerRows(existing: Customer, item: Customer) {
     customerType: preferredRow.customerType || profileRow?.customerType || existing.customerType || item.customerType || "",
     vipLevel: preferredRow.vipLevel || profileRow?.vipLevel || existing.vipLevel || item.vipLevel || "",
     creditLevel: preferredRow.creditLevel || profileRow?.creditLevel || existing.creditLevel || item.creditLevel || "",
+    paymentTermText:
+      preferredRow.paymentTermText ||
+      profileRow?.paymentTermText ||
+      ygRow?.paymentTermText ||
+      existing.paymentTermText ||
+      item.paymentTermText ||
+      "",
     tags: preferredRow.tags || profileRow?.tags || existing.tags || item.tags || "",
     orderStats: String(mergedDetailRows.length || ygRow?.orderStats || profileRow?.orderStats || existing.orderStats || item.orderStats || ""),
     detailRows: mergedDetailRows,
@@ -612,6 +655,151 @@ function mapSearchUrl(address: string) {
   const text = (address || "").trim();
   if (!text) return "";
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(text)}`;
+}
+
+function parseAmountValue(value: unknown) {
+  const amount = Number(String(value || "").replace(/[^0-9.-]/g, "").trim() || 0);
+  return Number.isFinite(amount) ? amount : 0;
+}
+
+function parseLooseDate(value: string) {
+  const text = String(value || "").trim();
+  if (!text || text === "-") return null;
+  const normalized = text.replace(/[.]/g, "-").replace(/\//g, "-");
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const [, yearText, monthText, dayText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+}
+
+function formatDateValue(date: Date | null) {
+  if (!date || Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}/${month}/${day}`;
+}
+
+function buildDueDateText(baseDateText: string, paymentTermText: string) {
+  const baseDate = parseLooseDate(baseDateText);
+  const termDays = Number.parseInt(String(paymentTermText || "").replace(/[^\d-]/g, ""), 10);
+  if (!baseDate || !Number.isFinite(termDays)) return "";
+  const dueDate = new Date(baseDate);
+  dueDate.setDate(dueDate.getDate() + termDays);
+  return formatDateValue(dueDate);
+}
+
+function buildPaymentStatus(params: {
+  payableAmountText: string;
+  paidAmountText: string;
+  dueDateText: string;
+}) {
+  const payable = parseAmountValue(params.payableAmountText);
+  const paid = parseAmountValue(params.paidAmountText);
+  const unpaid = Math.max(payable - paid, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dueDate = parseLooseDate(params.dueDateText);
+  const isOverdue = unpaid > 0 && Boolean(dueDate) && (dueDate?.getTime() || 0) < today.getTime();
+  let statusKey: PaymentStatusKey = "unpaid";
+  if (payable > 0 && unpaid <= 0) {
+    statusKey = "paid";
+  } else if (paid > 0 && unpaid > 0) {
+    statusKey = "partial";
+  } else if (isOverdue) {
+    statusKey = "overdue";
+  }
+  return {
+    statusKey,
+    paidAmountText: paid > 0 ? paid.toFixed(2) : "",
+    unpaidAmountText: unpaid > 0 ? unpaid.toFixed(2) : payable > 0 && statusKey === "paid" ? "0.00" : "",
+  };
+}
+
+function getPaymentStatusLabel(statusKey: PaymentStatusKey, t: (zh: string, es: string) => string) {
+  switch (statusKey) {
+    case "paid":
+      return t("已结清", "Liquidado");
+    case "partial":
+      return t("部分付款", "Parcial");
+    case "overdue":
+      return t("逾期未结", "Vencido");
+    default:
+      return t("未付款", "Sin pago");
+  }
+}
+
+function getOverdueLabel(count: number, t: (zh: string, es: string) => string) {
+  if (count <= 0) return t("无", "No");
+  if (count === 1) return t("1笔", "1");
+  if (count === 2) return t("2笔", "2");
+  return t("3笔+", "3+");
+}
+
+function getCustomerCreditLevelDisplay(
+  rawValue: string,
+  debtAmountText: string,
+  overdueCount: number,
+) {
+  const normalized = String(rawValue || "").trim().toUpperCase();
+  if (/^[A-E]$/.test(normalized)) return normalized;
+  const debtAmount = parseAmountValue(debtAmountText);
+  if (overdueCount >= 3) return "E";
+  if (overdueCount === 2) return "D";
+  if (overdueCount === 1) return "C";
+  if (debtAmount > 0) return "B";
+  return "A";
+}
+
+function getStatusTone(statusKey: PaymentStatusKey) {
+  switch (statusKey) {
+    case "paid":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "partial":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+    case "overdue":
+      return "border-rose-200 bg-rose-50 text-rose-700";
+    default:
+      return "border-slate-200 bg-slate-50 text-slate-700";
+  }
+}
+
+function buildComputedPaymentRows(
+  sourceType: "yg" | "manual",
+  payableAmountText: string,
+  rows: Array<{
+    id: string;
+    paymentAmountText?: string;
+    paymentTimeText?: string;
+    paymentMethodText?: string;
+    paymentTargetText?: string;
+    noteText?: string;
+  }>,
+) {
+  const payable = parseAmountValue(payableAmountText);
+  let cumulativePaid = 0;
+  return rows.map((row) => {
+    const currentPayment = parseAmountValue(row.paymentAmountText);
+    cumulativePaid += currentPayment;
+    const paidAmountText = cumulativePaid > 0 ? cumulativePaid.toFixed(2) : "";
+    const unpaidAmount = Math.max(payable - cumulativePaid, 0);
+    return {
+      id: row.id,
+      sourceType,
+      payableAmountText: payable > 0 ? payable.toFixed(2) : "",
+      currentPaymentAmountText: currentPayment > 0 ? currentPayment.toFixed(2) : "",
+      paidAmountText,
+      paymentTimeText: row.paymentTimeText || "",
+      paymentMethodText: row.paymentMethodText || "",
+      paymentTargetText: row.paymentTargetText || "",
+      unpaidAmountText: payable > 0 ? unpaidAmount.toFixed(2) : "",
+      noteText: row.noteText || "",
+    };
+  });
 }
 
 function ReadonlyCustomerField({ value, centered = false, children }: { value?: string; centered?: boolean; children?: ReactNode }) {
@@ -759,7 +947,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
     for (const customer of customers) {
       for (const row of customer.detailRows || []) {
         if (String(row.orderNo || "").trim().toLowerCase() !== orderKey) continue;
-        return String(row.packingAmountText || "").trim();
+        return String(row.payableAmountText || "").trim();
       }
     }
     return "";
@@ -1112,6 +1300,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
           phone: detailCustomerInfoForm.phone,
           stores: detailCustomerInfoForm.stores,
           cityCountry: detailCustomerInfoForm.cityCountry,
+          paymentTermText: detailCustomerInfoForm.paymentTermText,
         },
         "客户已保存",
         "Cli saved",
@@ -1256,12 +1445,30 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
     }
   }
 
-  function handlePaymentRowEdit(row: CustomerTimelineRow) {
-    const activeRow = row.paymentRows[0];
-    setPaymentEditingRowId(activeRow?.id || "");
+  function openNewPaymentRow() {
+    if (!activePaymentDetail) return;
+    setPaymentEditingRowId("new");
     setPaymentRowEditForm({
-      payableAmount: activeRow?.payableAmountText || "",
-      paymentTime: activeRow?.paymentTimeText || "",
+      id: "",
+      payableAmount: activePaymentDetail.payableAmountText || "",
+      currentPaymentAmount: "",
+      paymentTime: "",
+      paymentMethod: "",
+      paymentTarget: "",
+      note: "",
+    });
+  }
+
+  function handlePaymentRowEdit(row: CustomerTimelineRow["paymentRows"][number]) {
+    setPaymentEditingRowId(row.id || "");
+    setPaymentRowEditForm({
+      id: row.id || "",
+      payableAmount: row.payableAmountText || "",
+      currentPaymentAmount: row.currentPaymentAmountText || "",
+      paymentTime: row.paymentTimeText || "",
+      paymentMethod: row.paymentMethodText || "",
+      paymentTarget: row.paymentTargetText || "",
+      note: row.noteText || "",
     });
   }
 
@@ -1269,10 +1476,9 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
     try {
       setError("");
       if (!activePaymentDetail) return;
-      let nextPayload: ManualOrderForm | null = null;
       if (activePaymentDetail.sourceType === "yg") {
         const detailRow = detailCustomer?.detailRows?.find((item) => item.orderNo === activePaymentDetail.orderNo);
-        nextPayload = {
+        await saveEntity("/api/settings/customers/manual-orders", {
           id: detailRow?.overlayRecordId || activePaymentDetail.manualRecordId || "",
           sourceType: "yg",
           customerProfileId: detailCustomer?.sourceType === "profile" ? detailCustomer.id : "",
@@ -1281,30 +1487,49 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
           externalOrderNo: "",
           orderChannel: "YOGO",
           billingAmountOverride: paymentRowEditForm.payableAmount,
-          packingAmount: paymentRowEditForm.payableAmount,
+          packingAmount: detailRow?.packingAmountText || "",
           shippedAt: activePaymentDetail.shippedAtText || "",
-          paidAt: paymentRowEditForm.paymentTime,
+          paidAt: detailRow?.paidAtText || "",
           paymentTermDays: detailRow?.paymentTermText || "",
-        };
-      } else {
-        const manualRow = detailCustomer?.manualOrderRecords?.find((item) => item.id === activePaymentDetail.manualRecordId);
-        if (!manualRow) throw new Error(tx("未找到可编辑记录。", "Editable record not found."));
-        nextPayload = {
-          id: manualRow.id,
-          sourceType: "manual",
-          customerProfileId: manualRow.customerProfileId || (detailCustomer?.sourceType === "profile" ? detailCustomer.id : ""),
-          customerName: manualRow.customerName || detailCustomer?.name || "",
-          ygOrderNo: manualRow.ygOrderNo || "",
-          externalOrderNo: manualRow.externalOrderNo || "",
-          orderChannel: manualRow.orderChannel || "",
-          billingAmountOverride: manualRow.billingAmountOverrideText || "",
-          packingAmount: paymentRowEditForm.payableAmount,
-          shippedAt: manualRow.shippedAtText || "",
-          paidAt: paymentRowEditForm.paymentTime,
-          paymentTermDays: manualRow.paymentTermText || "",
-        };
+        }, "记录已保存", "Record saved");
       }
-      await saveEntity("/api/settings/customers/manual-orders", nextPayload, "记录已保存", "Record saved");
+
+      const manualRow = activePaymentDetail.sourceType === "manual"
+        ? detailCustomer?.manualOrderRecords?.find((item) => item.id === activePaymentDetail.manualRecordId)
+        : null;
+      if (activePaymentDetail.sourceType === "manual" && !manualRow) {
+        throw new Error(tx("未找到可编辑记录。", "Editable record not found."));
+      }
+      if (activePaymentDetail.sourceType === "manual") {
+        await saveEntity("/api/settings/customers/manual-orders", {
+          id: manualRow?.id || "",
+          sourceType: "manual",
+          customerProfileId: manualRow?.customerProfileId || (detailCustomer?.sourceType === "profile" ? detailCustomer.id : ""),
+          customerName: manualRow?.customerName || detailCustomer?.name || "",
+          ygOrderNo: manualRow?.ygOrderNo || "",
+          externalOrderNo: manualRow?.externalOrderNo || "",
+          orderChannel: manualRow?.orderChannel || "",
+          billingAmountOverride: manualRow?.billingAmountOverrideText || "",
+          packingAmount: paymentRowEditForm.payableAmount || manualRow?.packingAmountText || "",
+          shippedAt: manualRow?.shippedAtText || "",
+          paidAt: manualRow?.paidAtText || "",
+          paymentTermDays: manualRow?.paymentTermText || "",
+        }, "记录已保存", "Record saved");
+      }
+
+      await saveEntity("/api/settings/customers/payments", {
+        id: paymentEditingRowId === "new" ? "" : paymentRowEditForm.id,
+        sourceType: activePaymentDetail.sourceType,
+        customerProfileId: detailCustomer?.sourceType === "profile" ? detailCustomer.id : "",
+        manualOrderRecordId: activePaymentDetail.sourceType === "manual" ? activePaymentDetail.manualRecordId : "",
+        customerName: detailCustomer?.name || "",
+        orderNo: activePaymentDetail.orderNo || "",
+        paymentAmount: paymentRowEditForm.currentPaymentAmount,
+        paidAt: paymentRowEditForm.paymentTime,
+        paymentMethod: paymentRowEditForm.paymentMethod,
+        paymentTarget: paymentRowEditForm.paymentTarget,
+        note: paymentRowEditForm.note,
+      }, "付款记录已保存", "Payment saved");
       setPaymentEditingRowId("");
       setPaymentRowEditForm(EMPTY_PAYMENT_ROW_EDIT_FORM);
       await refreshCustomersSilently();
@@ -1331,7 +1556,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
         ygOrderNo: row.orderNo || "",
         externalOrderNo: "",
         orderChannel: "YOGO",
-        billingAmountOverride: row.packingAmountText || "",
+        billingAmountOverride: detailRow?.payableAmountText || "",
         packingAmount: row.packingAmountText || "",
         shippedAt: row.shippedAtText || "",
         paidAt: detailRow?.paidAtText || "",
@@ -1393,7 +1618,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
       const formData = new FormData();
       formData.set("sourceType", activePaymentDetail.sourceType);
       formData.set("orderNo", activePaymentDetail.orderNo || "");
-      formData.set("recordId", activePaymentDetail.manualRecordId || "");
+      formData.set("recordId", paymentRowId.startsWith("legacy:") ? activePaymentDetail.manualRecordId || "" : paymentRowId);
       for (const file of uploadFiles) {
         formData.append("files", file);
       }
@@ -1694,54 +1919,61 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
     [customerDetailId, mergedCustomers],
   );
   const sortedDetailRows = useMemo<CustomerTimelineRow[]>(() => {
-    const orderRows = (detailCustomer?.detailRows || []).map((row) => ({
-      id: `detail:${row.orderNo}`,
-      sourceType: "yg" as const,
-      manualRecordId: row.overlayRecordId || "",
-      orderNo: row.orderNo,
-      orderDateText: row.orderDateText,
-      orderAmountText: row.orderAmountText,
-      channelText: tx("友购", "Yogo"),
-      packingAmountText: row.packingAmountText || "",
-      shippedAtText: row.shippedAtText || "",
-      paymentRows: [
-        {
-          id: `detail:${row.orderNo}:payment`,
-          sourceType: "yg" as const,
-          payableAmountText: row.packingAmountText || row.orderAmountText || "",
-          paidAmountText: row.paidAtText && (row.packingAmountText || row.orderAmountText) ? row.packingAmountText || row.orderAmountText : "",
-          paymentTimeText: row.paidAtText || "",
-          paymentMethodText: "",
-          paymentTargetText: "",
-          unpaidAmountText: (row.packingAmountText || row.orderAmountText)
-            ? (row.paidAtText ? "0.00" : row.packingAmountText || row.orderAmountText)
-            : "",
-        },
-      ],
-    }));
-    const manualRows = (detailCustomer?.manualOrderRecords || []).map((row) => ({
-      id: `manual:${row.id}`,
-      sourceType: "manual" as const,
-      manualRecordId: row.id,
-      orderNo: row.ygOrderNo || row.externalOrderNo || "-",
-      orderDateText: row.shippedAtText || row.paidAtText || "-",
-      orderAmountText: "",
-      channelText: row.orderChannel || tx("其他渠道", "Canal manual"),
-      packingAmountText: row.packingAmountText || "",
-      shippedAtText: row.shippedAtText || "",
-      paymentRows: [
-        {
-          id: `manual:${row.id}:payment`,
-          sourceType: "manual" as const,
-          payableAmountText: row.packingAmountText || "",
-          paidAmountText: row.paidAtText && row.packingAmountText ? row.packingAmountText : "",
-          paymentTimeText: row.paidAtText || "",
-          paymentMethodText: "",
-          paymentTargetText: "",
-          unpaidAmountText: row.packingAmountText ? (row.paidAtText ? "0.00" : row.packingAmountText) : "",
-        },
-      ],
-    }));
+    const orderRows = (detailCustomer?.detailRows || []).map((row) => {
+      const dueDateText = buildDueDateText(row.shippedAtText || row.orderDateText || "", row.paymentTermText || "");
+      const computedPaymentRows = buildComputedPaymentRows("yg", row.payableAmountText || "", row.paymentRows || []);
+      const latestPaymentRow = computedPaymentRows[computedPaymentRows.length - 1];
+      const paymentState = buildPaymentStatus({
+        payableAmountText: row.payableAmountText || "",
+        paidAmountText: latestPaymentRow?.paidAmountText || "",
+        dueDateText,
+      });
+      return {
+        id: `detail:${row.orderNo}`,
+        sourceType: "yg" as const,
+        manualRecordId: row.overlayRecordId || "",
+        orderNo: row.orderNo,
+        orderDateText: row.orderDateText,
+        orderAmountText: row.orderAmountText,
+        channelText: tx("友购", "Yogo"),
+        packingAmountText: row.packingAmountText || "",
+        shippedAtText: row.shippedAtText || "",
+        payableAmountText: row.payableAmountText || "",
+        paidAmountText: latestPaymentRow?.paidAmountText || paymentState.paidAmountText,
+        unpaidAmountText: latestPaymentRow?.unpaidAmountText || paymentState.unpaidAmountText,
+        dueDateText,
+        statusKey: paymentState.statusKey,
+        paymentRows: computedPaymentRows,
+      };
+    });
+    const manualRows = (detailCustomer?.manualOrderRecords || []).map((row) => {
+      const payableAmountText = row.packingAmountText || "";
+      const dueDateText = buildDueDateText(row.shippedAtText || "", row.paymentTermText || "");
+      const computedPaymentRows = buildComputedPaymentRows("manual", payableAmountText, row.paymentRows || []);
+      const latestPaymentRow = computedPaymentRows[computedPaymentRows.length - 1];
+      const paymentState = buildPaymentStatus({
+        payableAmountText,
+        paidAmountText: latestPaymentRow?.paidAmountText || "",
+        dueDateText,
+      });
+      return {
+        id: `manual:${row.id}`,
+        sourceType: "manual" as const,
+        manualRecordId: row.id,
+        orderNo: row.ygOrderNo || row.externalOrderNo || "-",
+        orderDateText: row.shippedAtText || row.paidAtText || "-",
+        orderAmountText: "",
+        channelText: row.orderChannel || tx("其他渠道", "Canal manual"),
+        packingAmountText: row.packingAmountText || "",
+        shippedAtText: row.shippedAtText || "",
+        payableAmountText,
+        paidAmountText: latestPaymentRow?.paidAmountText || paymentState.paidAmountText,
+        unpaidAmountText: latestPaymentRow?.unpaidAmountText || paymentState.unpaidAmountText,
+        dueDateText,
+        statusKey: paymentState.statusKey,
+        paymentRows: computedPaymentRows,
+      };
+    });
     return [...orderRows, ...manualRows].sort((left, right) => {
       const compareResult = String(left.orderDateText || "").localeCompare(String(right.orderDateText || ""), "zh-CN");
       return customerDetailDateSort === "asc" ? compareResult : -compareResult;
@@ -1750,6 +1982,77 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
   const activePaymentDetail = useMemo(
     () => sortedDetailRows.find((row) => row.id === customerPaymentDetailId) || null,
     [customerPaymentDetailId, sortedDetailRows],
+  );
+  const activePaymentSummary = useMemo(() => {
+    if (!activePaymentDetail) return null;
+    return {
+      orderNo: activePaymentDetail.orderNo || "-",
+      orderAmountText: activePaymentDetail.orderAmountText ? `$ ${activePaymentDetail.orderAmountText}` : "-",
+      paidAmountText: activePaymentDetail.paidAmountText ? `$ ${activePaymentDetail.paidAmountText}` : "-",
+      unpaidAmountText: activePaymentDetail.unpaidAmountText ? `$ ${activePaymentDetail.unpaidAmountText}` : "-",
+      dueDateText: activePaymentDetail.dueDateText || "-",
+      statusKey: activePaymentDetail.statusKey,
+    };
+  }, [activePaymentDetail]);
+  const customerFinanceOverviewMap = useMemo(() => {
+    const map = new Map<string, {
+      packingAmountText: string;
+      debtAmountText: string;
+      overdueCount: number;
+      creditLevel: string;
+    }>();
+
+    for (const customer of mergedCustomers) {
+      const ygRows = (customer.detailRows || []).map((row) => {
+        const dueDateText = buildDueDateText(row.shippedAtText || row.orderDateText || "", row.paymentTermText || "");
+        const paymentState = buildPaymentStatus({
+          payableAmountText: row.payableAmountText || "",
+          paidAmountText: row.paidAtText && row.payableAmountText ? row.payableAmountText : "",
+          dueDateText,
+        });
+        return {
+          packing: parseAmountValue(row.packingAmountText),
+          unpaid: parseAmountValue(paymentState.unpaidAmountText),
+          statusKey: paymentState.statusKey,
+        };
+      });
+
+      const manualRows = (customer.manualOrderRecords || []).map((row) => {
+        const payableAmountText = row.packingAmountText || "";
+        const dueDateText = buildDueDateText(row.shippedAtText || "", row.paymentTermText || "");
+        const paymentState = buildPaymentStatus({
+          payableAmountText,
+          paidAmountText: row.paidAtText && payableAmountText ? payableAmountText : "",
+          dueDateText,
+        });
+        return {
+          packing: parseAmountValue(row.packingAmountText),
+          unpaid: parseAmountValue(paymentState.unpaidAmountText),
+          statusKey: paymentState.statusKey,
+        };
+      });
+
+      const allRows = [...ygRows, ...manualRows];
+      const packingTotal = allRows.reduce((sum, item) => sum + item.packing, 0);
+      const debtTotal = allRows.reduce((sum, item) => sum + item.unpaid, 0);
+      const overdueCount = allRows.filter((item) => item.statusKey === "overdue").length;
+
+      map.set(customer.id, {
+        packingAmountText: packingTotal > 0 ? packingTotal.toFixed(2) : "",
+        debtAmountText: debtTotal > 0 ? debtTotal.toFixed(2) : "",
+        overdueCount,
+        creditLevel: getCustomerCreditLevelDisplay(customer.creditLevel || "", debtTotal > 0 ? debtTotal.toFixed(2) : "", overdueCount),
+      });
+    }
+
+    return map;
+  }, [mergedCustomers]);
+  const detailCustomerFinanceOverview = useMemo(
+    () =>
+      detailCustomer
+        ? customerFinanceOverviewMap.get(detailCustomer.id) || { packingAmountText: "", debtAmountText: "", overdueCount: 0, creditLevel: getCustomerCreditLevelDisplay(detailCustomer.creditLevel || "", "", 0) }
+        : null,
+    [customerFinanceOverviewMap, detailCustomer],
   );
   const customerPaymentTotalPages = Math.max(
     1,
@@ -1791,6 +2094,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
       || (detailCustomerInfoForm.phone || "") !== (detailCustomer.phone || "")
       || (detailCustomerInfoForm.stores || "") !== (detailCustomer.stores || "")
       || (detailCustomerInfoForm.cityCountry || "") !== (detailCustomer.cityCountry || "")
+      || (detailCustomerInfoForm.paymentTermText || "") !== (detailCustomer.paymentTermText || "")
     );
   }, [detailCustomer, detailCustomerInfoForm]);
   const hasAnyPackingAmount = useMemo(
@@ -1817,6 +2121,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
       phone: detailCustomer.phone || "",
       stores: detailCustomer.stores || "",
       cityCountry: detailCustomer.cityCountry || "",
+      paymentTermText: detailCustomer.paymentTermText || "",
     });
   }, [detailCustomer]);
   useEffect(() => {
@@ -1839,13 +2144,15 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
   }, [activePaymentDetail]);
   useEffect(() => {
     if (!activePaymentDetail) return;
-    const paymentRow = activePaymentDetail.paymentRows[0];
-    if (!paymentRow) return;
-    void loadPaymentEvidenceItems(
-      paymentRow.id,
-      activePaymentDetail.sourceType,
-      activePaymentDetail.orderNo || "",
-      activePaymentDetail.manualRecordId || "",
+    void Promise.all(
+      (activePaymentDetail.paymentRows || []).map((paymentRow) =>
+        loadPaymentEvidenceItems(
+          paymentRow.id,
+          activePaymentDetail.sourceType,
+          activePaymentDetail.orderNo || "",
+          paymentRow.id.startsWith("legacy:") ? activePaymentDetail.manualRecordId || "" : paymentRow.id,
+        ),
+      ),
     ).catch((error) => {
       setError(error instanceof Error ? error.message : tx("加载付款证据失败", "Load payment evidence fail"));
     });
@@ -2654,24 +2961,40 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                       <th className="px-3 py-2 text-left whitespace-nowrap">{tx("全渠道下单", "Total amount")}</th>
                       <th className="px-3 py-2 text-center whitespace-nowrap">{tx("全渠道次数", "Total count")}</th>
                       <th className="px-3 py-2 text-left whitespace-nowrap">{tx("配货金额", "Packing amount")}</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("欠款金额", "Debt amount")}</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">{tx("欠款金额", "Saldo")}</th>
+                      <th className="px-3 py-2 text-center whitespace-nowrap">{tx("逾期", "Vencidas")}</th>
                       <th className="px-3 py-2 text-center whitespace-nowrap">{tx("VIP", "VIP")}</th>
-                      <th className="px-3 py-2 text-center whitespace-nowrap">{tx("信用", "Credit")}</th>
-                      <th className="px-3 py-2 text-center whitespace-nowrap">{tx("账期", "Term")}</th>
+                      <th className="px-3 py-2 text-center whitespace-nowrap">{tx("信用", "Crédito")}</th>
+                      <th className="px-3 py-2 text-center whitespace-nowrap">{tx("账期", "Plazo")}</th>
                       <th className="w-[66px] px-3 py-2 text-center whitespace-nowrap">{tx("详情", "Detail")}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {pagedCustomers.map((c) => (
+                    {pagedCustomers.map((c) => {
+                      const overview = customerFinanceOverviewMap.get(c.id) || { packingAmountText: "", debtAmountText: "", overdueCount: 0, creditLevel: getCustomerCreditLevelDisplay(c.creditLevel || "", "", 0) };
+                      return (
                       <tr key={c.id} className="border-t border-slate-100">
                         <td className="px-3 py-1.5">{c.name || "-"}</td>
                         <td className="px-3 py-1.5">{c.channelText || getCustomerChannelLabel(c, tx)}</td>
                         <td className="px-3 py-1.5">$ {c.totalOrderAmountText || "0.00"}</td>
                         <td className="px-3 py-1.5 text-center">{(c.totalOrderCount ?? c.orderStats) || "-"}</td>
-                        <td className="px-3 py-1.5">{c.packingAmountText ? `$ ${c.packingAmountText}` : "-"}</td>
-                        <td className="px-3 py-1.5">{c.debtAmountText ? `$ ${c.debtAmountText}` : "-"}</td>
+                        <td className="px-3 py-1.5">{overview.packingAmountText ? `$ ${overview.packingAmountText}` : "-"}</td>
+                        <td className="px-3 py-1.5">
+                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${overview.debtAmountText ? "bg-rose-50 text-rose-700" : "bg-slate-50 text-slate-500"}`}>
+                            {overview.debtAmountText ? `$ ${overview.debtAmountText}` : "-"}
+                          </span>
+                        </td>
+                        <td className="px-3 py-1.5 text-center">
+                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${overview.overdueCount > 0 ? "bg-amber-50 text-amber-700" : "bg-slate-50 text-slate-500"}`}>
+                            {getOverdueLabel(overview.overdueCount, tx)}
+                          </span>
+                        </td>
                         <td className="px-3 py-1.5 text-center">{isVipCustomer(c) ? <span className="inline-flex justify-center"><VipBadgeIcon /></span> : ""}</td>
-                        <td className="px-3 py-1.5 text-center">{c.creditLevel || "-"}</td>
+                        <td className="px-3 py-1.5 text-center">
+                          <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
+                            {overview.creditLevel || "-"}
+                          </span>
+                        </td>
                         <td className="px-3 py-1.5 text-center">{c.paymentTermText || "-"}</td>
                         <td className="px-3 py-1.5 text-center">
                           <button
@@ -2687,7 +3010,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                           </button>
                         </td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                 </table>
               </div>
@@ -2928,56 +3251,38 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                       <span className="text-[11px] font-medium text-red-500">{tx("请点击保存编辑", "Haz clic para guardar")}</span>
                     ) : null}
                   </div>
-                  <div className="grid gap-x-2 gap-y-3 xl:grid-cols-[minmax(0,230px)_minmax(0,230px)_minmax(0,170px)_minmax(0,170px)_minmax(0,170px)]">
-                    <div className="max-w-[240px]">
+                  <div className="grid gap-x-3 gap-y-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.72fr)_minmax(0,0.72fr)]">
+                    <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("友购客户名称", "Cliente Yogo")}</label>
                       <ReadonlyCustomerField value={detailCustomerInfoForm.linkedYgName} />
                     </div>
-                    <div className="max-w-[240px]">
+                    <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("真实客户名称", "Cliente real")}</label>
                       <input
                         value={detailCustomerInfoForm.name}
                         onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, name: e.target.value }))}
                         disabled={!canManageCustomers}
-                        className="h-11 w-full max-w-[240px] rounded-2xl border border-slate-200 bg-white px-4 text-xs font-normal text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-xs font-normal text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
                       />
                     </div>
-                    <div className="max-w-[180px]">
+                    <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("联系人", "Cont")}</label>
                       <ReadonlyCustomerField value={detailCustomerInfoForm.contact} />
                     </div>
-                    <div className="max-w-[180px]">
+                    <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("手机", "Mob")}</label>
                       <ReadonlyCustomerField value={detailCustomerInfoForm.phone} />
                     </div>
-                    <div className="max-w-[170px]">
-                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("门店编号", "Tiendas")}</label>
-                      <input
-                        value={detailCustomerInfoForm.stores}
-                        onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, stores: normalizeStoreNumberInput(e.target.value) }))}
-                        onKeyDown={(e) => {
-                          if (e.key !== "Enter") return;
-                          e.preventDefault();
-                          setDetailCustomerInfoForm((prev) => ({
-                            ...prev,
-                            stores: prev.stores ? `${normalizeStoreNumberInput(prev.stores)},` : "",
-                          }));
-                        }}
-                        onBlur={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, stores: normalizeStoreNumberInput(e.target.value) }))}
-                        disabled={!canManageCustomers}
-                        className="h-11 w-full max-w-[170px] rounded-2xl border border-slate-200 bg-white px-4 text-xs font-normal text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
-                      />
-                    </div>
                   </div>
-                  <div className="mt-3.5 grid gap-2.5 xl:grid-cols-[1002px]">
-                    <div className="w-[1002px]">
+                  <div className="mt-3.5">
+                    <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("客户地址", "Direccion")}</label>
-                      <div className="relative w-[1002px]">
+                      <div className="relative">
                         <input
                           value={detailCustomerInfoForm.cityCountry}
                           onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, cityCountry: e.target.value }))}
                           disabled={!canManageCustomers}
-                          className="h-11 w-[1002px] rounded-2xl border border-slate-200 bg-white px-4 pr-12 text-xs font-normal text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
+                          className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-12 text-xs font-normal text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
                         />
                         <a
                           href={mapSearchUrl(detailCustomerInfoForm.cityCountry)}
@@ -2992,7 +3297,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                       </div>
                     </div>
                   </div>
-                  <div className="mt-3.5 grid gap-3 xl:grid-cols-5">
+                  <div className="mt-3.5 grid gap-3 xl:grid-cols-8">
                     <div className="min-w-0 text-center">
                       <label className="mb-1 block text-center text-sm font-semibold text-slate-700">{tx("VIP等级", "VIP lvl")}</label>
                       <PlainCustomerValue centered>
@@ -3000,8 +3305,8 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                       </PlainCustomerValue>
                     </div>
                     <div className="min-w-0 text-center">
-                      <label className="mb-1 block text-center text-sm font-semibold text-slate-700">{tx("信用等级", "Credit")}</label>
-                      <PlainCustomerValue centered value={detailCustomer.creditLevel} />
+                      <label className="mb-1 block text-center text-sm font-semibold text-slate-700">{tx("信用等级", "Crédito")}</label>
+                      <PlainCustomerValue centered value={detailCustomerFinanceOverview?.creditLevel || "-"} />
                     </div>
                     <div className="min-w-0 text-center">
                       <label className="mb-1 block text-center text-sm font-semibold text-slate-700">{tx("下单次数", "Order count")}</label>
@@ -3012,8 +3317,37 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                       <PlainCustomerValue centered value={detailCustomer.totalOrderAmountText ? `$ ${detailCustomer.totalOrderAmountText}` : "-"} />
                     </div>
                     <div className="min-w-0 text-center">
-                      <label className="mb-1 block text-center text-sm font-semibold text-slate-700">{tx("累计配货金额", "Packing total")}</label>
-                      <PlainCustomerValue centered value={hasAnyPackingAmount ? `$ ${detailPackingAmountTotal.toFixed(2)}` : "-"} />
+                      <label className="mb-1 block text-center text-sm font-semibold text-slate-700">{tx("配货金额", "Packing amount")}</label>
+                      <PlainCustomerValue centered value={detailCustomerFinanceOverview?.packingAmountText ? `$ ${detailCustomerFinanceOverview.packingAmountText}` : "-"} />
+                    </div>
+                    <div className="min-w-0 text-center">
+                      <label className="mb-1 block text-center text-sm font-semibold text-slate-700">{tx("欠款金额", "Saldo")}</label>
+                      <PlainCustomerValue centered value={detailCustomerFinanceOverview?.debtAmountText ? `$ ${detailCustomerFinanceOverview.debtAmountText}` : "-"} />
+                    </div>
+                    <div className="min-w-0 text-center">
+                      <label className="mb-1 block text-center text-sm font-semibold text-slate-700">{tx("账期", "Plazo")}</label>
+                      {detailCustomer.paymentTermText ? (
+                        <PlainCustomerValue centered value={detailCustomer.paymentTermText} />
+                      ) : canManageCustomers ? (
+                        <div className="flex justify-center">
+                          <input
+                            value={detailCustomerInfoForm.paymentTermText || ""}
+                            onChange={(e) =>
+                              setDetailCustomerInfoForm((prev) => ({
+                                ...prev,
+                                paymentTermText: e.target.value.replace(/[^\d]/g, ""),
+                              }))}
+                            placeholder={tx("填写账期", "Captura plazo")}
+                            className="h-9 w-24 rounded-xl border border-slate-200 bg-white px-3 text-center text-sm font-normal text-slate-700 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+                          />
+                        </div>
+                      ) : (
+                        <PlainCustomerValue centered value="-" />
+                      )}
+                    </div>
+                    <div className="min-w-0 text-center">
+                      <label className="mb-1 block text-center text-sm font-semibold text-slate-700">{tx("逾期订单", "Vencidas")}</label>
+                      <PlainCustomerValue centered value={getOverdueLabel(detailCustomerFinanceOverview?.overdueCount || 0, tx)} />
                     </div>
                   </div>
                 </div>
@@ -3038,10 +3372,13 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                               {customerDetailDateSort === "desc" ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                             </button>
                           </th>
-                          <th className="w-[120px] px-3 py-1.5 text-left whitespace-nowrap">{tx("下单金额", "Order amount")}</th>
+                          <th className="w-[120px] px-3 py-1.5 text-left whitespace-nowrap">{tx("下单金额", "Monto pedido")}</th>
                           <th className="w-[120px] px-3 py-1.5 text-left whitespace-nowrap">{tx("配货金额", "Packing amount")}</th>
-                          <th className="w-[96px] px-3 py-1.5 text-left whitespace-nowrap">{tx("发货日期", "Ship date")}</th>
-                          <th className="w-[118px] px-3 py-1.5 text-right whitespace-nowrap">{tx("操作", "Acciones")}</th>
+                          <th className="w-[120px] px-3 py-1.5 text-left whitespace-nowrap">{tx("已付金额", "Pagado")}</th>
+                          <th className="w-[120px] px-3 py-1.5 text-left whitespace-nowrap">{tx("未付金额", "Pendiente")}</th>
+                          <th className="w-[110px] px-3 py-1.5 text-left whitespace-nowrap">{tx("应付款日", "Vence")}</th>
+                          <th className="w-[104px] px-3 py-1.5 text-left whitespace-nowrap">{tx("状态", "Estado")}</th>
+                          <th className="w-[128px] px-3 py-1.5 text-right whitespace-nowrap">{tx("操作", "Acciones")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3084,19 +3421,19 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                                 item.packingAmountText ? `$ ${item.packingAmountText}` : "-"
                               )}
                             </td>
-                            <td className="w-[96px] px-3 py-1.5 whitespace-nowrap">
-                              {detailEditingRowId === item.id ? (
-                                <input
-                                  type="date"
-                                  value={detailRowEditForm.shippedAt}
-                                  onChange={(e) => setDetailRowEditForm((prev) => ({ ...prev, shippedAt: e.target.value }))}
-                                  className="h-9 w-[110px] rounded-xl border border-slate-200 px-3 text-xs font-normal"
-                                />
-                              ) : (
-                                item.shippedAtText || "-"
-                              )}
+                            <td className="w-[120px] px-3 py-1.5 whitespace-nowrap">
+                              {item.paidAmountText ? `$ ${item.paidAmountText}` : "-"}
                             </td>
-                            <td className="w-[118px] px-3 py-1.5 text-right">
+                            <td className="w-[120px] px-3 py-1.5 whitespace-nowrap">
+                              {item.unpaidAmountText ? `$ ${item.unpaidAmountText}` : "-"}
+                            </td>
+                            <td className="w-[110px] px-3 py-1.5 whitespace-nowrap">{item.dueDateText || "-"}</td>
+                            <td className="w-[104px] px-3 py-1.5 whitespace-nowrap">
+                              <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${getStatusTone(item.statusKey)}`}>
+                                {getPaymentStatusLabel(item.statusKey, tx)}
+                              </span>
+                            </td>
+                            <td className="w-[128px] px-3 py-1.5 text-right">
                               <div className="flex flex-nowrap items-center justify-end gap-2 whitespace-nowrap">
                                 <button
                                   type="button"
@@ -3123,7 +3460,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                                   onClick={() => setCustomerPaymentDetailId(item.id)}
                                   className="inline-flex h-7 items-center rounded-xl bg-primary px-2.5 text-xs font-normal text-white hover:opacity-95"
                                 >
-                                  {tx("付款", "Pago")}
+                                  {tx("付款详情", "Ver pago")}
                                 </button>
                               </div>
                             </td>
@@ -3186,32 +3523,152 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                 <h4 className="text-sm font-semibold text-slate-900">
                   {tx("付款详情", "Detalle de pago")} · {activePaymentDetail.orderNo || "-"}
                 </h4>
-                <button
-                  type="button"
-                  onClick={() => setCustomerPaymentDetailId("")}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700"
-                  aria-label={tx("关闭", "Cerrar")}
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={openNewPaymentRow}
+                    className="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    {tx("新增付款", "Agregar pago")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomerPaymentDetailId("")}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700"
+                    aria-label={tx("关闭", "Cerrar")}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
               <div className="p-4">
+                {activePaymentSummary ? (
+                  <div className="mb-4 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-6">
+                    <div>
+                      <div className="text-[11px] font-medium text-slate-500">{tx("订单号", "Order no")}</div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">{activePaymentSummary.orderNo}</div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-medium text-slate-500">{tx("订单金额", "Monto pedido")}</div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">{activePaymentSummary.orderAmountText}</div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-medium text-slate-500">{tx("已付合计", "Pagado")}</div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">{activePaymentSummary.paidAmountText}</div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-medium text-slate-500">{tx("未付金额", "Pendiente")}</div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">{activePaymentSummary.unpaidAmountText}</div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-medium text-slate-500">{tx("应付款日", "Vence")}</div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">{activePaymentSummary.dueDateText}</div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-medium text-slate-500">{tx("当前状态", "Estado")}</div>
+                      <div className="mt-1">
+                        <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${getStatusTone(activePaymentSummary.statusKey)}`}>
+                          {getPaymentStatusLabel(activePaymentSummary.statusKey, tx)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="rounded-xl border border-slate-200">
                   <table className="w-full table-auto text-sm">
-                    <thead className="bg-slate-50 text-slate-600">
+                    <thead className="bg-slate-50 text-xs text-slate-600">
                       <tr>
                         <th className="px-3 py-2 text-left whitespace-nowrap">{tx("需付金额", "Monto por pagar")}</th>
+                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("本次付款金额", "Pago")}</th>
                         <th className="px-3 py-2 text-left whitespace-nowrap">{tx("已付金额", "Monto pagado")}</th>
                         <th className="px-3 py-2 text-left whitespace-nowrap">{tx("付款时间", "Fecha pago")}</th>
                         <th className="px-3 py-2 text-left whitespace-nowrap">{tx("付款方式", "Metodo pago")}</th>
                         <th className="px-3 py-2 text-left whitespace-nowrap">{tx("付款对象", "Destinatario")}</th>
                         <th className="px-3 py-2 text-left whitespace-nowrap">{tx("未付金额", "Monto pendiente")}</th>
-                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("付款证据", "Evidencia pago")}</th>
+                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("付款凭据", "Comprobante")}</th>
+                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("备注", "Nota")}</th>
                         <th className="px-3 py-2 text-right whitespace-nowrap">{tx("操作", "Acciones")}</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {pagedPaymentRows.map((row) => (
+                      {paymentEditingRowId === "new" ? (
+                        <tr className="border-t border-slate-100 bg-slate-50/60">
+                          <td className="px-3 py-1.5 whitespace-nowrap">{paymentRowEditForm.payableAmount ? `$ ${paymentRowEditForm.payableAmount}` : "-"}</td>
+                          <td className="px-3 py-1.5 whitespace-nowrap">
+                            <input
+                              value={paymentRowEditForm.currentPaymentAmount}
+                              onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, currentPaymentAmount: e.target.value }))}
+                              className="h-8 w-[112px] rounded-xl border border-slate-200 px-3 text-sm"
+                            />
+                          </td>
+                          <td className="px-3 py-1.5 whitespace-nowrap">
+                            {paymentRowEditForm.currentPaymentAmount ? `$ ${parseAmountValue(paymentRowEditForm.currentPaymentAmount).toFixed(2)}` : "-"}
+                          </td>
+                          <td className="px-3 py-1.5 whitespace-nowrap">
+                            <input
+                              type="date"
+                              value={paymentRowEditForm.paymentTime}
+                              onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, paymentTime: e.target.value }))}
+                              className="h-8 w-[128px] rounded-xl border border-slate-200 px-3 text-sm"
+                            />
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <input
+                              value={paymentRowEditForm.paymentMethod}
+                              onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, paymentMethod: e.target.value }))}
+                              className="h-8 w-full min-w-[100px] rounded-xl border border-slate-200 px-3 text-sm"
+                            />
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <input
+                              value={paymentRowEditForm.paymentTarget}
+                              onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, paymentTarget: e.target.value }))}
+                              className="h-8 w-full min-w-[100px] rounded-xl border border-slate-200 px-3 text-sm"
+                            />
+                          </td>
+                          <td className="px-3 py-1.5 whitespace-nowrap">
+                            {paymentRowEditForm.currentPaymentAmount
+                              ? `$ ${Math.max(parseAmountValue(paymentRowEditForm.payableAmount) - parseAmountValue(paymentRowEditForm.currentPaymentAmount), 0).toFixed(2)}`
+                              : (paymentRowEditForm.payableAmount ? `$ ${parseAmountValue(paymentRowEditForm.payableAmount).toFixed(2)}` : "-")}
+                          </td>
+                          <td className="px-3 py-1.5"><span className="text-sm text-slate-400">-</span></td>
+                          <td className="px-3 py-1.5">
+                            <input
+                              value={paymentRowEditForm.note}
+                              onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, note: e.target.value }))}
+                              className="h-8 w-full min-w-[120px] rounded-xl border border-slate-200 px-3 text-sm"
+                            />
+                          </td>
+                          <td className="px-3 py-1.5 text-right">
+                            <div className="flex flex-nowrap items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPaymentEditingRowId("");
+                                  setPaymentRowEditForm(EMPTY_PAYMENT_ROW_EDIT_FORM);
+                                }}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void saveInlinePaymentRow()}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
+                              >
+                                <Check className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null}
+                      {pagedPaymentRows.length === 0 && paymentEditingRowId !== "new" ? (
+                        <tr>
+                          <td colSpan={10} className="px-3 py-8 text-center text-sm text-slate-500">
+                            {tx("暂无付款记录", "Sin pagos registrados")}
+                          </td>
+                        </tr>
+                      ) : pagedPaymentRows.map((row) => (
                         <tr key={row.id} className="border-t border-slate-100">
                           <td className="px-3 py-1.5 whitespace-nowrap">
                             {paymentEditingRowId === row.id ? (
@@ -3224,7 +3681,20 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                               row.payableAmountText ? `$ ${row.payableAmountText}` : "-"
                             )}
                           </td>
-                          <td className="px-3 py-1.5 whitespace-nowrap">{row.paidAmountText ? `$ ${row.paidAmountText}` : "-"}</td>
+                          <td className="px-3 py-1.5 whitespace-nowrap">
+                            {paymentEditingRowId === row.id ? (
+                              <input
+                                value={paymentRowEditForm.currentPaymentAmount}
+                                onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, currentPaymentAmount: e.target.value }))}
+                                className="h-8 w-[112px] rounded-xl border border-slate-200 px-3 text-sm"
+                              />
+                            ) : row.currentPaymentAmountText ? `$ ${row.currentPaymentAmountText}` : "-"}
+                          </td>
+                          <td className="px-3 py-1.5 whitespace-nowrap">
+                            {paymentEditingRowId === row.id && paymentRowEditForm.currentPaymentAmount
+                              ? `$ ${Math.max(parseAmountValue(row.paidAmountText) - parseAmountValue(row.currentPaymentAmountText) + parseAmountValue(paymentRowEditForm.currentPaymentAmount), 0).toFixed(2)}`
+                              : (row.paidAmountText ? `$ ${row.paidAmountText}` : "-")}
+                          </td>
                           <td className="px-3 py-1.5 whitespace-nowrap">
                             {paymentEditingRowId === row.id ? (
                               <input
@@ -3237,9 +3707,29 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                               row.paymentTimeText || "-"
                             )}
                           </td>
-                          <td className="px-3 py-1.5 break-words whitespace-normal">{row.paymentMethodText || "-"}</td>
-                          <td className="px-3 py-1.5 break-words whitespace-normal">{row.paymentTargetText || "-"}</td>
-                          <td className="px-3 py-1.5 whitespace-nowrap">{row.unpaidAmountText ? `$ ${row.unpaidAmountText}` : "-"}</td>
+                          <td className="px-3 py-1.5 break-words whitespace-normal">
+                            {paymentEditingRowId === row.id ? (
+                              <input
+                                value={paymentRowEditForm.paymentMethod}
+                                onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, paymentMethod: e.target.value }))}
+                                className="h-8 w-full min-w-[100px] rounded-xl border border-slate-200 px-3 text-sm"
+                              />
+                            ) : (row.paymentMethodText || "-")}
+                          </td>
+                          <td className="px-3 py-1.5 break-words whitespace-normal">
+                            {paymentEditingRowId === row.id ? (
+                              <input
+                                value={paymentRowEditForm.paymentTarget}
+                                onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, paymentTarget: e.target.value }))}
+                                className="h-8 w-full min-w-[100px] rounded-xl border border-slate-200 px-3 text-sm"
+                              />
+                            ) : (row.paymentTargetText || "-")}
+                          </td>
+                          <td className="px-3 py-1.5 whitespace-nowrap">
+                            {paymentEditingRowId === row.id && paymentRowEditForm.currentPaymentAmount
+                              ? `$ ${Math.max(parseAmountValue(row.unpaidAmountText) + parseAmountValue(row.currentPaymentAmountText) - parseAmountValue(paymentRowEditForm.currentPaymentAmount), 0).toFixed(2)}`
+                              : (row.unpaidAmountText ? `$ ${row.unpaidAmountText}` : "-")}
+                          </td>
                           <td className="px-3 py-1.5">
                             {(paymentEvidenceItems[row.id] || []).length ? (
                               <div className="flex flex-wrap items-center gap-2">
@@ -3272,6 +3762,15 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                               <span className="text-sm text-slate-400">-</span>
                             )}
                           </td>
+                          <td className="px-3 py-1.5 break-words whitespace-normal">
+                            {paymentEditingRowId === row.id ? (
+                              <input
+                                value={paymentRowEditForm.note}
+                                onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, note: e.target.value }))}
+                                className="h-8 w-full min-w-[120px] rounded-xl border border-slate-200 px-3 text-sm"
+                              />
+                            ) : (row.noteText || "-")}
+                          </td>
                           <td className="px-3 py-1.5 text-right">
                             <div className="flex flex-nowrap items-center justify-end gap-2 whitespace-nowrap">
                               <input
@@ -3298,7 +3797,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                               </button>
                               <button
                                 type="button"
-                                onClick={() => handlePaymentRowEdit(activePaymentDetail)}
+                                onClick={() => handlePaymentRowEdit(row)}
                                 className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
                                 title={tx("编辑", "Edit")}
                                 aria-label={tx("编辑", "Edit")}

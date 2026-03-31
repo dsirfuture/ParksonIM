@@ -54,9 +54,11 @@ const PAGE_PADDING_BOTTOM = 28;
 const PRIMARY_COLOR = rgb(47 / 255, 60 / 255, 127 / 255);
 const BORDER_COLOR = rgb(226 / 255, 232 / 255, 240 / 255);
 const HEADER_FILL = rgb(248 / 255, 250 / 255, 252 / 255);
+const SUMMARY_FILL = rgb(243 / 255, 244 / 255, 246 / 255);
 const TEXT_COLOR = rgb(51 / 255, 65 / 255, 85 / 255);
 const MUTED_COLOR = rgb(100 / 255, 116 / 255, 139 / 255);
 const VIP_COLOR = rgb(187 / 255, 163 / 255, 20 / 255);
+const DANGER_COLOR = rgb(220 / 255, 38 / 255, 38 / 255);
 const VIP_ICON_PATH = "M17.42 3a2 2 0 0 1 1.649.868l.087.14L22.49 9.84a2 2 0 0 1-.208 2.283l-.114.123l-9.283 9.283a1.25 1.25 0 0 1-1.666.091l-.102-.09l-9.283-9.284a2 2 0 0 1-.4-2.257l.078-.15l3.333-5.832a2 2 0 0 1 1.572-1.001L6.58 3zM7.293 9.293a1 1 0 0 0 0 1.414l3.823 3.823a1.25 1.25 0 0 0 1.768 0l3.823-3.823a1 1 0 1 0-1.414-1.414L12 12.586L8.707 9.293a1 1 0 0 0-1.414 0";
 
 function sanitizeFileName(value: string) {
@@ -229,7 +231,7 @@ function drawSummaryCard(page: PDFPage, fonts: EmbeddedFonts, input: {
   vipIcon?: boolean;
 }) {
   const cardHeight = 52;
-  drawRoundedRect(page, input.x, input.y - cardHeight, input.width, cardHeight, HEADER_FILL);
+  drawRoundedRect(page, input.x, input.y - cardHeight, input.width, cardHeight, SUMMARY_FILL);
   drawText(page, fonts, input.label, {
     x: input.x + input.width / 2 - getFont(fonts, input.label, true).widthOfTextAtSize(input.label, 9) / 2,
     y: input.y - 16,
@@ -240,7 +242,7 @@ function drawSummaryCard(page: PDFPage, fonts: EmbeddedFonts, input: {
   if (input.vipIcon) {
     page.drawSvgPath(VIP_ICON_PATH, {
       x: input.x + input.width / 2 - 8,
-      y: input.y - 31,
+      y: input.y - 28,
       scale: 0.66,
       color: VIP_COLOR,
     });
@@ -272,15 +274,12 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
   };
 
   const drawSectionTitle = (title: string) => {
-    drawText(page, fonts, title, { x: PAGE_PADDING_X, y: cursorY, size: 13, color: PRIMARY_COLOR, bold: true });
-    cursorY -= 16;
-    page.drawLine({
-      start: { x: PAGE_PADDING_X, y: cursorY },
-      end: { x: PAGE_WIDTH - PAGE_PADDING_X, y: cursorY },
-      color: BORDER_COLOR,
-      thickness: 1,
-    });
-    cursorY -= 14;
+    const titleX = PAGE_PADDING_X;
+    const titleY = cursorY;
+    drawText(page, fonts, title, { x: titleX, y: titleY, size: 12, color: TEXT_COLOR, bold: true });
+    drawText(page, fonts, title, { x: titleX + 0.35, y: titleY, size: 12, color: TEXT_COLOR, bold: true });
+    drawText(page, fonts, title, { x: titleX, y: titleY + 0.2, size: 12, color: TEXT_COLOR, bold: true });
+    cursorY -= 12;
   };
 
   const drawSectionDivider = () => {
@@ -293,7 +292,7 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
     cursorY -= 14;
   };
 
-  drawText(page, fonts, "PARKSONMX", { x: PAGE_PADDING_X, y: cursorY, size: 20, color: PRIMARY_COLOR, bold: true });
+  drawText(page, fonts, "PARKSONMX", { x: PAGE_PADDING_X, y: cursorY, size: 19, color: PRIMARY_COLOR, bold: true });
   const exportDate = `导出日期 ${formatDateLabel()}`;
   const exportDateFont = getFont(fonts, exportDate, false);
   drawText(page, fonts, exportDate, {
@@ -305,8 +304,7 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
   });
   cursorY -= 18;
 
-  cursorY -= 6;
-  drawSectionDivider();
+  cursorY -= 20;
 
   const infoFieldGap = 8;
   const infoFieldWidth = (PAGE_WIDTH - PAGE_PADDING_X * 2 - infoFieldGap * 3) / 4;
@@ -317,13 +315,27 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
     ["手机", payload.phone],
     ["门店编号", payload.stores],
   ].forEach(([label, value], index) => {
-    drawFieldCard(page, fonts, {
-      x: infoX,
-      y: cursorY,
-      width: infoFieldWidth,
-      label,
-      value,
-    });
+    if (index === 0) {
+      const cardHeight = 48;
+      drawRoundedRect(page, infoX, cursorY - cardHeight, infoFieldWidth, cardHeight, rgb(1, 1, 1));
+      const displayValue = String(value || "-");
+      const size = 14;
+      drawText(page, fonts, displayValue, {
+        x: infoX + 10,
+        y: cursorY - 30,
+        size,
+        color: TEXT_COLOR,
+        bold: true,
+      });
+    } else {
+      drawFieldCard(page, fonts, {
+        x: infoX,
+        y: cursorY,
+        width: infoFieldWidth,
+        label,
+        value,
+      });
+    }
     infoX += infoFieldWidth + infoFieldGap;
   });
   cursorY -= 62;
@@ -356,7 +368,7 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
     });
     summaryX += summaryWidth + 8;
   });
-  cursorY -= 74;
+  cursorY -= 84;
 
   drawSectionTitle("订单总览");
 
@@ -370,13 +382,12 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
   ] as const;
 
   const paymentColumns = [
-    { key: "orderNo", label: "订单号", width: 180 },
-    { key: "payableAmountText", label: "需付金额", width: 90 },
-    { key: "paidAmountText", label: "已付金额", width: 90 },
-    { key: "paymentTimeText", label: "付款时间", width: 116 },
-    { key: "paymentMethodText", label: "付款方式", width: 96 },
-    { key: "paymentTargetText", label: "付款对象", width: 108 },
-    { key: "unpaidAmountText", label: "未付金额", width: 94 },
+    { key: "orderNo", label: "订单号", width: 248 },
+    { key: "payableAmountText", label: "需付金额", width: 96 },
+    { key: "paidAmountText", label: "已付金额", width: 96 },
+    { key: "paymentTimeText", label: "付款时间", width: 114 },
+    { key: "paymentMethodText", label: "付款方式", width: 116 },
+    { key: "unpaidAmountText", label: "未付金额", width: 104 },
   ] as const;
 
   const drawTableHeader = () => {
@@ -387,7 +398,7 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
       y: cursorY - headerHeight,
       width: PAGE_WIDTH - PAGE_PADDING_X * 2,
       height: headerHeight,
-      color: HEADER_FILL,
+      color: rgb(1, 1, 1),
       borderColor: BORDER_COLOR,
       borderWidth: 1,
     });
@@ -476,7 +487,7 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
     cursorY -= emptyHeight;
   }
 
-  cursorY -= 18;
+  cursorY -= 28;
   drawSectionTitle("付款详情");
 
   const drawPaymentTableHeader = () => {
@@ -487,7 +498,7 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
       y: cursorY - headerHeight,
       width: PAGE_WIDTH - PAGE_PADDING_X * 2,
       height: headerHeight,
-      color: HEADER_FILL,
+      color: rgb(1, 1, 1),
       borderColor: BORDER_COLOR,
       borderWidth: 1,
     });
@@ -520,7 +531,6 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
       row.paidAmountText || "-",
       row.paymentTimeText || "-",
       row.paymentMethodText || "-",
-      row.paymentTargetText || "-",
       row.unpaidAmountText || "-",
     ];
     const wrapped = rowValues.map((value, index) =>
@@ -542,11 +552,13 @@ export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDeta
     let colX = PAGE_PADDING_X;
     wrapped.forEach((lines, index) => {
       lines.forEach((line, lineIndex) => {
+        const isUnpaidAmountColumn = paymentColumns[index]?.key === "unpaidAmountText";
+        const hasConcreteValue = String(row.unpaidAmountText || "").trim() && String(row.unpaidAmountText || "").trim() !== "-";
         drawText(page, fonts, line, {
           x: colX + 8,
           y: cursorY - 16 - lineIndex * 10,
           size: 9,
-          color: TEXT_COLOR,
+          color: isUnpaidAmountColumn && hasConcreteValue ? DANGER_COLOR : TEXT_COLOR,
           bold: false,
         });
       });
