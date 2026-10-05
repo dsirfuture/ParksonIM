@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import {
   parseBillingSnapshot,
@@ -8,6 +9,7 @@ import {
   parseBillingRemark,
 } from "@/lib/billing-meta";
 import { prisma } from "@/lib/prisma";
+import { getResolvedLandingPath, hasAppPermission } from "@/lib/permissions";
 import { getSession } from "@/lib/tenant";
 import { parseYogoDiscountNumbers } from "@/lib/yogo-product-utils";
 import { BillingClient } from "./BillingClient";
@@ -65,10 +67,9 @@ function computeLineTotalWithoutVip(
 }
 
 function baseOrderNo(receiptNo: string) {
-  const head = String(receiptNo || "")
-    .trim()
-    .split("-")[0];
-  return head || String(receiptNo || "").trim();
+  const normalized = String(receiptNo || "").trim();
+  if (!normalized) return "";
+  return normalized.replace(/-\d+$/u, "");
 }
 
 function normalizeLookupKey(value: string | null | undefined) {
@@ -81,6 +82,25 @@ function normalizeCustomerKey(value: string | null | undefined) {
 
 function normalizeOrderKey(value: string | null | undefined) {
   return String(value || "").trim().toUpperCase();
+}
+
+function compareProductCodeAsc(a: { sku?: string; barcode?: string }, b: { sku?: string; barcode?: string }) {
+  const aKey = String(a.sku || a.barcode || "").trim().toUpperCase();
+  const bKey = String(b.sku || b.barcode || "").trim().toUpperCase();
+  return aKey.localeCompare(bKey, "en", { numeric: true, sensitivity: "base" });
+}
+
+function getBillableReceiptItemQty(item: {
+  unexpected?: boolean | null;
+  good_qty?: number | null;
+  damaged_qty?: number | null;
+  excess_qty?: number | null;
+}) {
+  if (item.unexpected) return 0;
+  const goodQty = Number(item.good_qty || 0);
+  const damagedQty = Number(item.damaged_qty || 0);
+  const excessQty = Number(item.excess_qty || 0);
+  return Math.max(goodQty + damagedQty + excessQty, 0);
 }
 
 export default async function BillingPage({
@@ -97,6 +117,9 @@ export default async function BillingPage({
         </section>
       </AppShell>
     );
+  }
+  if (!(await hasAppPermission(session, "billing.view"))) {
+    return redirect(await getResolvedLandingPath(session));
   }
 
   const params = (await searchParams) || {};
@@ -119,6 +142,10 @@ export default async function BillingPage({
           name_zh: true,
           name_es: true,
           expected_qty: true,
+          good_qty: true,
+          damaged_qty: true,
+          excess_qty: true,
+          unexpected: true,
           sell_price: true,
           normal_discount: true,
           vip_discount: true,
@@ -196,6 +223,7 @@ export default async function BillingPage({
             product_code: true,
             product_no: true,
             category_name: true,
+            source_price: true,
             source_discount: true,
             updated_at: true,
           },
@@ -206,6 +234,7 @@ export default async function BillingPage({
   const yogoDiscountMap = new Map<
     string,
     {
+      unitPrice: number | null;
       normalDiscount: number | null;
       vipDiscount: number | null;
     }
@@ -213,8 +242,10 @@ export default async function BillingPage({
   for (const row of yogoDiscountRows) {
     const skuKey = normalizeLookupKey(row.product_code);
     const discount = parseYogoDiscountNumbers(row.category_name, row.source_discount);
+    const unitPrice = row.source_price === null ? null : Number(row.source_price);
     if (skuKey && !yogoDiscountMap.has(skuKey)) {
       yogoDiscountMap.set(skuKey, {
+        unitPrice,
         normalDiscount: discount.normal,
         vipDiscount: discount.vip,
       });
@@ -222,6 +253,7 @@ export default async function BillingPage({
     const barcodeKey = normalizeLookupKey((row as { product_no?: string | null }).product_no);
     if (barcodeKey && !yogoDiscountMap.has(barcodeKey)) {
       yogoDiscountMap.set(barcodeKey, {
+        unitPrice,
         normalDiscount: discount.normal,
         vipDiscount: discount.vip,
       });
@@ -274,14 +306,18 @@ export default async function BillingPage({
     for (const item of receipt.items) {
       const sku = String(item.sku || "").trim();
       const barcode = String(item.barcode || "").trim();
-      const qty = Number(item.expected_qty || 0);
-      // Billing unit price must always come from the completed receipt's supplier price.
-      // `sell_price` here is the imported 验货单“供应价”, not the product catalog selling price.
-      const supplierUnitPrice = item.sell_price === null ? 0 : Number(item.sell_price);
-      const catalogDiscount = productDiscountMap.get(sku);
+      const qty = getBillableReceiptItemQty(item);
+      if (qty <= 0) continue;
       const yogoDiscount =
         yogoDiscountMap.get(normalizeLookupKey(sku)) ??
         yogoDiscountMap.get(normalizeLookupKey(barcode));
+      const catalogDiscount = productDiscountMap.get(sku);
+      const unitPrice =
+        yogoDiscount?.unitPrice !== null && yogoDiscount?.unitPrice !== undefined
+          ? Number(yogoDiscount.unitPrice)
+          : item.sell_price === null
+            ? 0
+            : Number(item.sell_price);
       const normalDiscountRaw =
         yogoDiscount?.normalDiscount ??
         catalogDiscount?.normalDiscount ??
@@ -292,9 +328,9 @@ export default async function BillingPage({
         (item.vip_discount === null ? null : Number(item.vip_discount));
       const normalDiscount = toDiscountFactor(normalDiscountRaw);
       const vipDiscount = toDiscountFactor(vipDiscountRaw);
-      const lineTotal = computeLineTotal(qty, supplierUnitPrice, normalDiscount, vipDiscount);
-      const lineOriginalTotal = qty * supplierUnitPrice;
-      const lineDiscountedTotal = computeLineTotalWithoutVip(qty, supplierUnitPrice, normalDiscount);
+      const lineTotal = computeLineTotal(qty, unitPrice, normalDiscount, vipDiscount);
+      const lineOriginalTotal = qty * unitPrice;
+      const lineDiscountedTotal = computeLineTotalWithoutVip(qty, unitPrice, normalDiscount);
 
       receiptOriginalAmount += lineOriginalTotal;
       receiptDiscountedAmount += lineDiscountedTotal;
@@ -308,7 +344,7 @@ export default async function BillingPage({
           nameZh: String(item.name_zh || "").trim(),
           nameEs: String(item.name_es || "").trim(),
           qty,
-          unitPrice: supplierUnitPrice,
+          unitPrice,
           normalDiscount:
             normalDiscountRaw !== null && Number.isFinite(normalDiscountRaw)
               ? normalDiscountRaw
@@ -322,6 +358,7 @@ export default async function BillingPage({
       } else {
         old.qty += qty;
         old.lineTotal += lineTotal;
+        if (!(old.unitPrice > 0) && unitPrice > 0) old.unitPrice = unitPrice;
         if (
           old.normalDiscount === null &&
           normalDiscountRaw !== null &&
@@ -523,7 +560,7 @@ export default async function BillingPage({
       addressText: row.address_text || "",
       remarkText: parsedRemark.noteText,
       storeLabelText: normalizeStoreLabelInput(row.store_label),
-      issueDateText: formatDateOnly(new Date()),
+      issueDateText: parsedRemark.meta.issueDate || formatDateOnly(new Date()),
       boxCountText: parsedRemark.meta.boxCount,
       shipDateText: parsedRemark.meta.shipDate,
       warehouseText: FIXED_WAREHOUSE,
@@ -566,10 +603,7 @@ export default async function BillingPage({
       const orderKey = normalizeOrderKey(row.orderNo);
       const order = orderMap.get(orderKey);
       const fallbackCustomer = fallbackCustomerMap.get(orderKey);
-      const detailItems =
-        order?.generatedAtText && (order.snapshotItems?.length || 0) > 0
-          ? order.snapshotItems
-          : Array.from(detailMap.get(row.orderNo)?.values() || []);
+      const detailItems = Array.from(detailMap.get(row.orderNo)?.values() || []).sort(compareProductCodeAsc);
       const effectiveVipEnabled = Boolean(order?.generatedAtText && order?.generatedVipEnabled);
       const finalDiscountedAmount = detailItems.reduce((sum, item) => {
         let factor = 1;
@@ -589,7 +623,7 @@ export default async function BillingPage({
         addressText: order?.addressText || "",
         remarkText: order?.remarkText || "",
         storeLabelText: normalizeStoreLabelInput(order?.storeLabelText || ""),
-        issueDateText: formatDateOnly(new Date()),
+        issueDateText: order?.issueDateText || formatDateOnly(new Date()),
         boxCountText: order?.boxCountText || "",
         shipDateText: order?.shipDateText || "",
         warehouseText: FIXED_WAREHOUSE,
@@ -610,13 +644,7 @@ export default async function BillingPage({
 
   const detailsByOrderNo = Object.fromEntries(
     initialRows.map((row) => {
-      const orderKey = normalizeOrderKey(row.orderNo);
-      const order = orderMap.get(orderKey);
-      const items =
-        order?.generatedAtText && (order.snapshotItems?.length || 0) > 0
-          ? order.snapshotItems
-          : Array.from(detailMap.get(row.orderNo)?.values() || []);
-      return [row.orderNo, items];
+      return [row.orderNo, Array.from(detailMap.get(row.orderNo)?.values() || []).sort(compareProductCodeAsc)];
     }),
   );
 

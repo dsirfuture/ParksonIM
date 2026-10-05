@@ -30,6 +30,9 @@ export async function PATCH(
         id,
         tenant_id: session.tenantId,
         company_id: session.companyId,
+        ...(session.dropshippingCustomerId
+          ? { customer_id: session.dropshippingCustomerId || "__none__" }
+          : {}),
       },
       include: {
         customer: {
@@ -52,9 +55,11 @@ export async function PATCH(
     }
 
     const customerName =
-      body.customerName === undefined
+      session.dropshippingCustomerId
         ? existing.customer.name
-        : String(body.customerName || "").trim();
+        : body.customerName === undefined
+          ? existing.customer.name
+          : String(body.customerName || "").trim();
     const platform =
       body.platform === undefined
         ? existing.platform
@@ -178,6 +183,9 @@ export async function DELETE(
         id,
         tenant_id: session.tenantId,
         company_id: session.companyId,
+        ...(session.dropshippingCustomerId
+          ? { customer_id: session.dropshippingCustomerId || "__none__" }
+          : {}),
       },
       select: { id: true },
     });

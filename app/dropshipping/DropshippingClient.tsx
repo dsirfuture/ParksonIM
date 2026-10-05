@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type ReactNode, type SetStateAction } from "react";
 import ExcelJS from "exceljs";
 import * as XLSX from "xlsx";
+import { useSearchParams } from "next/navigation";
 import { EmptyState } from "@/components/empty-state";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { ProductImage } from "@/components/product-image";
@@ -27,6 +28,7 @@ import type {
   DsSettlementCurrencyMode,
 } from "@/lib/dropshipping-types";
 import { normalizeDsSettlementCurrencyMode } from "@/lib/dropshipping-types";
+import { DropshippingQuickSetup } from "./DropshippingQuickSetup";
 
 type OverviewPayload = {
   stats: DsOverviewStats;
@@ -42,6 +44,8 @@ type OverviewPayload = {
 
 type Props = {
   initialLang: "zh" | "es";
+  initialActiveTab?: TabKey;
+  sessionUserType: "staff" | "dropshipping_customer";
   initialOverview: OverviewPayload;
   initialOrders: DsOrderRow[];
   initialInventory: DsInventoryRow[];
@@ -50,7 +54,7 @@ type Props = {
   initialLoadedTabs: Record<"overview" | "orders" | "inventory" | "finance" | "rate", boolean>;
 };
 
-type TabKey = "overview" | "orders" | "inventory" | "finance" | "supplier_misc";
+type TabKey = "overview" | "orders" | "inventory" | "finance" | "supplier_misc" | "quick_setup";
 
 type InventoryPreviewState = {
   orderId: string;
@@ -1390,6 +1394,8 @@ function normalizeGroupProductOptions(items: GroupProductOption[]) {
 
 export function DropshippingClient({
   initialLang,
+  initialActiveTab,
+  sessionUserType,
   initialOverview,
   initialOrders,
   initialInventory,
@@ -1397,8 +1403,13 @@ export function DropshippingClient({
   initialExchangeRate,
   initialLoadedTabs,
 }: Props) {
+  const searchParams = useSearchParams();
+  const isCustomerUser = sessionUserType === "dropshipping_customer";
+  const visibleTabs = isCustomerUser
+    ? (["overview", "orders", "inventory", "finance", "quick_setup"] as TabKey[])
+    : (["overview", "orders", "inventory", "finance", "supplier_misc", "quick_setup"] as TabKey[]);
   const [lang, setLang] = useState<"zh" | "es">(initialLang);
-  const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  const [activeTab, setActiveTab] = useState<TabKey>(initialActiveTab || "overview");
   const [overviewAlertFilter, setOverviewAlertFilter] = useState<DsAlertItem["type"] | null>(null);
   const [overview, setOverview] = useState(initialOverview);
   const [orders, setOrders] = useState(initialOrders);
@@ -1519,6 +1530,30 @@ export function DropshippingClient({
   const inventoryPageSize = 11;
   const orderPageSize = 10;
   const orderImportPreviewPageSize = 8;
+
+  useEffect(() => {
+    if (isCustomerUser && activeTab === "supplier_misc") {
+      setActiveTab("overview");
+    }
+  }, [activeTab, isCustomerUser]);
+
+  useEffect(() => {
+    const rawTab = searchParams.get("tab");
+    const nextTab =
+      rawTab === "overview"
+      || rawTab === "orders"
+      || rawTab === "inventory"
+      || rawTab === "finance"
+      || rawTab === "supplier_misc"
+      || rawTab === "quick_setup"
+        ? rawTab
+        : "overview";
+    if (isCustomerUser && nextTab === "supplier_misc") {
+      setActiveTab("overview");
+      return;
+    }
+    setActiveTab(nextTab);
+  }, [isCustomerUser, searchParams]);
 
   const overviewCustomerOptions = useMemo(() => {
     const customerMap = new Map<string, string>();
@@ -1854,7 +1889,7 @@ export function DropshippingClient({
         create: "新增订单",
         importOrders: "导入订单文件",
         import: "历史迁移导入",
-        tabs: { overview: "总览", orders: "订单管理", inventory: "已发商品", finance: "财务结算", supplier_misc: "供应商散单记录" },
+        tabs: { overview: "总览", orders: "订单管理", inventory: isCustomerUser ? "备货和发货" : "已发商品", finance: "财务结算", supplier_misc: "供应商散单记录", quick_setup: "代发快捷设置" },
         stats: {
           todayOrders: "今日录单",
           todayShipped: "今日已发货",
@@ -1869,7 +1904,7 @@ export function DropshippingClient({
           recent: "最近订单",
           alerts: "待处理提醒",
           orders: "订单列表",
-          inventory: "已发商品列表",
+          inventory: isCustomerUser ? "备货和发货" : "已发商品列表",
           finance: "客户结算",
           supplier_misc: "供应商散单记录",
           rate: "汇率状态",
@@ -1974,7 +2009,7 @@ export function DropshippingClient({
         create: "Nuevo pedido",
         importOrders: "Importar archivo",
         import: "Importar historial",
-        tabs: { overview: "Resumen", orders: "Pedidos", inventory: "Inventario SKU", finance: "Finanzas", supplier_misc: "Registros sueltos proveedor" },
+        tabs: { overview: "Resumen", orders: "Pedidos", inventory: "Inventario SKU", finance: "Finanzas", supplier_misc: "Registros sueltos proveedor", quick_setup: "Config. rápida" },
         stats: {
           todayOrders: "Pedidos hoy",
           todayShipped: "Enviados hoy",
@@ -6366,23 +6401,25 @@ export function DropshippingClient({
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div>
       ) : null}
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
-          {(["overview", "orders", "inventory", "finance", "supplier_misc"] as TabKey[]).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              className={tabButtonClass(tab)}
-              onClick={() => {
-                setOverviewAlertFilter(null);
-                setActiveTab(tab);
-              }}
-            >
-              {text.tabs[tab]}
-            </button>
-          ))}
+      {!isCustomerUser ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-2">
+            {visibleTabs.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                className={tabButtonClass(tab)}
+                onClick={() => {
+                  setOverviewAlertFilter(null);
+                  setActiveTab(tab);
+                }}
+              >
+                {text.tabs[tab]}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {activeTab === "overview" ? (
         <div className="space-y-3.5">
@@ -6391,19 +6428,23 @@ export function DropshippingClient({
               <div className="flex items-center justify-between gap-3 border-b border-white/60 px-3.5 py-2.5">
                 <div>
                   <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">{lang === "zh" ? "总览仪表板" : "Dashboard"}</div>
-                  <div className="mt-1">
-                    <select
-                      value={overviewCustomerFilter}
-                      onChange={(event) => setOverviewCustomerFilter(event.target.value)}
-                      className="min-w-0 bg-transparent text-xs text-slate-500 outline-none"
-                    >
-                      {overviewCustomerOptions.map((option) => (
-                        <option key={option.id} value={option.id}>
-                          {option.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {!isCustomerUser ? (
+                    <div className="mt-1">
+                      <select
+                        value={overviewCustomerFilter}
+                        onChange={(event) => setOverviewCustomerFilter(event.target.value)}
+                        className="min-w-0 bg-transparent text-xs text-slate-500 outline-none"
+                      >
+                        {overviewCustomerOptions.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="mt-1 text-xs text-slate-500">{lang === "zh" ? "仅显示我的代发数据" : "Solo mis datos"}</div>
+                  )}
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-xs text-slate-500">{overviewRangeLabel}</div>
@@ -6655,6 +6696,10 @@ export function DropshippingClient({
             </OverviewWidgetShell>
           </div>
         </div>
+      ) : null}
+
+      {activeTab === "quick_setup" ? (
+        <DropshippingQuickSetup lang={lang} />
       ) : null}
 
       {false ? (
@@ -7037,25 +7082,27 @@ export function DropshippingClient({
                       </svg>
                     </span>
                   </div>
-                  <div className="relative shrink-0">
-                    <select
-                      value={customerFilter}
-                      onChange={(event) => setCustomerFilter(event.target.value)}
-                      className="h-8 min-w-[116px] appearance-none rounded-lg bg-transparent px-3 pr-8 text-sm text-slate-700 outline-none transition"
-                    >
-                      <option value="all">{lang === "zh" ? "\u5168\u90e8\u5ba2\u6237" : "Todos los clientes"}</option>
-                      {customerOptions.map((customer) => (
-                        <option key={customer} value={customer}>
-                          {customer}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-slate-400">
-                      <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="m4 6 4 4 4-4" />
-                      </svg>
-                    </span>
-                  </div>
+                  {!isCustomerUser ? (
+                    <div className="relative shrink-0">
+                      <select
+                        value={customerFilter}
+                        onChange={(event) => setCustomerFilter(event.target.value)}
+                        className="h-8 min-w-[116px] appearance-none rounded-lg bg-transparent px-3 pr-8 text-sm text-slate-700 outline-none transition"
+                      >
+                        <option value="all">{lang === "zh" ? "\u5168\u90e8\u5ba2\u6237" : "Todos los clientes"}</option>
+                        {customerOptions.map((customer) => (
+                          <option key={customer} value={customer}>
+                            {customer}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-slate-400">
+                        <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="m4 6 4 4 4-4" />
+                        </svg>
+                      </span>
+                    </div>
+                  ) : null}
                   <div className="relative shrink-0">
                     <select
                       value={settlementFilter}
@@ -7405,7 +7452,9 @@ export function DropshippingClient({
                 onClick={exportStockTagInventoryPdf}
                 className="inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
-                <span className="whitespace-nowrap">{lang === "zh" ? "选择客户导出备货数据" : "Exportar stock por cliente"}</span>
+                <span className="whitespace-nowrap">
+                  {lang === "zh" ? (isCustomerUser ? "导出备货数据" : "选择客户导出备货数据") : "Exportar stock por cliente"}
+                </span>
               </button>
               <button
                 type="button"
@@ -7414,23 +7463,25 @@ export function DropshippingClient({
               >
                 <span className="whitespace-nowrap">{lang === "zh" ? "筛选导出" : "Exportar filtro"}</span>
               </button>
-              <button
-                type="button"
-                onClick={() => void beginInventoryCreate()}
-                className="inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-xl bg-primary px-4 text-sm font-semibold text-white transition hover:bg-primary/90"
-              >
-                <span className="whitespace-nowrap">{lang === "zh" ? "新增备货" : "Nuevo stock"}</span>
-              </button>
+              {!isCustomerUser ? (
+                <button
+                  type="button"
+                  onClick={() => void beginInventoryCreate()}
+                  className="inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-xl bg-primary px-4 text-sm font-semibold text-white transition hover:bg-primary/90"
+                >
+                  <span className="whitespace-nowrap">{lang === "zh" ? "新增备货" : "Nuevo stock"}</span>
+                </button>
+              ) : null}
               <div className="relative w-full max-w-[560px] rounded-xl border border-slate-200 bg-white shadow-sm shadow-slate-100/60">
                 <input
                   value={inventoryKeyword}
                   onChange={(event) => setInventoryKeyword(event.target.value)}
                   placeholder={lang === "zh" ? "搜索编码 / 中文名" : "Buscar codigo / nombre"}
-                  className="h-10 w-full rounded-xl bg-transparent pl-3 pr-[340px] text-sm text-slate-700 outline-none"
+                  className={`h-10 w-full rounded-xl bg-transparent pl-3 text-sm text-slate-700 outline-none ${isCustomerUser ? "pr-[220px]" : "pr-[340px]"}`}
                 />
                 {inventoryKeywordStockSummary ? (
                   <div
-                    className={`pointer-events-none absolute inset-y-0 right-[236px] flex items-center whitespace-nowrap text-sm font-bold ${inventoryKeywordStockSummary.className}`}
+                    className={`pointer-events-none absolute inset-y-0 flex items-center whitespace-nowrap text-sm font-bold ${inventoryKeywordStockSummary.className} ${isCustomerUser ? "right-[120px]" : "right-[236px]"}`}
                   >
                     {inventoryKeywordStockSummary.text}
                   </div>
@@ -7452,25 +7503,27 @@ export function DropshippingClient({
                       </svg>
                     </span>
                   </div>
-                  <div className="relative">
-                    <select
-                      value={inventoryCustomerFilter}
-                      onChange={(event) => setInventoryCustomerFilter(event.target.value)}
-                      className="h-8 min-w-[116px] appearance-none rounded-lg bg-transparent px-3 pr-8 text-sm text-slate-700 outline-none transition"
-                    >
-                      <option value="all">{lang === "zh" ? "全部客户" : "Todos"}</option>
-                      {inventoryCustomerOptions.map((customer) => (
-                        <option key={customer} value={customer}>
-                          {customer}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">
-                      <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="m4 6 4 4 4-4" />
-                      </svg>
-                    </span>
-                  </div>
+                  {!isCustomerUser ? (
+                    <div className="relative">
+                      <select
+                        value={inventoryCustomerFilter}
+                        onChange={(event) => setInventoryCustomerFilter(event.target.value)}
+                        className="h-8 min-w-[116px] appearance-none rounded-lg bg-transparent px-3 pr-8 text-sm text-slate-700 outline-none transition"
+                      >
+                        <option value="all">{lang === "zh" ? "全部客户" : "Todos"}</option>
+                        {inventoryCustomerOptions.map((customer) => (
+                          <option key={customer} value={customer}>
+                            {customer}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">
+                        <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="m4 6 4 4 4-4" />
+                        </svg>
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -7643,26 +7696,28 @@ export function DropshippingClient({
                         {row.shippedAt ? fmtDateOnly(row.shippedAt, lang) : "-"}
                       </td>
                       <td className="px-4 py-2 text-right">
-                        <div className="inline-flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void (row.inventoryId ? removeInventoryRow(row) : removeShippedItemRow(row))}
-                            title={lang === "zh" ? "删除" : "Eliminar"}
-                            aria-label={lang === "zh" ? "删除" : "Eliminar"}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-500 transition hover:border-rose-300 hover:text-rose-600"
-                          >
-                            <TrashIcon />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => beginInventoryEdit(row)}
-                            title={lang === "zh" ? "编辑" : "Editar"}
-                            aria-label={lang === "zh" ? "编辑" : "Editar"}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
-                          >
-                            <PencilIcon />
-                          </button>
-                        </div>
+                        {!isCustomerUser ? (
+                          <div className="inline-flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void (row.inventoryId ? removeInventoryRow(row) : removeShippedItemRow(row))}
+                              title={lang === "zh" ? "删除" : "Eliminar"}
+                              aria-label={lang === "zh" ? "删除" : "Eliminar"}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-500 transition hover:border-rose-300 hover:text-rose-600"
+                            >
+                              <TrashIcon />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => beginInventoryEdit(row)}
+                              title={lang === "zh" ? "编辑" : "Editar"}
+                              aria-label={lang === "zh" ? "编辑" : "Editar"}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+                            >
+                              <PencilIcon />
+                            </button>
+                          </div>
+                        ) : null}
                       </td>
                     </tr>
                   ))}

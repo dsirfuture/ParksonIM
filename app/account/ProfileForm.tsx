@@ -1,7 +1,12 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { getAvatarFallback } from "@/lib/user-account";
+import {
+  getAvatarFallback,
+  PHONE_COUNTRIES,
+  splitPhoneForCountry,
+  type PhoneCountryCode,
+} from "@/lib/user-account";
 
 type Lang = "zh" | "es";
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
@@ -10,6 +15,8 @@ type UserProfile = {
   id: string;
   name: string;
   phone: string;
+  phone_country: string | null;
+  company_name: string | null;
   email: string | null;
   avatar_url: string | null;
   role: string;
@@ -35,7 +42,9 @@ export function ProfileForm({
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const [name, setName] = useState(initialUser.name || "");
-  const [phone, setPhone] = useState(initialUser.phone || "");
+  const [companyName, setCompanyName] = useState(initialUser.company_name || "");
+  const [phoneCountry, setPhoneCountry] = useState<PhoneCountryCode>((initialUser.phone_country as PhoneCountryCode) || "MX");
+  const [phone, setPhone] = useState(splitPhoneForCountry(initialUser.phone || "", initialUser.phone_country || "MX"));
   const [email, setEmail] = useState(initialUser.email || "");
   const [avatarUrl, setAvatarUrl] = useState(initialUser.avatar_url || "");
   const [password, setPassword] = useState("");
@@ -54,6 +63,8 @@ export function ProfileForm({
             avatarTooLarge: "头像图片不能超过 2MB",
             avatarInvalid: "当前未能读取图片 请重新选择",
             name: "姓名",
+            companyName: "公司名",
+            defaultCountry: "默认国家",
             phone: "手机号",
             email: "邮箱",
             password: "新密码",
@@ -71,6 +82,8 @@ export function ProfileForm({
             avatarTooLarge: "El avatar no puede superar 2 MB",
             avatarInvalid: "Por ahora no fue posible leer la imagen",
             name: "Nombre",
+            companyName: "Empresa",
+            defaultCountry: "Pais predeterminado",
             phone: "Teléfono",
             email: "Correo",
             password: "Nueva contraseña",
@@ -110,7 +123,15 @@ export function ProfileForm({
       const res = await fetch("/api/account/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, phone, email, avatarUrl, password }),
+        body: JSON.stringify({
+          name,
+          companyName,
+          phoneCountry,
+          phone,
+          email,
+          avatarUrl,
+          password,
+        }),
       });
 
       const data = await res.json();
@@ -200,11 +221,40 @@ export function ProfileForm({
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
+              {text.companyName}
+            </label>
+            <input
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              placeholder={text.companyName}
+              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-sm outline-none transition focus:border-primary focus:bg-white"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">
+              {text.defaultCountry}
+            </label>
+            <select
+              value={phoneCountry}
+              onChange={(e) => setPhoneCountry(e.target.value as PhoneCountryCode)}
+              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-sm outline-none transition focus:border-primary focus:bg-white"
+            >
+              {PHONE_COUNTRIES.map((country) => (
+                <option key={country.code} value={country.code}>
+                  {lang === "zh" ? country.labelZh : country.labelEs} {country.dialCode}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">
               {text.phone}
             </label>
             <input
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => setPhone(e.target.value.replace(/[^\d\s()-]/g, ""))}
               placeholder={text.phone}
               className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-sm outline-none transition focus:border-primary focus:bg-white"
             />

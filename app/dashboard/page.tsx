@@ -7,6 +7,8 @@ import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { TableCard } from "@/components/table-card";
 import { getLang } from "@/lib/i18n-server";
+import { getResolvedLandingPath, hasAppPermission } from "@/lib/permissions";
+import { redirect } from "next/navigation";
 
 function formatTime(
   value: Date | string | null | undefined,
@@ -26,6 +28,10 @@ function formatTime(
 export default async function DashboardPage() {
   const session = await getSession();
   const lang = await getLang();
+  if (!session) redirect("/login");
+  if (!(await hasAppPermission(session, "dashboard.view"))) {
+    redirect(await getResolvedLandingPath(session));
+  }
 
   const text =
     lang === "zh"

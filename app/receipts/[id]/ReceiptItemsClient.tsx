@@ -37,6 +37,7 @@ type ReceiptItemsClientProps = {
   title: string;
   currencyHint: string;
   rows: ItemRow[];
+  activeFilterLabel?: string | null;
   text: {
     image: string;
     sku: string;
@@ -69,6 +70,13 @@ type ReceiptItemsClientProps = {
     previousPage: string;
     nextPage: string;
     edit: string;
+    delete: string;
+    deleteTitle: string;
+    deleteConfirm: string;
+    deleteHint: string;
+    deleteAction: string;
+    deleting: string;
+    deleteFailed: string;
     editTitle: string;
     cancel: string;
     save: string;
@@ -119,6 +127,27 @@ function PencilIcon() {
   );
 }
 
+function TrashIcon() {
+  return (
+    <svg
+      className="h-[18px] w-[18px]"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 6h18" />
+      <path d="M8 6V4.5A1.5 1.5 0 0 1 9.5 3h5A1.5 1.5 0 0 1 16 4.5V6" />
+      <path d="M6.5 6l1 13a2 2 0 0 0 2 1.85h5a2 2 0 0 0 2-1.85l1-13" />
+      <path d="M10 10.5v6" />
+      <path d="M14 10.5v6" />
+    </svg>
+  );
+}
+
 function getStatusLabel(
   status: ItemStatus,
   text: ReceiptItemsClientProps["text"],
@@ -144,6 +173,7 @@ export function ReceiptItemsClient({
   title,
   currencyHint,
   rows,
+  activeFilterLabel = null,
   text,
 }: ReceiptItemsClientProps) {
   const router = useRouter();
@@ -170,6 +200,8 @@ export function ReceiptItemsClient({
     title: "",
   });
   const [saveSuccessOpen, setSaveSuccessOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ItemRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     setItems(rows);
@@ -390,6 +422,33 @@ export function ReceiptItemsClient({
     }
   }
 
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+
+    try {
+      setDeleting(true);
+
+      const response = await fetch(`/api/receipts/items/${deleteTarget.id}`, {
+        method: "DELETE",
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result?.error || text.deleteFailed);
+      }
+
+      setItems((prev) => prev.filter((item) => item.id !== deleteTarget.id));
+      setDeleteTarget(null);
+      router.refresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : text.deleteFailed;
+      window.alert(message);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <>
       <section className="overflow-hidden rounded-xl bg-white shadow-soft">
@@ -399,6 +458,11 @@ export function ReceiptItemsClient({
               <div className="whitespace-nowrap text-[18px] font-bold tracking-tight text-slate-900">
                 {title}
               </div>
+              {activeFilterLabel ? (
+                <div className="mt-2 inline-flex h-8 items-center rounded-full border border-primary/20 bg-primary/5 px-3 text-xs font-semibold text-primary">
+                  {activeFilterLabel}
+                </div>
+              ) : null}
               <div className="mt-1 text-sm text-slate-500">{currencyHint}</div>
             </div>
 
@@ -443,7 +507,7 @@ export function ReceiptItemsClient({
               <col className="w-[45px]" />
               <col className="w-[45px]" />
               <col className="w-[84px]" />
-              <col className="w-[40px]" />
+              <col className="w-[64px]" />
             </colgroup>
 
             <thead>
@@ -632,15 +696,27 @@ export function ReceiptItemsClient({
                       </td>
 
                       <td className="whitespace-nowrap py-3 pl-1 pr-0 text-left text-sm">
-                        <button
-                          type="button"
-                          onClick={() => beginEdit(row)}
-                          title={text.edit}
-                          aria-label={text.edit}
-                          className="inline-flex -translate-x-1 items-center justify-center text-slate-500 transition hover:text-slate-900"
-                        >
-                          <PencilIcon />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => beginEdit(row)}
+                            title={text.edit}
+                            aria-label={text.edit}
+                            className="inline-flex items-center justify-center text-slate-500 transition hover:text-slate-900"
+                          >
+                            <PencilIcon />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(row)}
+                            title={text.delete}
+                            aria-label={text.delete}
+                            className="inline-flex items-center justify-center text-rose-500 transition hover:text-rose-700"
+                          >
+                            <TrashIcon />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -861,6 +937,50 @@ export function ReceiptItemsClient({
                 className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-soft transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {saving ? text.saving : text.save}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteTarget ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="w-full max-w-[420px] rounded-xl bg-white shadow-2xl">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <h3 className="text-base font-semibold text-slate-900">
+                {text.deleteTitle}
+              </h3>
+            </div>
+
+            <div className="px-5 py-5">
+              <div className="text-sm font-medium text-slate-800">
+                {text.deleteConfirm}
+              </div>
+              <div className="mt-2 text-sm text-slate-500">
+                {deleteTarget.sku || text.noValue}
+                {deleteTarget.nameZh ? ` · ${deleteTarget.nameZh}` : ""}
+              </div>
+              <div className="mt-4 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+                {text.deleteHint}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                {text.cancel}
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={deleting}
+                className="inline-flex h-10 items-center justify-center rounded-xl bg-rose-600 px-4 text-sm font-semibold text-white shadow-soft transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {deleting ? text.deleting : text.deleteAction}
               </button>
             </div>
           </div>

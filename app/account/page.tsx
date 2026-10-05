@@ -20,9 +20,14 @@ export default async function AccountPage() {
       id: true,
       name: true,
       phone: true,
+      phone_country: true,
+      company_name: true,
       email: true,
       avatar_url: true,
       role: true,
+      user_type: true,
+      customer_org_role: true,
+      dropshipping_customer_id: true,
       active: true,
     },
   });
@@ -33,12 +38,19 @@ export default async function AccountPage() {
 
   return (
     <AppShell>
-      <div className="mx-auto w-full max-w-[880px]">
+      <div className="mx-auto w-full max-w-[880px] space-y-5">
         <ProfileForm
           lang={lang}
           initialUser={{
-            ...user,
+            id: user.id,
+            name: user.name,
+            phone: user.phone,
+            phone_country: user.phone_country,
+            company_name: user.company_name,
+            email: user.email,
             avatar_url: sanitizeAvatarUrl(user.avatar_url),
+            role: user.role,
+            active: user.active,
           }}
         />
       </div>

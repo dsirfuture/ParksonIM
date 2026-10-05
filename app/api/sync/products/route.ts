@@ -27,6 +27,20 @@ type YogoPayload = {
   source_price?: unknown;
   source_discount?: unknown;
   source_disabled?: unknown;
+  sourceDisabled?: unknown;
+  disabled?: unknown;
+  is_disabled?: unknown;
+  isDisabled?: unknown;
+  available?: unknown;
+  is_available?: unknown;
+  isAvailable?: unknown;
+  on_shelf?: unknown;
+  onShelf?: unknown;
+  is_on_shelf?: unknown;
+  isOnShelf?: unknown;
+  status_text?: unknown;
+  statusText?: unknown;
+  status?: unknown;
   source_updated_at?: unknown;
   synced_at?: unknown;
 };
@@ -81,6 +95,86 @@ function booleanOrDefault(value: unknown, defaultValue = false) {
     if (["0", "false", "no", "n", "off"].includes(normalized)) return false;
   }
   return defaultValue;
+}
+
+function normalizeToken(value: unknown) {
+  if (value === null || value === undefined) return "";
+  return String(value).trim().toLowerCase();
+}
+
+function parseDisabledToken(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") {
+    if (value === 0) return false;
+    if (value === 1) return true;
+    return null;
+  }
+  const normalized = normalizeToken(value);
+  if (!normalized) return null;
+
+  const enabledLike = ["0", "false", "no", "n", "enabled", "enable", "active", "上架", "在售"];
+  const disabledLike = ["1", "true", "yes", "y", "disabled", "disable", "inactive", "off", "下架", "停售"];
+  if (enabledLike.includes(normalized)) return false;
+  if (disabledLike.includes(normalized)) return true;
+  return null;
+}
+
+function parseAvailableToken(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") {
+    if (value === 0) return false;
+    if (value === 1) return true;
+    return null;
+  }
+  const normalized = normalizeToken(value);
+  if (!normalized) return null;
+
+  const availableLike = ["1", "true", "yes", "y", "on", "enabled", "enable", "active", "available", "上架", "在售"];
+  const unavailableLike = ["0", "false", "no", "n", "off", "disabled", "disable", "inactive", "unavailable", "下架", "停售"];
+  if (availableLike.includes(normalized)) return true;
+  if (unavailableLike.includes(normalized)) return false;
+  return null;
+}
+
+function firstBoolean(values: unknown[], parser: (value: unknown) => boolean | null) {
+  for (const value of values) {
+    const parsed = parser(value);
+    if (parsed !== null) return parsed;
+  }
+  return null;
+}
+
+function resolveSourceDisabled(input: YogoPayload) {
+  const available = firstBoolean(
+    [
+      input.available,
+      input.is_available,
+      input.isAvailable,
+      input.on_shelf,
+      input.onShelf,
+      input.is_on_shelf,
+      input.isOnShelf,
+      input.status_text,
+      input.statusText,
+      input.status,
+    ],
+    parseAvailableToken,
+  );
+  if (available !== null) return !available;
+
+  const disabled = firstBoolean(
+    [
+      input.source_disabled,
+      input.sourceDisabled,
+      input.disabled,
+      input.is_disabled,
+      input.isDisabled,
+    ],
+    parseDisabledToken,
+  );
+  if (disabled !== null) return disabled;
+
+  return booleanOrDefault(input.source_disabled, false);
 }
 
 function dateOrNull(value: unknown) {
@@ -144,7 +238,7 @@ function normalizeProduct(input: YogoPayload, index: number): NormalizedProduct 
     ),
     source_price: numberOrNull(input.source_price),
     source_discount: numberOrNull(input.source_discount),
-    source_disabled: booleanOrDefault(input.source_disabled, false),
+    source_disabled: resolveSourceDisabled(input),
     source_updated_at: dateOrNull(input.source_updated_at),
     synced_at: dateOrNull(input.synced_at),
   };
@@ -156,6 +250,10 @@ function chunkArray<T>(items: T[], size: number) {
     result.push(items.slice(index, index + size));
   }
   return result;
+}
+
+function normalizeLookupKey(value: string | null | undefined) {
+  return String(value || "").trim().toUpperCase();
 }
 
 export async function POST(request: Request) {
@@ -268,6 +366,108 @@ export async function POST(request: Request) {
           }),
         ),
       );
+    }
+
+    // Background auto-backfill for receipt items:
+    // Fill empty barcode/name/case_pack from newly synced YOGO data.
+    const syncedSkuSet = new Set(items.map((item) => String(item.product_code || "").trim()).filter(Boolean));
+    const syncedBarcodeSet = new Set(items.map((item) => String(item.product_no || "").trim()).filter(Boolean));
+    if (syncedSkuSet.size > 0 || syncedBarcodeSet.size > 0) {
+      const [candidateReceiptItems, yogoLookupRows] = await Promise.all([
+        prisma.receiptItem.findMany({
+          where: {
+            tenant_id: tenantId,
+            company_id: companyId,
+            OR: [
+              { sku: { in: Array.from(syncedSkuSet) } },
+              ...(syncedBarcodeSet.size > 0 ? [{ barcode: { in: Array.from(syncedBarcodeSet) } }] : []),
+            ],
+            AND: [
+              {
+                OR: [
+                  { barcode: null },
+                  { name_zh: null },
+                  { name_es: null },
+                  { case_pack: null },
+                ],
+              },
+            ],
+          },
+          select: {
+            id: true,
+            sku: true,
+            barcode: true,
+            name_zh: true,
+            name_es: true,
+            case_pack: true,
+          },
+        }),
+        prisma.yogoProductSource.findMany({
+          where: {
+            tenant_id: tenantId,
+            company_id: companyId,
+            OR: [
+              { product_code: { in: Array.from(syncedSkuSet) } },
+              ...(syncedBarcodeSet.size > 0 ? [{ product_no: { in: Array.from(syncedBarcodeSet) } }] : []),
+            ],
+          },
+          select: {
+            product_code: true,
+            product_no: true,
+            name_cn: true,
+            name_es: true,
+            case_pack: true,
+            updated_at: true,
+          },
+          orderBy: [{ updated_at: "desc" }],
+        }),
+      ]);
+
+      const yogoBySku = new Map<string, (typeof yogoLookupRows)[number]>();
+      const yogoByBarcode = new Map<string, (typeof yogoLookupRows)[number]>();
+      for (const row of yogoLookupRows) {
+        const skuKey = normalizeLookupKey(row.product_code);
+        if (skuKey && !yogoBySku.has(skuKey)) yogoBySku.set(skuKey, row);
+        const barcodeKey = normalizeLookupKey(row.product_no);
+        if (barcodeKey && !yogoByBarcode.has(barcodeKey)) yogoByBarcode.set(barcodeKey, row);
+      }
+
+      const updates = candidateReceiptItems
+        .map((item) => {
+          const yogo =
+            yogoBySku.get(normalizeLookupKey(item.sku)) ??
+            yogoByBarcode.get(normalizeLookupKey(item.barcode));
+          if (!yogo) return null;
+          const nextBarcode = item.barcode || yogo.product_no || null;
+          const nextNameZh = item.name_zh || yogo.name_cn || null;
+          const nextNameEs = item.name_es || yogo.name_es || null;
+          const nextCasePack =
+            item.case_pack === null || item.case_pack === undefined
+              ? yogo.case_pack ?? null
+              : item.case_pack;
+          if (
+            nextBarcode === item.barcode &&
+            nextNameZh === item.name_zh &&
+            nextNameEs === item.name_es &&
+            nextCasePack === item.case_pack
+          ) {
+            return null;
+          }
+          return { id: item.id, nextBarcode, nextNameZh, nextNameEs, nextCasePack };
+        })
+        .filter(Boolean);
+
+      for (const row of updates) {
+        await prisma.receiptItem.update({
+          where: { id: row.id },
+          data: {
+            barcode: row.nextBarcode,
+            name_zh: row.nextNameZh,
+            name_es: row.nextNameEs,
+            case_pack: row.nextCasePack,
+          },
+        });
+      }
     }
 
     // Only disable explicit placeholder/test products kept from historical syncs.

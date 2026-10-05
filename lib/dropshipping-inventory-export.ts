@@ -31,6 +31,8 @@ type LoadedProductImage = {
 
 function sanitizeFileName(value: string) {
   return String(value || "")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/[\u0000-\u001F\u007F]/g, "")
     .trim()
     .replace(/[\\/:*?"<>|]/g, " ")
     .replace(/\s+/g, " ")
@@ -213,15 +215,24 @@ async function loadFontCandidates(candidates: string[]) {
 async function embedFonts(pdfDoc: PDFDocument): Promise<EmbeddedFonts> {
   pdfDoc.registerFontkit(fontkit);
   const regularBytes = await loadFontCandidates([
+    path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Regular.ttf"),
     path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Regular.otf"),
+    "C:\\Windows\\Fonts\\msyh.ttf",
+  ]);
+  const boldBytes = await loadFontCandidates([
+    path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Bold.ttf"),
+    path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Bold.otf"),
+    "C:\\Windows\\Fonts\\msyhbd.ttf",
     "C:\\Windows\\Fonts\\msyh.ttf",
   ]);
   const latinRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const latinBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
   if (regularBytes) {
-    const zhRegular = await pdfDoc.embedFont(regularBytes);
-    const zhBold = zhRegular;
+    const zhRegular = await pdfDoc.embedFont(regularBytes, { subset: true });
+    const zhBold = boldBytes
+      ? await pdfDoc.embedFont(boldBytes, { subset: true })
+      : zhRegular;
     return { zhRegular, zhBold, latinRegular, latinBold };
   }
   return { zhRegular: latinRegular, zhBold: latinBold, latinRegular, latinBold };
@@ -314,6 +325,15 @@ function requiresUnicodeFont(value: string) {
   return /[^\u0000-\u00FF]/.test(String(value || ""));
 }
 
+function sanitizePdfText(value: unknown) {
+  return String(value ?? "")
+    .replace(/\r?\n|\r/g, " ")
+    .replace(/\t+/g, " ")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function getFontForText(fonts: EmbeddedFonts, value: string, bold = false) {
   if (hasChineseGlyph(value) || requiresUnicodeFont(value)) {
     return bold ? fonts.zhBold : fonts.zhRegular;
@@ -351,7 +371,8 @@ function drawText(page: PDFPage, value: string, options: {
   color?: ReturnType<typeof rgb>;
   fontRole?: FontRole;
 }) {
-  const chunks = String(value || "").match(/([^\u0000-\u00FF]+|[\u0000-\u00FF]+)/g) || [];
+  const safeValue = sanitizePdfText(value);
+  const chunks = safeValue.match(/([^\u0000-\u00FF]+|[\u0000-\u00FF]+)/g) || [];
   let cursorX = options.x;
   for (const chunk of chunks) {
     const font = resolveDrawFont(options.fonts, chunk, options.bold, options.fontRole);
@@ -367,7 +388,7 @@ function drawText(page: PDFPage, value: string, options: {
 }
 
 function truncateTextForWidth(fonts: EmbeddedFonts, value: string, maxWidth: number, size = 8.5, bold = false) {
-  const text = String(value || "");
+  const text = sanitizePdfText(value);
   const ellipsis = "…";
   const ellipsisWidth = getFontForText(fonts, ellipsis, bold).widthOfTextAtSize(ellipsis, size);
   let width = 0;
@@ -385,7 +406,8 @@ function truncateTextForWidth(fonts: EmbeddedFonts, value: string, maxWidth: num
 }
 
 function measureTextWidth(value: string, options: { fonts: EmbeddedFonts; size?: number; bold?: boolean }) {
-  const chunks = String(value || "").match(/([^\u0000-\u00FF]+|[\u0000-\u00FF]+)/g) || [];
+  const safeValue = sanitizePdfText(value);
+  const chunks = safeValue.match(/([^\u0000-\u00FF]+|[\u0000-\u00FF]+)/g) || [];
   return chunks.reduce((sum, chunk) => {
     const font = getFontForText(options.fonts, chunk, options.bold);
     return sum + font.widthOfTextAtSize(chunk, options.size || 10);
@@ -406,7 +428,7 @@ function drawSpacedText(
     fontRole?: FontRole;
   },
 ) {
-  const text = String(value || "");
+  const text = sanitizePdfText(value);
   const size = options.size || 10;
   const spacing = options.letterSpacing ?? 0;
   let cursorX = options.x;
@@ -428,15 +450,16 @@ function measureSpacedTextWidth(
   options: { fonts: EmbeddedFonts; size?: number; bold?: boolean; letterSpacing?: number },
 ) {
   const text = String(value || "");
-  if (!text) return 0;
+  const safeText = sanitizePdfText(text);
+  if (!safeText) return 0;
   const size = options.size || 10;
   const spacing = options.letterSpacing ?? 0;
   let width = 0;
-  for (const char of text) {
+  for (const char of safeText) {
     const font = getFontForText(options.fonts, char, options.bold);
     width += font.widthOfTextAtSize(char, size);
   }
-  return width + spacing * Math.max(text.length - 1, 0);
+  return width + spacing * Math.max(safeText.length - 1, 0);
 }
 
 function drawPdfHeader(page: PDFPage, fonts: EmbeddedFonts, total: number) {

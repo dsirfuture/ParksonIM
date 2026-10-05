@@ -77,7 +77,7 @@ export function LoginForm({ lang }: { lang: Lang }) {
       }
 
       const next = searchParams.get("next");
-      router.push(next || "/dashboard");
+      router.push(next || data.redirectTo || "/dashboard");
       router.refresh();
     } catch (caughtError) {
       console.error("[login] request failed:", caughtError);

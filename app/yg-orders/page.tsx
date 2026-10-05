@@ -1,6 +1,7 @@
 // @ts-nocheck
 ﻿import { AppShell } from "@/components/app-shell";
 import { parseBillingRemark } from "@/lib/billing-meta";
+import { getDefaultLandingPath, hasAppPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { parseYogoDiscountParts } from "@/lib/yogo-product-utils";
 import { getSession } from "@/lib/tenant";
@@ -168,8 +169,22 @@ function normalizeLookupKey(value: string | null | undefined) {
   return String(value || "").trim().toUpperCase();
 }
 
+const YOGO_LOOKUP_CHUNK_SIZE = 10000;
+
+function chunkValues<T>(values: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+  return chunks;
+}
+
 export default async function YgOrdersPage() {
   const session = await getSession();
+  if (!session) redirect("/login");
+  if (!(await hasAppPermission(session, "yg_data.orders.view"))) {
+    redirect(getDefaultLandingPath(session));
+  }
 
   if (!session) {
     redirect("/login");
@@ -410,16 +425,14 @@ export default async function YgOrdersPage() {
     }
   }
 
-  const yogoNameRows =
-    skuSet.size > 0 || barcodeSet.size > 0
-      ? await prisma.yogoProductSource.findMany({
+  const yogoNameRows = [];
+  for (const skuChunk of chunkValues(Array.from(skuSet), YOGO_LOOKUP_CHUNK_SIZE)) {
+    yogoNameRows.push(
+      ...(await prisma.yogoProductSource.findMany({
           where: {
             tenant_id: session.tenantId,
             company_id: session.companyId,
-            OR: [
-              ...(skuSet.size > 0 ? [{ product_code: { in: Array.from(skuSet) } }] : []),
-              ...(barcodeSet.size > 0 ? [{ product_no: { in: Array.from(barcodeSet) } }] : []),
-            ],
+            product_code: { in: skuChunk },
           },
           select: {
             product_code: true,
@@ -429,8 +442,28 @@ export default async function YgOrdersPage() {
             category_name: true,
             source_discount: true,
           },
-        })
-      : [];
+        })),
+    );
+  }
+  for (const barcodeChunk of chunkValues(Array.from(barcodeSet), YOGO_LOOKUP_CHUNK_SIZE)) {
+    yogoNameRows.push(
+      ...(await prisma.yogoProductSource.findMany({
+          where: {
+            tenant_id: session.tenantId,
+            company_id: session.companyId,
+            product_no: { in: barcodeChunk },
+          },
+          select: {
+            product_code: true,
+            product_no: true,
+            name_cn: true,
+            name_es: true,
+            category_name: true,
+            source_discount: true,
+          },
+        })),
+    );
+  }
 
   const nameBySku = new Map(
     yogoNameRows.map((row) => [

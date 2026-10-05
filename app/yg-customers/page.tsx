@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { getDefaultLandingPath, hasAppPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
 import { YgCustomersClient } from "./YgCustomersClient";
@@ -48,6 +49,9 @@ export default async function YgCustomersPage() {
   const session = await getSession();
   if (!session) {
     redirect("/login");
+  }
+  if (!(await hasAppPermission(session, "yg_data.customers.view"))) {
+    redirect(getDefaultLandingPath(session));
   }
 
   const [customers, orders, customerSyncSummaryRows] = await Promise.all([

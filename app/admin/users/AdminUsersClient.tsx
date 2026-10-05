@@ -6,6 +6,7 @@ type Lang = "zh" | "es";
 
 type UserRow = {
   id: string;
+  user_id?: string | null;
   name: string;
   phone: string;
   email: string | null;
@@ -36,6 +37,11 @@ export function AdminUsersClient({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
+  const [deleteForm, setDeleteForm] = useState({
+    account: "",
+    confirmDelete: "",
+  });
 
   const text = useMemo(
     () =>
@@ -57,6 +63,14 @@ export function AdminUsersClient({
             active: "启用",
             inactive: "停用",
             confirmDelete: "确定删除这个用户吗",
+            deleteTitle: "删除用户",
+            deleteHint: "请输入账号和删除文案后，才可删除该用户。",
+            deleteAccountLabel: "账号",
+            deleteConfirmLabel: "删除文案",
+            deleteConfirmPlaceholder: "请输入 删除",
+            deleteAccountPlaceholder: "请输入账号",
+            deleteNeedFullInput: "请完整输入账号和删除文案",
+            deleteValidationFailed: "删除校验未通过",
             deleted: "用户已删除",
             updated: "用户资料已更新",
             accountActive: "账号启用",
@@ -79,6 +93,14 @@ export function AdminUsersClient({
             active: "Activo",
             inactive: "Inactivo",
             confirmDelete: "¿Confirmas eliminar este usuario?",
+            deleteTitle: "Eliminar usuario",
+            deleteHint: "Ingresa la cuenta y el texto de eliminación para continuar.",
+            deleteAccountLabel: "Cuenta",
+            deleteConfirmLabel: "Texto",
+            deleteConfirmPlaceholder: "Escribe 删除",
+            deleteAccountPlaceholder: "Escribe la cuenta",
+            deleteNeedFullInput: "Completa la cuenta y el texto",
+            deleteValidationFailed: "La validación para eliminar no pasó",
             deleted: "El usuario fue eliminado",
             updated: "Los datos del usuario fueron actualizados",
             accountActive: "Cuenta activa",
@@ -152,17 +174,41 @@ export function AdminUsersClient({
     }
   }
 
-  async function deleteUser(id: string) {
+  function beginDelete(user: UserRow) {
     setError("");
     setMessage("");
+    setDeleteTarget(user);
+    setDeleteForm({
+      account: "",
+      confirmDelete: "",
+    });
+  }
 
-    const confirmed = window.confirm(text.confirmDelete);
-    if (!confirmed) return;
+  function closeDelete() {
+    setDeleteTarget(null);
+    setDeleteForm({
+      account: "",
+      confirmDelete: "",
+    });
+  }
+
+  async function deleteUser() {
+    if (!deleteTarget) return;
+    setError("");
+    setMessage("");
+    if (!deleteForm.account.trim() || !deleteForm.confirmDelete.trim()) {
+      setError(text.deleteNeedFullInput);
+      return;
+    }
 
     const res = await fetch("/api/admin/users", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
+      body: JSON.stringify({
+        id: deleteTarget.id,
+        confirmAccount: deleteForm.account.trim(),
+        confirmDelete: deleteForm.confirmDelete.trim(),
+      }),
     });
 
     const data = await res.json();
@@ -172,10 +218,11 @@ export function AdminUsersClient({
       return;
     }
 
-    setUsers((prev) => prev.filter((item) => item.id !== id));
-    if (editingId === id) {
+    setUsers((prev) => prev.filter((item) => item.id !== deleteTarget.id));
+    if (editingId === deleteTarget.id) {
       closeEdit();
     }
+    closeDelete();
     setMessage(text.deleted);
   }
 
@@ -198,6 +245,7 @@ export function AdminUsersClient({
           <table className="min-w-full border-separate border-spacing-0">
             <thead>
               <tr className="bg-slate-50 text-left text-sm text-slate-500">
+                <th className="px-4 py-3 font-semibold">头像</th>
                 <th className="px-4 py-3 font-semibold">{text.name}</th>
                 <th className="px-4 py-3 font-semibold">{text.phone}</th>
                 <th className="px-4 py-3 font-semibold">{text.email}</th>
@@ -215,6 +263,19 @@ export function AdminUsersClient({
                   key={user.id}
                   className="border-t border-slate-100 transition hover:bg-rose-50/60"
                 >
+                  <td className="px-4 py-4 text-sm text-slate-700">
+                    {user.avatar_url ? (
+                      <img
+                        src={user.avatar_url}
+                        alt={user.name || "avatar"}
+                        className="h-10 w-10 rounded-full border border-slate-200 object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-sm font-semibold text-slate-600">
+                        {String(user.name || user.phone || "U").trim().slice(0, 1).toUpperCase()}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-4 text-sm text-slate-700">
                     {user.name}
                   </td>
@@ -243,7 +304,7 @@ export function AdminUsersClient({
                       {user.role !== "admin" ? (
                         <button
                           type="button"
-                          onClick={() => deleteUser(user.id)}
+                          onClick={() => beginDelete(user)}
                           className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-lg border border-rose-200 bg-white px-3 text-sm font-medium text-rose-700 transition hover:bg-rose-50"
                         >
                           {text.delete}
@@ -364,6 +425,69 @@ export function AdminUsersClient({
                     ? "保存中..."
                     : "Guardando..."
                   : text.save}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteTarget ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-soft">
+            <div className="border-b border-slate-200 px-6 py-5">
+              <h2 className="text-[18px] font-bold tracking-tight text-slate-900">
+                {text.deleteTitle}
+              </h2>
+              <p className="mt-2 text-sm text-slate-500">{text.deleteHint}</p>
+            </div>
+
+            <div className="space-y-4 p-6">
+              <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                <div className="font-semibold text-slate-900">{deleteTarget.name}</div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {text.deleteAccountLabel}：{deleteTarget.user_id || deleteTarget.phone}
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                  {text.deleteAccountLabel}
+                </label>
+                <input
+                  value={deleteForm.account}
+                  onChange={(e) => setDeleteForm((prev) => ({ ...prev, account: e.target.value }))}
+                  placeholder={text.deleteAccountPlaceholder}
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                  {text.deleteConfirmLabel}
+                </label>
+                <input
+                  value={deleteForm.confirmDelete}
+                  onChange={(e) => setDeleteForm((prev) => ({ ...prev, confirmDelete: e.target.value }))}
+                  placeholder={text.deleteConfirmPlaceholder}
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-primary"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-4">
+              <button
+                type="button"
+                onClick={closeDelete}
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                {text.cancel}
+              </button>
+              <button
+                type="button"
+                onClick={deleteUser}
+                className="inline-flex h-10 items-center justify-center rounded-lg bg-rose-600 px-4 text-sm font-semibold text-white transition hover:opacity-95"
+              >
+                {text.delete}
               </button>
             </div>
           </div>

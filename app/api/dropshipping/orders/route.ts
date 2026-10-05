@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { listOrders, saveOrder } from "@/lib/dropshipping";
 import { hasPermission } from "@/lib/permissions";
+import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
 
 const FIXED_WAREHOUSE = "墨西哥-百盛仓";
@@ -36,7 +37,18 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as Record<string, unknown>;
-    const customerName = String(body.customerName || "").trim();
+    const forcedCustomerSession =
+      session.dropshippingCustomerId
+        ? await prisma.dropshippingCustomer.findFirst({
+            where: {
+              id: session.dropshippingCustomerId || "__none__",
+              tenant_id: session.tenantId,
+              company_id: session.companyId,
+            },
+            select: { name: true },
+          })
+        : null;
+    const customerName = forcedCustomerSession?.name || String(body.customerName || "").trim();
     const platform = String(body.platform || "未知").trim() || "未知";
     const platformOrderNo = String(body.platformOrderNo || "").trim();
     const trackingNo = String(body.trackingNo || "").trim();

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
 import { getLang } from "@/lib/i18n-server";
+import { getDefaultLandingPath, hasAppPermission } from "@/lib/permissions";
 import { AppShell } from "@/components/app-shell";
 import { AdminUsersClient } from "./AdminUsersClient";
 
@@ -14,8 +15,8 @@ export default async function AdminUsersPage() {
     redirect("/login");
   }
 
-  if (session.role !== "admin") {
-    redirect("/dashboard");
+  if (!(await hasAppPermission(session, "admin.users.view"))) {
+    redirect(getDefaultLandingPath(session));
   }
 
   const users = await prisma.user.findMany({
@@ -26,6 +27,7 @@ export default async function AdminUsersPage() {
     orderBy: [{ role: "asc" }, { created_at: "asc" }],
     select: {
       id: true,
+      user_id: true,
       name: true,
       phone: true,
       email: true,
@@ -66,6 +68,7 @@ export default async function AdminUsersPage() {
             lang={lang}
             initialUsers={users.map((user) => ({
               ...user,
+              user_id: user.user_id ?? null,
               email: user.email ?? null,
               avatar_url: user.avatar_url ?? null,
               created_at: user.created_at.toISOString(),

@@ -1,7 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/tenant";
 
 type RouteParams = {
   params: Promise<{
@@ -27,11 +26,6 @@ function getContentType(filename: string) {
 }
 
 export async function GET(_req: NextRequest, { params }: RouteParams) {
-  const session = await getSession();
-  if (!session) {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
-
   const { filename } = await params;
   if (!/^supplier-logo-[a-f0-9-]+-\d+-[a-f0-9]+\.(jpg|jpeg|png|webp|gif)$/i.test(filename)) {
     return new NextResponse("Not Found", { status: 404 });

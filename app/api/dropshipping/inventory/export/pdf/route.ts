@@ -6,7 +6,7 @@ import {
   filterInventoryExportRows,
   type InventoryExportFilters,
 } from "@/lib/dropshipping-inventory-export";
-import { hasPermission } from "@/lib/permissions";
+import { hasAppPermission } from "@/lib/permissions";
 import { getSession } from "@/lib/tenant";
 
 export const runtime = "nodejs";
@@ -27,7 +27,7 @@ export async function GET(request: Request) {
   try {
     const session = await getSession();
     if (!session) return NextResponse.json({ ok: false, error: "未登录" }, { status: 401 });
-    if (!(await hasPermission(session, "viewReports"))) {
+    if (!(await hasAppPermission(session, "dropshipping.inventory.export"))) {
       return NextResponse.json({ ok: false, error: "无权限" }, { status: 403 });
     }
 

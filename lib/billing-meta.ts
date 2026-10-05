@@ -51,6 +51,64 @@ function trimString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function extractLeadingJsonObject(text: string) {
+  const source = text.trimStart();
+  if (!source.startsWith("{")) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === "\"") {
+      inString = true;
+      continue;
+    }
+
+    if (char === "{") {
+      depth += 1;
+      continue;
+    }
+
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return {
+          jsonText: source.slice(0, index + 1),
+          restText: source.slice(index + 1),
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+export function normalizeBillingDateInput(value: unknown) {
+  const text = trimString(value).replace(/[.]/g, "-").replace(/\//g, "-");
+  const matched = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!matched) return trimString(value);
+  return `${matched[1]}/${matched[2]}/${matched[3]}`;
+}
+
+export function toBillingDateInputValue(value: unknown) {
+  const normalized = normalizeBillingDateInput(value);
+  return normalized ? normalized.replace(/\//g, "-") : "";
+}
+
 export function normalizeStoreLabelInput(value: unknown) {
   const text = trimString(value).replace(/\s+/g, "").replace(STORE_LABEL_SUFFIX_RE, "");
   const matched = text.match(STORE_LABEL_ALLOWED_RE);
@@ -101,9 +159,9 @@ export function normalizeBillingHeaderMeta(
   value: Partial<BillingHeaderMeta> | null | undefined,
 ): BillingHeaderMeta {
   return {
-    issueDate: trimString(value?.issueDate),
+    issueDate: normalizeBillingDateInput(value?.issueDate),
     boxCount: trimString(value?.boxCount),
-    shipDate: trimString(value?.shipDate),
+    shipDate: trimString(value?.shipDate).replace(/\//g, "-"),
     warehouse: trimString(value?.warehouse),
     shippingMethod: trimString(value?.shippingMethod),
     recipientName: trimString(value?.recipientName),
@@ -169,26 +227,32 @@ export function parseBillingRemark(raw: string | null | undefined) {
     };
   }
 
-  const body = text.slice(BILLING_META_PREFIX.length);
-  const metaMatch = body.match(/^\s*(\{[\s\S]*?\})/);
-  const metaJson = metaMatch?.[1]?.trim() || "";
-  const noteText = body
-    .slice(metaMatch?.[0]?.length || 0)
-    .replace(/^\s*\+\s*/u, "")
-    .trim();
+  let rest = text;
+  let mergedMeta: BillingHeaderMeta = { ...EMPTY_BILLING_HEADER_META };
 
-  try {
-    const parsed = JSON.parse(metaJson) as Partial<BillingHeaderMeta>;
-    return {
-      noteText,
-      meta: normalizeBillingHeaderMeta(parsed),
-    };
-  } catch {
-    return {
-      noteText: text,
-      meta: { ...EMPTY_BILLING_HEADER_META },
-    };
+  while (rest.startsWith(BILLING_META_PREFIX)) {
+    const body = rest.slice(BILLING_META_PREFIX.length);
+    const extracted = extractLeadingJsonObject(body);
+    const metaJson = extracted?.jsonText?.trim() || "";
+    if (!metaJson) break;
+
+    try {
+      const parsed = JSON.parse(metaJson) as Partial<BillingHeaderMeta>;
+      mergedMeta = {
+        ...mergedMeta,
+        ...normalizeBillingHeaderMeta(parsed),
+      };
+      rest = (extracted?.restText || "").trimStart();
+    } catch {
+      break;
+    }
   }
+
+  const noteText = rest.replace(/^\s*\+\s*/u, "").trim();
+  return {
+    noteText,
+    meta: mergedMeta,
+  };
 }
 
 export function buildBillingRemark(
@@ -196,7 +260,8 @@ export function buildBillingRemark(
   metaValue: Partial<BillingHeaderMeta> | null | undefined,
 ) {
   const meta = normalizeBillingHeaderMeta(metaValue);
-  const note = trimString(noteText);
+  const parsed = parseBillingRemark(noteText);
+  const note = trimString(parsed.noteText);
   const hasMeta = Object.values(meta).some(Boolean);
 
   if (!hasMeta && !note) return null;

@@ -265,33 +265,34 @@ async function ensureRateByDate(
   input: { date: Date | null; value: number | null; sourceName?: string },
 ) {
   const rateDate = startOfMexicoDay(input.date);
-  const existing = await prisma.dropshippingExchangeRate.findFirst({
-    where: {
+  const uniqueWhere = {
+    tenant_id_company_id_rate_date_base_currency_target_currency: {
       tenant_id: session.tenantId,
       company_id: session.companyId,
       rate_date: rateDate,
       base_currency: "RMB",
       target_currency: "MXN",
     },
-    orderBy: { created_at: "desc" },
+  } as const;
+  const existing = await prisma.dropshippingExchangeRate.findUnique({
+    where: uniqueWhere,
   });
 
-  if (existing) {
-    if (input.value && toNumber(existing.rate_value) !== input.value) {
-      return prisma.dropshippingExchangeRate.update({
-        where: { id: existing.id },
-        data: {
-          rate_value: input.value,
-          source_name: input.sourceName || existing.source_name,
-          fetched_at: new Date(),
-        },
-      });
-    }
+  if (existing && (!input.value || toNumber(existing.rate_value) === input.value)) {
     return existing;
   }
 
-  return prisma.dropshippingExchangeRate.create({
-    data: {
+  return prisma.dropshippingExchangeRate.upsert({
+    where: uniqueWhere,
+    update: {
+      rate_value: input.value ?? existing?.rate_value ?? DEFAULT_RATE_VALUE,
+      source_name: input.sourceName || existing?.source_name || "legacy-import",
+      fetched_at: new Date(),
+      is_manual: true,
+      fetch_failed: false,
+      failure_reason: null,
+    },
+    create: {
       tenant_id: session.tenantId,
       company_id: session.companyId,
       rate_date: rateDate,
@@ -302,6 +303,7 @@ async function ensureRateByDate(
       fetched_at: new Date(),
       is_manual: true,
       fetch_failed: false,
+      failure_reason: null,
     },
   });
 }
@@ -653,15 +655,17 @@ function sanitizeOrderNotes(notes: string | null | undefined) {
 
 export async function ensureTodayExchangeRate(session: Session) {
   const today = startOfTodayInMexico();
-  const existing = await prisma.dropshippingExchangeRate.findFirst({
-    where: {
+  const uniqueWhere = {
+    tenant_id_company_id_rate_date_base_currency_target_currency: {
       tenant_id: session.tenantId,
       company_id: session.companyId,
       rate_date: today,
       base_currency: "RMB",
       target_currency: "MXN",
     },
-    orderBy: { created_at: "desc" },
+  } as const;
+  const existing = await prisma.dropshippingExchangeRate.findUnique({
+    where: uniqueWhere,
   });
 
   const now = new Date();
@@ -681,22 +685,17 @@ export async function ensureTodayExchangeRate(session: Session) {
   try {
     const wiseRate = await fetchWiseMxnToCnyRate();
 
-    if (existing) {
-      return prisma.dropshippingExchangeRate.update({
-        where: { id: existing.id },
-        data: {
-          rate_value: wiseRate.rateValue,
-          source_name: wiseRate.sourceName,
-          fetched_at: wiseRate.fetchedAt,
-          is_manual: false,
-          fetch_failed: false,
-          failure_reason: null,
-        },
-      });
-    }
-
-    return prisma.dropshippingExchangeRate.create({
-      data: {
+    return prisma.dropshippingExchangeRate.upsert({
+      where: uniqueWhere,
+      update: {
+        rate_value: wiseRate.rateValue,
+        source_name: wiseRate.sourceName,
+        fetched_at: wiseRate.fetchedAt,
+        is_manual: false,
+        fetch_failed: false,
+        failure_reason: null,
+      },
+      create: {
         tenant_id: session.tenantId,
         company_id: session.companyId,
         rate_date: today,
@@ -712,20 +711,15 @@ export async function ensureTodayExchangeRate(session: Session) {
   } catch (error) {
     const failureReason = error instanceof Error ? error.message : "wise_rate_fetch_failed";
 
-    if (existing) {
-      return prisma.dropshippingExchangeRate.update({
-        where: { id: existing.id },
-        data: {
-          source_name: existing.source_name || "system-default",
-          fetched_at: existing.fetched_at || now,
-          fetch_failed: true,
-          failure_reason: failureReason,
-        },
-      });
-    }
-
-    return prisma.dropshippingExchangeRate.create({
-      data: {
+    return prisma.dropshippingExchangeRate.upsert({
+      where: uniqueWhere,
+      update: {
+        source_name: existing?.source_name || "system-default",
+        fetched_at: existing?.fetched_at || now,
+        fetch_failed: true,
+        failure_reason: failureReason,
+      },
+      create: {
         tenant_id: session.tenantId,
         company_id: session.companyId,
         rate_date: today,
@@ -763,6 +757,190 @@ async function ensureCustomer(session: Session, customerName: string) {
   }
 
   return customer;
+}
+
+function getScopedCustomerId(session: Session) {
+  const scopedCustomerId = String(session.dropshippingCustomerId || "").trim();
+  if (!scopedCustomerId) return null;
+  return scopedCustomerId || "__none__";
+}
+
+async function getRequiredScopedCustomer(session: Session) {
+  const scopedCustomerId = getScopedCustomerId(session);
+  if (!scopedCustomerId) return null;
+
+  const customer = await prisma.dropshippingCustomer.findFirst({
+    where: {
+      id: scopedCustomerId,
+      tenant_id: session.tenantId,
+      company_id: session.companyId,
+    },
+    select: {
+      id: true,
+      name: true,
+    },
+  });
+
+  if (!customer) {
+    throw new Error("dropshipping_customer_not_found");
+  }
+
+  return customer;
+}
+
+export async function saveQuickSetupStockSelections(
+  session: Session,
+  items: Array<{
+    sku: string;
+    productNameZh?: string | null;
+    productNameEs?: string | null;
+    stockedQty: number;
+    unitPrice?: number | null;
+    discountRate?: number | null;
+  }>,
+) {
+  const customer = await getRequiredScopedCustomer(session);
+  if (!customer) {
+    throw new Error("customer_not_found");
+  }
+  const now = new Date();
+  const dayStart = new Date(now);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(now);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  const normalizedItems = items
+    .map((item) => ({
+      sku: normalizeProductCode(String(item.sku || "")),
+      productNameZh: String(item.productNameZh || "").trim(),
+      productNameEs: String(item.productNameEs || "").trim(),
+      stockedQty: Math.max(Number(item.stockedQty || 0), 0),
+      unitPrice:
+        item.unitPrice === null || item.unitPrice === undefined || item.unitPrice === ""
+          ? null
+          : Number(item.unitPrice),
+      discountRate:
+        item.discountRate === null || item.discountRate === undefined || item.discountRate === ""
+          ? null
+          : Number(item.discountRate),
+    }))
+    .filter((item) => item.sku && item.stockedQty > 0);
+
+  const uniqueItems = Array.from(
+    new Map(normalizedItems.map((item) => [item.sku, item])).values(),
+  );
+
+  const productIds = new Set<string>();
+
+  for (const item of uniqueItems) {
+    const catalog = await prisma.productCatalog.findFirst({
+      where: {
+        tenant_id: session.tenantId,
+        company_id: session.companyId,
+        sku: { equals: item.sku, mode: "insensitive" as const },
+      },
+      select: {
+        sku: true,
+        name_zh: true,
+        name_es: true,
+        price: true,
+        normal_discount: true,
+      },
+    });
+
+    const yogoSource = catalog
+      ? null
+      : await prisma.yogoProductSource.findFirst({
+          where: {
+            tenant_id: session.tenantId,
+            company_id: session.companyId,
+            product_code: { equals: item.sku, mode: "insensitive" as const },
+          },
+          select: {
+            product_code: true,
+            name_cn: true,
+            name_es: true,
+            source_price: true,
+            source_discount: true,
+          },
+        });
+
+    const product = await ensureProduct(session, {
+      sku: catalog?.sku || yogoSource?.product_code || item.sku,
+      nameZh: item.productNameZh || catalog?.name_zh || yogoSource?.name_cn || item.sku,
+      nameEs: item.productNameEs || catalog?.name_es || yogoSource?.name_es || undefined,
+    });
+    productIds.add(product.id);
+
+    const existing = await prisma.dropshippingCustomerInventory.findFirst({
+      where: {
+        tenant_id: session.tenantId,
+        company_id: session.companyId,
+        customer_id: customer.id,
+        product_id: product.id,
+        linked_order_id: null,
+        stocked_at: {
+          gte: dayStart,
+          lte: dayEnd,
+        },
+      },
+      select: {
+        id: true,
+        stocked_qty: true,
+        locked_unit_price: true,
+        locked_discount_rate: true,
+      },
+      orderBy: [{ stocked_at: "desc" }, { created_at: "desc" }],
+    });
+
+    const payload = {
+      is_stocked: true,
+      stocked_qty: item.stockedQty,
+      stocked_at: now,
+      linked_order_id: null,
+      locked_unit_price:
+        item.unitPrice
+        ?? toOptionalNumber(catalog?.price)
+        ?? toOptionalNumber(yogoSource?.source_price)
+        ?? toOptionalNumber(product.unit_price),
+      locked_discount_rate:
+        item.discountRate
+        ?? toOptionalNumber(catalog?.normal_discount)
+        ?? toOptionalNumber(yogoSource?.source_discount)
+        ?? toOptionalNumber(product.discount_rate),
+      warehouse: product.default_warehouse || null,
+    };
+
+    if (existing) {
+      await prisma.dropshippingCustomerInventory.update({
+        where: { id: existing.id },
+        data: {
+          ...payload,
+          stocked_qty: Math.max(Number(existing.stocked_qty || 0), 0) + item.stockedQty,
+          locked_unit_price:
+            payload.locked_unit_price
+            ?? toOptionalNumber(existing.locked_unit_price)
+            ?? null,
+          locked_discount_rate:
+            payload.locked_discount_rate
+            ?? toOptionalNumber(existing.locked_discount_rate)
+            ?? null,
+        },
+      });
+    } else {
+      await prisma.dropshippingCustomerInventory.create({
+        data: {
+          tenant_id: session.tenantId,
+          company_id: session.companyId,
+          customer_id: customer.id,
+          product_id: product.id,
+          ...payload,
+        },
+      });
+    }
+  }
+
+  return { count: uniqueItems.length };
 }
 
 async function ensureProduct(
@@ -1048,6 +1226,7 @@ export async function saveOrder(
     notes?: string;
   },
 ) {
+  const scopedCustomer = await getRequiredScopedCustomer(session);
   let effectiveTrackingGroupId = payload.trackingGroupId;
   if (payload.id && payload.trackingGroupId === undefined) {
     const existingGroup = await prisma.dropshippingOrder.findFirst({
@@ -1070,7 +1249,7 @@ export async function saveOrder(
     trackingGroupId: effectiveTrackingGroupId,
   });
 
-  const customer = await ensureCustomer(session, payload.customerName);
+  const customer = scopedCustomer || await ensureCustomer(session, payload.customerName);
   const product = await ensureProduct(session, {
     sku: payload.sku,
     nameZh: payload.productNameZh,
@@ -1141,6 +1320,7 @@ export async function importLegacyOrders(
   session: Session,
   rows: DsLegacyImportRow[],
 ): Promise<DsLegacyImportSummary> {
+  const scopedCustomer = await getRequiredScopedCustomer(session);
   const legacyGroupCounts = new Map<string, number>();
   for (const row of rows) {
     const key = legacyGroupKeyOf(row);
@@ -1168,7 +1348,7 @@ export async function importLegacyOrders(
   >();
 
   for (const row of rows) {
-    const customer = await ensureCustomer(session, row.customerName);
+    const customer = scopedCustomer || await ensureCustomer(session, row.customerName);
     touchedCustomers.add(customer.id);
 
     const product = await ensureProduct(session, {
@@ -1369,10 +1549,12 @@ export async function importLegacyOrders(
 }
 
 export async function listOrders(session: Session) {
+  const scopedCustomerId = getScopedCustomerId(session);
   const rawRows = await prisma.dropshippingOrder.findMany({
     where: {
       tenant_id: session.tenantId,
       company_id: session.companyId,
+      ...(scopedCustomerId ? { customer_id: scopedCustomerId } : {}),
     },
     include: {
       customer: true,
@@ -1450,6 +1632,7 @@ export async function listOrders(session: Session) {
     where: {
       tenant_id: session.tenantId,
       company_id: session.companyId,
+      ...(scopedCustomerId ? { customer_id: scopedCustomerId } : {}),
     },
     select: {
       customer_id: true,
@@ -1521,10 +1704,12 @@ export async function listOrders(session: Session) {
 }
 
 export async function getInventoryRows(session: Session) {
+  const scopedCustomerId = getScopedCustomerId(session);
   const shippedOrders = await prisma.dropshippingOrder.findMany({
     where: {
       tenant_id: session.tenantId,
       company_id: session.companyId,
+      ...(scopedCustomerId ? { customer_id: scopedCustomerId } : {}),
       shipping_status: "shipped",
     },
     include: {
@@ -1586,8 +1771,27 @@ export async function getInventoryRows(session: Session) {
     where: {
       tenant_id: session.tenantId,
       company_id: session.companyId,
+      ...(scopedCustomerId ? { customer_id: scopedCustomerId } : {}),
     },
     select: {
+      customer: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      product: {
+        select: {
+          id: true,
+          sku: true,
+          name_zh: true,
+          name_es: true,
+          image_url: true,
+          unit_price: true,
+          discount_rate: true,
+          default_warehouse: true,
+        },
+      },
       id: true,
       customer_id: true,
       product_id: true,
@@ -1785,8 +1989,6 @@ export async function getInventoryRows(session: Session) {
 
   for (const [pairKey, pairInventories] of inventoriesByPair.entries()) {
     const pairOrders = shippedOrdersByPair.get(pairKey) || [];
-    if (pairOrders.length === 0) continue;
-
     const stockedInventoriesForPair = pairInventories.filter((entry) => entry.is_stocked && entry.stocked_qty > 0);
     if (stockedInventoriesForPair.length === 0) continue;
 
@@ -1801,24 +2003,27 @@ export async function getInventoryRows(session: Session) {
 
       const anchorOrder =
         pairOrders.find((row) => row.id === inventory.linked_order_id)
-        || pairOrders[0];
-      if (!anchorOrder) continue;
+        || pairOrders[0]
+        || null;
 
-      const normalizedSku = normalizeProductCode(anchorOrder.product.sku);
+      const productSku = anchorOrder?.product.sku || inventory.product.sku;
+      const normalizedSku = normalizeProductCode(productSku);
       const catalog = catalogBySku.get(normalizedSku);
       const yogoSource = yogoSourceBySku.get(normalizedSku);
-      const matchedSku = catalog?.sku?.trim() || yogoSource?.product_code?.trim() || anchorOrder.product.sku;
+      const matchedSku = catalog?.sku?.trim() || yogoSource?.product_code?.trim() || productSku;
       const unitPrice = pickPreferredNumber(
         toOptionalNumber(inventory.locked_unit_price),
         toOptionalNumber(yogoSource?.source_price),
         toOptionalNumber(catalog?.price),
-        toOptionalNumber(anchorOrder.product.unit_price),
+        toOptionalNumber(anchorOrder?.product.unit_price),
+        toOptionalNumber(inventory.product.unit_price),
       );
       const rawDiscountRate = pickPreferredNumber(
         toOptionalNumber(inventory.locked_discount_rate),
         toOptionalNumber(yogoSource?.source_discount),
         toOptionalNumber(catalog?.normal_discount),
-        toOptionalNumber(anchorOrder.product.discount_rate),
+        toOptionalNumber(anchorOrder?.product.discount_rate),
+        toOptionalNumber(inventory.product.discount_rate),
       );
       const discountRate = Math.abs(rawDiscountRate) <= 1 ? rawDiscountRate : rawDiscountRate / 100;
 
@@ -1827,19 +2032,19 @@ export async function getInventoryRows(session: Session) {
 
       extraStockRows.push({
         rowKey: `inventory:${inventory.id}`,
-        orderId: anchorOrder.id,
+        orderId: anchorOrder?.id || "",
         inventoryId: inventory.id,
-        customerId: anchorOrder.customer_id,
-        customerName: anchorOrder.customer.name,
-        productId: anchorOrder.product_id,
-        sku: anchorOrder.product.sku,
-        productNameZh: stripTrailingUnitPrice(catalog?.name_zh?.trim() || anchorOrder.product.name_zh),
-        productNameEs: catalog?.name_es?.trim() || anchorOrder.product.name_es || "",
-        productImageUrl: anchorOrder.product.image_url || buildProductImageUrl(matchedSku, "jpg"),
+        customerId: inventory.customer_id,
+        customerName: inventory.customer.name,
+        productId: inventory.product_id,
+        sku: productSku,
+        productNameZh: stripTrailingUnitPrice(catalog?.name_zh?.trim() || anchorOrder?.product.name_zh || inventory.product.name_zh),
+        productNameEs: catalog?.name_es?.trim() || anchorOrder?.product.name_es || inventory.product.name_es || "",
+        productImageUrl: anchorOrder?.product.image_url || inventory.product.image_url || buildProductImageUrl(matchedSku, "jpg"),
         stockedAt: inventory.stocked_at?.toISOString() || null,
-        shippedAt: anchorOrder.shipped_at?.toISOString() || null,
-        trackingNo: anchorOrder.tracking_no || "",
-        warehouse: inventory.warehouse || anchorOrder.warehouse || anchorOrder.product.default_warehouse || "",
+        shippedAt: anchorOrder?.shipped_at?.toISOString() || null,
+        trackingNo: anchorOrder?.tracking_no || "",
+        warehouse: inventory.warehouse || anchorOrder?.warehouse || inventory.product.default_warehouse || "",
         isStocked: true,
         stockedQty: inventory.stocked_qty,
         shippedQty: inventoryShippedQty,
@@ -1863,6 +2068,7 @@ export async function getStockTagExportRows(
     status?: "all" | DsInventoryStatus;
   },
 ) {
+  const scopedCustomerId = getScopedCustomerId(session);
   const customerFilter = String(options?.customerName || "").trim().toLowerCase();
   const skuFilter = String(options?.skuKeyword || "").trim().toLowerCase();
   const statusFilter = options?.status || "all";
@@ -1871,6 +2077,7 @@ export async function getStockTagExportRows(
     where: {
       tenant_id: session.tenantId,
       company_id: session.companyId,
+      ...(scopedCustomerId ? { customer_id: scopedCustomerId } : {}),
       shipping_status: "shipped",
     },
     include: {
@@ -1884,6 +2091,7 @@ export async function getStockTagExportRows(
     where: {
       tenant_id: session.tenantId,
       company_id: session.companyId,
+      ...(scopedCustomerId ? { customer_id: scopedCustomerId } : {}),
       is_stocked: true,
       stocked_qty: { gt: 0 },
     },
@@ -2110,10 +2318,12 @@ export async function getStockTagExportRows(
 }
 
 export async function getDropshippingCustomerOptions(session: Session) {
+  const scopedCustomerId = getScopedCustomerId(session);
   const rows = await prisma.dropshippingCustomer.findMany({
     where: {
       tenant_id: session.tenantId,
       company_id: session.companyId,
+      ...(scopedCustomerId ? { id: scopedCustomerId } : {}),
     },
     select: {
       id: true,
@@ -2358,11 +2568,13 @@ export async function deleteInventory(session: Session, id: string) {
 }
 
 export async function getFinanceRows(session: Session) {
+  const scopedCustomerId = getScopedCustomerId(session);
   const [customers, inventoryRows, paymentRows, currentRate, catalogRows, yogoSourceRows, financeOrders] = await Promise.all([
     prisma.dropshippingCustomer.findMany({
       where: {
         tenant_id: session.tenantId,
         company_id: session.companyId,
+        ...(scopedCustomerId ? { id: scopedCustomerId } : {}),
       },
       orderBy: { name: "asc" },
     }),
@@ -2371,6 +2583,7 @@ export async function getFinanceRows(session: Session) {
       where: {
         tenant_id: session.tenantId,
         company_id: session.companyId,
+        ...(scopedCustomerId ? { customer_id: scopedCustomerId } : {}),
       },
       orderBy: { paid_at: "desc" },
     }),
@@ -2404,6 +2617,7 @@ export async function getFinanceRows(session: Session) {
       where: {
         tenant_id: session.tenantId,
         company_id: session.companyId,
+        ...(scopedCustomerId ? { customer_id: scopedCustomerId } : {}),
       },
       select: {
         id: true,
@@ -2423,6 +2637,7 @@ export async function getFinanceRows(session: Session) {
     where: {
       tenant_id: session.tenantId,
       company_id: session.companyId,
+      ...(scopedCustomerId ? { customer_id: scopedCustomerId } : {}),
     },
     include: {
       product: true,

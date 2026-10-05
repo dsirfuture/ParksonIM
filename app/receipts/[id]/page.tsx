@@ -6,13 +6,16 @@ import { getSession } from "@/lib/tenant";
 import { AppShell } from "@/components/app-shell";
 import { getLang } from "@/lib/i18n-server";
 import { ReceiptItemsClient } from "./ReceiptItemsClient";
+import { ReceiptSummaryCardsClient } from "./ReceiptSummaryCardsClient";
 import { EvidencePreviewButton } from "./EvidencePreviewButton";
 import { ExportFilesButton } from "./ExportFilesButton";
+import { SpecialSettingsButton } from "./SpecialSettingsButton";
 
 type ReceiptDetailPageProps = {
   params: Promise<{
     id: string;
   }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
 type ItemStatus = "pending" | "in_progress" | "completed";
@@ -84,8 +87,13 @@ function toEditPercent(value: unknown) {
 
 export default async function ReceiptDetailPage({
   params,
+  searchParams,
 }: ReceiptDetailPageProps) {
   const { id } = await params;
+  const query = (await searchParams) || {};
+  const filterParamRaw = Array.isArray(query.filter) ? query.filter[0] : query.filter;
+  const activeFilter: "all" | "diffQty" | "uncheckedQty" =
+    filterParamRaw === "diffQty" || filterParamRaw === "uncheckedQty" ? filterParamRaw : "all";
   const session = await getSession();
   const lang = await getLang();
 
@@ -142,16 +150,42 @@ export default async function ReceiptDetailPage({
           previousPage: "上一页",
           nextPage: "下一页",
           edit: "编辑",
+          delete: "删除",
+          deleteTitle: "删除商品明细",
+          deleteConfirm: "确认删除这条商品明细吗？",
+          deleteHint: "删除后，该商品将不会再计入验货汇总、导出文件和相关财务账单。",
+          deleteAction: "确认删除",
+          deleting: "删除中...",
+          deleteFailed: "删除失败",
           editTitle: "编辑商品明细",
           cancel: "取消",
           save: "保存",
           saving: "保存中...",
           saveSuccess: "保存成功",
           saveFailed: "保存失败",
+          specialSettings: "特殊设置",
+          specialSettingsTitle: "特殊设置（已完成验货单）",
+          specialSettingsSave: "保存修改",
+          specialSettingsSaving: "保存中...",
+          specialSettingsDisabled: "仅已完成验货单可使用特殊设置",
+          specialSettingsSuccess: "特殊设置已保存，账单统计将自动使用新数据",
+          specialSettingsFailed: "特殊设置保存失败",
+          addGoodQty: "良品新调整",
+          checkedGoodQty: "已验良品",
+          loginNameLabel: "登录名",
+          receiptNoLabel: "完整验货单号",
+          remarkLabel: "备注",
+          loginNamePlaceholder: "请输入登录名",
+          receiptNoPlaceholder: "请输入完整验货单号",
+          remarkPlaceholder: "请输入备注",
+          requiredValidationText: "请完整填写：登录名、完整验货单号、备注",
+          receiptNoMismatchText: "完整验货单号不匹配",
+          loginNameMismatchText: "登录名不匹配",
           notFound: "未找到对应验货单，或该单据不属于当前公司。",
           imagePreviewTitle: "商品图片预览",
           emptyImage: "空",
           newTag: "新",
+          specialNoRows: "当前无可调整商品",
         }
       : {
           back: "Volver a recepciones",
@@ -200,17 +234,47 @@ export default async function ReceiptDetailPage({
           previousPage: "Anterior",
           nextPage: "Siguiente",
           edit: "Editar",
+          delete: "Eliminar",
+          deleteTitle: "Eliminar artículo",
+          deleteConfirm: "¿Confirmas eliminar este artículo?",
+          deleteHint:
+            "Después de eliminarlo, ya no contará en los resúmenes, exportaciones ni facturación relacionada.",
+          deleteAction: "Eliminar",
+          deleting: "Eliminando...",
+          deleteFailed: "No se pudo eliminar",
           editTitle: "Editar artículo",
           cancel: "Cerrar",
           save: "Guardar",
           saving: "Guardando...",
           saveSuccess: "Guardado correctamente",
           saveFailed: "Error al guardar",
+          specialSettings: "Ajuste especial",
+          specialSettingsTitle: "Ajuste especial (recepción completada)",
+          specialSettingsSave: "Guardar",
+          specialSettingsSaving: "Guardando...",
+          specialSettingsDisabled:
+            "Solo disponible para recepciones completadas",
+          specialSettingsSuccess:
+            "Se guardó. La facturación usará los nuevos datos automáticamente.",
+          specialSettingsFailed: "No se pudo guardar",
+          addGoodQty: "Ajuste buenas",
+          checkedGoodQty: "Buenas verificadas",
+          loginNameLabel: "Usuario",
+          receiptNoLabel: "No. recepción completo",
+          remarkLabel: "Nota",
+          loginNamePlaceholder: "Ingresa usuario",
+          receiptNoPlaceholder: "Ingresa no. completo",
+          remarkPlaceholder: "Ingresa nota",
+          requiredValidationText:
+            "Completa usuario, no. de recepción y nota.",
+          receiptNoMismatchText: "El no. de recepción no coincide",
+          loginNameMismatchText: "El usuario no coincide",
           notFound:
             "No se encontró la recepción o no pertenece a la compañía actual.",
           imagePreviewTitle: "Vista de imagen",
           emptyImage: "Vacío",
           newTag: "Nuevo",
+          specialNoRows: "No hay artículos ajustables",
         };
 
   const receipt = await prisma.receipt.findFirst({
@@ -321,19 +385,33 @@ export default async function ReceiptDetailPage({
             company_id: session.companyId,
             product_code: { in: Array.from(skuSet) },
           },
-          select: {
-            product_code: true,
-            source_price: true,
-            updated_at: true,
-          },
+        select: {
+          product_code: true,
+          product_no: true,
+          name_cn: true,
+          name_es: true,
+          case_pack: true,
+          source_price: true,
+          updated_at: true,
+        },
           orderBy: [{ updated_at: "desc" }],
         })
       : [];
   const yogoPriceBySku = new Map<string, number | null>();
+  const yogoInfoBySku = new Map<
+    string,
+    { productNo: string | null; nameCn: string | null; nameEs: string | null; casePack: number | null }
+  >();
   for (const row of yogoPriceRows) {
     const key = String(row.product_code || "").trim().toUpperCase();
     if (!key || yogoPriceBySku.has(key)) continue;
     yogoPriceBySku.set(key, toNumber(row.source_price));
+    yogoInfoBySku.set(key, {
+      productNo: row.product_no ? String(row.product_no).trim() : null,
+      nameCn: row.name_cn ? String(row.name_cn).trim() : null,
+      nameEs: row.name_es ? String(row.name_es).trim() : null,
+      casePack: toNumber(row.case_pack),
+    });
   }
 
   const itemRows = receipt.items.map((item) => {
@@ -359,6 +437,8 @@ export default async function ReceiptDetailPage({
 
     const yogoPriceValue =
       yogoPriceBySku.get(String(item.sku || "").trim().toUpperCase()) ?? null;
+    const yogoInfo =
+      yogoInfoBySku.get(String(item.sku || "").trim().toUpperCase()) ?? null;
     const hasComparablePrice =
       unitPriceValue !== null && yogoPriceValue !== null;
     const priceCompareStatus: "unknown" | "same" | "different" = !hasComparablePrice
@@ -380,10 +460,10 @@ export default async function ReceiptDetailPage({
     return {
       id: item.id,
       sku: item.sku || "",
-      barcode: item.barcode || "",
-      nameZh: item.name_zh || "",
-      nameEs: item.name_es || "",
-      casePack: toNumber(item.case_pack),
+      barcode: item.barcode || yogoInfo?.productNo || "",
+      nameZh: item.name_zh || yogoInfo?.nameCn || "",
+      nameEs: item.name_es || yogoInfo?.nameEs || "",
+      casePack: toNumber(item.case_pack) ?? yogoInfo?.casePack ?? null,
       expectedQty,
       goodQty,
       diffQty,
@@ -403,43 +483,64 @@ export default async function ReceiptDetailPage({
     };
   });
 
+  const filteredItemRows =
+    activeFilter === "diffQty"
+      ? itemRows.filter((item) => item.diffQty > 0)
+      : activeFilter === "uncheckedQty"
+        ? itemRows.filter((item) => item.uncheckedQty > 0)
+        : itemRows;
+
   const summaryCards = [
-    { label: text.totalSku, value: totalSku, valueClassName: "text-slate-900" },
+    { key: "all", label: text.totalSku, value: totalSku, valueClassName: "text-slate-900", clickable: false },
     {
+      key: "all",
       label: text.expectedQty,
       value: expectedQtyTotal,
       valueClassName: "text-slate-900",
+      clickable: false,
     },
     {
+      key: "all",
       label: text.goodQty,
       value: goodQtyTotal,
       valueClassName: "text-slate-900",
+      clickable: false,
     },
     {
+      key: "diffQty",
       label: text.diffQty,
       value: diffQtyTotal,
       valueClassName: diffQtyTotal > 0 ? "text-rose-600" : "text-slate-900",
+      clickable: diffQtyTotal > 0,
     },
     {
+      key: "uncheckedQty",
       label: text.uncheckedQty,
       value: uncheckedQtyTotal,
       valueClassName:
         uncheckedQtyTotal > 0 ? "text-rose-600" : "text-slate-900",
+      clickable: uncheckedQtyTotal > 0,
     },
     {
+      key: "all",
       label: text.damagedQty,
       value: damagedQtyTotal,
       valueClassName: damagedQtyTotal > 0 ? "text-rose-600" : "text-slate-900",
+      clickable: false,
     },
     {
+      key: "all",
       label: text.excessQty,
       value: excessQtyTotal,
       valueClassName: excessQtyTotal > 0 ? "text-rose-600" : "text-slate-900",
+      clickable: false,
     },
     {
+      key: "all",
       label: text.addedQty,
       value: addedCount,
       valueClassName: addedCount > 0 ? "text-rose-600" : "text-slate-900",
+      clickable: false,
     },
   ];
 
@@ -480,6 +581,44 @@ export default async function ReceiptDetailPage({
               emptyText={text.noEvidence}
               closeText={text.cancel}
             />
+            <SpecialSettingsButton
+              receiptId={receipt.id}
+              receiptNo={receipt.receipt_no || ""}
+              currentLoginName={session.name || ""}
+              rows={itemRows.map((item) => ({
+                id: item.id,
+                sku: item.sku,
+                nameZh: item.nameZh,
+                nameEs: item.nameEs,
+                expectedQty: item.expectedQty,
+                goodQty: item.goodQty,
+                unexpected: item.unexpected,
+              }))}
+              disabled={receipt.status !== "completed"}
+              buttonText={text.specialSettings}
+              titleText={text.specialSettingsTitle}
+              saveText={text.specialSettingsSave}
+              cancelText={text.cancel}
+              savingText={text.specialSettingsSaving}
+              disabledHintText={text.specialSettingsDisabled}
+              successText={text.specialSettingsSuccess}
+              failText={text.specialSettingsFailed}
+              expectedQtyText={text.expectedQtyCol}
+              goodQtyText={text.checkedGoodQty}
+              addGoodQtyText={text.addGoodQty}
+              skuText={text.sku}
+              nameText={text.nameZh}
+              noRowsText={text.specialNoRows}
+              loginNameLabel={text.loginNameLabel}
+              receiptNoLabel={text.receiptNoLabel}
+              remarkLabel={text.remarkLabel}
+              loginNamePlaceholder={text.loginNamePlaceholder}
+              receiptNoPlaceholder={text.receiptNoPlaceholder}
+              remarkPlaceholder={text.remarkPlaceholder}
+              requiredValidationText={text.requiredValidationText}
+              receiptNoMismatchText={text.receiptNoMismatchText}
+              loginNameMismatchText={text.loginNameMismatchText}
+            />
 
             <Link
               href="/receipts"
@@ -497,21 +636,10 @@ export default async function ReceiptDetailPage({
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 xl:grid-cols-8">
-          {summaryCards.map((item) => (
-            <div
-              key={item.label}
-              className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4"
-            >
-              <div className="text-sm text-slate-500">{item.label}</div>
-              <div
-                className={`mt-2 text-[18px] font-bold leading-none ${item.valueClassName}`}
-              >
-                {item.value}
-              </div>
-            </div>
-          ))}
-        </div>
+        <ReceiptSummaryCardsClient
+          activeFilter={activeFilter}
+          items={summaryCards}
+        />
 
         <div className="mt-5 flex items-center gap-4">
           <div className="h-3 flex-1 overflow-hidden rounded-full bg-slate-200">
@@ -527,7 +655,7 @@ export default async function ReceiptDetailPage({
       </section>
 
       <div className="mt-3">
-        {itemRows.length === 0 ? (
+        {filteredItemRows.length === 0 ? (
           <section className="overflow-hidden rounded-xl bg-white shadow-soft">
             <div className="border-b border-slate-200 px-5 py-4">
               <div className="text-[18px] font-bold tracking-tight text-slate-900">
@@ -542,7 +670,14 @@ export default async function ReceiptDetailPage({
           <ReceiptItemsClient
             title={text.itemListTitle}
             currencyHint={text.currencyHint}
-            rows={itemRows}
+            rows={filteredItemRows}
+            activeFilterLabel={
+              activeFilter === "diffQty"
+                ? text.diffQty
+                : activeFilter === "uncheckedQty"
+                  ? text.uncheckedQty
+                  : null
+            }
             text={{
               image: text.image,
               sku: text.sku,
@@ -575,6 +710,13 @@ export default async function ReceiptDetailPage({
               previousPage: text.previousPage,
               nextPage: text.nextPage,
               edit: text.edit,
+              delete: text.delete,
+              deleteTitle: text.deleteTitle,
+              deleteConfirm: text.deleteConfirm,
+              deleteHint: text.deleteHint,
+              deleteAction: text.deleteAction,
+              deleting: text.deleting,
+              deleteFailed: text.deleteFailed,
               editTitle: text.editTitle,
               cancel: text.cancel,
               save: text.save,

@@ -1,11 +1,13 @@
 // @ts-nocheck
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { StatCard } from "@/components/stat-card";
 import { getLang } from "@/lib/i18n-server";
+import { getResolvedLandingPath, hasAppPermission } from "@/lib/permissions";
 import { ReceiptsTableClient } from "./ReceiptsTableClient";
 
 function getStatusLabel(status: string, lang: "zh" | "es") {
@@ -67,6 +69,10 @@ function formatTime(
 export default async function ReceiptsPage() {
   const session = await getSession();
   const lang = await getLang();
+  if (!session) redirect("/login");
+  if (!(await hasAppPermission(session, "inspection.view"))) {
+    redirect(await getResolvedLandingPath(session));
+  }
 
   const text =
     lang === "zh"

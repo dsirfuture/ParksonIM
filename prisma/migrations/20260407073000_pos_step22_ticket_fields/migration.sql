@@ -1,0 +1,10 @@
+ALTER TABLE "pos_ticket_settings"
+  ADD COLUMN IF NOT EXISTS "whatsapp" TEXT,
+  ADD COLUMN IF NOT EXISTS "website" TEXT,
+  ADD COLUMN IF NOT EXISTS "qr_content" TEXT,
+  ADD COLUMN IF NOT EXISTS "show_whatsapp" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS "show_website" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS "show_qr" BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE "pos_store_settings"
+  ADD COLUMN IF NOT EXISTS "company_full_name" TEXT;

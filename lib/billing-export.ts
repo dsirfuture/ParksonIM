@@ -130,7 +130,7 @@ export function buildBillingCopyPdfFileName(
 }
 
 function hasChineseGlyph(value: string) {
-  return /[\u3400-\u9FFF\uF900-\uFAFF]/.test(String(value || ""));
+  return /[^\x20-\x7E\xA0-\xFF]/.test(String(value || ""));
 }
 
 function getDocumentFontName(value: string, options?: { chineseBold?: boolean }) {
@@ -202,14 +202,19 @@ function computeLineTotal(
 }
 
 function baseOrderNo(receiptNo: string) {
-  const head = String(receiptNo || "")
-    .trim()
-    .split("-")[0];
-  return head || String(receiptNo || "").trim();
+  const normalized = String(receiptNo || "").trim();
+  if (!normalized) return "";
+  return normalized.replace(/-\d+$/u, "");
 }
 
 function normalizeLookupKey(value: string | null | undefined) {
   return String(value || "").trim().toUpperCase();
+}
+
+function compareProductCodeAsc(a: { sku?: string; barcode?: string }, b: { sku?: string; barcode?: string }) {
+  const aKey = String(a.sku || a.barcode || "").trim().toUpperCase();
+  const bKey = String(b.sku || b.barcode || "").trim().toUpperCase();
+  return aKey.localeCompare(bKey, "en", { numeric: true, sensitivity: "base" });
 }
 
 function normalizeCustomerKey(value: string | null | undefined) {
@@ -224,6 +229,94 @@ function lineTotalFromItem(item: BillingExportItem, vipDiscountEnabled: boolean)
     toDiscountFactor(item.vipDiscount),
     vipDiscountEnabled,
   );
+}
+
+export async function resolveBillingItemsWithYogoPrice(params: {
+  tenantId: string;
+  companyId: string;
+  items: BillingExportItem[];
+  vipDiscountEnabled: boolean;
+}) {
+  const { tenantId, companyId, items, vipDiscountEnabled } = params;
+  if (items.length === 0) return items;
+
+  const skuList = Array.from(
+    new Set(
+      items
+        .map((item) => String(item.sku || "").trim())
+        .filter((value) => value.length > 0),
+    ),
+  );
+  const barcodeList = Array.from(
+    new Set(
+      items
+        .map((item) => String(item.barcode || "").trim())
+        .filter((value) => value.length > 0),
+    ),
+  );
+
+  if (skuList.length === 0 && barcodeList.length === 0) {
+    return items.map((item) => ({
+      ...item,
+      lineTotal: lineTotalFromItem(item, vipDiscountEnabled),
+    }));
+  }
+
+  const yogoRows = await prisma.yogoProductSource.findMany({
+    where: {
+      tenant_id: tenantId,
+      company_id: companyId,
+      OR: [
+        ...(skuList.length > 0 ? [{ product_code: { in: skuList } }] : []),
+        ...(barcodeList.length > 0 ? [{ product_no: { in: barcodeList } }] : []),
+      ],
+    },
+    select: {
+      product_code: true,
+      product_no: true,
+      source_price: true,
+      updated_at: true,
+    },
+    orderBy: [{ updated_at: "desc" }],
+  });
+
+  const yogoPriceMap = new Map<string, number>();
+  for (const row of yogoRows) {
+    const unitPrice = toNumber(row.source_price);
+    if (unitPrice === null) continue;
+    const skuKey = normalizeLookupKey(row.product_code);
+    if (skuKey && !yogoPriceMap.has(skuKey)) yogoPriceMap.set(skuKey, unitPrice);
+    const barcodeKey = normalizeLookupKey(row.product_no);
+    if (barcodeKey && !yogoPriceMap.has(barcodeKey)) yogoPriceMap.set(barcodeKey, unitPrice);
+  }
+
+  return items.map((item) => {
+    const unitPrice =
+      yogoPriceMap.get(normalizeLookupKey(item.sku)) ??
+      yogoPriceMap.get(normalizeLookupKey(item.barcode)) ??
+      Number(item.unitPrice || 0);
+    const resolvedItem = {
+      ...item,
+      unitPrice,
+    };
+    return {
+      ...resolvedItem,
+      lineTotal: lineTotalFromItem(resolvedItem, vipDiscountEnabled),
+    };
+  });
+}
+
+function getBillableReceiptItemQty(item: {
+  unexpected?: boolean | null;
+  good_qty?: number | null;
+  damaged_qty?: number | null;
+  excess_qty?: number | null;
+}) {
+  if (item.unexpected) return 0;
+  const goodQty = Number(item.good_qty || 0);
+  const damagedQty = Number(item.damaged_qty || 0);
+  const excessQty = Number(item.excess_qty || 0);
+  return Math.max(goodQty + damagedQty + excessQty, 0);
 }
 
 function formatDateOnly(value: Date | null | undefined) {
@@ -286,6 +379,7 @@ async function loadPdfFontBytes() {
   const fontCandidates = [
     "C:\\Windows\\Fonts\\msyh.ttf",
     "C:\\Windows\\Fonts\\simhei.ttf",
+    path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Regular.ttf"),
     path.join(process.cwd(), "public", "fonts", "NotoSansSC-Regular.ttf"),
     path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Regular.otf"),
   ];
@@ -309,6 +403,7 @@ async function loadPdfBoldFontBytes() {
   const fontCandidates = [
     "C:\\Windows\\Fonts\\msyhbd.ttf",
     "C:\\Windows\\Fonts\\simhei.ttf",
+    path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Bold.ttf"),
     path.join(process.cwd(), "public", "fonts", "NotoSansSC-Bold.ttf"),
     path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Bold.otf"),
   ];
@@ -449,15 +544,9 @@ export async function getBillingExportData(params: {
   }
   const vipDiscountEnabled = parseBillingBooleanFlag(parsedRemark.meta.generatedVipEnabled);
   const metaPhone = String(parsedRemark.meta.recipientPhone || "").trim();
-  const snapshotItems = parseBillingSnapshot(parsedRemark.meta.billingSnapshot).map((item) => ({
+  const rawSnapshotItems = parseBillingSnapshot(parsedRemark.meta.billingSnapshot).map((item) => ({
     ...item,
-    lineTotal: lineTotalFromItem(
-      {
-        ...item,
-        lineTotal: 0,
-      },
-      vipDiscountEnabled,
-    ),
+    lineTotal: 0,
   }));
 
   const customerMatchKeys = [orderRow.customer_name, orderRow.company_name, orderRow.contact_name]
@@ -499,7 +588,13 @@ export async function getBillingExportData(params: {
   const resolvedPhone =
     extractCustomerContactPhone(orderRow.contact_phone, parsedRemark.noteText) || fallbackPhone;
 
-  if (snapshotItems.length > 0) {
+  if (rawSnapshotItems.length > 0) {
+    const snapshotItems = await resolveBillingItemsWithYogoPrice({
+      tenantId,
+      companyId,
+      items: rawSnapshotItems,
+      vipDiscountEnabled,
+    });
     const totalQty = snapshotItems.reduce((sum, item) => sum + Number(item.qty || 0), 0);
     const totalAmount = snapshotItems.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0);
     const exportDate = formatDateOnly(new Date(parsedRemark.meta.generatedAt || new Date()));
@@ -517,8 +612,8 @@ export async function getBillingExportData(params: {
       totalQty,
       totalAmount,
       vipDiscountEnabled,
-      items: snapshotItems,
-      issueDateText: exportDate,
+      items: [...snapshotItems].sort(compareProductCodeAsc),
+      issueDateText: parsedRemark.meta.issueDate || exportDate,
       boxCountText: parsedRemark.meta.boxCount,
       shipDateText: parsedRemark.meta.shipDate,
       warehouseText: FIXED_WAREHOUSE,
@@ -555,6 +650,10 @@ export async function getBillingExportData(params: {
           name_zh: true,
           name_es: true,
           expected_qty: true,
+          good_qty: true,
+          damaged_qty: true,
+          excess_qty: true,
+          unexpected: true,
           sell_price: true,
           normal_discount: true,
           vip_discount: true,
@@ -628,6 +727,7 @@ export async function getBillingExportData(params: {
             product_code: true,
             product_no: true,
             category_name: true,
+            source_price: true,
             source_discount: true,
             updated_at: true,
           },
@@ -638,6 +738,7 @@ export async function getBillingExportData(params: {
   const yogoDiscountMap = new Map<
     string,
     {
+      unitPrice: number | null;
       normalDiscount: number | null;
       vipDiscount: number | null;
     }
@@ -645,8 +746,10 @@ export async function getBillingExportData(params: {
   for (const row of yogoDiscountRows) {
     const skuKey = normalizeLookupKey(row.product_code);
     const discount = parseYogoDiscountNumbers(row.category_name, row.source_discount);
+    const unitPrice = toNumber(row.source_price);
     if (skuKey && !yogoDiscountMap.has(skuKey)) {
       yogoDiscountMap.set(skuKey, {
+        unitPrice,
         normalDiscount: discount.normal,
         vipDiscount: discount.vip,
       });
@@ -654,6 +757,7 @@ export async function getBillingExportData(params: {
     const barcodeKey = normalizeLookupKey(row.product_no);
     if (barcodeKey && !yogoDiscountMap.has(barcodeKey)) {
       yogoDiscountMap.set(barcodeKey, {
+        unitPrice,
         normalDiscount: discount.normal,
         vipDiscount: discount.vip,
       });
@@ -673,14 +777,16 @@ export async function getBillingExportData(params: {
     for (const item of receipt.items) {
       const sku = String(item.sku || "").trim();
       const barcode = String(item.barcode || "").trim();
-      const qty = Number(item.expected_qty || 0);
-      // Billing export unit price must always come from the completed receipt's supplier price.
-      // `sell_price` in receipt import/export is the 验货单“供应价”, not a product catalog selling price.
-      const supplierUnitPrice = toNumber(item.sell_price) || 0;
-      const catalogDiscount = productDiscountMap.get(sku);
+      const qty = getBillableReceiptItemQty(item);
+      if (qty <= 0) continue;
       const yogoDiscount =
         yogoDiscountMap.get(normalizeLookupKey(sku)) ??
         yogoDiscountMap.get(normalizeLookupKey(barcode));
+      const catalogDiscount = productDiscountMap.get(sku);
+      const unitPrice =
+        yogoDiscount?.unitPrice !== null && yogoDiscount?.unitPrice !== undefined
+          ? Number(yogoDiscount.unitPrice)
+          : toNumber(item.sell_price) || 0;
       const normalDiscountRaw =
         yogoDiscount?.normalDiscount ??
         catalogDiscount?.normalDiscount ??
@@ -693,7 +799,7 @@ export async function getBillingExportData(params: {
       const vipDiscount = toDiscountFactor(vipDiscountRaw);
       const lineTotal = computeLineTotal(
         qty,
-        supplierUnitPrice,
+        unitPrice,
         normalDiscount,
         vipDiscount,
         vipDiscountEnabled,
@@ -711,7 +817,7 @@ export async function getBillingExportData(params: {
           nameZh: String(item.name_zh || "").trim(),
           nameEs: String(item.name_es || "").trim(),
           qty,
-          unitPrice: supplierUnitPrice,
+          unitPrice,
           normalDiscount:
             normalDiscountRaw !== null && Number.isFinite(normalDiscountRaw) ? normalDiscountRaw : null,
           vipDiscount:
@@ -721,6 +827,7 @@ export async function getBillingExportData(params: {
       } else {
         old.qty += qty;
         old.lineTotal += lineTotal;
+        if (!(old.unitPrice > 0) && unitPrice > 0) old.unitPrice = unitPrice;
         if (!old.nameZh) old.nameZh = String(item.name_zh || "").trim();
         if (!old.nameEs) old.nameEs = String(item.name_es || "").trim();
         if (old.normalDiscount === null && normalDiscountRaw !== null && Number.isFinite(normalDiscountRaw)) {
@@ -748,8 +855,8 @@ export async function getBillingExportData(params: {
     totalQty,
     totalAmount,
     vipDiscountEnabled,
-    items: Array.from(itemsMap.values()),
-    issueDateText: exportDate,
+    items: Array.from(itemsMap.values()).sort(compareProductCodeAsc),
+    issueDateText: parsedRemark.meta.issueDate || exportDate,
     boxCountText: parsedRemark.meta.boxCount,
     shipDateText: parsedRemark.meta.shipDate,
     warehouseText: FIXED_WAREHOUSE,
@@ -792,7 +899,8 @@ export async function buildBillingXlsx(data: BillingExportData) {
     totalProducts: Number(data.totalQty || 0) || 0,
   };
 
-  const items: InvoiceItem[] = data.items.map((item) => ({
+  const sortedExportItems = [...data.items].sort(compareProductCodeAsc);
+  const items: InvoiceItem[] = sortedExportItems.map((item) => ({
     image: item.sku || item.barcode || "",
     sku: item.sku || "",
     barcode: item.barcode || "",
@@ -1648,8 +1756,9 @@ export async function buildBillingPdf(data: BillingExportData) {
   drawItemsHeader();
   let isFirstRowOnPage = true;
 
-  for (let itemIndex = 0; itemIndex < data.items.length; itemIndex += 1) {
-    const item = data.items[itemIndex];
+  const sortedPdfItems = [...data.items].sort(compareProductCodeAsc);
+  for (let itemIndex = 0; itemIndex < sortedPdfItems.length; itemIndex += 1) {
+    const item = sortedPdfItems[itemIndex];
     const primaryName = item.nameEs || item.nameZh || "-";
     const secondaryName = item.nameZh && item.nameEs ? item.nameZh : "";
     const nameLines = wrapTextByWidth(primaryName, fontForText(primaryName), 10.2, 210, unicodeSafe);
@@ -1725,7 +1834,7 @@ export async function buildBillingPdf(data: BillingExportData) {
     isFirstRowOnPage = false;
   }
 
-  const summarySubtotal = data.items.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
+  const summarySubtotal = sortedPdfItems.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
   const summaryDiscount = Math.max(summarySubtotal - data.totalAmount, 0);
 
   if (cursorY < bottomMargin + 120) {

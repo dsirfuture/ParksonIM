@@ -5,9 +5,12 @@ import {
   getBillingExportData,
 } from "@/lib/billing-export";
 import { writeBillingActionLog } from "@/lib/billing-action-log";
+import { hasAppPermission } from "@/lib/permissions";
 import { getSession } from "@/lib/tenant";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET(
   request: Request,
@@ -17,6 +20,9 @@ export async function GET(
     const session = await getSession();
     if (!session?.tenantId || !session?.companyId) {
       return NextResponse.json({ error: "未登录" }, { status: 401 });
+    }
+    if (!(await hasAppPermission(session, "billing.export"))) {
+      return NextResponse.json({ error: "您暂无执行此操作的权限" }, { status: 403 });
     }
 
     const { orderNo } = await params;
@@ -49,6 +55,9 @@ export async function GET(
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`,
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        Pragma: "no-cache",
+        Expires: "0",
       },
     });
   } catch (error) {

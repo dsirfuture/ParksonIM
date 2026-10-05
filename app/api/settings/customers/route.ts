@@ -4,7 +4,12 @@ import { prisma } from "@/lib/prisma";
 import { hasPermission } from "@/lib/permissions";
 import { withPrismaRetry } from "@/lib/prisma-retry";
 import { getSession } from "@/lib/tenant";
-import { parseBillingBooleanFlag, parseBillingRemark, parseBillingSnapshot } from "@/lib/billing-meta";
+import {
+  extractCustomerContactPhone,
+  parseBillingBooleanFlag,
+  parseBillingRemark,
+  parseBillingSnapshot,
+} from "@/lib/billing-meta";
 
 function normalizeKey(value: unknown) {
   return String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
@@ -27,10 +32,10 @@ function buildCandidateKeys(input: {
   whatsapp?: unknown;
 }) {
   return [
-    normalizeKey(input.name),
-    normalizeKey(input.contact),
     normalizeKey(input.phone),
     normalizeKey(input.whatsapp),
+    normalizeKey(input.name),
+    normalizeKey(input.contact),
   ].filter(Boolean);
 }
 
@@ -70,7 +75,7 @@ function pickPreferredYgRow(left: any, right: any) {
 }
 
 function buildYgGroupKey(row: any) {
-  return normalizeKey(row?.company_name) || normalizeKey(row?.customer_key) || normalizeKey(row?.customer_id);
+  return normalizeKey(row?.customer_id) || normalizeKey(row?.customer_key) || normalizeKey(row?.company_name);
 }
 
 function groupYgCustomers(rows: any[]) {
@@ -119,8 +124,23 @@ function normalizeAmountText(value: unknown) {
   return Number.isFinite(amount) ? amount.toFixed(2) : "0.00";
 }
 
+function normalizeOrderChannelLabel(value: unknown) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return "";
+  if (["友购", "yogo"].includes(normalized)) return "友购";
+  if (["微信", "wechat"].includes(normalized)) return "微信";
+  if (["whatsapp", "what's app"].includes(normalized)) return "WhatsApp";
+  return "";
+}
+
 function trimText(value: unknown) {
   return String(value || "").trim();
+}
+
+function normalizeMasterOrderNo(value: unknown) {
+  const text = trimText(value);
+  if (!text) return "";
+  return text.replace(/-\d+$/u, "");
 }
 
 function normalizeDateInputText(value: unknown) {
@@ -129,7 +149,9 @@ function normalizeDateInputText(value: unknown) {
 }
 
 function buildPaymentGroupKey(sourceType: string, key: string) {
-  return `${normalizeKey(sourceType)}:${normalizeKey(key)}`;
+  const source = normalizeKey(sourceType);
+  const normalizedOrderNo = source === "yg" ? normalizeMasterOrderNo(key) : trimText(key);
+  return `${source}:${normalizeKey(normalizedOrderNo)}`;
 }
 
 function toDiscountFactor(value: number | null | undefined) {
@@ -205,36 +227,9 @@ export async function GET() {
       ),
     ]);
 
-    const includedOrders = orders.filter((order) => !isExcludedYgName(order.company_name || order.customer_name));
-    const uniqueIncludedOrderMap = new Map<string, any>();
-    for (const order of includedOrders) {
-      if (!uniqueIncludedOrderMap.has(order.order_no)) {
-        uniqueIncludedOrderMap.set(order.order_no, order);
-      }
-    }
-    const ordersByCustomerId = new Map<string, any[]>();
-    const ordersByCompanyName = new Map<string, any[]>();
-    for (const order of includedOrders) {
-      const customerIdKey = normalizeKey(order.customer_id);
-      if (customerIdKey) {
-        const list = ordersByCustomerId.get(customerIdKey) || [];
-        list.push(order);
-        ordersByCustomerId.set(customerIdKey, list);
-      }
-      const companyNameKey = normalizeKey(order.company_name || order.customer_name);
-      if (companyNameKey) {
-        const list = ordersByCompanyName.get(companyNameKey) || [];
-        list.push(order);
-        ordersByCompanyName.set(companyNameKey, list);
-      }
-    }
-    const orderSummaryTotals = Array.from(uniqueIncludedOrderMap.values()).reduce(
-      (sum, order) => sum + Number(order.order_amount || 0),
-      0,
-    );
-
     const ygCustomers = groupYgCustomers(rawYgCustomers);
     const ygCustomerMap = new Map<string, any>();
+    const ygCustomerByCustomerId = new Map<string, any>();
     for (const row of ygCustomers) {
       const keys = buildCandidateKeys({
         name: row.company_name,
@@ -246,17 +241,22 @@ export async function GET() {
           ygCustomerMap.set(key, row);
         }
       }
+      for (const customerId of Array.from(row._customerIds || [])) {
+        if (!ygCustomerByCustomerId.has(customerId)) {
+          ygCustomerByCustomerId.set(customerId, row);
+        }
+      }
     }
 
     function isYgOverlayRecord(row: any) {
       const channelKey = normalizeKey(row?.order_channel);
-      return Boolean(normalizeKey(row?.yg_order_no)) && channelKey === normalizeKey("yogo");
+      return Boolean(normalizeKey(row?.yg_order_no)) && [normalizeKey("yogo"), normalizeKey("友购")].includes(channelKey);
     }
 
     const overlayByOrderNo = new Map<string, any>();
     for (const row of manualRecords) {
       if (!isYgOverlayRecord(row)) continue;
-      const orderKey = normalizeKey(row.yg_order_no);
+      const orderKey = normalizeKey(normalizeMasterOrderNo(row.yg_order_no));
       if (!orderKey) continue;
       const current = overlayByOrderNo.get(orderKey);
       const currentTime = current ? new Date(current.updated_at || current.created_at || 0).getTime() : 0;
@@ -282,6 +282,44 @@ export async function GET() {
       }
     }
 
+    const includedOrders = orders.filter((order) => {
+      if (!isExcludedYgName(order.company_name || order.customer_name)) return true;
+      const orderKey = normalizeKey(normalizeMasterOrderNo(order.order_no));
+      if (!orderKey) return false;
+      return overlayByOrderNo.has(orderKey) || paymentRecordsByOrderKey.has(buildPaymentGroupKey("yg", order.order_no));
+    });
+    const uniqueIncludedOrderMap = new Map<string, any>();
+    for (const order of includedOrders) {
+      const masterOrderNo = normalizeMasterOrderNo(order.order_no);
+      if (!masterOrderNo) continue;
+      if (!uniqueIncludedOrderMap.has(masterOrderNo)) {
+        uniqueIncludedOrderMap.set(masterOrderNo, {
+          ...order,
+          order_no: masterOrderNo,
+        });
+      }
+    }
+    const ordersByCustomerId = new Map<string, any[]>();
+    const ordersByCompanyName = new Map<string, any[]>();
+    for (const order of includedOrders) {
+      const customerIdKey = normalizeKey(order.customer_id);
+      if (customerIdKey) {
+        const list = ordersByCustomerId.get(customerIdKey) || [];
+        list.push(order);
+        ordersByCustomerId.set(customerIdKey, list);
+      }
+      const companyNameKey = normalizeKey(order.company_name || order.customer_name);
+      if (companyNameKey) {
+        const list = ordersByCompanyName.get(companyNameKey) || [];
+        list.push(order);
+        ordersByCompanyName.set(companyNameKey, list);
+      }
+    }
+    const orderSummaryTotals = Array.from(uniqueIncludedOrderMap.values()).reduce(
+      (sum, order) => sum + Number(order.order_amount || 0),
+      0,
+    );
+
     function buildOrderSummary(input: { customerIds?: string[]; companyName?: string | null }) {
       const matchedMap = new Map<string, any>();
 
@@ -289,14 +327,48 @@ export async function GET() {
       for (const customerId of customerIds) {
         const matches = ordersByCustomerId.get(normalizeKey(customerId)) || [];
         for (const order of matches) {
-          matchedMap.set(order.order_no, order);
+          const masterOrderNo = normalizeMasterOrderNo(order.order_no);
+          if (!masterOrderNo) continue;
+          const existing = matchedMap.get(masterOrderNo);
+          if (!existing) {
+            matchedMap.set(masterOrderNo, {
+              ...order,
+              order_no: masterOrderNo,
+            });
+            continue;
+          }
+          const existingTime = new Date(existing.order_created_at || existing.updated_at || 0).getTime();
+          const orderTime = new Date(order.order_created_at || order.updated_at || 0).getTime();
+          if (orderTime >= existingTime) {
+            matchedMap.set(masterOrderNo, {
+              ...order,
+              order_no: masterOrderNo,
+            });
+          }
         }
       }
 
-      if (matchedMap.size === 0 && normalizeKey(input.companyName)) {
+      if (matchedMap.size === 0 && customerIds.length === 0 && normalizeKey(input.companyName)) {
         const matches = ordersByCompanyName.get(normalizeKey(input.companyName)) || [];
         for (const order of matches) {
-          matchedMap.set(order.order_no, order);
+          const masterOrderNo = normalizeMasterOrderNo(order.order_no);
+          if (!masterOrderNo) continue;
+          const existing = matchedMap.get(masterOrderNo);
+          if (!existing) {
+            matchedMap.set(masterOrderNo, {
+              ...order,
+              order_no: masterOrderNo,
+            });
+            continue;
+          }
+          const existingTime = new Date(existing.order_created_at || existing.updated_at || 0).getTime();
+          const orderTime = new Date(order.order_created_at || order.updated_at || 0).getTime();
+          if (orderTime >= existingTime) {
+            matchedMap.set(masterOrderNo, {
+              ...order,
+              order_no: masterOrderNo,
+            });
+          }
         }
       }
 
@@ -350,7 +422,7 @@ export async function GET() {
             paymentTargetText: trimText(payment.payment_target),
             noteText: trimText(payment.note),
           }));
-          if (paymentRows.length === 0 && overlay?.paid_at && payableAmountText) {
+          if (!overlay?.is_voided && paymentRows.length === 0 && overlay?.paid_at && payableAmountText) {
             paymentRows.push({
               id: `legacy:${order.order_no}`,
               paymentAmountText: payableAmountText,
@@ -360,22 +432,33 @@ export async function GET() {
               noteText: "",
             });
           }
+          if (overlay?.is_voided) {
+            paymentRows.length = 0;
+          }
           return {
             overlayRecordId: overlay?.id || "",
-            orderNo: order.order_no,
+            orderNo: normalizeMasterOrderNo(order.order_no),
             orderDateText: formatDateText(order.order_created_at || order.updated_at),
             orderAmountText: Number(order.order_amount || 0).toFixed(2),
-            payableAmountText,
-            packingAmountText: packedAmountText,
+            payableAmountText: overlay?.is_voided ? "0.00" : payableAmountText,
+            packingAmountText: overlay?.is_voided ? "0.00" : packedAmountText,
             shippedAtText: formatDateText(overlay?.shipped_at) || billingShipDateText,
             paidAtText: formatDateText(overlay?.paid_at) || billingPaidAtText,
             paymentTermText: overlay?.payment_term_days ? String(overlay.payment_term_days) : billingPaymentTermText,
             deliveryAddressText,
             latestStatus: String(order.latest_status || "").trim() || "-",
+            isVoided: Boolean(overlay?.is_voided),
             paymentRows,
           };
         });
 
+      const latestMatchedOrder = Array.from(matchedMap.values())
+        .sort((left, right) => {
+          const leftTime = new Date(left.order_created_at || left.updated_at || 0).getTime();
+          const rightTime = new Date(right.order_created_at || right.updated_at || 0).getTime();
+          return rightTime - leftTime;
+        })[0] || null;
+      const exactYgCustomer = ygCustomerByCustomerId.get(normalizeKey(latestMatchedOrder?.customer_id));
       const totalOrderAmount = detailRows.reduce((sum, item) => sum + Number(item.orderAmountText || 0), 0);
       const latestAddressText = detailRows.find((item) => trimText(item.deliveryAddressText))?.deliveryAddressText || "";
       const latestPaymentTermText = detailRows.find((item) => trimText(item.paymentTermText))?.paymentTermText || "";
@@ -385,6 +468,16 @@ export async function GET() {
         primaryAddressText: latestAddressText,
         paymentTermText: latestPaymentTermText,
         totalOrderCount: detailRows.length,
+        companyNameText: trimText(
+          exactYgCustomer?.company_name || latestMatchedOrder?.company_name || latestMatchedOrder?.customer_name,
+        ),
+        contactNameText: trimText(exactYgCustomer?.relation_name || latestMatchedOrder?.contact_name),
+        phoneText: trimText(
+          exactYgCustomer?.registered_phone || extractCustomerContactPhone(
+            latestMatchedOrder?.contact_phone,
+            parseBillingRemark(latestMatchedOrder?.order_remark).noteText,
+          ),
+        ),
         detailRows,
       };
     }
@@ -437,7 +530,7 @@ export async function GET() {
       const manualChannelText = Array.from(
         new Set(
           manualRows
-            .map((item) => String(item.order_channel || "").trim())
+            .map((item) => normalizeOrderChannelLabel(item.order_channel))
             .filter(Boolean),
         ),
       ).join(" / ");
@@ -474,7 +567,7 @@ export async function GET() {
             customerProfileId: item.customer_profile_id || "",
             ygOrderNo: item.yg_order_no || "",
             externalOrderNo: item.external_order_no || "",
-            orderChannel: item.order_channel || "",
+            orderChannel: normalizeOrderChannelLabel(item.order_channel),
             packingAmountText: normalizeAmountText(item.packing_amount || 0),
             shippedAtText: formatDateText(item.shipped_at),
             paidAtText: formatDateText(item.paid_at),
@@ -497,30 +590,34 @@ export async function GET() {
       if (buildYgGroupKey(matchedYg)) {
         matchedYgCustomerKeys.add(buildYgGroupKey(matchedYg));
       }
-      const linkedYgName =
-        matchedYg?.company_name ||
-        String(row.contact_name || "").trim() ||
-        "";
+      const profileName = trimText(row.name);
+      const profileContact = trimText(row.contact_name);
+      const profilePhone = trimText(row.mobile);
+      const profileAddress = trimText(row.city_country);
+      const matchedYgName = trimText(matchedYg?.company_name);
       const orderSummary = buildOrderSummary({
         customerIds: Array.from(matchedYg?._customerIds || []),
-        companyName: linkedYgName || row.name,
+        companyName: matchedYgName || profileName,
       });
       const manualSummary = buildManualOrderSummary({
         profileId: row.id,
-        customerName: row.name,
+        customerName: profileName,
       });
+      const linkedYgName = matchedYgName || trimText(orderSummary.companyNameText);
 
       return {
         id: row.id,
         sourceType: "profile",
-        name: row.name || matchedYg?.company_name || "",
+        // Persisted customer profile fields must win over synced YG values.
+        // This prevents manually edited real names from bouncing back after refresh.
+        name: profileName || orderSummary.companyNameText || matchedYg?.company_name || "",
         linkedYgName,
-        contact: matchedYg?.relation_name || row.contact_name || "",
-        phone: matchedYg?.registered_phone || row.mobile || "",
+        contact: profileContact || orderSummary.contactNameText || matchedYg?.relation_name || "",
+        phone: profilePhone || orderSummary.phoneText || matchedYg?.registered_phone || "",
         whatsapp: row.whatsapp || "",
         email: row.email || "",
         stores: row.store_addresses || "",
-        cityCountry: row.city_country || orderSummary.primaryAddressText || "",
+        cityCountry: profileAddress || orderSummary.primaryAddressText || "",
         customerType: row.customer_type || "",
         vipLevel: row.vip_level || "",
         creditLevel: row.credit_level || "",
@@ -555,7 +652,7 @@ export async function GET() {
         vipLevel: row.vip_level || "",
         creditLevel: row.credit_level || "",
         tags: row.tag_text || "",
-        channelText: "其他渠道",
+        channelText: "",
         orderStats: row.manual_order_count ? String(row.manual_order_count) : "",
         totalOrderCount: Number(row.manual_order_count || 0),
         totalOrderAmountText: row.manual_order_amount ? Number(row.manual_order_amount).toFixed(2) : "",
@@ -570,13 +667,20 @@ export async function GET() {
     const syncedOnlyRows = ygCustomers
       .filter((row) => !matchedYgCustomerKeys.has(buildYgGroupKey(row)))
       .map((row) => {
+        const orderSummary = buildOrderSummary({
+          customerIds: Array.from(row._customerIds || []),
+          companyName: row.company_name,
+        });
+        const manualSummary = buildManualOrderSummary({
+          customerName: row.name || row.company_name,
+        });
         return {
           id: `yg:${buildYgGroupKey(row)}`,
           sourceType: "yg",
-          name: row.company_name || "",
+          name: orderSummary.companyNameText || row.company_name || "",
           linkedYgName: row.company_name || "",
-          contact: row.relation_name || "",
-          phone: row.registered_phone || "",
+          contact: orderSummary.contactNameText || row.relation_name || "",
+          phone: orderSummary.phoneText || row.registered_phone || "",
           whatsapp: "",
           email: "",
           stores: "",
@@ -586,27 +690,16 @@ export async function GET() {
           creditLevel: "",
           tags: "",
           channelText: "友购",
-          ...(() => {
-            const orderSummary = buildOrderSummary({
-              customerIds: Array.from(row._customerIds || []),
-              companyName: row.company_name,
-            });
-            const manualSummary = buildManualOrderSummary({
-              customerName: row.name || row.company_name,
-            });
-            return {
-              channelText: manualSummary.manualChannelText ? `友购 / ${manualSummary.manualChannelText}` : "友购",
-              orderStats: String(orderSummary.totalOrderCount + manualSummary.manualOrderCount),
-              totalOrderCount: orderSummary.totalOrderCount + manualSummary.manualOrderCount,
-              totalOrderAmountText: orderSummary.totalOrderAmountText,
-              packingAmountText: manualSummary.manualPackingAmountText !== "0.00" ? manualSummary.manualPackingAmountText : "",
-              debtAmountText: manualSummary.manualDebtAmountText !== "0.00" ? manualSummary.manualDebtAmountText : "",
-              paymentTermText: manualSummary.paymentTermText || orderSummary.paymentTermText,
-              cityCountry: orderSummary.primaryAddressText || "",
-              detailRows: orderSummary.detailRows,
-              manualOrderRecords: manualSummary.manualDetailRows,
-            };
-          })(),
+          channelText: manualSummary.manualChannelText ? `友购 / ${manualSummary.manualChannelText}` : "友购",
+          orderStats: String(orderSummary.totalOrderCount + manualSummary.manualOrderCount),
+          totalOrderCount: orderSummary.totalOrderCount + manualSummary.manualOrderCount,
+          totalOrderAmountText: orderSummary.totalOrderAmountText,
+          packingAmountText: manualSummary.manualPackingAmountText !== "0.00" ? manualSummary.manualPackingAmountText : "",
+          debtAmountText: manualSummary.manualDebtAmountText !== "0.00" ? manualSummary.manualDebtAmountText : "",
+          paymentTermText: manualSummary.paymentTermText || orderSummary.paymentTermText,
+          cityCountry: orderSummary.primaryAddressText || "",
+          detailRows: orderSummary.detailRows,
+          manualOrderRecords: manualSummary.manualDetailRows,
         };
       });
 
@@ -620,7 +713,7 @@ export async function GET() {
     }
 
     const remainingOrderGroups = new Map<string, any[]>();
-    for (const order of includedOrders) {
+    for (const order of uniqueIncludedOrderMap.values()) {
       if (seenOrderNos.has(order.order_no)) continue;
       const groupKey =
         normalizeKey(order.customer_id)
@@ -638,18 +731,26 @@ export async function GET() {
         const rightTime = new Date(right.order_created_at || right.updated_at || 0).getTime();
         return rightTime - leftTime;
       });
+      const latestOverlay = overlayByOrderNo.get(normalizeKey(sortedOrders[0]?.order_no));
+      const trackedCustomerName = trimText(latestOverlay?.customer_name);
       const orderSummary = buildOrderSummary({
         customerIds: sortedOrders[0]?.customer_id ? [sortedOrders[0].customer_id] : [],
-        companyName: sortedOrders[0]?.company_name || sortedOrders[0]?.customer_name || "",
+        companyName: trackedCustomerName || sortedOrders[0]?.company_name || sortedOrders[0]?.customer_name || "",
       });
+      const resolvedCustomerName =
+        trackedCustomerName
+        || orderSummary.companyNameText
+        || sortedOrders[0]?.company_name
+        || sortedOrders[0]?.customer_name
+        || "";
 
       return {
         id: `order:${groupKey}`,
         sourceType: "yg",
-        name: sortedOrders[0]?.company_name || sortedOrders[0]?.customer_name || "",
-        linkedYgName: sortedOrders[0]?.company_name || sortedOrders[0]?.customer_name || "",
-        contact: sortedOrders[0]?.contact_name || "",
-        phone: sortedOrders[0]?.contact_phone || "",
+        name: resolvedCustomerName,
+        linkedYgName: resolvedCustomerName,
+        contact: orderSummary.contactNameText || "",
+        phone: orderSummary.phoneText || "",
         whatsapp: "",
         email: "",
         stores: "",
@@ -702,6 +803,9 @@ export async function GET() {
       const totalPackingAmount = sortedRows.reduce((sum, item) => sum + Number(item.packing_amount || 0), 0);
       const unpaidAmount = sortedRows.reduce((sum, item) => sum + (item.paid_at ? 0 : Number(item.packing_amount || 0)), 0);
       const latestTermDays = sortedRows.find((item) => Number.isFinite(Number(item.payment_term_days)))?.payment_term_days;
+      const manualOnlyChannelText = Array.from(
+        new Set(sortedRows.map((item) => normalizeOrderChannelLabel(item.order_channel)).filter(Boolean)),
+      ).join(" / ");
 
       return {
         id: `manual:${groupKey}`,
@@ -718,7 +822,7 @@ export async function GET() {
         vipLevel: "",
         creditLevel: "",
         tags: "",
-        channelText: "其他渠道",
+        channelText: manualOnlyChannelText,
         orderStats: String(sortedRows.length),
         totalOrderCount: sortedRows.length,
         totalOrderAmountText: "0.00",
@@ -751,16 +855,19 @@ export async function GET() {
             customerProfileId: item.customer_profile_id || "",
             ygOrderNo: item.yg_order_no || "",
             externalOrderNo: item.external_order_no || "",
-            orderChannel: item.order_channel || "",
+            orderChannel: normalizeOrderChannelLabel(item.order_channel),
+            isVoided: Boolean(item.is_voided),
             billingAmountOverrideText:
-              item.billing_amount_override !== null && item.billing_amount_override !== undefined
+              item.is_voided
+                ? "0.00"
+                : item.billing_amount_override !== null && item.billing_amount_override !== undefined
                 ? normalizeAmountText(item.billing_amount_override)
                 : "",
-            packingAmountText: normalizeAmountText(item.packing_amount || 0),
+            packingAmountText: item.is_voided ? "0.00" : normalizeAmountText(item.packing_amount || 0),
             shippedAtText: formatDateText(item.shipped_at),
             paidAtText: formatDateText(item.paid_at),
             paymentTermText: item.payment_term_days ? String(item.payment_term_days) : "",
-            paymentRows,
+            paymentRows: item.is_voided ? [] : paymentRows,
           };
         }),
       };
@@ -840,6 +947,51 @@ export async function POST(request: Request) {
         prisma.customerProfile.update({ where: { id }, data }),
       );
       return NextResponse.json({ ok: true, id });
+    }
+
+    const normalizedContact = String(body.contact || "").trim();
+    const normalizedPhone = String(body.phone || "").trim();
+    const normalizedLinkedYgName = String(body.linkedYgName || "").trim();
+    if (!id && (sourceType === "yg" || sourceType === "manual")) {
+      const existingProfileWhere = [
+        ...(normalizedContact && normalizedPhone
+          ? [{
+              contact_name: normalizedContact,
+              mobile: normalizedPhone,
+            }]
+          : []),
+        ...(normalizedLinkedYgName && normalizedPhone
+          ? [{
+              name: normalizedLinkedYgName,
+              mobile: normalizedPhone,
+            }]
+          : []),
+        ...(normalizedLinkedYgName && normalizedContact
+          ? [{
+              name: normalizedLinkedYgName,
+              contact_name: normalizedContact,
+            }]
+          : []),
+      ];
+      if (existingProfileWhere.length > 0) {
+      const existingProfile = await withPrismaRetry(() =>
+        prisma.customerProfile.findFirst({
+          where: {
+            tenant_id: session.tenantId,
+            company_id: session.companyId,
+            OR: existingProfileWhere,
+          },
+          orderBy: [{ updated_at: "desc" }],
+          select: { id: true },
+        }),
+      );
+      if (existingProfile?.id) {
+        await withPrismaRetry(() =>
+          prisma.customerProfile.update({ where: { id: existingProfile.id }, data }),
+        );
+        return NextResponse.json({ ok: true, id: existingProfile.id });
+      }
+      }
     }
 
     const created = await withPrismaRetry(() =>

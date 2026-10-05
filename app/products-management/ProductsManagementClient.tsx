@@ -196,6 +196,20 @@ export function ProductsManagementClient({
   });
   const [catalogShareOpen, setCatalogShareOpen] = useState(false);
   const [catalogCategory, setCatalogCategory] = useState("all");
+  const [catalogShareKeyword, setCatalogShareKeyword] = useState("");
+  const [catalogTitleEditorOpen, setCatalogTitleEditorOpen] = useState(false);
+  const [catalogTitleZh, setCatalogTitleZh] = useState("");
+  const [catalogTitleEs, setCatalogTitleEs] = useState("");
+  const [catalogTitlesByKey, setCatalogTitlesByKey] = useState<Record<string, { titleZh: string; titleEs: string }>>({});
+  const [catalogPendingAction, setCatalogPendingAction] = useState<{
+    type: "export" | "share";
+    format: "pdf" | "xlsx";
+    channel?: "whatsapp" | "wechat";
+  } | null>(null);
+  const [catalogShareNotice, setCatalogShareNotice] = useState("");
+  const [catalogExporting, setCatalogExporting] = useState(false);
+  const [catalogExportProgress, setCatalogExportProgress] = useState(0);
+  const [catalogExportStatusText, setCatalogExportStatusText] = useState("");
   const [comparePreview, setComparePreview] = useState<{
     open: boolean;
     fileName: string;
@@ -322,7 +336,15 @@ export function ProductsManagementClient({
     "Compare...": "对比中...",
     "Prog": "进度",
     "Pick category, export PDF/XLSX and share": "选择品类导出 PDF / XLSX，可直接分享客户",
+    "Add keyword to export filtered products": "可输入关键词，按当前条件导出 PDF / XLSX",
+    "Edit export titles": "编辑导出标题",
+    "Edit titles for keyword export": "输入关键词导出时，可自定义文件大标题中文名和西语名",
+    "Title ZH": "中文大标题",
+    "Title ES": "西语大标题",
+    "Continue export": "继续导出",
     "Category": "品类",
+    "Keyword": "关键词",
+    "Search SKU/cod/name/cat/prov": "搜索 SKU、条形码、品名、分类、供应商",
     "All": "全部",
     "Export PDF": "导出 PDF",
     "Export XLSX": "导出 XLSX",
@@ -339,12 +361,42 @@ export function ProductsManagementClient({
     }
     return zh;
   };
+  const normalizeCatalogTitleEs = (value: string) =>
+    String(value || "")
+      .trim()
+      .toUpperCase();
+  const buildCatalogExportUrl = (
+    format: "pdf" | "xlsx",
+    options?: { share?: boolean; titleZh?: string; titleEs?: string },
+  ) => {
+    const params = new URLSearchParams({
+      format,
+      category: catalogCategory,
+      lang,
+    });
+    const shareKeywordText = catalogShareKeyword.trim();
+    if (shareKeywordText) params.set("keyword", shareKeywordText);
+    const titleZhText = String(options?.titleZh || "").trim();
+    const titleEsText = normalizeCatalogTitleEs(String(options?.titleEs || ""));
+    if (titleZhText) params.set("categoryZh", titleZhText);
+    if (titleEsText) params.set("categoryEs", titleEsText);
+    if (options?.share) params.set("share", "1");
+    return `/api/products/catalog-export?${params.toString()}`;
+  };
   const catalogExportUrl = (format: "pdf" | "xlsx") =>
-    `/api/products/catalog-export?format=${format}&category=${encodeURIComponent(catalogCategory)}&lang=${lang}`;
-  const catalogSharePdfUrl = () =>
-    `${catalogExportUrl("pdf")}&share=1`;
-  const catalogShareXlsxUrl = () =>
-    `${catalogExportUrl("xlsx")}&share=1`;
+    buildCatalogExportUrl(format);
+  const getCatalogCurrentSeedKey = () => `${catalogCategory}__${catalogShareKeyword.trim()}`;
+  const getCatalogCurrentTitleOptions = () => {
+    const currentSeedKey = getCatalogCurrentSeedKey();
+    const saved = catalogTitlesByKey[currentSeedKey];
+    const titleZhText = String(saved?.titleZh || "").trim();
+    const titleEsText = String(saved?.titleEs || "").trim();
+    if (!titleZhText && !titleEsText) return undefined;
+    return {
+      titleZh: titleZhText,
+      titleEs: titleEsText,
+    };
+  };
   const quickBaseOptions = [
     { key: "hasImage", label: tx("有图", "Con img") },
     { key: "noImage", label: tx("无图", "Sin img") },
@@ -371,6 +423,13 @@ export function ProductsManagementClient({
   useEffect(() => {
     setLang(getClientLang());
   }, []);
+
+  useEffect(() => {
+    if (!readOnlyMode) return;
+    setKeyword("");
+    setQuickSelected([]);
+    setPage(1);
+  }, [readOnlyMode]);
 
   useEffect(() => {
     if (!uploading) return;
@@ -432,18 +491,22 @@ export function ProductsManagementClient({
     [supplierChoices, edit?.supplier],
   );
   const on = rows.filter((r) => r.statusText === "上架").length;
-  const off = rows.length - on;
+  const off = rows.filter((r) => r.statusText !== "上架").length;
 
   const filtered = useMemo(
-    () =>
-      rows.filter((r) => {
-        const v = keyword.trim().toLowerCase();
+    () => {
+      const trimmedKeyword = keyword.trim().toLowerCase();
+      if (!trimmedKeyword && quickSelected.length === 0) {
+        return rows;
+      }
+
+      return rows.filter((r) => {
         const kw =
-          !v ||
+          !trimmedKeyword ||
           [r.sku, r.barcode, r.nameZh, r.nameEs, r.category, r.categoryName, r.supplier]
             .join(" ")
             .toLowerCase()
-            .includes(v);
+            .includes(trimmedKeyword);
 
         const quickMatched = quickSelected.every((key) => {
           if (key.startsWith("cat:")) {
@@ -451,8 +514,8 @@ export function ProductsManagementClient({
             return categoryText === key.slice(4);
           }
           if (key.startsWith("supplier:")) return r.supplier === key.slice(9);
-          if (key === "hasImage") return imageFlag(r);
-          if (key === "noImage") return !imageFlag(r);
+          if (key === "hasImage") return r.hasImage;
+          if (key === "noImage") return !r.hasImage;
           if (key === "hasBarcode") return Boolean(r.barcode);
           if (key === "noBarcode") return !r.barcode;
           if (key === "hasZh") return Boolean(r.nameZh);
@@ -475,7 +538,8 @@ export function ProductsManagementClient({
         });
 
         return kw && quickMatched;
-      }),
+      });
+    },
     [rows, keyword, quickSelected],
   );
 
@@ -516,7 +580,8 @@ export function ProductsManagementClient({
     const res = await fetch(`/api/products${q}`);
     const json = await res.json();
     if (!res.ok || !json?.ok) throw new Error(json?.error || tx("读取失败", "Load fail"));
-    setRows(json.items || []);
+    const nextItems = Array.isArray(json.items) ? json.items : [];
+    setRows(nextItems);
   }
 
   async function loadImportRecords() {
@@ -862,7 +927,7 @@ export function ProductsManagementClient({
       return;
     }
     const data = filtered.map((r) => ({
-      图片: imageFlag(r) ? "有图" : "无图",
+      图片: r.hasImage ? "有图" : "无图",
       编号: r.sku,
       条形码: r.barcode || "",
       中文名: r.nameZh || "",
@@ -900,7 +965,7 @@ export function ProductsManagementClient({
       return;
     }
     const data = rows.map((r) => ({
-      图片: imageFlag(r) ? "有图" : "无图",
+      图片: r.hasImage ? "有图" : "无图",
       编号: r.sku,
       条形码: r.barcode || "",
       中文名: r.nameZh || "",
@@ -960,6 +1025,202 @@ export function ProductsManagementClient({
     window.open(`/api/products/import-records/${id}`, "_blank");
   }
 
+  function openCatalogTitleEditor(
+    action: { type: "export" | "share"; format: "pdf" | "xlsx"; channel?: "whatsapp" | "wechat" },
+  ) {
+    const trimmedKeyword = catalogShareKeyword.trim();
+    const fallbackCategory = catalogCategory === "all" ? tx("全部品类", "ALL CATEGORIES") : catalogCategory;
+    const defaultTitle = trimmedKeyword || fallbackCategory;
+    const seedKey = getCatalogCurrentSeedKey();
+    const saved = catalogTitlesByKey[seedKey];
+    setCatalogTitleZh(String(saved?.titleZh || "").trim() || defaultTitle);
+    setCatalogTitleEs(normalizeCatalogTitleEs(String(saved?.titleEs || "").trim() || defaultTitle));
+    setCatalogPendingAction(action);
+    setCatalogTitleEditorOpen(true);
+  }
+
+  function buildCatalogDownloadName(
+    format: "pdf" | "xlsx",
+    options?: { titleZh?: string; titleEs?: string },
+  ) {
+    const titleZhText = String(options?.titleZh || "").trim();
+    const titleEsText = normalizeCatalogTitleEs(String(options?.titleEs || ""));
+    const fallbackCategory = catalogCategory === "all" ? "ALL" : catalogCategory.trim();
+    const baseName = titleZhText || titleEsText || fallbackCategory || "CATALOG";
+    const stamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
+    return `PARKSONMX-${baseName}-${stamp}`.replace(/[\\/:*?"<>|]+/g, "_") + `.${format}`;
+  }
+
+  async function downloadCatalogExport(
+    format: "pdf" | "xlsx",
+    options?: { titleZh?: string; titleEs?: string },
+  ) {
+    let preparingTimer: ReturnType<typeof setInterval> | null = null;
+    try {
+      setCatalogExporting(true);
+      setCatalogExportProgress(3);
+      setCatalogExportStatusText(tx("正在生成导出文件…", "Preparing export file..."));
+      preparingTimer = setInterval(() => {
+        setCatalogExportProgress((prev) => (prev >= 32 ? prev : prev + 2));
+      }, 350);
+
+      const url = `${buildCatalogExportUrl(format, options)}&ts=${Date.now()}`;
+      const res = await fetch(url, { credentials: "same-origin", cache: "no-store" });
+      if (preparingTimer) {
+        clearInterval(preparingTimer);
+        preparingTimer = null;
+      }
+
+      const totalBytes = Number(res.headers.get("content-length") || 0);
+      const reader = res.body?.getReader();
+      const chunks: ArrayBuffer[] = [];
+      let loadedBytes = 0;
+
+      if (reader) {
+        setCatalogExportStatusText(tx("正在下载导出文件…", "Downloading export file..."));
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (!value) continue;
+          chunks.push(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer);
+          loadedBytes += value.byteLength;
+          if (totalBytes > 0) {
+            const ratio = Math.min(1, loadedBytes / totalBytes);
+            const nextProgress = 35 + Math.round(ratio * 60);
+            setCatalogExportProgress((prev) => (nextProgress > prev ? nextProgress : prev));
+          } else {
+            const nextProgress = Math.min(95, 35 + Math.round(Math.log10(loadedBytes + 10) * 14));
+            setCatalogExportProgress((prev) => (nextProgress > prev ? nextProgress : prev));
+          }
+        }
+      }
+
+      const blob =
+        chunks.length > 0
+          ? new Blob(chunks, {
+              type:
+                res.headers.get("content-type")
+                || (format === "pdf"
+                  ? "application/pdf"
+                  : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            })
+          : await res.blob();
+
+      if (!res.ok) {
+        const text = await blob.text().catch(() => "");
+        throw new Error(text || tx("导出失败", "Export failed"));
+      }
+
+      setCatalogExportProgress(100);
+      setCatalogExportStatusText(tx("导出完成，正在保存…", "Export ready, saving..."));
+      const objectUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = buildCatalogDownloadName(format, options);
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(objectUrl);
+      setTimeout(() => {
+        setCatalogExporting(false);
+        setCatalogExportProgress(0);
+        setCatalogExportStatusText("");
+      }, 450);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : tx("导出失败", "Export failed"));
+      setCatalogExporting(false);
+      setCatalogExportProgress(0);
+      setCatalogExportStatusText("");
+    } finally {
+      if (preparingTimer) clearInterval(preparingTimer);
+    }
+  }
+
+  async function shareCatalogExport(
+    format: "pdf" | "xlsx",
+    channel: "whatsapp" | "wechat",
+    options?: { titleZh?: string; titleEs?: string },
+  ) {
+    try {
+      const res = await fetch("/api/products/catalog-share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          format,
+          lang,
+          category: catalogCategory,
+          keyword: catalogShareKeyword.trim(),
+          categoryZh: String(options?.titleZh || "").trim(),
+          categoryEs: normalizeCatalogTitleEs(String(options?.titleEs || "")),
+        }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok || !json?.publicPath) {
+        throw new Error(json?.error || tx("分享失败", "Share failed"));
+      }
+      const url = `${window.location.origin}${json.publicPath}`;
+      const titleZhText = String(options?.titleZh || "").trim();
+      const titleEsText = normalizeCatalogTitleEs(String(options?.titleEs || ""));
+      const shareTitle = titleZhText || titleEsText || tx("产品清单", "Catalog");
+      const shareText = `${shareTitle}\n${url}`;
+      if (channel === "whatsapp") {
+        await navigator.clipboard.writeText(shareText);
+        window.open("https://web.whatsapp.com/", "_blank", "noopener,noreferrer");
+        setCatalogShareNotice(tx("已复制标题和短链接，请到 WhatsApp 粘贴发送", "Copied title and short link, paste into WhatsApp"));
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setCatalogShareNotice(tx("微信请粘贴已复制短链接", "Paste copied short link in WeChat"));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : tx("分享失败", "Share failed"));
+    }
+  }
+
+  function shouldPromptCatalogTitles() {
+    if (!catalogShareKeyword.trim()) return false;
+    return !getCatalogCurrentTitleOptions();
+  }
+
+  function handleCatalogExport(format: "pdf" | "xlsx") {
+    const titleOptions = getCatalogCurrentTitleOptions();
+    if (shouldPromptCatalogTitles()) {
+      openCatalogTitleEditor({ type: "export", format });
+      return;
+    }
+    void downloadCatalogExport(format, titleOptions);
+  }
+
+  function handleCatalogShare(format: "pdf" | "xlsx", channel: "whatsapp" | "wechat") {
+    const titleOptions = getCatalogCurrentTitleOptions();
+    if (shouldPromptCatalogTitles()) {
+      openCatalogTitleEditor({ type: "share", format, channel });
+      return;
+    }
+    void shareCatalogExport(format, channel, titleOptions);
+  }
+
+  function confirmCatalogExportWithTitles() {
+    if (!catalogPendingAction) return;
+    const titleZhText = catalogTitleZh.trim();
+    const titleEsText = normalizeCatalogTitleEs(catalogTitleEs);
+    const titleOptions = {
+      titleZh: titleZhText,
+      titleEs: titleEsText,
+    };
+    setCatalogTitlesByKey((prev) => ({
+      ...prev,
+      [getCatalogCurrentSeedKey()]: titleOptions,
+    }));
+    if (catalogPendingAction.type === "share" && catalogPendingAction.channel) {
+      void shareCatalogExport(catalogPendingAction.format, catalogPendingAction.channel, titleOptions);
+    } else {
+      void downloadCatalogExport(catalogPendingAction.format, titleOptions);
+    }
+    setCatalogTitleEditorOpen(false);
+    setCatalogPendingAction(null);
+  }
+
   return (
     <section className="space-y-4">
       <TableCard
@@ -974,7 +1235,7 @@ export function ProductsManagementClient({
 	              <button type="button" onClick={() => { setImportMode("compare"); fileRef.current?.click(); }} disabled={uploading} className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{uploading ? tx("处理中...", "Proc...") : tx("对比数据导入", "Imp cmp")}</button>
 	              <input ref={fileRef} type="file" accept=".xls,.xlsx" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void openComparePreview(f); }} />
 	              <button type="button" onClick={openQuickModal} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700">
-	                {lang === "zh" ? `批量筛选（${filtered.length}）` : `Filt (${filtered.length})`}
+	                {tx("批量筛选", "Filt")}
 	              </button>
 	              </div>
 
@@ -1006,6 +1267,7 @@ export function ProductsManagementClient({
         </div>
       </TableCard>
 
+
       <TableCard
         title={tx("产品目录", "Cat prod")}
         className="overflow-visible"
@@ -1014,7 +1276,11 @@ export function ProductsManagementClient({
             <p className="text-xs text-slate-500">{yogoLastUpdatedText}</p>
             <button
               type="button"
-              onClick={() => setCatalogShareOpen(true)}
+              onClick={() => {
+                setCatalogCategory("all");
+                setCatalogShareKeyword(keyword);
+                setCatalogShareOpen(true);
+              }}
               className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700"
             >
               {tx("分享客户产品清单", "Share catalog")}
@@ -1249,8 +1515,17 @@ export function ProductsManagementClient({
       {quickOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
           <div className="flex w-full max-w-[940px] flex-col rounded-2xl bg-white text-[13px] shadow-2xl">
-            <div className="border-b border-slate-200 px-5 py-4">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <h3 className="text-[15px] font-semibold">{tx("批量筛选与修改", "Filt + edit")}</h3>
+              <button
+                type="button"
+                onClick={cancelQuickModal}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
+                aria-label={tx("关闭", "Close")}
+                title={tx("关闭", "Close")}
+              >
+                <span className="text-lg leading-none">&times;</span>
+              </button>
             </div>
 
             <div className="space-y-4 px-5 py-4">
@@ -1567,6 +1842,7 @@ export function ProductsManagementClient({
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xl font-bold tracking-wide text-slate-900">PARKSONMX</p>
                 <p className="mt-1 text-xs text-slate-500">{tx("选择品类导出 PDF / XLSX，可直接分享客户", "Pick category, export PDF/XLSX and share")}</p>
+                <p className="mt-1 text-xs text-slate-400">{tx("可输入关键词，按当前条件导出 PDF / XLSX", "Add keyword to export filtered products")}</p>
               </div>
 
               <div className="space-y-1">
@@ -1584,25 +1860,31 @@ export function ProductsManagementClient({
                   ))}
                 </select>
               </div>
+              <div className="space-y-1">
+                <p className="text-xs text-slate-500">{tx("关键词", "Keyword")}</p>
+                <input
+                  value={catalogShareKeyword}
+                  onChange={(e) => setCatalogShareKeyword(e.target.value)}
+                  placeholder={tx("搜索 SKU、条形码、品名、分类、供应商", "Search SKU/cod/name/cat/prov")}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <a
-                    href={catalogExportUrl("pdf")}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                  >
-                    {tx("导出 PDF", "Export PDF")}
-                  </a>
+	                  <button
+	                    type="button"
+	                    onClick={() => handleCatalogExport("pdf")}
+	                    disabled={catalogExporting}
+	                    className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+	                  >
+	                    {tx("导出 PDF", "Export PDF")}
+	                  </button>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       title={tx("PDF 分享到 WhatsApp", "PDF to WhatsApp")}
                       aria-label={tx("PDF 分享到 WhatsApp", "PDF to WhatsApp")}
-                      onClick={() => {
-                        const url = `${window.location.origin}${catalogSharePdfUrl()}`;
-                        window.open(`https://wa.me/?text=${encodeURIComponent(url)}`, "_blank", "noopener,noreferrer");
-                      }}
+                      onClick={() => handleCatalogShare("pdf", "whatsapp")}
                       className="inline-flex h-10 w-full items-center justify-center text-emerald-600 transition hover:text-emerald-700"
                     >
                       <svg viewBox="0 0 32 32" className="h-7 w-7" aria-hidden="true">
@@ -1617,11 +1899,7 @@ export function ProductsManagementClient({
                       type="button"
                       title={tx("PDF 分享到微信", "PDF to WeChat")}
                       aria-label={tx("PDF 分享到微信", "PDF to WeChat")}
-                      onClick={async () => {
-                        const url = `${window.location.origin}${catalogSharePdfUrl()}`;
-                        await navigator.clipboard.writeText(url);
-                        window.alert(tx("微信请粘贴已复制链接", "Paste copied link in WeChat"));
-                      }}
+                      onClick={() => handleCatalogShare("pdf", "wechat")}
                       className="inline-flex h-10 w-full items-center justify-center text-sky-600 transition hover:text-sky-700"
                     >
                       <svg viewBox="0 0 32 32" className="h-7 w-7" aria-hidden="true">
@@ -1635,21 +1913,20 @@ export function ProductsManagementClient({
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <a
-                    href={catalogExportUrl("xlsx")}
-                    className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                  >
-                    {tx("导出 XLSX", "Export XLSX")}
-                  </a>
+	                  <button
+	                    type="button"
+	                    onClick={() => handleCatalogExport("xlsx")}
+	                    disabled={catalogExporting}
+	                    className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+	                  >
+	                    {tx("导出 XLSX", "Export XLSX")}
+	                  </button>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       title={tx("XLSX 分享到 WhatsApp", "XLSX to WhatsApp")}
                       aria-label={tx("XLSX 分享到 WhatsApp", "XLSX to WhatsApp")}
-                      onClick={() => {
-                        const url = `${window.location.origin}${catalogShareXlsxUrl()}`;
-                        window.open(`https://wa.me/?text=${encodeURIComponent(url)}`, "_blank", "noopener,noreferrer");
-                      }}
+                      onClick={() => handleCatalogShare("xlsx", "whatsapp")}
                       className="inline-flex h-10 w-full items-center justify-center text-emerald-600 transition hover:text-emerald-700"
                     >
                       <svg viewBox="0 0 32 32" className="h-7 w-7" aria-hidden="true">
@@ -1664,11 +1941,7 @@ export function ProductsManagementClient({
                       type="button"
                       title={tx("XLSX 分享到微信", "XLSX to WeChat")}
                       aria-label={tx("XLSX 分享到微信", "XLSX to WeChat")}
-                      onClick={async () => {
-                        const url = `${window.location.origin}${catalogShareXlsxUrl()}`;
-                        await navigator.clipboard.writeText(url);
-                        window.alert(tx("微信请粘贴已复制链接", "Paste copied link in WeChat"));
-                      }}
+                      onClick={() => handleCatalogShare("xlsx", "wechat")}
                       className="inline-flex h-10 w-full items-center justify-center text-sky-600 transition hover:text-sky-700"
                     >
                       <svg viewBox="0 0 32 32" className="h-7 w-7" aria-hidden="true">
@@ -1695,6 +1968,93 @@ export function ProductsManagementClient({
           </div>
         </div>
       ) : null}
+	      {catalogExporting ? (
+	        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/45 px-4">
+	          <div className="w-full max-w-[420px] rounded-xl bg-white p-5 shadow-2xl">
+	            <div className="text-sm font-semibold text-slate-900">
+	              {tx("正在导出产品清单", "Exporting catalog")}
+	            </div>
+	            <p className="mt-2 text-xs text-slate-500">
+	              {catalogExportStatusText || tx("请稍候，导出完成后会自动下载。", "Please wait, download starts automatically.")}
+	            </p>
+	            <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
+	              <div
+	                className="h-full rounded-full bg-primary transition-all"
+	                style={{ width: `${Math.max(2, Math.min(100, catalogExportProgress))}%` }}
+	              />
+	            </div>
+	            <div className="mt-2 text-right text-xs tabular-nums text-slate-500">
+	              {Math.max(0, Math.min(100, Math.round(catalogExportProgress)))}%
+	            </div>
+	          </div>
+	        </div>
+	      ) : null}
+	      {catalogTitleEditorOpen ? (
+	        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/45 px-4">
+          <div className="w-full max-w-[520px] rounded-xl bg-white shadow-2xl">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <h3 className="text-base font-semibold text-slate-900">{tx("编辑导出标题", "Edit export titles")}</h3>
+              <p className="mt-1 text-xs text-slate-500">{tx("输入关键词导出时，可自定义文件大标题中文名和西语名", "Edit titles for keyword export")}</p>
+            </div>
+            <div className="space-y-4 px-5 py-5">
+              <div className="space-y-1">
+                <p className="text-xs text-slate-500">{tx("中文大标题", "Title ZH")}</p>
+                <input
+                  value={catalogTitleZh}
+                  onChange={(e) => setCatalogTitleZh(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-slate-500">{tx("西语大标题", "Title ES")}</p>
+                <input
+                  value={catalogTitleEs}
+                  onChange={(e) => setCatalogTitleEs(normalizeCatalogTitleEs(e.target.value))}
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setCatalogTitleEditorOpen(false);
+                  setCatalogPendingAction(null);
+                }}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
+              >
+                {tx("取消", "Canc")}
+              </button>
+              <button
+                type="button"
+                onClick={confirmCatalogExportWithTitles}
+                className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white"
+              >
+                {tx("继续导出", "Continue export")}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {catalogShareNotice ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/35 px-4">
+          <div className="w-full max-w-[460px] rounded-2xl bg-white shadow-2xl">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <h3 className="text-base font-semibold text-slate-900">{tx("分享提示", "Share notice")}</h3>
+            </div>
+            <div className="px-5 py-5 text-sm text-slate-700">{catalogShareNotice}</div>
+            <div className="flex justify-end border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setCatalogShareNotice("")}
+                className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white"
+              >
+                {tx("确定", "OK")}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <ImageLightbox
         open={preview.open}
         src={preview.src}
@@ -1704,7 +2064,3 @@ export function ProductsManagementClient({
     </section>
   );
 }
-
-
-  const imageFlag = (row: ProductRow) =>
-    HAS_REMOTE_PRODUCT_IMAGE_BASE ? true : row.hasImage;

@@ -5,7 +5,12 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { TableCard } from "@/components/table-card";
 import { ProductImage } from "@/components/product-image";
 import { ImageLightbox } from "@/components/image-lightbox";
-import { formatStoreLabelDisplay, getPaymentTermDisplayLines, normalizeStoreLabelInput } from "@/lib/billing-meta";
+import {
+  formatStoreLabelDisplay,
+  getPaymentTermDisplayLines,
+  normalizeStoreLabelInput,
+  toBillingDateInputValue,
+} from "@/lib/billing-meta";
 import { buildProductImageUrl } from "@/lib/product-image-url";
 
 type TabKey = "customer" | "supplier";
@@ -132,6 +137,10 @@ function EyeIcon() {
   return <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8"><path d="M1.75 10s2.75-4.75 8.25-4.75S18.25 10 18.25 10 15.5 14.75 10 14.75 1.75 10 1.75 10Z" /><circle cx="10" cy="10" r="2.25" /></svg>;
 }
 
+function SearchIcon() {
+  return <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8"><circle cx="9" cy="9" r="5.5" /><path d="M13.25 13.25 17 17" /></svg>;
+}
+
 function PencilIcon() {
   return <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8"><path d="M3.5 13.75V16.5h2.75L15 7.75 12.25 5 3.5 13.75Z" /><path d="M10.75 6.5 13.5 9.25" /><path d="M11.5 3.75 16.25 8.5" /></svg>;
 }
@@ -144,12 +153,25 @@ function PaidIcon() {
   return <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8"><path d="M3.5 10 7.25 13.75 16.5 4.5" /><path d="M10 1.75h4.25A1.75 1.75 0 0 1 16 3.5v4.25" /><path d="M10 18.25H5.75A1.75 1.75 0 0 1 4 16.5v-4.25" /></svg>;
 }
 
+function PaymentStateIcon({ paid }: { paid: boolean }) {
+  return <span className="inline-flex w-3.5 justify-center text-[13px] leading-none">{paid ? "√" : "X"}</span>;
+}
+
 function MapPinIcon() {
   return <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8"><path d="M10 18s5-4.86 5-9a5 5 0 1 0-10 0c0 4.14 5 9 5 9Z" /><circle cx="10" cy="9" r="1.75" /></svg>;
 }
 
 function toMoney(value: number) {
   return value.toFixed(2);
+}
+
+async function readJsonSafe<T>(raw: string): Promise<T | null> {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
 }
 
 function toPercentText(value: number | null) {
@@ -272,6 +294,8 @@ export function BillingClient({
   const [historyEntries, setHistoryEntries] = useState<BillingHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const [detailSearchKeyword, setDetailSearchKeyword] = useState("");
+  const [detailSearchModalOpen, setDetailSearchModalOpen] = useState(false);
 
   useEffect(() => {
     setCurrentTab(activeTab);
@@ -303,6 +327,21 @@ export function BillingClient({
   const detailRow = useMemo(() => (detailOrderNo ? rows.find((row) => row.orderNo === detailOrderNo) || null : null), [detailOrderNo, rows]);
   const detailGenerated = Boolean(detailRow?.generatedAtText);
   const detailPaid = Boolean(detailRow?.paidAtText);
+  const detailSearchResults = useMemo(() => {
+    const keyword = String(detailSearchKeyword || "").trim().toLowerCase();
+    if (!keyword) return [];
+    return detailItems.filter((item) => {
+      const haystack = [
+        item.sku,
+        item.barcode,
+        item.nameZh,
+        item.nameEs,
+      ]
+        .map((value) => String(value || "").toLowerCase())
+        .join(" ");
+      return haystack.includes(keyword);
+    });
+  }, [detailItems, detailSearchKeyword]);
   const rowAmountMap = useMemo(() => {
     const map = new Map<string, { originalAmountText: string; discountedAmountText: string }>();
     for (const row of rows) {
@@ -334,6 +373,16 @@ export function BillingClient({
     setVipDiscountEnabled(detailRow.generatedVipEnabled);
   }, [detailRow?.generatedAtText, detailRow?.generatedVipEnabled]);
 
+  useEffect(() => {
+    setDetailSearchKeyword("");
+    setDetailSearchModalOpen(false);
+  }, [detailOrderNo]);
+
+  function openDetailSearchModal() {
+    if (!String(detailSearchKeyword || "").trim()) return;
+    setDetailSearchModalOpen(true);
+  }
+
   function handleExport(kind: "xlsx" | "pdf") {
     if (!detailGenerated || !exportLinks) return;
     window.location.assign(exportLinks[kind]);
@@ -346,7 +395,7 @@ export function BillingClient({
     setHistoryLoading(true);
     try {
       const res = await fetch(`/api/billing/${encodeURIComponent(orderNo)}/history`);
-      const data = await res.json();
+      const data = await readJsonSafe<{ ok?: boolean; error?: string; entries?: BillingHistoryEntry[] }>(await res.text());
       if (!res.ok || !data?.ok) {
         throw new Error(data?.error || "获取账单记录失败");
       }
@@ -391,7 +440,7 @@ export function BillingClient({
               : undefined,
         }),
       });
-      const result = await res.json();
+      const result = await readJsonSafe<{ ok?: boolean; error?: string; data?: { generatedAtText?: string; generatedVipEnabled?: boolean; paidAtText?: string } }>(await res.text());
       if (!res.ok || !result?.ok) {
         throw new Error(
           result?.error ||
@@ -405,11 +454,17 @@ export function BillingClient({
         );
       }
 
+      const data = (result.data || {}) as Partial<{
+        generatedAtText: string;
+        generatedVipEnabled: boolean;
+        paidAtText: string;
+      }>;
+
       setRows((prev) => prev.map((row) => row.id !== detailRow.id ? row : {
         ...row,
-        generatedAtText: result.data.generatedAtText || "",
-        generatedVipEnabled: Boolean(result.data.generatedVipEnabled),
-        paidAtText: result.data.paidAtText || "",
+        generatedAtText: data.generatedAtText || "",
+        generatedVipEnabled: Boolean(data.generatedVipEnabled),
+        paidAtText: data.paidAtText || "",
       }));
 
       if (action === "revoke") {
@@ -450,15 +505,21 @@ export function BillingClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "mark_paid" }),
       });
-      const result = await res.json();
+      const result = await readJsonSafe<{ ok?: boolean; error?: string; data?: { generatedAtText?: string; generatedVipEnabled?: boolean; paidAtText?: string } }>(await res.text());
       if (!res.ok || !result?.ok) {
         throw new Error(result?.error || "标记已付款失败");
       }
+      const data = (result.data || {}) as Partial<{
+        generatedAtText: string;
+        generatedVipEnabled: boolean;
+        paidAtText: string;
+      }>;
+
       setRows((prev) => prev.map((item) => item.id !== row.id ? item : {
         ...item,
-        generatedAtText: result.data.generatedAtText || item.generatedAtText,
-        generatedVipEnabled: Boolean(result.data.generatedVipEnabled),
-        paidAtText: result.data.paidAtText || "",
+        generatedAtText: data.generatedAtText || item.generatedAtText,
+        generatedVipEnabled: Boolean(data.generatedVipEnabled),
+        paidAtText: data.paidAtText || "",
       }));
     } catch (error) {
       setStatusActionError(error instanceof Error ? error.message : "标记已付款失败");
@@ -480,15 +541,21 @@ export function BillingClient({
           adminPassword,
         }),
       });
-      const result = await res.json();
+      const result = await readJsonSafe<{ ok?: boolean; error?: string; data?: { generatedAtText?: string; generatedVipEnabled?: boolean; paidAtText?: string } }>(await res.text());
       if (!res.ok || !result?.ok) {
         throw new Error(result?.error || "撤销已付款失败");
       }
+      const data = (result.data || {}) as Partial<{
+        generatedAtText: string;
+        generatedVipEnabled: boolean;
+        paidAtText: string;
+      }>;
+
       setRows((prev) => prev.map((item) => item.id !== orderId ? item : {
         ...item,
-        generatedAtText: result.data.generatedAtText || item.generatedAtText,
-        generatedVipEnabled: Boolean(result.data.generatedVipEnabled),
-        paidAtText: result.data.paidAtText || "",
+        generatedAtText: data.generatedAtText || item.generatedAtText,
+        generatedVipEnabled: Boolean(data.generatedVipEnabled),
+        paidAtText: data.paidAtText || "",
       }));
       setRevokePaidState(null);
       if (detailOrderNo === orderNo) {
@@ -503,10 +570,15 @@ export function BillingClient({
 
   async function saveEdit() {
     if (!editState) return;
+    const saveTarget = String(editState.id || "").trim() || String(editState.orderNo || "").trim();
+    if (!saveTarget) {
+      setSaveError("缺少可保存的账单标识");
+      return;
+    }
     setSaving(true);
     setSaveError("");
     try {
-      const res = await fetch(`/api/yg-orders/${editState.id}`, {
+      const res = await fetch(`/api/yg-orders/${encodeURIComponent(saveTarget)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -516,6 +588,7 @@ export function BillingClient({
           remarkText: editState.remarkText.trim(),
           storeLabel: normalizeStoreLabelInput(editState.storeLabelText),
           headerMeta: {
+            issueDate: editState.issueDateText.trim(),
             boxCount: editState.boxCountText.trim(),
             shipDate: editState.shipDateText.trim(),
             shippingMethod: editState.shippingMethodText.trim(),
@@ -526,26 +599,46 @@ export function BillingClient({
           },
         }),
       });
-      const result = await res.json();
-      if (!res.ok || !result?.ok) throw new Error(result?.error || "保存失败");
+      const raw = await res.text();
+      const result = await readJsonSafe<{ ok?: boolean; error?: string; data?: BillingRow }>(raw);
+      if (!res.ok || !result?.ok) {
+        const fallback = raw.trim().slice(0, 180);
+        throw new Error(result?.error || fallback || `保存失败（HTTP ${res.status}）`);
+      }
+      const data = (result.data || {}) as Partial<{
+        customerName: string;
+        contactText: string;
+        addressText: string;
+        remarkText: string;
+        storeLabelText: string;
+        issueDateText: string;
+        boxCountText: string;
+        shipDateText: string;
+        warehouseText: string;
+        shippingMethodText: string;
+        recipientNameText: string;
+        recipientPhoneText: string;
+        carrierCompanyText: string;
+        paymentTermText: string;
+      }>;
 
       setRows((prev) => prev.map((row) => row.id !== editState.id ? row : {
         ...row,
-        companyName: result.data.customerName || row.companyName,
-        customerName: result.data.customerName || row.customerName,
-        contactPhone: result.data.contactText || row.contactPhone,
-        addressText: result.data.addressText || row.addressText,
-        remarkText: result.data.remarkText || row.remarkText,
-        storeLabelText: normalizeStoreLabelInput(result.data.storeLabelText || row.storeLabelText),
-        issueDateText: result.data.issueDateText || row.issueDateText,
-        boxCountText: result.data.boxCountText || row.boxCountText,
-        shipDateText: result.data.shipDateText || row.shipDateText,
-        warehouseText: result.data.warehouseText || row.warehouseText,
-        shippingMethodText: result.data.shippingMethodText || row.shippingMethodText,
-        recipientNameText: result.data.recipientNameText || row.recipientNameText,
-        recipientPhoneText: result.data.recipientPhoneText || row.recipientPhoneText,
-        carrierCompanyText: result.data.carrierCompanyText || row.carrierCompanyText,
-        paymentTermText: result.data.paymentTermText || row.paymentTermText,
+        companyName: data.customerName || row.companyName,
+        customerName: data.customerName || row.customerName,
+        contactPhone: data.contactText || row.contactPhone,
+        addressText: data.addressText || row.addressText,
+        remarkText: data.remarkText || row.remarkText,
+        storeLabelText: normalizeStoreLabelInput(data.storeLabelText || row.storeLabelText),
+        issueDateText: data.issueDateText || row.issueDateText,
+        boxCountText: data.boxCountText || row.boxCountText,
+        shipDateText: data.shipDateText || row.shipDateText,
+        warehouseText: data.warehouseText || row.warehouseText,
+        shippingMethodText: data.shippingMethodText || row.shippingMethodText,
+        recipientNameText: data.recipientNameText || row.recipientNameText,
+        recipientPhoneText: data.recipientPhoneText || row.recipientPhoneText,
+        carrierCompanyText: data.carrierCompanyText || row.carrierCompanyText,
+        paymentTermText: data.paymentTermText || row.paymentTermText,
       }));
       setEditState(null);
     } catch (error) {
@@ -565,7 +658,7 @@ export function BillingClient({
       addressText: detailRow.addressText || "",
       remarkText: detailRow.remarkText || "",
       storeLabelText: detailRow.storeLabelText || "",
-      issueDateText: detailRow.issueDateText || "",
+      issueDateText: toBillingDateInputValue(detailRow.issueDateText),
       boxCountText: detailRow.boxCountText || "",
       shipDateText: detailRow.shipDateText || "",
       warehouseText: detailRow.warehouseText || "",
@@ -635,7 +728,7 @@ export function BillingClient({
       if (!res.ok) {
         let message = kind === "pdf" ? "导出复制账单 PDF 失败" : "导出复制账单 XLSX 失败";
         try {
-          const data = await res.json();
+          const data = await readJsonSafe<{ error?: string }>(await res.text());
           if (data?.error) message = data.error;
         } catch {}
         throw new Error(message);
@@ -726,11 +819,16 @@ export function BillingClient({
                           <button
                             type="button"
                             disabled={!row.generatedAtText || Boolean(row.paidAtText)}
-                            className="inline-flex h-9 items-center justify-center rounded-full border border-emerald-200 px-3 text-xs font-medium text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-300 disabled:hover:bg-transparent"
+                            className={`inline-flex h-9 items-center justify-center rounded-full border px-3 text-xs font-medium transition ${
+                              row.paidAtText
+                                ? "border-emerald-200 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50"
+                                : "border-red-200 text-red-600 hover:border-red-300 hover:bg-red-50"
+                            } disabled:cursor-not-allowed disabled:border-stone-200 disabled:text-stone-300 disabled:hover:bg-transparent`}
                             title={row.paidAtText ? "账单已付款，不能重复标记" : !row.generatedAtText ? "请先生成账单" : "标记已付款并永久锁定"}
                             onClick={() => markRowPaid(row)}
                           >
-                            <span className="mr-1"><PaidIcon /></span>已付款
+                            <span className="mr-1"><PaymentStateIcon paid={Boolean(row.paidAtText)} /></span>
+                            {row.paidAtText ? "已付款" : "未付款"}
                           </button>
                           {row.paidAtText ? (
                             <button
@@ -752,7 +850,7 @@ export function BillingClient({
                             addressText: row.addressText,
                             remarkText: row.remarkText,
                             storeLabelText: row.storeLabelText,
-                            issueDateText: row.issueDateText,
+                            issueDateText: toBillingDateInputValue(row.issueDateText),
                             boxCountText: row.boxCountText,
                             shipDateText: row.shipDateText,
                             warehouseText: row.warehouseText,
@@ -797,6 +895,28 @@ export function BillingClient({
                 {statusActionError ? <div className="mt-2 text-sm text-red-600">{statusActionError}</div> : null}
               </div>
               <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-2">
+                  <SearchIcon />
+                  <input
+                    value={detailSearchKeyword}
+                    onChange={(e) => setDetailSearchKeyword(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        openDetailSearchModal();
+                      }
+                    }}
+                    placeholder="搜索产品"
+                    className="w-[220px] border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={openDetailSearchModal}
+                    className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-200"
+                  >
+                    搜索
+                  </button>
+                </div>
                 {detailRow && !detailPaid ? (
                   <button
                     type="button"
@@ -837,10 +957,15 @@ export function BillingClient({
                   <button
                     type="button"
                     disabled={statusActionLoading === "mark_paid" || detailPaid}
-                    className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                    className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
+                      detailPaid
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                        : "border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                    } disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400`}
                     onClick={() => updateGeneratedState("mark_paid")}
                   >
-                    {detailPaid ? "已付款" : "已付款"}
+                    <span className="mr-1 inline-flex align-middle"><PaymentStateIcon paid={detailPaid} /></span>
+                    {detailPaid ? "已付款" : "未付款"}
                   </button>
                 ) : null}
                 {detailRow && detailPaid ? (
@@ -862,7 +987,7 @@ export function BillingClient({
                     addressText: detailRow.addressText,
                     remarkText: detailRow.remarkText,
                     storeLabelText: detailRow.storeLabelText,
-                    issueDateText: detailRow.issueDateText,
+                    issueDateText: toBillingDateInputValue(detailRow.issueDateText),
                     boxCountText: detailRow.boxCountText,
                     shipDateText: detailRow.shipDateText,
                     warehouseText: detailRow.warehouseText,
@@ -878,6 +1003,16 @@ export function BillingClient({
                   启用 VIP 折扣
                 </label>
                 <button type="button" className="rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-700 transition hover:bg-slate-50" onClick={() => setDetailOrderNo(null)}>关闭</button>
+                {detailRow && detailGenerated ? (
+                  <button
+                    type="button"
+                    disabled={statusActionLoading === "revoke" || detailPaid}
+                    className="rounded-full bg-amber-100 px-4 py-2 text-sm font-medium text-amber-900 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => setRevokeState({ confirmOrderNo: "", reason: "", error: "" })}
+                  >
+                    作废
+                  </button>
+                ) : null}
               </div>
             </div>
 
@@ -1040,6 +1175,60 @@ export function BillingClient({
         </div>
       ) : null}
 
+      {detailSearchModalOpen ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/35 p-4" onClick={() => setDetailSearchModalOpen(false)}>
+          <div className="flex max-h-[82vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="border-b border-slate-200 px-6 py-4">
+              <h3 className="text-xl font-semibold text-slate-900">搜索结果</h3>
+              <p className="mt-1 text-sm text-slate-500">关键词：{detailSearchKeyword}</p>
+            </div>
+            <div className="flex-1 overflow-auto px-6 py-5">
+              {detailSearchResults.length === 0 ? (
+                <div className="py-16 text-center text-sm text-slate-500">没有匹配到相关商品</div>
+              ) : (
+                <div className="divide-y divide-slate-200 overflow-hidden rounded-2xl border border-slate-200">
+                  {detailSearchResults.map((item, idx) => (
+                    <div key={`${item.sku}-${item.barcode}-search-${idx}`} className="grid grid-cols-[minmax(320px,1.7fr)_72px_92px_82px_110px] gap-4 px-4 py-4">
+                      <div className="flex min-w-0 gap-4">
+                        <div className="flex w-[56px] shrink-0 items-start justify-center pt-1">
+                          <ProductImage
+                            sku={item.sku}
+                            alt={item.nameZh || item.nameEs || item.sku || item.barcode || "商品图片"}
+                            size={44}
+                            roundedClassName="rounded-xl"
+                            onClick={() => {
+                              const src = buildProductImageUrl(item.sku, "jpg");
+                              if (!src) return;
+                              const title = item.nameZh || item.nameEs || item.sku || item.barcode || "商品图片";
+                              setPreviewImage({ src, alt: title, title });
+                            }}
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[15px] font-medium leading-6 text-slate-900">{item.nameEs || item.nameZh || "-"}</div>
+                          {item.nameZh && item.nameEs ? <div className="mt-1 text-sm leading-6 text-slate-500">{item.nameZh}</div> : null}
+                          <div className="mt-2 text-xs uppercase tracking-[0.14em] text-slate-400">SKU {item.sku || "-"} / Barcode {item.barcode || "-"}</div>
+                        </div>
+                      </div>
+                      <div className="text-right text-sm font-medium text-slate-700">{item.qty}</div>
+                      <div className="text-right text-sm font-medium text-slate-700">${toMoney(item.unitPrice)}</div>
+                      <div className="text-right text-sm text-slate-500">
+                        <div>{toPercentText(item.normalDiscount)}</div>
+                        {vipDiscountEnabled ? <div className="mt-1 text-xs text-slate-400">VIP {toPercentText(item.vipDiscount)}</div> : null}
+                      </div>
+                      <div className="text-right text-sm font-semibold text-slate-900">${toMoney(calcLineTotal(item, vipDiscountEnabled))}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-end border-t border-slate-200 px-6 py-4">
+              <button type="button" onClick={() => setDetailSearchModalOpen(false)} className="h-10 rounded-xl border border-slate-200 px-4 text-sm text-slate-600 hover:bg-slate-50">关闭</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {revokePaidState ? (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/40 p-4" onClick={() => setRevokePaidState(null)}>
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
@@ -1098,8 +1287,8 @@ export function BillingClient({
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/40 p-4" onClick={() => setRevokeState(null)}>
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="border-b border-slate-200 px-6 py-4">
-              <h3 className="text-lg font-semibold text-slate-900">撤销生成</h3>
-              <p className="mt-1 text-sm text-slate-500">请输入完整订单号并填写撤销原因后继续。</p>
+              <h3 className="text-lg font-semibold text-slate-900">作废账单</h3>
+              <p className="mt-1 text-sm text-slate-500">请输入完整订单号并填写备注后继续。</p>
             </div>
             <div className="space-y-4 px-6 py-5">
               <div>
@@ -1110,14 +1299,14 @@ export function BillingClient({
                 <input value={revokeState.confirmOrderNo} onChange={(e) => setRevokeState((prev) => prev ? { ...prev, confirmOrderNo: e.target.value, error: "" } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" />
               </div>
               <div>
-                <label className="mb-1 block text-sm text-slate-600">撤销原因</label>
+                <label className="mb-1 block text-sm text-slate-600">备注</label>
                 <textarea value={revokeState.reason} onChange={(e) => setRevokeState((prev) => prev ? { ...prev, reason: e.target.value, error: "" } : prev)} className="min-h-[110px] w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-primary/40" />
               </div>
               {revokeState.error ? <div className="text-sm text-red-600">{revokeState.error}</div> : null}
             </div>
             <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-4">
               <button type="button" onClick={() => setRevokeState(null)} className="h-10 rounded-xl border border-slate-200 px-4 text-sm text-slate-600 hover:bg-slate-50">取消</button>
-              <button type="button" disabled={statusActionLoading === "revoke"} onClick={() => updateGeneratedState("revoke", { confirmOrderNo: revokeState.confirmOrderNo, revokeReason: revokeState.reason })} className="h-10 rounded-xl bg-primary px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">确认撤销</button>
+              <button type="button" disabled={statusActionLoading === "revoke"} onClick={() => updateGeneratedState("revoke", { confirmOrderNo: revokeState.confirmOrderNo, revokeReason: revokeState.reason })} className="h-10 rounded-xl bg-primary px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">确认作废</button>
             </div>
           </div>
         </div>
@@ -1138,7 +1327,7 @@ export function BillingClient({
                 <div className="space-y-4">
                   <div className="flex flex-wrap gap-4 md:flex-nowrap">
                     <div className="w-full md:w-[190px] md:shrink-0"><label className="mb-1 block text-sm text-slate-600">订单号</label><input value={editState.orderNo} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none" /></div>
-                    <div className="w-full md:w-[140px] md:shrink-0"><label className="mb-1 block text-sm text-slate-600">出账日期</label><input value={editState.issueDateText} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none" /></div>
+                    <div className="w-full md:w-[140px] md:shrink-0"><label className="mb-1 block text-sm text-slate-600">出账日期</label><input type="date" value={editState.issueDateText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, issueDateText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
                     <div className="w-full md:w-[150px] md:shrink-0"><label className="mb-1 block text-sm text-slate-600">发货日期</label><input type="date" value={editState.shipDateText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, shipDateText: e.target.value } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
                     <div className="w-full md:w-[88px] md:shrink-0"><label className="mb-1 block text-sm text-slate-600">账期</label><input inputMode="numeric" value={editState.paymentTermText} onChange={(e) => setEditState((prev) => (prev ? { ...prev, paymentTermText: e.target.value.replace(/[^\d]/g, "") } : prev))} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
                   </div>
@@ -1197,7 +1386,7 @@ export function BillingClient({
                   <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">表头信息</div>
                   <div className="grid gap-4 md:grid-cols-2">
                     <div><label className="mb-1 block text-sm text-slate-600">订单号</label><input value={copyState.orderNo} readOnly className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 outline-none" /></div>
-                    <div><label className="mb-1 block text-sm text-slate-600">出账日期</label><input value={copyState.issueDateText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, issueDateText: e.target.value } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
+                    <div><label className="mb-1 block text-sm text-slate-600">出账日期</label><input type="date" value={copyState.issueDateText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, issueDateText: e.target.value } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
                     <div className="md:col-span-2"><label className="mb-1 block text-sm text-slate-600">公司名称</label><input value={copyState.companyName} onChange={(e) => setCopyState((prev) => prev ? { ...prev, companyName: e.target.value } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
                     <div><label className="mb-1 block text-sm text-slate-600">门店标记</label><input value={copyState.storeLabelText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, storeLabelText: normalizeStoreLabelInput(e.target.value) } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>
                     <div><label className="mb-1 block text-sm text-slate-600">账期</label><input value={copyState.paymentTermText} onChange={(e) => setCopyState((prev) => prev ? { ...prev, paymentTermText: e.target.value.replace(/[^\d]/g, "") } : prev)} className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-primary/40" /></div>

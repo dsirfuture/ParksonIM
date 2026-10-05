@@ -23,11 +23,20 @@ type AppNavigationProps = {
   loggedIn: boolean;
 };
 
-function isChildActive(href: string, pathname: string, search: URLSearchParams) {
-  if (href === "/billing") {
-    return pathname === "/billing";
+function hrefMatchesCurrent(href: string, pathname: string, search: URLSearchParams) {
+  const [targetPath, rawQuery = ""] = href.split("?");
+  if (targetPath === "/billing") {
+    if (pathname !== "/billing") return false;
+  } else if (pathname !== targetPath) {
+    return false;
   }
-  return pathname === href;
+  if (!rawQuery) return true;
+
+  const targetQuery = new URLSearchParams(rawQuery);
+  for (const [key, value] of targetQuery.entries()) {
+    if (search.get(key) !== value) return false;
+  }
+  return true;
 }
 
 export function AppNavigation({ groups, loginLabel, loggedIn }: AppNavigationProps) {
@@ -37,7 +46,7 @@ export function AppNavigation({ groups, loginLabel, loggedIn }: AppNavigationPro
 
   const visibleGroups = groups.filter((group) => group.visible !== false);
   const activeGroup =
-    visibleGroups.find((group) => group.match.some((item) => pathname.startsWith(item))) || null;
+    visibleGroups.find((group) => hrefMatchesCurrent(group.href, pathname, search) || group.match.some((item) => pathname.startsWith(item) && hrefMatchesCurrent(group.href, pathname, search))) || null;
 
   return (
     <div className="hidden min-w-0 flex-1 items-start justify-end md:flex">
@@ -69,7 +78,7 @@ export function AppNavigation({ groups, loginLabel, loggedIn }: AppNavigationPro
                 <div className="absolute left-1/2 top-full z-20 -translate-x-1/2 pt-2">
                   <nav className="flex min-w-[136px] flex-col items-stretch gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-[0_10px_30px_rgba(15,23,42,0.12)]">
                     {group.children!.map((item) => {
-                      const childActive = isChildActive(item.href, pathname, search);
+                      const childActive = hrefMatchesCurrent(item.href, pathname, search);
                       return (
                         <Link
                           key={item.href}

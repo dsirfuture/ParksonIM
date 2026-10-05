@@ -1,4 +1,4 @@
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const publicBaseUrl = (process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL || "").trim().replace(/\/+$/, "");
@@ -166,4 +166,29 @@ export async function deleteR2Object(key: string) {
       Key: key,
     }),
   );
+}
+
+export async function listR2ObjectKeys(prefix?: string) {
+  const s3 = getClient();
+  const keys: string[] = [];
+  let continuationToken: string | undefined;
+
+  do {
+    const result = await s3.send(
+      new ListObjectsV2Command({
+        Bucket: bucketName,
+        Prefix: prefix || undefined,
+        ContinuationToken: continuationToken,
+        MaxKeys: 1000,
+      }),
+    );
+
+    for (const item of result.Contents || []) {
+      if (item.Key) keys.push(item.Key);
+    }
+
+    continuationToken = result.IsTruncated ? result.NextContinuationToken || undefined : undefined;
+  } while (continuationToken);
+
+  return keys;
 }

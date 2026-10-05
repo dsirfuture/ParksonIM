@@ -43,7 +43,8 @@ export function parseYogoDiscountNumbers(categoryName: string | null, sourceDisc
 
   const vipOnly = text.match(/VIP\s*(\d+(?:\.\d+)?)%/i);
   if (vipOnly) {
-    const normalOnly = text.match(/(\d+(?:\.\d+)?)%/);
+    const beforeVip = text.slice(0, vipOnly.index ?? 0);
+    const normalOnly = beforeVip.match(/(\d+(?:\.\d+)?)%/);
     return {
       normal: parsePercentNumber(normalOnly?.[1]),
       vip: parsePercentNumber(vipOnly[1]),

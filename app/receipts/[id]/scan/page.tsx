@@ -1,8 +1,10 @@
 // @ts-nocheck
+import { randomUUID } from "crypto";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { prisma } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n-server";
+import { getReceiptScanStateById } from "@/lib/receipts/scan-state";
 import { getSession } from "@/lib/tenant";
 import { ScanClient } from "./ScanClient";
 
@@ -11,117 +13,6 @@ type ScanPageProps = {
     id: string;
   }>;
 };
-
-function toNumber(value: unknown): number | null {
-  if (value === null || value === undefined) return null;
-
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : null;
-  }
-
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    "toNumber" in value &&
-    typeof (value as { toNumber: unknown }).toNumber === "function"
-  ) {
-    try {
-      return (value as { toNumber: () => number }).toNumber();
-    } catch {
-      return null;
-    }
-  }
-
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function formatTime(
-  value: Date | string | null | undefined,
-  lang: "zh" | "es",
-) {
-  if (!value) return "-";
-  const date = value instanceof Date ? value : new Date(value);
-
-  return new Intl.DateTimeFormat(lang === "zh" ? "zh-CN" : "es-MX", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "America/Mexico_City",
-  }).format(date);
-}
-
-type ItemRow = {
-  id: string;
-  sku: string;
-  barcode: string;
-  nameZh: string;
-  nameEs: string;
-  casePack: number | null;
-  supplierCasePack: number | null;
-  expectedQty: number | null;
-  goodQty: number;
-  damagedQty: number;
-  excessQty: number;
-  diffQty: number;
-  uncheckedQty: number;
-  status: "pending" | "in_progress" | "completed";
-  updatedAtText: string;
-  createdAt: string;
-  unexpected?: boolean;
-};
-
-function buildSummary(rows: ItemRow[]) {
-  const importedRows = rows.filter((row) => !row.unexpected);
-  const addedCount = rows.filter((row) => row.unexpected).length;
-
-  const totalSku = importedRows.length;
-  const expectedQtyTotal = importedRows.reduce((sum, item) => sum + (item.expectedQty ?? 0), 0);
-  const goodQtyTotal = importedRows.reduce(
-    (sum, item) => sum + item.goodQty,
-    0,
-  );
-  const damagedQtyTotal = importedRows.reduce(
-    (sum, item) => sum + item.damagedQty,
-    0,
-  );
-  const excessQtyTotal = importedRows.reduce(
-    (sum, item) => sum + item.excessQty,
-    0,
-  );
-
-  const checkedQtyTotal = goodQtyTotal + damagedQtyTotal;
-  const uncheckedQtyTotal = Math.max(expectedQtyTotal - checkedQtyTotal, 0);
-  const diffQtyTotal = uncheckedQtyTotal;
-
-  const progress =
-    expectedQtyTotal > 0
-      ? Math.max(
-          0,
-          Math.min(100, Math.round((checkedQtyTotal / expectedQtyTotal) * 100)),
-        )
-      : 0;
-
-  return {
-    totalSku,
-    addedCount,
-    expectedQtyTotal,
-    goodQtyTotal,
-    diffQtyTotal,
-    uncheckedQtyTotal,
-    damagedQtyTotal,
-    excessQtyTotal,
-    progress,
-  };
-}
 
 export default async function ReceiptScanPage({ params }: ScanPageProps) {
   const { id } = await params;
@@ -139,7 +30,10 @@ export default async function ReceiptScanPage({ params }: ScanPageProps) {
           uploadEvidence: "上传证据",
           finishInspection: "验货完毕",
           finishingInspection: "处理中...",
+          revokeFinishInspection: "撤销完成验货",
+          revokingFinishInspection: "撤销中...",
           finishInspectionFailed: "暂时无法完成验货",
+          revokeFinishInspectionFailed: "暂时无法撤销完成验货",
           supplier: "供应商",
           uploadedAt: "文件上传时间",
           inspectedAt: "验货时间",
@@ -188,13 +82,22 @@ export default async function ReceiptScanPage({ params }: ScanPageProps) {
           chooseImages: "选择图片",
           noEvidence: "暂未选择图片",
           emptyImage: "空",
+          mobileScan: "手机扫码",
+          mobileScanTitle: "手机扫码链接",
+          mobileScanDesc: "分享到微信或让手机扫码二维码后，即可在手机上直接扫码验货。",
+          mobileScanCopy: "复制链接",
+          mobileScanCopied: "已复制",
+          mobileScanOpen: "打开链接",
         }
       : {
           back: "Volver al detalle",
           uploadEvidence: "Subir evidencia",
           finishInspection: "Finalizar inspección",
           finishingInspection: "Procesando...",
+          revokeFinishInspection: "Revertir finalización",
+          revokingFinishInspection: "Revirtiendo...",
           finishInspectionFailed: "No se pudo finalizar la inspección",
+          revokeFinishInspectionFailed: "No se pudo revertir la finalización",
           supplier: "Proveedor",
           uploadedAt: "Hora de carga del archivo",
           inspectedAt: "Hora de inspección",
@@ -245,6 +148,12 @@ export default async function ReceiptScanPage({ params }: ScanPageProps) {
           chooseImages: "Elegir imágenes",
           noEvidence: "No hay imágenes seleccionadas",
           emptyImage: "Vacío",
+          mobileScan: "Escaneo móvil",
+          mobileScanTitle: "Enlace de escaneo móvil",
+          mobileScanDesc: "Comparte este enlace por WeChat o abre el código QR en el teléfono para escanear desde el móvil.",
+          mobileScanCopy: "Copiar enlace",
+          mobileScanCopied: "Copiado",
+          mobileScanOpen: "Abrir enlace",
         };
 
   const receipt = await prisma.receipt.findFirst({
@@ -253,28 +162,9 @@ export default async function ReceiptScanPage({ params }: ScanPageProps) {
       tenant_id: session.tenantId,
       company_id: session.companyId,
     },
-    include: {
-      items: {
-        select: {
-          id: true,
-          sku: true,
-          barcode: true,
-          name_zh: true,
-          name_es: true,
-          case_pack: true,
-          expected_qty: true,
-          good_qty: true,
-          damaged_qty: true,
-          excess_qty: true,
-          updated_at: true,
-          status: true,
-          created_at: true,
-          unexpected: true,
-        },
-        orderBy: {
-          created_at: "asc",
-        },
-      },
+    select: {
+      id: true,
+      public_share_id: true,
     },
   });
 
@@ -288,105 +178,41 @@ export default async function ReceiptScanPage({ params }: ScanPageProps) {
     );
   }
 
-  const receiptSupplierName = (receipt.supplier_name || "").trim();
-  const receiptSkuList = Array.from(
-    new Set(
-      receipt.items
-        .map((item) => String(item.sku || "").trim())
-        .filter(Boolean),
-    ),
-  );
-
-  let supplierCasePackMap = new Map<string, number | null>();
-
-  if (receiptSupplierName && receiptSkuList.length > 0) {
-    const supplierProfile = await prisma.supplierProfile.findFirst({
-      where: {
-        tenant_id: session.tenantId,
-        company_id: session.companyId,
-        OR: [
-          { short_name: receiptSupplierName },
-          { full_name: receiptSupplierName },
-        ],
-      },
-      select: {
-        id: true,
-      },
+  let publicShareId = receipt.public_share_id;
+  if (!publicShareId) {
+    publicShareId = randomUUID();
+    await prisma.receipt.update({
+      where: { id: receipt.id },
+      data: { public_share_id: publicShareId },
     });
-
-    if (supplierProfile) {
-      const supplierProducts = await prisma.supplierProductSource.findMany({
-        where: {
-          tenant_id: session.tenantId,
-          company_id: session.companyId,
-          supplier_profile_id: supplierProfile.id,
-          sku: { in: receiptSkuList },
-        },
-        select: {
-          sku: true,
-          case_pack: true,
-        },
-      });
-
-      supplierCasePackMap = new Map(
-        supplierProducts.map((item) => [item.sku, toNumber(item.case_pack)]),
-      );
-    }
   }
 
-  const itemRows: ItemRow[] = receipt.items.map((item) => {
-    const expectedQty = item.expected_qty ?? 0;
-    const goodQty = item.unexpected ? 0 : (item.good_qty ?? 0);
-    const damagedQty = item.unexpected ? 0 : (item.damaged_qty ?? 0);
-    const excessQty = item.unexpected ? 0 : (item.excess_qty ?? 0);
-
-    const checkedQty = Math.min(goodQty + damagedQty, expectedQty);
-    const isPending = item.status === "pending";
-    const diffQty = item.unexpected || isPending ? 0 : Math.max(expectedQty - checkedQty, 0);
-    const uncheckedQty = item.unexpected || isPending ? 0 : diffQty;
-
-    return {
-      id: item.id,
-      sku: item.sku || "",
-      barcode: item.barcode || "",
-      nameZh: item.name_zh || "",
-      nameEs: item.name_es || "",
-      casePack: toNumber(item.case_pack),
-      supplierCasePack: supplierCasePackMap.get(item.sku || "") ?? null,
-      expectedQty: toNumber(item.expected_qty),
-      goodQty,
-      damagedQty,
-      excessQty,
-      diffQty,
-      uncheckedQty,
-      status: item.status,
-      updatedAtText: formatTime(item.updated_at, lang),
-      createdAt: item.created_at.toISOString(),
-      unexpected: item.unexpected,
-    };
+  const scanState = await getReceiptScanStateById({
+    receiptId: id,
+    tenantId: session.tenantId,
+    companyId: session.companyId,
+    lang,
   });
 
-  const summary = buildSummary(itemRows);
-
-  const inspectedAt = (() => {
-    const left = receipt.last_activity_at ? new Date(receipt.last_activity_at).getTime() : 0;
-    const right = receipt.updated_at ? new Date(receipt.updated_at).getTime() : 0;
-    return left >= right ? receipt.last_activity_at : receipt.updated_at;
-  })();
+  if (!scanState) {
+    notFound();
+  }
 
   return (
     <AppShell>
       <ScanClient
-        receiptId={receipt.id}
-        receiptNo={receipt.receipt_no}
-        receiptStatus={receipt.status}
-        receiptLocked={receipt.locked}
-        supplierName={receipt.supplier_name || text.noSupplier}
-        uploadedAtText={formatTime(receipt.created_at, lang)}
-        inspectedAtText={formatTime(inspectedAt, lang)}
-        backHref={`/receipts/${receipt.id}`}
-        rows={itemRows}
-        initialSummary={summary}
+        receiptId={scanState.receiptId}
+        receiptNo={scanState.receiptNo}
+        receiptStatus={scanState.receiptStatus}
+        receiptLocked={scanState.receiptLocked}
+        supplierName={scanState.supplierName || text.noSupplier}
+        uploadedAtText={scanState.uploadedAtText}
+        inspectedAtText={scanState.inspectedAtText}
+        backHref={`/receipts/${scanState.receiptId}`}
+        rows={scanState.rows}
+        initialSummary={scanState.summary}
+        stateEndpoint={`/api/receipts/${scanState.receiptId}/scan-state`}
+        mobileSharePath={`/public/receipts/${publicShareId}/scan`}
         text={text}
       />
     </AppShell>

@@ -1,11 +1,11 @@
 ﻿"use client";
 
 import NextImage from "next/image";
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronDown, ChevronUp, Eye, MapPin, Paperclip, Pencil, Trash2, X } from "lucide-react";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { getClientLang } from "@/lib/lang-client";
+import { CustomerPermissionsClient } from "@/app/admin/customer-permissions/CustomerPermissionsClient";
 
 type PermissionState = {
   manageSuppliers: boolean;
@@ -21,9 +21,13 @@ type PermissionState = {
 
 type SettingsClientProps = {
   isAdmin: boolean;
+  currentUserId?: string;
   currentPermissions: PermissionState;
   initialTab?: TabKey;
   visibleTabs?: TabKey[];
+  canManageAppPermissions?: boolean;
+  canViewInviteCodes?: boolean;
+  canManageInviteCodes?: boolean;
 };
 
 type TabKey = "perm" | "supplier" | "customer" | "category" | "doc";
@@ -34,6 +38,27 @@ type UserPermissionRow = {
   phone: string;
   role: "admin" | "worker";
   permissions: PermissionState;
+};
+
+type ManagedUserRow = {
+  id: string;
+  name: string;
+  phone: string;
+  email: string | null;
+  avatar_url: string | null;
+  role: "admin" | "worker";
+  active: boolean;
+  created_at: string;
+};
+
+type ManagedUserForm = {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  password: string;
+  role: "admin" | "worker";
+  active: boolean;
 };
 
 type Supplier = {
@@ -52,8 +77,7 @@ type Supplier = {
 type SupplierDiscountRule = {
   id: string;
   category: string;
-  normalDiscount: string;
-  vipDiscount: string;
+  discount: string;
 };
 
 type SupplierProductSourceItem = {
@@ -102,6 +126,7 @@ type Customer = {
     paidAtText?: string;
     paymentTermText?: string;
     latestStatus: string;
+    isVoided?: boolean;
     paymentRows?: Array<{
       id: string;
       paymentAmountText: string;
@@ -118,6 +143,7 @@ type Customer = {
     ygOrderNo: string;
     externalOrderNo: string;
     orderChannel: string;
+    isVoided?: boolean;
     billingAmountOverrideText?: string;
     packingAmountText: string;
     shippedAtText: string;
@@ -144,6 +170,7 @@ type ManualOrderForm = {
   orderChannel: string;
   billingAmountOverride: string;
   packingAmount: string;
+  ygShippedAt: string;
   shippedAt: string;
   paidAt: string;
   paymentTermDays: string;
@@ -173,6 +200,7 @@ type DetailCustomerInfoForm = {
   phone: string;
   stores: string;
   cityCountry: string;
+  paymentTermText: string;
 };
 
 type PaymentEvidenceItem = {
@@ -202,6 +230,7 @@ type CustomerTimelineRow = {
   paidAmountText: string;
   unpaidAmountText: string;
   dueDateText: string;
+  isVoided?: boolean;
   statusKey: PaymentStatusKey;
   paymentRows: Array<{
     id: string;
@@ -217,7 +246,7 @@ type CustomerTimelineRow = {
   }>;
 };
 
-type PaymentStatusKey = "paid" | "partial" | "overdue" | "unpaid";
+type PaymentStatusKey = "paid" | "partial" | "overdue" | "unpaid" | "voided";
 
 type CustomerSearchItem = {
   id: string;
@@ -276,6 +305,49 @@ const EMPTY_SUPPLIER: Supplier = {
   discountRules: [],
 };
 
+const EMPTY_MANAGED_USER_FORM: ManagedUserForm = {
+  id: "",
+  name: "",
+  phone: "",
+  email: "",
+  password: "",
+  role: "worker",
+  active: true,
+};
+
+function SupplierLogoThumb({
+  src,
+  alt,
+  emptyText,
+  className,
+}: {
+  src?: string;
+  alt: string;
+  emptyText: string;
+  className?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  const safeSrc = String(src || "").trim();
+  useEffect(() => {
+    setFailed(false);
+  }, [safeSrc]);
+  const showImage = Boolean(safeSrc) && !failed;
+  return (
+    <div className={className}>
+      {showImage ? (
+        <img
+          src={safeSrc}
+          alt={alt}
+          className="h-full w-full object-contain"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <span className="text-[10px] font-medium text-slate-400">{emptyText}</span>
+      )}
+    </div>
+  );
+}
+
 const EMPTY_CUSTOMER: Customer = {
   id: "",
   sourceType: "manual",
@@ -330,6 +402,7 @@ const EMPTY_MANUAL_ORDER_FORM: ManualOrderForm = {
   orderChannel: "",
   billingAmountOverride: "",
   packingAmount: "",
+  ygShippedAt: "",
   shippedAt: "",
   paidAt: "",
   paymentTermDays: "",
@@ -360,6 +433,7 @@ const EMPTY_DETAIL_CUSTOMER_INFO_FORM: DetailCustomerInfoForm = {
   phone: "",
   stores: "",
   cityCountry: "",
+  paymentTermText: "",
 };
 
 const EMPTY_CATEGORY_MAP: CategoryMapForm = {
@@ -382,16 +456,6 @@ const PERMISSION_KEYS: Array<{ key: keyof PermissionState; zh: string; es: strin
   { key: "importReceipts", zh: "导入验货单", es: "ImpRec" },
   { key: "exportAllData", zh: "导出全部", es: "ExpAll" },
   { key: "viewAllData", zh: "查看全部", es: "ViewAll" },
-];
-
-const SITE_MAP_ROWS: Array<{ zh: string; es: string; key: keyof PermissionState }> = [
-  { zh: "友购订单", es: "YG", key: "manageSuppliers" },
-  { zh: "产品管理", es: "Prod", key: "manageProducts" },
-  { zh: "客户与资料", es: "Cli", key: "manageCustomers" },
-  { zh: "产品目录导出", es: "ExpCat", key: "exportProductCatalog" },
-  { zh: "账单/报表", es: "Bill/Rep", key: "viewReports" },
-  { zh: "验货与导入", es: "Insp/Imp", key: "inspectGoods" },
-  { zh: "数据总览/导出", es: "View/Exp", key: "viewAllData" },
 ];
 
 async function readJson<T = unknown>(res: Response): Promise<T> {
@@ -530,9 +594,43 @@ function pickPreferredCustomerRow(left: Customer, right: Customer) {
   return left;
 }
 
-function buildCustomerMergeKey(item: Customer) {
+function getCustomerDisplayName(item: Customer) {
+  return String(item.name || "").trim() || String(item.linkedYgName || "").trim() || "-";
+}
+
+function getEditedRealNameMergeKey(item: Customer) {
+  const realNameKey = normalizeCustomerMergeValue(item.name);
+  if (!realNameKey) return "";
+  if (item.sourceType === "profile" || item.sourceType === "manual") {
+    return realNameKey;
+  }
+  const linkedNameKey = normalizeCustomerMergeValue(item.linkedYgName);
+  return linkedNameKey && linkedNameKey !== realNameKey ? realNameKey : "";
+}
+
+function buildCustomerRealNameAliasMap(items: Customer[]) {
+  const aliasMap = new Map<string, string>();
+  for (const item of items) {
+    const realNameKey = getEditedRealNameMergeKey(item);
+    if (!realNameKey) continue;
+    const linkedNameKey = normalizeCustomerMergeValue(item.linkedYgName);
+    if (linkedNameKey && linkedNameKey !== realNameKey) {
+      aliasMap.set(linkedNameKey, realNameKey);
+    }
+  }
+  return aliasMap;
+}
+
+function buildCustomerMergeKey(item: Customer, aliasMap?: Map<string, string>) {
+  const editedRealNameKey = getEditedRealNameMergeKey(item);
+  if (editedRealNameKey) return `real:${editedRealNameKey}`;
+  const aliasedRealName =
+    aliasMap?.get(normalizeCustomerMergeValue(item.name))
+    || aliasMap?.get(normalizeCustomerMergeValue(item.linkedYgName));
+  if (aliasedRealName) return `real:${aliasedRealName}`;
+  const nameKey = normalizeCustomerMergeValue(item.name) || normalizeCustomerMergeValue(item.linkedYgName);
+  if (nameKey) return `name:${nameKey}`;
   return [
-    normalizeCustomerMergeValue(item.name),
     normalizeCustomerMergeValue(item.contact),
     normalizeCustomerMergeValue(item.phone),
   ]
@@ -543,55 +641,105 @@ function buildCustomerMergeKey(item: Customer) {
 function mergeTwoCustomerRows(existing: Customer, item: Customer) {
   const existingDetailMap = new Map<string, CustomerDetailRow>();
   for (const row of existing.detailRows || []) {
-    existingDetailMap.set(row.orderNo, row);
+    const detailKey = [String(row.orderNo || "").trim().toLowerCase(), String(row.orderAmountText || "").trim()].join("|");
+    if (detailKey !== "|") {
+      existingDetailMap.set(detailKey, row);
+    }
   }
   for (const row of item.detailRows || []) {
-    if (!existingDetailMap.has(row.orderNo)) {
-      existingDetailMap.set(row.orderNo, row);
+    const detailKey = [String(row.orderNo || "").trim().toLowerCase(), String(row.orderAmountText || "").trim()].join("|");
+    if (detailKey !== "|" && !existingDetailMap.has(detailKey)) {
+      existingDetailMap.set(detailKey, row);
     }
   }
   const mergedDetailRows = Array.from(existingDetailMap.values()).sort((left, right) =>
     String(right.orderDateText || "").localeCompare(String(left.orderDateText || ""), "zh-CN"),
   );
+  const manualRecordMap = new Map<string, NonNullable<Customer["manualOrderRecords"]>[number]>();
+  for (const row of [...(existing.manualOrderRecords || []), ...(item.manualOrderRecords || [])]) {
+    const manualKey = String(row.id || "").trim() || [
+      String(row.ygOrderNo || "").trim().toLowerCase(),
+      String(row.externalOrderNo || "").trim().toLowerCase(),
+      String(row.orderChannel || "").trim().toLowerCase(),
+      String(row.packingAmountText || "").trim(),
+    ].join("|");
+    if (!manualKey || manualRecordMap.has(manualKey)) continue;
+    manualRecordMap.set(manualKey, row);
+  }
+  const mergedManualRows = Array.from(manualRecordMap.values()).sort((left, right) =>
+    String(right.shippedAtText || right.paidAtText || "").localeCompare(String(left.shippedAtText || left.paidAtText || ""), "zh-CN"),
+  );
   const totalOrderAmount = mergedDetailRows.reduce(
     (sum, row) => sum + Number(row.orderAmountText || 0),
     0,
   );
+  const channelSet = new Set<string>();
+  for (const row of mergedDetailRows) {
+    channelSet.add("友购");
+  }
+  for (const row of mergedManualRows) {
+    const channel = normalizeCustomerChannelLabel(row.orderChannel || "");
+    if (channel) channelSet.add(channel);
+  }
+  const mergedOrderCountKeys = new Set<string>();
+  for (const row of mergedDetailRows) {
+    const key = String(row.orderNo || "").trim().toLowerCase() || [`detail`, String(row.orderDateText || "").trim(), String(row.orderAmountText || "").trim()].join("|");
+    if (key) mergedOrderCountKeys.add(key);
+  }
+  for (const row of mergedManualRows) {
+    const key =
+      String(row.ygOrderNo || "").trim().toLowerCase()
+      || String(row.externalOrderNo || "").trim().toLowerCase()
+      || [`manual`, String(row.orderChannel || "").trim().toLowerCase(), String(row.shippedAtText || row.paidAtText || "").trim(), String(row.packingAmountText || "").trim()].join("|");
+    if (key) mergedOrderCountKeys.add(key);
+  }
   const profileRow =
     existing.sourceType === "profile" ? existing : item.sourceType === "profile" ? item : null;
+  const manualProfileRow =
+    existing.sourceType === "manual" ? existing : item.sourceType === "manual" ? item : null;
   const ygRow =
     existing.sourceType === "yg" ? existing : item.sourceType === "yg" ? item : null;
   const preferredRow = pickPreferredCustomerRow(existing, item);
+  const persistedRow = profileRow || manualProfileRow;
 
   return {
     ...preferredRow,
-    name: preferredRow.name || ygRow?.name || profileRow?.name || existing.name || item.name || "",
+    name:
+      profileRow?.name
+      || manualProfileRow?.name
+      || preferredRow.name
+      || existing.name
+      || item.name
+      || ygRow?.name
+      || "",
     linkedYgName:
       existing.linkedYgName ||
       item.linkedYgName ||
       ygRow?.linkedYgName ||
       ygRow?.name ||
       "",
-    contact: preferredRow.contact || ygRow?.contact || profileRow?.contact || existing.contact || item.contact || "",
-    phone: preferredRow.phone || ygRow?.phone || profileRow?.phone || existing.phone || item.phone || "",
-    whatsapp: preferredRow.whatsapp || ygRow?.whatsapp || profileRow?.whatsapp || existing.whatsapp || item.whatsapp || "",
-    email: preferredRow.email || ygRow?.email || profileRow?.email || existing.email || item.email || "",
-    stores: preferredRow.stores || profileRow?.stores || existing.stores || item.stores || "",
-    cityCountry: preferredRow.cityCountry || ygRow?.cityCountry || profileRow?.cityCountry || existing.cityCountry || item.cityCountry || "",
-    customerType: preferredRow.customerType || profileRow?.customerType || existing.customerType || item.customerType || "",
-    vipLevel: preferredRow.vipLevel || profileRow?.vipLevel || existing.vipLevel || item.vipLevel || "",
-    creditLevel: preferredRow.creditLevel || profileRow?.creditLevel || existing.creditLevel || item.creditLevel || "",
+    contact: persistedRow?.contact || preferredRow.contact || ygRow?.contact || existing.contact || item.contact || "",
+    phone: persistedRow?.phone || preferredRow.phone || ygRow?.phone || existing.phone || item.phone || "",
+    whatsapp: persistedRow?.whatsapp || preferredRow.whatsapp || ygRow?.whatsapp || existing.whatsapp || item.whatsapp || "",
+    email: persistedRow?.email || preferredRow.email || ygRow?.email || existing.email || item.email || "",
+    stores: persistedRow?.stores || preferredRow.stores || existing.stores || item.stores || "",
+    cityCountry: persistedRow?.cityCountry || preferredRow.cityCountry || ygRow?.cityCountry || existing.cityCountry || item.cityCountry || "",
+    customerType: persistedRow?.customerType || preferredRow.customerType || existing.customerType || item.customerType || "",
+    vipLevel: persistedRow?.vipLevel || preferredRow.vipLevel || existing.vipLevel || item.vipLevel || "",
+    creditLevel: persistedRow?.creditLevel || preferredRow.creditLevel || existing.creditLevel || item.creditLevel || "",
     paymentTermText:
+      persistedRow?.paymentTermText ||
       preferredRow.paymentTermText ||
-      profileRow?.paymentTermText ||
       ygRow?.paymentTermText ||
       existing.paymentTermText ||
       item.paymentTermText ||
       "",
-    tags: preferredRow.tags || profileRow?.tags || existing.tags || item.tags || "",
-    orderStats: String(mergedDetailRows.length || ygRow?.orderStats || profileRow?.orderStats || existing.orderStats || item.orderStats || ""),
+    tags: persistedRow?.tags || preferredRow.tags || existing.tags || item.tags || "",
+    channelText: Array.from(channelSet).join(" / ") || normalizeCustomerChannelLabel(preferredRow.channelText || existing.channelText || item.channelText || ""),
+    orderStats: String(mergedOrderCountKeys.size || ygRow?.orderStats || profileRow?.orderStats || existing.orderStats || item.orderStats || ""),
     detailRows: mergedDetailRows,
-    totalOrderCount: mergedDetailRows.length,
+    manualOrderRecords: mergedManualRows,
+    totalOrderCount: mergedOrderCountKeys.size,
     totalOrderAmountText: totalOrderAmount.toFixed(2),
     packingAmountText: "",
   };
@@ -599,9 +747,10 @@ function mergeTwoCustomerRows(existing: Customer, item: Customer) {
 
 function mergeCustomerRows(items: Customer[]) {
   const mergedByExactKey = new Map<string, Customer>();
+  const realNameAliasMap = buildCustomerRealNameAliasMap(items);
 
   for (const item of items) {
-    const mergeKey = buildCustomerMergeKey(item) || `${item.sourceType || "profile"}:${item.id}`;
+    const mergeKey = buildCustomerMergeKey(item, realNameAliasMap) || `${item.sourceType || "profile"}:${item.id}`;
     const existing = mergedByExactKey.get(mergeKey);
     if (!existing) {
       mergedByExactKey.set(mergeKey, {
@@ -626,12 +775,37 @@ function mergeCustomerRows(items: Customer[]) {
   return dedupedRows;
 }
 
+function mergeTimelineRows(primary: CustomerTimelineRow, secondary: CustomerTimelineRow): CustomerTimelineRow {
+  const paymentMap = new Map<string, CustomerTimelineRow["paymentRows"][number]>();
+  for (const row of [...(primary.paymentRows || []), ...(secondary.paymentRows || [])]) {
+    const key = String(row.id || `${row.paymentTimeText}:${row.currentPaymentAmountText}:${row.noteText}`);
+    if (!paymentMap.has(key)) {
+      paymentMap.set(key, row);
+    }
+  }
+  return {
+    ...primary,
+    orderDateText: primary.orderDateText || secondary.orderDateText,
+    orderAmountText: primary.orderAmountText || secondary.orderAmountText,
+    channelText: primary.channelText || secondary.channelText,
+    packingAmountText: primary.packingAmountText || secondary.packingAmountText,
+    shippedAtText: primary.shippedAtText || secondary.shippedAtText,
+    payableAmountText: primary.payableAmountText || secondary.payableAmountText,
+    paidAmountText: primary.paidAmountText || secondary.paidAmountText,
+    unpaidAmountText: primary.unpaidAmountText || secondary.unpaidAmountText,
+    dueDateText: primary.dueDateText || secondary.dueDateText,
+    isVoided: primary.isVoided || secondary.isVoided,
+    statusKey: primary.statusKey || secondary.statusKey,
+    paymentRows: Array.from(paymentMap.values()),
+  };
+}
+
 function isVipCustomer(item: Customer) {
   return Number(item.totalOrderAmountText || 0) >= 100000;
 }
 
 function getCustomerChannelLabel(item: Customer, t: (zh: string, es: string) => string) {
-  return item.sourceType === "manual" ? t("其他渠道", "Canal manual") : t("友购", "Yogo");
+  return normalizeCustomerChannelLabel(item.channelText || "") || (item.sourceType === "manual" ? "-" : t("友购", "Yogo"));
 }
 
 function VipBadgeIcon() {
@@ -689,7 +863,9 @@ function buildDueDateText(baseDateText: string, paymentTermText: string) {
   const termDays = Number.parseInt(String(paymentTermText || "").replace(/[^\d-]/g, ""), 10);
   if (!baseDate || !Number.isFinite(termDays)) return "";
   const dueDate = new Date(baseDate);
-  dueDate.setDate(dueDate.getDate() + termDays);
+  // Billing term starts on the day after shipment.
+  // Example: shipped 2026/01/01 with 30 days term => due 2026/02/01.
+  dueDate.setDate(dueDate.getDate() + termDays + 1);
   return formatDateValue(dueDate);
 }
 
@@ -697,7 +873,15 @@ function buildPaymentStatus(params: {
   payableAmountText: string;
   paidAmountText: string;
   dueDateText: string;
+  isVoided?: boolean;
 }) {
+  if (params.isVoided) {
+    return {
+      statusKey: "voided" as PaymentStatusKey,
+      paidAmountText: "0.00",
+      unpaidAmountText: "0.00",
+    };
+  }
   const payable = parseAmountValue(params.payableAmountText);
   const paid = parseAmountValue(params.paidAmountText);
   const unpaid = Math.max(payable - paid, 0);
@@ -722,6 +906,8 @@ function buildPaymentStatus(params: {
 
 function getPaymentStatusLabel(statusKey: PaymentStatusKey, t: (zh: string, es: string) => string) {
   switch (statusKey) {
+    case "voided":
+      return t("作废", "Anulado");
     case "paid":
       return t("已结清", "Liquidado");
     case "partial":
@@ -757,6 +943,8 @@ function getCustomerCreditLevelDisplay(
 
 function getStatusTone(statusKey: PaymentStatusKey) {
   switch (statusKey) {
+    case "voided":
+      return "border-slate-300 bg-slate-100 text-slate-600";
     case "paid":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
     case "partial":
@@ -766,6 +954,15 @@ function getStatusTone(statusKey: PaymentStatusKey) {
     default:
       return "border-slate-200 bg-slate-50 text-slate-700";
   }
+}
+
+function normalizeCustomerChannelLabel(value: string) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return "";
+  if (["友购", "yogo"].includes(normalized)) return "友购";
+  if (["微信", "wechat"].includes(normalized)) return "微信";
+  if (["whatsapp", "what's app"].includes(normalized)) return "WhatsApp";
+  return "";
 }
 
 function buildComputedPaymentRows(
@@ -802,6 +999,98 @@ function buildComputedPaymentRows(
   });
 }
 
+function buildCustomerTimelineRows(
+  customer: Customer | null | undefined,
+  customerDetailDateSort: "asc" | "desc",
+  tx: (zh: string, es: string) => string,
+) {
+  const orderRows = (customer?.detailRows || []).map((row) => {
+    const dueDateText = buildDueDateText(row.shippedAtText || row.orderDateText || "", row.paymentTermText || "");
+    const computedPaymentRows = buildComputedPaymentRows("yg", row.payableAmountText || "", row.paymentRows || []);
+    const latestPaymentRow = computedPaymentRows[computedPaymentRows.length - 1];
+    const paymentState = buildPaymentStatus({
+      payableAmountText: row.payableAmountText || "",
+      paidAmountText: latestPaymentRow?.paidAmountText || "",
+      dueDateText,
+      isVoided: Boolean(row.isVoided),
+    });
+    return {
+      id: `detail:${row.orderNo}`,
+      sourceType: "yg" as const,
+      manualRecordId: row.overlayRecordId || "",
+      orderNo: row.orderNo,
+      orderDateText: row.orderDateText,
+      orderAmountText: row.orderAmountText,
+      channelText: "友购",
+      packingAmountText: row.packingAmountText || "",
+      shippedAtText: row.shippedAtText || "",
+      payableAmountText: row.payableAmountText || "",
+      paidAmountText: latestPaymentRow?.paidAmountText || paymentState.paidAmountText,
+      unpaidAmountText: latestPaymentRow?.unpaidAmountText || paymentState.unpaidAmountText,
+      dueDateText,
+      isVoided: Boolean(row.isVoided),
+      statusKey: paymentState.statusKey,
+      paymentRows: row.isVoided ? [] : computedPaymentRows,
+    };
+  });
+
+  const manualRows = (customer?.manualOrderRecords || []).map((row) => {
+    const payableAmountText = row.packingAmountText || "";
+    const dueDateText = buildDueDateText(row.shippedAtText || "", row.paymentTermText || "");
+    const computedPaymentRows = buildComputedPaymentRows("manual", payableAmountText, row.paymentRows || []);
+    const latestPaymentRow = computedPaymentRows[computedPaymentRows.length - 1];
+    const paymentState = buildPaymentStatus({
+      payableAmountText,
+      paidAmountText: latestPaymentRow?.paidAmountText || "",
+      dueDateText,
+      isVoided: Boolean(row.isVoided),
+    });
+    return {
+      id: `manual:${row.id}`,
+      sourceType: "manual" as const,
+      manualRecordId: row.id,
+      orderNo: row.ygOrderNo || row.externalOrderNo || "-",
+      orderDateText: row.shippedAtText || row.paidAtText || "-",
+      orderAmountText: "",
+      channelText: normalizeCustomerChannelLabel(row.orderChannel || ""),
+      packingAmountText: row.packingAmountText || "",
+      shippedAtText: row.shippedAtText || "",
+      payableAmountText,
+      paidAmountText: latestPaymentRow?.paidAmountText || paymentState.paidAmountText,
+      unpaidAmountText: latestPaymentRow?.unpaidAmountText || paymentState.unpaidAmountText,
+      dueDateText,
+      isVoided: Boolean(row.isVoided),
+      statusKey: paymentState.statusKey,
+      paymentRows: row.isVoided ? [] : computedPaymentRows,
+    };
+  });
+
+  const dedupedRows = new Map<string, CustomerTimelineRow>();
+  for (const row of [...orderRows, ...manualRows]) {
+    const orderKey = String(row.orderNo || "").trim().toLowerCase();
+    const mapKey = orderKey && orderKey !== "-" ? orderKey : row.id;
+    const existing = dedupedRows.get(mapKey);
+    if (!existing) {
+      dedupedRows.set(mapKey, row);
+      continue;
+    }
+    if (existing.sourceType === "yg" && row.sourceType !== "yg") {
+      dedupedRows.set(mapKey, mergeTimelineRows(existing, row));
+      continue;
+    }
+    if (row.sourceType === "yg" && existing.sourceType !== "yg") {
+      dedupedRows.set(mapKey, mergeTimelineRows(row, existing));
+      continue;
+    }
+    dedupedRows.set(mapKey, mergeTimelineRows(existing, row));
+  }
+
+  return Array.from(dedupedRows.values()).sort((left, right) => {
+    const compareResult = String(left.orderDateText || "").localeCompare(String(right.orderDateText || ""), "zh-CN");
+    return customerDetailDateSort === "asc" ? compareResult : -compareResult;
+  });
+}
+
 function ReadonlyCustomerField({ value, centered = false, children }: { value?: string; centered?: boolean; children?: ReactNode }) {
   return (
     <div className={`flex h-11 items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 text-xs font-normal text-slate-700 ${centered ? "justify-center text-center" : ""}`}>
@@ -828,8 +1117,7 @@ function parseSupplierDiscountRules(input: string): SupplierDiscountRule[] {
       .map((item, idx) => ({
         id: String(item?.id || `rule-${idx}-${Date.now()}`),
         category: String(item?.category || "").trim(),
-        normalDiscount: String(item?.normalDiscount ?? "").trim(),
-        vipDiscount: String(item?.vipDiscount ?? "").trim(),
+        discount: String(item?.discount ?? item?.normalDiscount ?? item?.vipDiscount ?? "").trim(),
       }))
       .filter((item) => item.category);
   } catch {
@@ -842,11 +1130,28 @@ function toSupplierDiscountRuleText(rules: SupplierDiscountRule[]) {
     rules
       .map((item) => ({
         category: String(item.category || "").trim(),
-        normalDiscount: String(item.normalDiscount || "").trim(),
-        vipDiscount: String(item.vipDiscount || "").trim(),
+        discount: String(item.discount || "").trim(),
       }))
       .filter((item) => item.category),
   );
+}
+
+function formatSupplierDiscountInput(value: string) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const numeric = raw.replace(/[^\d.]/g, "");
+  if (!numeric) return "";
+  const parsed = Number(numeric);
+  if (!Number.isFinite(parsed)) return "";
+  const normalized = Number.isInteger(parsed) ? String(parsed) : String(parsed);
+  return `${normalized}%`;
+}
+
+function formatSupplierDiscountSummary(rules: SupplierDiscountRule[]) {
+  return rules
+    .map((item) => formatSupplierDiscountInput(item.discount))
+    .filter(Boolean)
+    .join("，");
 }
 
 function normalizeYogoCodeInput(value: string) {
@@ -867,7 +1172,61 @@ function paymentEvidenceLooksLikeImage(item: { name?: string; url?: string }) {
   return /\.(png|jpe?g|gif|webp|bmp|svg|avif|heic|heif)(\?|$)/i.test(target);
 }
 
-export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm", visibleTabs }: SettingsClientProps) {
+function PaymentMethodSelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="h-8 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none"
+    >
+      <option value="">-</option>
+      <option value="转账">转账</option>
+      <option value="现金">现金</option>
+    </select>
+  );
+}
+
+function PaymentTargetSelect({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="h-8 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none"
+    >
+      <option value="">-</option>
+      {options.map((option) => (
+        <option key={option} value={option}>
+          {option}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+export function SettingsClient({
+  isAdmin,
+  currentUserId = "",
+  currentPermissions,
+  initialTab = "perm",
+  visibleTabs,
+  canManageAppPermissions = false,
+  canViewInviteCodes = false,
+  canManageInviteCodes = false,
+}: SettingsClientProps) {
   const SUPPLIER_PAGE_SIZE = 10;
   const SUPPLIER_PRODUCT_PREVIEW_PAGE_SIZE = 12;
   const CUSTOMER_PAGE_SIZE = 14;
@@ -912,6 +1271,27 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
     active: true,
     saving: false,
   });
+  const [supplierRuleDraft, setSupplierRuleDraft] = useState({
+    open: false,
+    category: "",
+    discount: "",
+    saving: false,
+  });
+  const [supplierDiscountPreview, setSupplierDiscountPreview] = useState<{
+    open: boolean;
+    supplierName: string;
+    rules: SupplierDiscountRule[];
+  }>({
+    open: false,
+    supplierName: "",
+    rules: [],
+  });
+  const [userManagerOpen, setUserManagerOpen] = useState(false);
+  const [managedUsers, setManagedUsers] = useState<ManagedUserRow[]>([]);
+  const [managedUserLoading, setManagedUserLoading] = useState(false);
+  const [managedUserSaving, setManagedUserSaving] = useState(false);
+  const [managedUserEditorOpen, setManagedUserEditorOpen] = useState(false);
+  const [managedUserForm, setManagedUserForm] = useState<ManagedUserForm>(EMPTY_MANAGED_USER_FORM);
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [manualOrderOpen, setManualOrderOpen] = useState(false);
@@ -919,6 +1299,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
   const [customerSummary, setCustomerSummary] = useState<CustomerSummary>({ totalOrderCount: 0, totalOrderAmountText: "0.00" });
   const [customerKeyword, setCustomerKeyword] = useState("");
   const [customerVipFilter, setCustomerVipFilter] = useState<"all" | "vip" | "normal">("all");
+  const [customerSettlementFilter, setCustomerSettlementFilter] = useState<"all" | "settled" | "unsettled">("all");
   const [customerPage, setCustomerPage] = useState(1);
   const [customerForm, setCustomerForm] = useState<Customer>(EMPTY_CUSTOMER);
   const [customerEditorOpen, setCustomerEditorOpen] = useState(false);
@@ -936,6 +1317,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
   const [paymentRowEditForm, setPaymentRowEditForm] = useState<PaymentRowEditForm>(EMPTY_PAYMENT_ROW_EDIT_FORM);
   const [paymentEvidencePreview, setPaymentEvidencePreview] = useState<{ src: string; title: string } | null>(null);
   const [detailCustomerInfoForm, setDetailCustomerInfoForm] = useState<DetailCustomerInfoForm>(EMPTY_DETAIL_CUSTOMER_INFO_FORM);
+  const [detailCustomerInfoEditOpen, setDetailCustomerInfoEditOpen] = useState(false);
   const [savingDetailCustomerInfo, setSavingDetailCustomerInfo] = useState(false);
   const paymentEvidenceInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [paymentEvidenceItems, setPaymentEvidenceItems] = useState<Record<string, PaymentEvidenceItem[]>>({});
@@ -959,8 +1341,6 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
   const [categoryMaps, setCategoryMaps] = useState<CategoryMap[]>([]);
   const [categoryKeyword, setCategoryKeyword] = useState("");
   const [categoryForm, setCategoryForm] = useState<CategoryMapForm>(EMPTY_CATEGORY_MAP);
-  const [categoryDefaultActive, setCategoryDefaultActive] = useState(true);
-  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const categoryZhInputRef = useRef<HTMLInputElement | null>(null);
   const supplierProductInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -1065,6 +1445,10 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
         readJson<any>(cmRes),
       ]);
 
+      if (!cRes.ok || !cJson?.ok) {
+        throw new Error(cJson?.error || tx("客户财务加载失败", "Customer finance load failed"));
+      }
+
       if (pRes.ok && pJson?.ok) setPermissionRows(pJson.items || []);
       if (sRes.ok && sJson?.ok) {
         setSuppliers(
@@ -1074,13 +1458,11 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
           })),
         );
       }
-      if (cRes.ok && cJson?.ok) {
-        setCustomers(cJson.items || []);
-        setCustomerSummary({
-          totalOrderCount: Number(cJson.summary?.totalOrderCount || 0),
-          totalOrderAmountText: String(cJson.summary?.totalOrderAmountText || "0.00"),
-        });
-      }
+      setCustomers(cJson.items || []);
+      setCustomerSummary({
+        totalOrderCount: Number(cJson.summary?.totalOrderCount || 0),
+        totalOrderAmountText: String(cJson.summary?.totalOrderAmountText || "0.00"),
+      });
       if (cfgRes.ok && cfgJson?.ok && cfgJson.item) {
         setCatalogConfig({ ...EMPTY_CATALOG, ...cfgJson.item });
       }
@@ -1089,6 +1471,23 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
       setError(e instanceof Error ? e.message : tx("加载设置失败", "Load fail"));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadManagedUsers() {
+    try {
+      setManagedUserLoading(true);
+      setError("");
+      const res = await fetch("/api/admin/users");
+      const json = await readJson<any>(res);
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || tx("账号加载失败", "User load fail"));
+      }
+      setManagedUsers(json.items || []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : tx("账号加载失败", "User load fail"));
+    } finally {
+      setManagedUserLoading(false);
     }
   }
 
@@ -1120,6 +1519,77 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
     }
   }
 
+  function openUserManager() {
+    setUserManagerOpen(true);
+    void loadManagedUsers();
+  }
+
+  function openManagedUserEditor(user?: ManagedUserRow) {
+    setManagedUserForm(
+      user
+        ? {
+            id: user.id,
+            name: user.name,
+            phone: user.phone,
+            email: user.email || "",
+            password: "",
+            role: user.role,
+            active: user.active,
+          }
+        : EMPTY_MANAGED_USER_FORM,
+    );
+    setManagedUserEditorOpen(true);
+  }
+
+  function closeManagedUserEditor() {
+    setManagedUserEditorOpen(false);
+    setManagedUserForm(EMPTY_MANAGED_USER_FORM);
+  }
+
+  async function saveManagedUser() {
+    try {
+      setManagedUserSaving(true);
+      setError("");
+      const method = managedUserForm.id ? "PATCH" : "POST";
+      const res = await fetch("/api/admin/users", {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(managedUserForm),
+      });
+      const json = await readJson<any>(res);
+      if (!res.ok || !json?.ok) throw new Error(json?.error || tx("保存用户失败", "Save user fail"));
+      const nextUser = json.user;
+      setManagedUsers((prev) =>
+        managedUserForm.id ? prev.map((item) => (item.id === nextUser.id ? nextUser : item)) : [...prev, nextUser],
+      );
+      closeManagedUserEditor();
+      showSaved(managedUserForm.id ? tx("用户资料已更新", "User updated") : tx("用户已新增", "User created"));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : tx("保存用户失败", "Save user fail"));
+    } finally {
+      setManagedUserSaving(false);
+    }
+  }
+
+  async function deleteManagedUser(id: string) {
+    try {
+      const confirmed = window.confirm(tx("确定删除这个用户吗", "Confirm delete user?"));
+      if (!confirmed) return;
+      setError("");
+      const res = await fetch("/api/admin/users", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const json = await readJson<any>(res);
+      if (!res.ok || !json?.ok) throw new Error(json?.error || tx("删除用户失败", "Delete user fail"));
+      setManagedUsers((prev) => prev.filter((item) => item.id !== id));
+      showSaved(tx("用户已删除", "User deleted"));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : tx("删除用户失败", "Delete user fail"));
+    }
+  }
+
   async function saveEntity(endpoint: string, payload: unknown, okTextZh: string, okTextEs: string) {
     const res = await fetch(endpoint, {
       method: "POST",
@@ -1129,6 +1599,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
     const json = await readJson<any>(res);
     if (!res.ok || !json?.ok) throw new Error(json?.error || tx("保存失败", "Save fail"));
     showSaved(tx(okTextZh, okTextEs));
+    return json;
   }
 
   async function saveSupplier() {
@@ -1286,7 +1757,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
     try {
       setError("");
       setSavingDetailCustomerInfo(true);
-      await saveEntity(
+      const saveResult = await saveEntity(
         "/api/settings/customers",
         {
           id:
@@ -1307,8 +1778,10 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
       );
       const nextItems = await refreshCustomersSilently();
       const nextMerged = mergeCustomerRows(nextItems);
+      const savedProfileId = String(saveResult?.id || "").trim();
       const nextDetailCustomer =
-        nextMerged.find((item) => detailCustomerInfoForm.id && item.id === detailCustomerInfoForm.id)
+        nextMerged.find((item) => savedProfileId && item.id === savedProfileId)
+        || nextMerged.find((item) => detailCustomerInfoForm.id && item.id === detailCustomerInfoForm.id)
         || nextMerged.find((item) =>
           item.name === detailCustomerInfoForm.name
           && item.linkedYgName === detailCustomerInfoForm.linkedYgName
@@ -1323,7 +1796,13 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
         || null;
       if (nextDetailCustomer?.id) {
         setCustomerDetailId(nextDetailCustomer.id);
+        setDetailCustomerInfoForm((prev) => ({
+          ...prev,
+          id: savedProfileId || nextDetailCustomer.id,
+          sourceType: "profile",
+        }));
       }
+      setDetailCustomerInfoEditOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : tx("保存客户失败", "Save cli fail"));
     } finally {
@@ -1348,7 +1827,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
           stores: detailCustomerInfoForm.stores || "-",
           address: detailCustomerInfoForm.cityCountry || "-",
           vipLevel: isVipCustomer(detailCustomer) ? "VIP" : "-",
-          creditLevel: detailCustomer.creditLevel || "-",
+          creditLevel: detailCustomerFinanceOverview?.creditLevel || detailCustomer.creditLevel || "-",
           totalOrderCount: Number(detailCustomer.totalOrderCount || 0) > 0 ? String(detailCustomer.totalOrderCount) : "-",
           totalOrderAmountText: detailCustomer.totalOrderAmountText ? `$ ${detailCustomer.totalOrderAmountText}` : "-",
           totalPackingAmountText: hasAnyPackingAmount ? `$ ${detailPackingAmountTotal.toFixed(2)}` : "-",
@@ -1359,6 +1838,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
             orderAmountText: item.orderAmountText ? `$ ${item.orderAmountText}` : "-",
             packingAmountText: item.packingAmountText ? `$ ${item.packingAmountText}` : "-",
             shippedAtText: item.shippedAtText || "-",
+            remarkText: item.isVoided ? tx("作废", "Void") : "-",
           })),
           paymentRows: sortedDetailRows.flatMap((item) =>
             (item.paymentRows || []).map((paymentRow) => ({
@@ -1369,6 +1849,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
               paymentMethodText: paymentRow.paymentMethodText || "-",
               paymentTargetText: paymentRow.paymentTargetText || "-",
               unpaidAmountText: paymentRow.unpaidAmountText ? `$ ${paymentRow.unpaidAmountText}` : "-",
+              remarkText: paymentRow.noteText || "-",
             })),
           ),
         }),
@@ -1420,6 +1901,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
       orderChannel: input.orderChannel || "",
       billingAmountOverride: input.billingAmountOverride || "",
       packingAmount: input.packingAmount || "",
+      ygShippedAt: input.ygShippedAt || input.shippedAt || "",
       shippedAt: input.shippedAt || "",
       paidAt: input.paidAt || "",
       paymentTermDays: input.paymentTermDays || "",
@@ -1435,6 +1917,10 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
         ...detailRowEditForm,
         ygOrderNo: detailRowEditForm.displayOrderNoField === "ygOrderNo" ? detailRowEditForm.displayOrderNo : "",
         externalOrderNo: detailRowEditForm.displayOrderNoField === "externalOrderNo" ? detailRowEditForm.displayOrderNo : "",
+        ygShippedAt:
+          detailRowEditForm.displayOrderNoField === "ygOrderNo"
+            ? (detailRowEditForm.ygShippedAt || detailRowEditForm.shippedAt)
+            : "",
       };
       await saveEntity("/api/settings/customers/manual-orders", nextPayload, "记录已保存", "Record saved");
       setDetailEditingRowId("");
@@ -1442,6 +1928,47 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
       await refreshCustomersSilently();
     } catch (e) {
       setError(e instanceof Error ? e.message : tx("保存记录失败", "Save record fail"));
+    }
+  }
+
+  async function voidTimelineRow(row: CustomerTimelineRow) {
+    try {
+      setError("");
+      const detailRow = row.sourceType === "yg"
+        ? detailCustomer?.detailRows?.find((item) => item.orderNo === row.orderNo)
+        : null;
+      const manualRow = row.sourceType === "manual"
+        ? detailCustomer?.manualOrderRecords?.find((item) => item.id === row.manualRecordId)
+        : null;
+      await saveEntity("/api/settings/customers/manual-orders", {
+        id: row.sourceType === "yg" ? (detailRow?.overlayRecordId || row.manualRecordId || "") : (manualRow?.id || ""),
+        sourceType: row.sourceType,
+        customerProfileId:
+          row.sourceType === "manual"
+            ? (manualRow?.customerProfileId || (detailCustomer?.sourceType === "profile" ? detailCustomer.id : ""))
+            : (detailCustomer?.sourceType === "profile" ? detailCustomer.id : ""),
+        customerName: row.sourceType === "manual" ? (manualRow?.customerName || detailCustomer?.name || "") : (detailCustomer?.name || ""),
+        ygOrderNo: row.sourceType === "yg" ? (row.orderNo || "") : (manualRow?.ygOrderNo || ""),
+        externalOrderNo: row.sourceType === "manual" ? (manualRow?.externalOrderNo || "") : "",
+        orderChannel: row.sourceType === "yg" ? "友购" : (manualRow?.orderChannel || row.channelText || ""),
+        billingAmountOverride: "0.00",
+        packingAmount: "0.00",
+        ygShippedAt: row.sourceType === "yg" ? (detailRow?.shippedAtText || row.shippedAtText || "") : "",
+        shippedAt: row.sourceType === "manual" ? (manualRow?.shippedAtText || row.shippedAtText || "") : (row.shippedAtText || ""),
+        paidAt: "",
+        paymentTermDays: row.sourceType === "manual" ? (manualRow?.paymentTermText || "") : (detailRow?.paymentTermText || ""),
+        isVoided: true,
+      }, "订单已作废", "Order voided");
+      if (customerPaymentDetailId === row.id) {
+        setCustomerPaymentDetailId("");
+      }
+      setDetailEditingRowId("");
+      setDetailRowEditForm(EMPTY_DETAIL_ROW_EDIT_FORM);
+      setPaymentEditingRowId("");
+      setPaymentRowEditForm(EMPTY_PAYMENT_ROW_EDIT_FORM);
+      await refreshCustomersSilently();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : tx("作废失败", "Void failed"));
     }
   }
 
@@ -1476,6 +2003,9 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
     try {
       setError("");
       if (!activePaymentDetail) return;
+      if (activePaymentDetail.statusKey === "voided") {
+        throw new Error(tx("作废订单不能新增或编辑付款记录。", "Voided orders cannot save payments."));
+      }
       if (activePaymentDetail.sourceType === "yg") {
         const detailRow = detailCustomer?.detailRows?.find((item) => item.orderNo === activePaymentDetail.orderNo);
         await saveEntity("/api/settings/customers/manual-orders", {
@@ -1485,7 +2015,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
           customerName: detailCustomer?.name || "",
           ygOrderNo: activePaymentDetail.orderNo || "",
           externalOrderNo: "",
-          orderChannel: "YOGO",
+          orderChannel: "友购",
           billingAmountOverride: paymentRowEditForm.payableAmount,
           packingAmount: detailRow?.packingAmountText || "",
           shippedAt: activePaymentDetail.shippedAtText || "",
@@ -1555,7 +2085,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
         customerName: detailCustomer?.name || "",
         ygOrderNo: row.orderNo || "",
         externalOrderNo: "",
-        orderChannel: "YOGO",
+        orderChannel: "友购",
         billingAmountOverride: detailRow?.payableAmountText || "",
         packingAmount: row.packingAmountText || "",
         shippedAt: row.shippedAtText || "",
@@ -1730,22 +2260,17 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
   }
 
   function addSupplierDiscountRule() {
-    const newRule = {
-      id: `rule-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+    setSupplierRuleDraft({
+      open: true,
       category: "",
-      normalDiscount: "",
-      vipDiscount: "",
-    };
-    setSupplierForm((prev) => ({
-      ...prev,
-      // Put the newly added rule at the top for faster editing.
-      discountRules: [newRule, ...prev.discountRules],
-    }));
+      discount: "",
+      saving: false,
+    });
   }
 
   function updateSupplierDiscountRule(
     id: string,
-    patch: Partial<Pick<SupplierDiscountRule, "category" | "normalDiscount" | "vipDiscount">>,
+    patch: Partial<Pick<SupplierDiscountRule, "category" | "discount">>,
   ) {
     setSupplierForm((prev) => ({
       ...prev,
@@ -1763,23 +2288,9 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
   }
 
   function openQuickCategoryForRules() {
-    let targetRuleId =
-      supplierForm.discountRules.find((item) => !item.category)?.id ||
-      supplierForm.discountRules[0]?.id ||
-      "";
-    if (!targetRuleId) {
-      targetRuleId = `rule-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
-      setSupplierForm((prev) => ({
-        ...prev,
-        discountRules: [
-          ...prev.discountRules,
-          { id: targetRuleId, category: "", normalDiscount: "", vipDiscount: "" },
-        ],
-      }));
-    }
     setQuickCategoryDraft({
       open: true,
-      ruleId: targetRuleId,
+      ruleId: "",
       categoryZh: "",
       categoryEs: "",
       active: true,
@@ -1805,7 +2316,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
       const json = await readJson<any>(res);
       if (!res.ok || !json?.ok) throw new Error(json?.error || tx("保存分类失败", "Save category fail"));
       await loadCategoryMaps();
-      updateSupplierDiscountRule(quickCategoryDraft.ruleId, { category: zh });
+      setSupplierRuleDraft((prev) => (prev.open ? { ...prev, category: zh } : prev));
       setQuickCategoryDraft({
         open: false,
         ruleId: "",
@@ -1819,6 +2330,33 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
       setError(e instanceof Error ? e.message : tx("保存分类失败", "Save category fail"));
       setQuickCategoryDraft((prev) => ({ ...prev, saving: false }));
     }
+  }
+
+  function saveSupplierDiscountDraft() {
+    const category = String(supplierRuleDraft.category || "").trim();
+    const discount = formatSupplierDiscountInput(supplierRuleDraft.discount);
+    if (!category || !discount) return;
+    setSupplierForm((prev) => {
+      const nextRules = prev.discountRules.filter((item) => item.category !== category);
+      return {
+        ...prev,
+        discountRules: [
+          ...nextRules,
+          {
+            id: `rule-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+            category,
+            discount,
+          },
+        ],
+      };
+    });
+    setSupplierRuleDraft({
+      open: false,
+      category: "",
+      discount: "",
+      saving: false,
+    });
+    showSaved(tx("规则已保存", "Rule saved"));
   }
 
   async function deleteCategoryMap(id: string) {
@@ -1846,6 +2384,17 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
           .includes(supplierKeyword.trim().toLowerCase()),
       ),
     [suppliers, supplierKeyword],
+  );
+  const supplierShortNameOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          suppliers
+            .map((supplier) => String(supplier.shortName || "").trim())
+            .filter(Boolean),
+        ),
+      ).sort((left, right) => left.localeCompare(right, "zh-CN")),
+    [suppliers],
   );
 
   useEffect(() => {
@@ -1880,29 +2429,57 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
   const mergedCustomers = useMemo(() => mergeCustomerRows(customers), [customers]);
 
   const filteredCustomers = useMemo(
-    () =>
-      mergedCustomers
-        .filter((c) =>
-          Number(c.totalOrderAmountText || 0) > 0
-          &&
-          !String(c.name || "").includes("百盛供应链")
-          &&
-          [c.name, c.contact, c.phone, c.whatsapp, c.tags]
+    () => {
+      const normalizedKeyword = customerKeyword.trim().toLowerCase();
+      return mergedCustomers
+        .filter((c) => {
+          const timelineRows = buildCustomerTimelineRows(c, "desc", tx);
+          const debtAmount = timelineRows.reduce((sum, row) => sum + parseAmountValue(row.unpaidAmountText), 0);
+          const hasFinanceTracking = (c.detailRows || []).some(
+            (row) => Boolean(String(row.payableAmountText || "").trim()) || (row.paymentRows || []).length > 0,
+          ) || (c.manualOrderRecords || []).some(
+            (row) => Boolean(String(row.packingAmountText || "").trim()) || (row.paymentRows || []).length > 0,
+          );
+          const isSettledCustomer = hasFinanceTracking && debtAmount <= 0;
+          const isUnsettledCustomer = hasFinanceTracking && debtAmount > 0;
+          const orderNos = [
+            ...(c.detailRows || []).map((row) => row.orderNo || ""),
+            ...(c.manualOrderRecords || []).flatMap((row) => [row.ygOrderNo || "", row.externalOrderNo || ""]),
+          ];
+          const searchableText = [
+            c.name,
+            c.contact,
+            c.phone,
+            c.whatsapp,
+            c.tags,
+            ...orderNos,
+          ]
             .join(" ")
-            .toLowerCase()
-            .includes(customerKeyword.trim().toLowerCase())
-          && (
-            customerVipFilter === "all"
-            || (customerVipFilter === "vip" && isVipCustomer(c))
-            || (customerVipFilter === "normal" && !isVipCustomer(c))
-          ),
-        )
-        .sort((left, right) => Number(right.totalOrderAmountText || 0) - Number(left.totalOrderAmountText || 0)),
-    [mergedCustomers, customerKeyword, customerVipFilter],
+            .toLowerCase();
+
+          return (
+            Number(c.totalOrderAmountText || 0) > 0
+            && (!String(c.name || "").includes("百盛供应链") || hasFinanceTracking)
+            && searchableText.includes(normalizedKeyword)
+            && (
+              customerVipFilter === "all"
+              || (customerVipFilter === "vip" && isVipCustomer(c))
+              || (customerVipFilter === "normal" && !isVipCustomer(c))
+            )
+            && (
+              customerSettlementFilter === "all"
+              || (customerSettlementFilter === "settled" && isSettledCustomer)
+              || (customerSettlementFilter === "unsettled" && isUnsettledCustomer)
+            )
+          );
+        })
+        .sort((left, right) => Number(right.totalOrderAmountText || 0) - Number(left.totalOrderAmountText || 0));
+    },
+    [mergedCustomers, customerKeyword, customerVipFilter, customerSettlementFilter, tx],
   );
   useEffect(() => {
     setCustomerPage(1);
-  }, [customerKeyword, customerVipFilter, mergedCustomers.length]);
+  }, [customerKeyword, customerVipFilter, customerSettlementFilter, mergedCustomers.length]);
 
   const customerTotalPages = Math.max(1, Math.ceil(filteredCustomers.length / CUSTOMER_PAGE_SIZE));
   const safeCustomerPage = Math.min(customerPage, customerTotalPages);
@@ -1919,65 +2496,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
     [customerDetailId, mergedCustomers],
   );
   const sortedDetailRows = useMemo<CustomerTimelineRow[]>(() => {
-    const orderRows = (detailCustomer?.detailRows || []).map((row) => {
-      const dueDateText = buildDueDateText(row.shippedAtText || row.orderDateText || "", row.paymentTermText || "");
-      const computedPaymentRows = buildComputedPaymentRows("yg", row.payableAmountText || "", row.paymentRows || []);
-      const latestPaymentRow = computedPaymentRows[computedPaymentRows.length - 1];
-      const paymentState = buildPaymentStatus({
-        payableAmountText: row.payableAmountText || "",
-        paidAmountText: latestPaymentRow?.paidAmountText || "",
-        dueDateText,
-      });
-      return {
-        id: `detail:${row.orderNo}`,
-        sourceType: "yg" as const,
-        manualRecordId: row.overlayRecordId || "",
-        orderNo: row.orderNo,
-        orderDateText: row.orderDateText,
-        orderAmountText: row.orderAmountText,
-        channelText: tx("友购", "Yogo"),
-        packingAmountText: row.packingAmountText || "",
-        shippedAtText: row.shippedAtText || "",
-        payableAmountText: row.payableAmountText || "",
-        paidAmountText: latestPaymentRow?.paidAmountText || paymentState.paidAmountText,
-        unpaidAmountText: latestPaymentRow?.unpaidAmountText || paymentState.unpaidAmountText,
-        dueDateText,
-        statusKey: paymentState.statusKey,
-        paymentRows: computedPaymentRows,
-      };
-    });
-    const manualRows = (detailCustomer?.manualOrderRecords || []).map((row) => {
-      const payableAmountText = row.packingAmountText || "";
-      const dueDateText = buildDueDateText(row.shippedAtText || "", row.paymentTermText || "");
-      const computedPaymentRows = buildComputedPaymentRows("manual", payableAmountText, row.paymentRows || []);
-      const latestPaymentRow = computedPaymentRows[computedPaymentRows.length - 1];
-      const paymentState = buildPaymentStatus({
-        payableAmountText,
-        paidAmountText: latestPaymentRow?.paidAmountText || "",
-        dueDateText,
-      });
-      return {
-        id: `manual:${row.id}`,
-        sourceType: "manual" as const,
-        manualRecordId: row.id,
-        orderNo: row.ygOrderNo || row.externalOrderNo || "-",
-        orderDateText: row.shippedAtText || row.paidAtText || "-",
-        orderAmountText: "",
-        channelText: row.orderChannel || tx("其他渠道", "Canal manual"),
-        packingAmountText: row.packingAmountText || "",
-        shippedAtText: row.shippedAtText || "",
-        payableAmountText,
-        paidAmountText: latestPaymentRow?.paidAmountText || paymentState.paidAmountText,
-        unpaidAmountText: latestPaymentRow?.unpaidAmountText || paymentState.unpaidAmountText,
-        dueDateText,
-        statusKey: paymentState.statusKey,
-        paymentRows: computedPaymentRows,
-      };
-    });
-    return [...orderRows, ...manualRows].sort((left, right) => {
-      const compareResult = String(left.orderDateText || "").localeCompare(String(right.orderDateText || ""), "zh-CN");
-      return customerDetailDateSort === "asc" ? compareResult : -compareResult;
-    });
+    return buildCustomerTimelineRows(detailCustomer, customerDetailDateSort, tx);
   }, [customerDetailDateSort, detailCustomer?.detailRows, detailCustomer?.manualOrderRecords, lang, tx]);
   const activePaymentDetail = useMemo(
     () => sortedDetailRows.find((row) => row.id === customerPaymentDetailId) || null,
@@ -2003,36 +2522,11 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
     }>();
 
     for (const customer of mergedCustomers) {
-      const ygRows = (customer.detailRows || []).map((row) => {
-        const dueDateText = buildDueDateText(row.shippedAtText || row.orderDateText || "", row.paymentTermText || "");
-        const paymentState = buildPaymentStatus({
-          payableAmountText: row.payableAmountText || "",
-          paidAmountText: row.paidAtText && row.payableAmountText ? row.payableAmountText : "",
-          dueDateText,
-        });
-        return {
-          packing: parseAmountValue(row.packingAmountText),
-          unpaid: parseAmountValue(paymentState.unpaidAmountText),
-          statusKey: paymentState.statusKey,
-        };
-      });
-
-      const manualRows = (customer.manualOrderRecords || []).map((row) => {
-        const payableAmountText = row.packingAmountText || "";
-        const dueDateText = buildDueDateText(row.shippedAtText || "", row.paymentTermText || "");
-        const paymentState = buildPaymentStatus({
-          payableAmountText,
-          paidAmountText: row.paidAtText && payableAmountText ? payableAmountText : "",
-          dueDateText,
-        });
-        return {
-          packing: parseAmountValue(row.packingAmountText),
-          unpaid: parseAmountValue(paymentState.unpaidAmountText),
-          statusKey: paymentState.statusKey,
-        };
-      });
-
-      const allRows = [...ygRows, ...manualRows];
+      const allRows = buildCustomerTimelineRows(customer, "desc", tx).map((row) => ({
+        packing: parseAmountValue(row.packingAmountText),
+        unpaid: parseAmountValue(row.unpaidAmountText),
+        statusKey: row.statusKey,
+      }));
       const packingTotal = allRows.reduce((sum, item) => sum + item.packing, 0);
       const debtTotal = allRows.reduce((sum, item) => sum + item.unpaid, 0);
       const overdueCount = allRows.filter((item) => item.statusKey === "overdue").length;
@@ -2123,6 +2617,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
       cityCountry: detailCustomer.cityCountry || "",
       paymentTermText: detailCustomer.paymentTermText || "",
     });
+    setDetailCustomerInfoEditOpen(false);
   }, [detailCustomer]);
   useEffect(() => {
     setCustomerDetailPage(1);
@@ -2302,70 +2797,15 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
 
         {!loading && tab === "perm" ? (
           <div className="space-y-4 p-5">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
-              {tx("当前角色：", "Role:")}
-              <span className="font-semibold">{isAdmin ? tx("超级管理员", "Admin") : tx("员工", "Staff")}</span>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 p-4">
-              <div className="mb-2 text-sm font-semibold text-slate-800">{tx("权限与页面对应", "Perm -> Page")}</div>
-              <div className="grid gap-2 text-xs text-slate-600 md:grid-cols-2">
-                {SITE_MAP_ROWS.map((row) => (
-                  <div key={row.key} className="flex items-center justify-between rounded-md border border-slate-100 px-2 py-1.5">
-                    <span>{lang === "zh" ? row.zh : row.es}</span>
-                    <code className="rounded bg-slate-100 px-1.5 py-0.5">{row.key}</code>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[980px] text-sm">
-                <thead className="bg-slate-50 text-slate-600">
-                  <tr>
-                    <th className="px-3 py-2 text-left">{tx("账号", "User")}</th>
-                    {PERMISSION_KEYS.map((p) => (
-                      <th key={p.key} className="px-3 py-2 text-left">{lang === "zh" ? p.zh : p.es}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {permissionRows.map((u) => (
-                    <tr key={u.id} className="border-t border-slate-100">
-                      <td className="px-3 py-2 font-semibold">{`${u.name} (${u.phone})`}</td>
-                      {PERMISSION_KEYS.map((p) => (
-                        <td key={p.key} className="px-3 py-2">
-                          {u.role === "admin" ? (
-                            "✓"
-                          ) : (
-                            <input
-                              type="checkbox"
-                              checked={u.permissions[p.key]}
-                              disabled={!isAdmin}
-                              onChange={(e) => {
-                                const next = permissionRows.map((row) =>
-                                  row.id === u.id
-                                    ? { ...row, permissions: { ...row.permissions, [p.key]: e.target.checked } }
-                                    : row,
-                                );
-                                setPermissionRows(next);
-                                const changed = next.find((row) => row.id === u.id);
-                                if (changed) void savePermission(u.id, changed.permissions);
-                              }}
-                            />
-                          )}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {isAdmin ? (
-              <Link href="/admin/users" className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-white">
-                {tx("去账号管理", "Go users")}
-              </Link>
-            ) : null}
+            <CustomerPermissionsClient
+              lang={lang}
+              autoload
+              embedded
+              preferredUserId={currentUserId}
+              canManagePermissions={canManageAppPermissions}
+              canViewInviteCodes={canViewInviteCodes}
+              canManageInviteCodes={canManageInviteCodes}
+            />
           </div>
         ) : null}
 
@@ -2373,8 +2813,8 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
           <div className="space-y-4 p-5">
             <div className="rounded-2xl border border-slate-200 bg-white">
               <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-base font-semibold text-slate-900">{tx("供应商列表", "Lista prov")}</h3>
+                <h3 className="text-base font-semibold text-slate-900">{tx("供应商列表", "Lista prov")}</h3>
+                <div className="flex min-w-0 items-center justify-end gap-2">
                   <button
                     type="button"
                     disabled={!canManageSuppliers}
@@ -2382,18 +2822,18 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                       setSupplierForm(EMPTY_SUPPLIER);
                       setSupplierEditorOpen(true);
                     }}
-                    className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-xs font-semibold text-white disabled:opacity-40"
+                    className="inline-flex h-8 shrink-0 items-center rounded-lg bg-primary px-3 text-xs font-semibold text-white disabled:opacity-40"
                   >
                     {tx("新增供应商", "Nuevo prov")}
                   </button>
+                  <input value={supplierKeyword} onChange={(e) => setSupplierKeyword(e.target.value)} placeholder={tx("搜索供应商", "Search prov")} className="h-10 w-full max-w-[280px] rounded-xl border border-slate-200 px-3 text-sm" />
                 </div>
-                <input value={supplierKeyword} onChange={(e) => setSupplierKeyword(e.target.value)} placeholder={tx("搜索供应商", "Search prov")} className="h-10 w-full max-w-[280px] rounded-xl border border-slate-200 px-3 text-sm" />
               </div>
               <div className="max-h-[540px] overflow-auto">
                 <table className="w-full min-w-[1040px] text-sm">
                   <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600">
                     <tr>
-                      <th className="w-[76px] px-3 py-2 text-left whitespace-nowrap">LOGO</th>
+                      <th className="w-[76px] px-3 py-2 text-left whitespace-nowrap"></th>
                       <th className="px-3 py-2 text-left whitespace-nowrap">{tx("简称", "Short")}</th>
                       <th className="px-3 py-2 text-left whitespace-nowrap">{tx("全称", "Full")}</th>
                       <th className="px-3 py-2 text-left whitespace-nowrap">{tx("联系人 / 电话", "Cont / Tel")}</th>
@@ -2407,27 +2847,34 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                     {pagedSuppliers.map((s) => (
                       <tr key={s.id} className="border-t border-slate-100">
                         <td className="px-3 py-1.5">
-                          <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-                            {s.logoUrl ? (
-                              <img
-                                src={s.logoUrl}
-                                alt={`${s.shortName || "supplier"}-logo`}
-                                className="h-full w-full object-contain"
-                              />
-                            ) : (
-                              <span className="text-[10px] font-medium text-slate-400">
-                                {lang === "zh" ? "未上传" : "Sin logo"}
-                              </span>
-                            )}
-                          </div>
+                          <SupplierLogoThumb
+                            src={s.logoUrl}
+                            alt={`${s.shortName || "supplier"}-logo`}
+                            emptyText={lang === "zh" ? "未上传" : "Sin logo"}
+                            className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
+                          />
                         </td>
                         <td className="px-3 py-1.5 font-semibold">{s.shortName || "-"}</td>
                         <td className="px-3 py-1.5">{s.fullName || "-"}</td>
                         <td className="px-3 py-1.5">{`${s.contact || "-"} / ${s.phone || "-"}`}</td>
                         <td className="px-3 py-1.5">
-                          {s.discountRules.length
-                            ? tx(`已配置 ${s.discountRules.length} 条`, `${s.discountRules.length} reglas`)
-                            : tx("未配置", "Sin configurar")}
+                          {s.discountRules.length ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSupplierDiscountPreview({
+                                  open: true,
+                                  supplierName: s.shortName || s.fullName || "-",
+                                  rules: s.discountRules.filter((rule) => String(rule.category || "").trim() && String(rule.discount || "").trim()),
+                                })
+                              }
+                              className="inline-flex max-w-full items-center rounded-lg text-left text-primary hover:text-primary/80"
+                            >
+                              <span className="truncate">{formatSupplierDiscountSummary(s.discountRules)}</span>
+                            </button>
+                          ) : (
+                            tx("未配置", "Sin configurar")
+                          )}
                         </td>
                         <td className="px-3 py-1.5">{s.accountPeriodDays ? `${s.accountPeriodDays} ${tx("天", "d")}` : "-"}</td>
                         <td className="px-3 py-1.5">
@@ -2687,7 +3134,10 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/30 px-4">
             <div className="w-full max-w-[520px] rounded-2xl border border-slate-200 bg-white shadow-soft">
               <div className="border-b border-slate-200 px-4 py-3">
-                <h3 className="text-sm font-semibold text-slate-900">{tx("新增品类", "Nueva categoria")}</h3>
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-slate-900">{tx("新增品类", "Nueva categoria")}</h3>
+                  {renderSwitch(tx("启用", "On"), quickCategoryDraft.active, (next) => setQuickCategoryDraft((prev) => ({ ...prev, active: next })))}
+                </div>
               </div>
               <div className="grid gap-3 p-4 md:grid-cols-2">
                 <div>
@@ -2705,10 +3155,6 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                     onChange={(e) => setQuickCategoryDraft((prev) => ({ ...prev, categoryEs: e.target.value }))}
                     className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
                   />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">{tx("启用状态", "Estado")}</label>
-                  {renderSwitch(tx("启用", "On"), quickCategoryDraft.active, (next) => setQuickCategoryDraft((prev) => ({ ...prev, active: next })))}
                 </div>
               </div>
               <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-4 py-3">
@@ -2741,66 +3187,172 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
           </div>
         ) : null}
 
+        {!loading && supplierRuleDraft.open ? (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/30 px-4">
+            <div className="w-full max-w-[520px] rounded-2xl border border-slate-200 bg-white shadow-soft">
+              <div className="border-b border-slate-200 px-4 py-3">
+                <h3 className="text-sm font-semibold text-slate-900">{tx("新增规则", "Agregar regla")}</h3>
+              </div>
+              <div className="grid gap-3 p-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">{tx("选择品类", "Sel categoria")}</label>
+                  <select
+                    value={supplierRuleDraft.category}
+                    onChange={(e) => setSupplierRuleDraft((prev) => ({ ...prev, category: e.target.value }))}
+                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                  >
+                    <option value="">{tx("选择品类", "Sel categoria")}</option>
+                    {supplierCategoryOptions.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">{tx("供应商折扣", "Desc prov")}</label>
+                  <input
+                    value={supplierRuleDraft.discount}
+                    onChange={(e) => setSupplierRuleDraft((prev) => ({ ...prev, discount: formatSupplierDiscountInput(e.target.value) }))}
+                    onBlur={(e) => setSupplierRuleDraft((prev) => ({ ...prev, discount: formatSupplierDiscountInput(e.target.value) }))}
+                    placeholder="25%"
+                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSupplierRuleDraft({
+                      open: false,
+                      category: "",
+                      discount: "",
+                      saving: false,
+                    })
+                  }
+                  className="inline-flex h-9 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"
+                >
+                  {tx("取消", "Cancelar")}
+                </button>
+                <button
+                  type="button"
+                  disabled={!supplierRuleDraft.category.trim() || !supplierRuleDraft.discount.trim()}
+                  onClick={saveSupplierDiscountDraft}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-primary px-3 text-sm font-semibold text-white disabled:opacity-40"
+                >
+                  <Check className="h-4 w-4" />
+                  <span>{tx("保存规则", "Guardar regla")}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {!loading && supplierDiscountPreview.open ? (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/30 px-4">
+            <div className="w-full max-w-[460px] rounded-2xl border border-slate-200 bg-white shadow-soft">
+              <div className="border-b border-slate-200 px-4 py-3">
+                <h3 className="text-sm font-semibold text-slate-900">{tx("折扣规则", "Reglas de descuento")}</h3>
+                <p className="mt-1 text-xs text-slate-500">{supplierDiscountPreview.supplierName || "-"}</p>
+              </div>
+              <div className="space-y-2 p-4">
+                {supplierDiscountPreview.rules.length ? (
+                  supplierDiscountPreview.rules.map((rule) => (
+                    <div key={`preview-${rule.id}`} className="grid grid-cols-[minmax(0,1fr)_72px] items-center gap-3 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                      <span className="truncate">{rule.category || "-"}</span>
+                      <span className="text-right font-medium text-slate-900">{formatSupplierDiscountInput(rule.discount) || "-"}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-500">{tx("未配置", "Sin configurar")}</div>
+                )}
+              </div>
+              <div className="flex items-center justify-end border-t border-slate-200 px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSupplierDiscountPreview({
+                      open: false,
+                      supplierName: "",
+                      rules: [],
+                    })
+                  }
+                  className="inline-flex h-9 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"
+                >
+                  {tx("关闭", "Cerrar")}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {!loading && supplierEditorOpen ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-            <div className="max-h-[86vh] w-full max-w-[560px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
+            <div className="max-h-[86vh] w-full max-w-[620px] overflow-y-auto overflow-x-hidden rounded-2xl border border-slate-200 bg-white shadow-soft">
               <div className="border-b border-slate-200 px-4 py-3">
-                <h3 className="text-base font-semibold text-slate-900">{tx("供应商信息", "Info prov")}</h3>
-                <p className="mt-1 text-xs text-slate-500">
-                  {tx("用于新增、编辑和维护供应商基础资料。", "Alta, edicion y mantenimiento de datos base del proveedor.")}
-                </p>
-              </div>
-              <div className="space-y-3 p-3">
-                <div className="rounded-xl border border-slate-200 bg-white p-3">
-                  <div className="grid gap-2.5 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("简称", "Short")}</label>
-                      <input value={supplierForm.shortName} onChange={(e) => setSupplierForm((p) => ({ ...p, shortName: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("全称", "Full")}</label>
-                      <input value={supplierForm.fullName} onChange={(e) => setSupplierForm((p) => ({ ...p, fullName: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-900">{tx("供应商信息", "Info prov")}</h3>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {tx("用于新增、编辑和维护供应商基础资料。", "Alta, edicion y mantenimiento de datos base del proveedor.")}
+                    </p>
+                  </div>
+                  <div className="min-w-0 shrink-0">
+                    <div className="flex justify-end">
+                      {renderSwitch(tx("启用", "On"), supplierForm.enabled, (next) => setSupplierForm((p) => ({ ...p, enabled: next })))}
                     </div>
                   </div>
-
-                  <div className="mt-2.5 grid gap-2.5 lg:grid-cols-[1fr_1fr_1fr_1fr_auto]">
+                </div>
+              </div>
+              <div className="space-y-2 p-2.5">
+                <div className="bg-white p-1">
+                  <div className="grid gap-1.5 xl:grid-cols-3">
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("联系人", "Cont")}</label>
-                      <input value={supplierForm.contact} onChange={(e) => setSupplierForm((p) => ({ ...p, contact: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("全称", "Full")}</label>
+                      <input value={supplierForm.fullName} onChange={(e) => setSupplierForm((p) => ({ ...p, fullName: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-2.5 text-sm" />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("电话", "Tel")}</label>
-                      <input value={supplierForm.phone} onChange={(e) => setSupplierForm((p) => ({ ...p, phone: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("简称", "Short")}</label>
+                      <input value={supplierForm.shortName} onChange={(e) => setSupplierForm((p) => ({ ...p, shortName: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-2.5 text-sm" />
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("账期天数", "Term days")}</label>
-                      <input value={supplierForm.accountPeriodDays} onChange={(e) => setSupplierForm((p) => ({ ...p, accountPeriodDays: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                      <input value={supplierForm.accountPeriodDays} onChange={(e) => setSupplierForm((p) => ({ ...p, accountPeriodDays: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-2.5 text-sm" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("联系人", "Cont")}</label>
+                      <input value={supplierForm.contact} onChange={(e) => setSupplierForm((p) => ({ ...p, contact: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-2.5 text-sm" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("电话", "Tel")}</label>
+                      <input value={supplierForm.phone} onChange={(e) => setSupplierForm((p) => ({ ...p, phone: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-2.5 text-sm" />
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("合作开始日期", "Inicio coop.")}</label>
-                      <input type="date" value={supplierForm.startDate} onChange={(e) => setSupplierForm((p) => ({ ...p, startDate: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm" />
-                    </div>
-                    <div className="min-w-[118px] justify-self-end">
-                      <label className="mb-1 block text-xs font-medium text-slate-600 text-right">{tx("启用状态", "Estado")}</label>
-                      <div className="pt-0.5 flex justify-end">
-                        {renderSwitch(tx("启用", "On"), supplierForm.enabled, (next) => setSupplierForm((p) => ({ ...p, enabled: next })))}
-                      </div>
+                      <input type="date" value={supplierForm.startDate} onChange={(e) => setSupplierForm((p) => ({ ...p, startDate: e.target.value }))} className="h-9 w-full rounded-xl border border-slate-200 px-2.5 text-sm" />
                     </div>
                   </div>
 
-                  <div className="mt-2.5 grid gap-3 lg:grid-cols-[280px_1fr]">
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600">{tx("供应商 LOGO", "Logo proveedor")}</label>
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-lg border border-dashed border-slate-200 bg-white">
-                          {supplierForm.logoUrl ? (
-                            <img src={supplierForm.logoUrl} alt="supplier-logo" className="h-full w-full object-contain" />
-                          ) : (
-                            <span className="text-[11px] text-slate-400">{tx("未上传", "Sin logo")}</span>
-                          )}
-                        </div>
-                        <label className="inline-flex h-8 cursor-pointer items-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
-                          {uploadingSupplierLogo ? tx("上传中...", "Subiendo...") : tx("上传图片", "Subir imagen")}
+                  <div className="mt-1.5 grid items-start gap-1.5 xl:grid-cols-[88px_94px_minmax(0,1fr)]">
+                    <div className="min-w-0">
+                        <label className="mb-1 block text-xs font-medium text-slate-600">{tx("供应商 LOGO", "Logo proveedor")}</label>
+                        <div className="flex items-center gap-2">
+                          <label className="relative flex h-20 w-20 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-dashed border-slate-200 bg-white">
+                          <SupplierLogoThumb
+                            key={supplierForm.logoUrl || "empty-logo"}
+                            src={supplierForm.logoUrl}
+                            alt="supplier-logo"
+                            emptyText=""
+                            className="flex h-full w-full items-center justify-center overflow-hidden bg-white"
+                          />
+                          <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-white/85 py-1 text-center text-[10px] font-medium text-slate-600">
+                            {uploadingSupplierLogo
+                              ? tx("上传中...", "Subiendo...")
+                              : supplierForm.logoUrl
+                                ? tx("更换", "Cambiar")
+                                : tx("上传", "Subir")}
+                          </span>
                           <input
                             type="file"
                             accept="image/*"
@@ -2808,6 +3360,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                             disabled={uploadingSupplierLogo}
                             onChange={(e) => {
                               const file = e.target.files?.[0];
+                              e.currentTarget.value = "";
                               if (file) void uploadSupplierLogo(file);
                             }}
                           />
@@ -2815,76 +3368,50 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                       </div>
                     </div>
 
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5">
-                      <div className="mb-1.5 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="mb-1 flex items-start justify-between gap-3">
                         <div>
-                          <h4 className="text-sm font-semibold text-slate-900">{tx("分类折扣规则", "Reglas por categoria")}</h4>
-                          <p className="mt-0.5 text-[11px] text-slate-500">
-                            {tx("可按不同品类分别设置折扣。未配置的品类默认不应用专属折扣。", "Configure descuentos por categoria. Las no configuradas no aplican descuento especial.")}
-                          </p>
+                          <label className="block text-xs font-medium text-slate-600">{tx("添加折扣", "Agregar desc")}</label>
                         </div>
-                        <button
-                          type="button"
-                          onClick={openQuickCategoryForRules}
-                          className="inline-flex h-8 shrink-0 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700"
-                        >
-                          {tx("新增品类", "Nueva categoria")}
-                        </button>
                       </div>
 
-                      {supplierForm.discountRules.length > 0 ? (
-                        <div className="max-h-[170px] space-y-2 overflow-auto pr-1">
-                          {supplierForm.discountRules.map((rule) => {
-                            const usedByOthers = new Set(
-                              supplierForm.discountRules
-                                .filter((item) => item.id !== rule.id)
-                                .map((item) => item.category)
-                                .filter(Boolean),
-                            );
-                            return (
-                              <div key={rule.id} className="grid gap-2 lg:grid-cols-[52fr_18fr_18fr_12fr]">
-                                <select
-                                  value={rule.category}
-                                  onChange={(e) => updateSupplierDiscountRule(rule.id, { category: e.target.value })}
-                                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                                >
-                                  <option value="">{tx("选择品类", "Sel categoria")}</option>
-                                  {supplierCategoryOptions.map((cat) => (
-                                    <option key={cat} value={cat} disabled={usedByOthers.has(cat)}>
-                                      {cat}
-                                    </option>
-                                  ))}
-                                </select>
-                                <input
-                                  value={rule.normalDiscount}
-                                  onChange={(e) => updateSupplierDiscountRule(rule.id, { normalDiscount: e.target.value })}
-                                  placeholder={tx("普通折扣", "Desc normal")}
-                                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                                />
-                                <input
-                                  value={rule.vipDiscount}
-                                  onChange={(e) => updateSupplierDiscountRule(rule.id, { vipDiscount: e.target.value })}
-                                  placeholder={tx("VIP折扣", "Desc VIP")}
-                                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => removeSupplierDiscountRule(rule.id)}
-                                  className="inline-flex h-10 items-center justify-center rounded-xl border border-rose-200 bg-white text-rose-600 hover:bg-rose-50"
-                                  aria-label={tx("删除", "Del")}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              </div>
-                            );
-                          })}
+                      <div className="mt-1">
+                        <div className="flex flex-col items-start gap-2">
+                          <button type="button" onClick={addSupplierDiscountRule} className="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700">
+                            {tx("新增规则", "Agregar regla")}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={openQuickCategoryForRules}
+                            className="inline-flex h-8 shrink-0 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700"
+                          >
+                            {tx("新增品类", "Nueva categoria")}
+                          </button>
                         </div>
-                      ) : null}
+                      </div>
+                    </div>
 
-                      <div className={`${supplierForm.discountRules.length > 0 ? "mt-2.5" : "mt-1"}`}>
-                        <button type="button" onClick={addSupplierDiscountRule} className="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700">
-                          {tx("新增规则", "Agregar regla")}
-                        </button>
+                    <div className="min-w-0">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-600">{tx("目前折扣", "Desc actual")}</label>
+                      </div>
+                      <div className="space-y-1.5">
+                        {supplierForm.discountRules
+                          .filter((rule) => String(rule.category || "").trim() && String(rule.discount || "").trim())
+                          .map((rule) => (
+                            <div key={`summary-${rule.id}`} className="grid grid-cols-[minmax(0,1fr)_64px_28px] items-center gap-2 rounded-lg bg-primary/10 px-2.5 py-1.5 text-sm text-slate-700">
+                              <span className="truncate">{rule.category}</span>
+                              <span className="text-right font-medium text-slate-900">{formatSupplierDiscountInput(rule.discount)}</span>
+                              <button
+                                type="button"
+                                onClick={() => removeSupplierDiscountRule(rule.id)}
+                                className="ml-auto inline-flex h-6 w-6 items-center justify-center rounded-md text-rose-500 transition hover:bg-white/70 hover:text-rose-600"
+                                aria-label={tx("删除", "Del")}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          ))}
                       </div>
                     </div>
                   </div>
@@ -2903,6 +3430,187 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                 </button>
                 <button type="button" disabled={!canManageSuppliers} onClick={() => void saveSupplier()} className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-white disabled:opacity-40">{tx("保存供应商", "Save prov")}</button>
                 <button type="button" onClick={() => setSupplierForm(EMPTY_SUPPLIER)} className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700">{tx("清空", "Clear")}</button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {!loading && userManagerOpen ? (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 px-4">
+            <div className="max-h-[86vh] w-full max-w-[680px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+                <h3 className="text-base font-semibold text-slate-900">{tx("用户管理", "Users")}</h3>
+                <div className="flex items-center gap-2">
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      onClick={() => openManagedUserEditor()}
+                      className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-xs font-semibold text-white"
+                    >
+                      {tx("新增用户", "New user")}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserManagerOpen(false);
+                      closeManagedUserEditor();
+                    }}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    aria-label={tx("关闭", "Close")}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="p-4">
+                <div className="overflow-hidden rounded-xl border border-slate-200">
+                  <table className="w-full table-fixed border-separate border-spacing-0">
+                    <thead>
+                      <tr className="bg-slate-50 text-left text-sm text-slate-500">
+                        <th className="w-[78px] px-2 py-3 font-semibold">{tx("头像", "Avatar")}</th>
+                        <th className="w-[84px] px-2 py-3 font-semibold">{tx("姓名", "Nombre")}</th>
+                        <th className="w-[132px] px-2 py-3 font-semibold">{tx("手机号", "Telefono")}</th>
+                        <th className="w-[178px] px-2 py-3 font-semibold">{tx("邮箱", "Correo")}</th>
+                        <th className="w-[68px] px-2 py-3 font-semibold">{tx("角色", "Rol")}</th>
+                        <th className="w-[54px] px-2 py-3 font-semibold">{tx("状态", "Estado")}</th>
+                        <th className="w-[72px] px-2 py-3 text-right font-semibold"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {managedUserLoading ? (
+                        <tr>
+                          <td colSpan={7} className="px-2 py-8 text-center text-sm text-slate-500">
+                            {tx("加载中...", "Cargando...")}
+                          </td>
+                        </tr>
+                      ) : managedUsers.length ? (
+                        managedUsers.map((user) => (
+                          <tr key={user.id} className="border-t border-slate-100">
+                            <td className="px-2 py-4">
+                              {user.avatar_url ? (
+                                <img
+                                  src={user.avatar_url}
+                                  alt={user.name || "avatar"}
+                                  className="h-9 w-9 rounded-full border border-slate-200 object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-xs font-semibold text-slate-600">
+                                  {String(user.name || user.phone || "U").trim().slice(0, 1).toUpperCase()}
+                                </div>
+                              )}
+                            </td>
+                            <td className="truncate px-2 py-4 text-sm text-slate-700">{user.name}</td>
+                            <td className="truncate px-2 py-4 text-sm text-slate-700">{user.phone}</td>
+                            <td className="truncate px-2 py-4 text-sm text-slate-700">{user.email || "-"}</td>
+                            <td className="truncate px-2 py-4 text-sm text-slate-700">{user.role === "admin" ? tx("管理员", "Admin") : tx("员工", "Staff")}</td>
+                            <td className="truncate px-2 py-4 text-sm text-slate-700">{user.active ? tx("启用", "Active") : tx("停用", "Inactive")}</td>
+                            <td className="px-2 py-4 text-right">
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => openManagedUserEditor(user)}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-primary hover:bg-slate-50"
+                                  aria-label={tx("编辑", "Edit")}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </button>
+                                {user.role !== "admin" ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => void deleteManagedUser(user.id)}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-600 hover:bg-rose-50"
+                                    aria-label={tx("删除", "Delete")}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                ) : null}
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={7} className="px-2 py-8 text-center text-sm text-slate-500">
+                            {tx("暂无用户", "No users")}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {!loading && managedUserEditorOpen ? (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/40 px-4">
+            <div className="w-full max-w-[420px] rounded-2xl border border-slate-200 bg-white shadow-soft">
+              <div className="border-b border-slate-200 px-4 py-4">
+                <h3 className="text-[18px] font-bold tracking-tight text-slate-900">
+                  {managedUserForm.id ? tx("编辑用户资料", "Edit user") : tx("新增用户", "New user")}
+                </h3>
+              </div>
+              <div className="grid gap-3 p-4">
+                <input
+                  value={managedUserForm.name}
+                  onChange={(e) => setManagedUserForm((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder={tx("姓名", "Nombre")}
+                  className="h-10 w-[180px] rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary"
+                />
+                <input
+                  value={managedUserForm.phone}
+                  onChange={(e) => setManagedUserForm((prev) => ({ ...prev, phone: e.target.value }))}
+                  placeholder={tx("手机号", "Telefono")}
+                  className="h-10 w-[180px] rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary"
+                />
+                <input
+                  value={managedUserForm.email}
+                  onChange={(e) => setManagedUserForm((prev) => ({ ...prev, email: e.target.value }))}
+                  placeholder={tx("邮箱", "Correo")}
+                  className="h-10 w-[180px] rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary"
+                />
+                <input
+                  type="password"
+                  value={managedUserForm.password}
+                  onChange={(e) => setManagedUserForm((prev) => ({ ...prev, password: e.target.value }))}
+                  placeholder={managedUserForm.id ? tx("新密码 不修改可留空", "New password optional") : tx("登录密码", "Password")}
+                  className="h-10 w-[180px] rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-primary"
+                />
+                <div className="w-[180px] rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700">
+                  <div className="flex items-center gap-5">
+                    <label className="flex items-center gap-2">
+                      <input type="radio" name="managed-user-role" checked={managedUserForm.role === "admin"} onChange={() => setManagedUserForm((prev) => ({ ...prev, role: "admin" }))} />
+                      <span>{tx("管理员", "Admin")}</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input type="radio" name="managed-user-role" checked={managedUserForm.role === "worker"} onChange={() => setManagedUserForm((prev) => ({ ...prev, role: "worker" }))} />
+                      <span>{tx("员工", "Staff")}</span>
+                    </label>
+                  </div>
+                </div>
+                <label className="flex h-10 w-[180px] items-center rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700">
+                  <input type="checkbox" checked={managedUserForm.active} onChange={(e) => setManagedUserForm((prev) => ({ ...prev, active: e.target.checked }))} className="mr-2" />
+                  {tx("账号启用", "Account active")}
+                </label>
+              </div>
+              <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-4 py-4">
+                <button
+                  type="button"
+                  onClick={closeManagedUserEditor}
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  {tx("取消", "Cancelar")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveManagedUser()}
+                  disabled={managedUserSaving}
+                  className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-white transition hover:opacity-95 disabled:opacity-60"
+                >
+                  {managedUserSaving ? tx("保存中...", "Saving...") : tx("保存", "Guardar")}
+                </button>
               </div>
             </div>
           </div>
@@ -2934,22 +3642,33 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                     {tx("新增记录", "Nuevo registro")}
                   </button>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex w-full max-w-[500px] items-center justify-end rounded-xl border border-slate-200 bg-white pl-3 pr-1.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                  <input
+                    value={customerKeyword}
+                    onChange={(e) => setCustomerKeyword(e.target.value)}
+                    placeholder={tx("搜索客户", "Search cli")}
+                    className="h-9 min-w-[148px] flex-[0_0_44%] border-0 bg-transparent px-0 text-sm text-slate-700 outline-none placeholder:text-slate-400"
+                  />
+                  <div className="mx-2.5 h-5 w-px bg-slate-200" />
+                  <select
+                    value={customerSettlementFilter}
+                    onChange={(e) => setCustomerSettlementFilter(e.target.value as "all" | "settled" | "unsettled")}
+                    className="h-9 w-[110px] flex-none border-0 bg-transparent px-2 text-sm text-slate-700 outline-none"
+                  >
+                    <option value="all">{tx("全部状态", "All status")}</option>
+                    <option value="settled">{tx("已结清", "Settled")}</option>
+                    <option value="unsettled">{tx("未结清", "Unsettled")}</option>
+                  </select>
+                  <div className="mx-1.5 h-5 w-px bg-slate-200" />
                   <select
                     value={customerVipFilter}
                     onChange={(e) => setCustomerVipFilter(e.target.value as "all" | "vip" | "normal")}
-                    className="h-10 min-w-[140px] rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                    className="h-9 w-[104px] flex-none border-0 bg-transparent px-2 text-sm text-slate-700 outline-none"
                   >
                     <option value="all">{tx("全部VIP", "VIP all")}</option>
                     <option value="vip">{tx("仅VIP", "Solo VIP")}</option>
                     <option value="normal">{tx("非VIP", "No VIP")}</option>
                   </select>
-                  <input
-                    value={customerKeyword}
-                    onChange={(e) => setCustomerKeyword(e.target.value)}
-                    placeholder={tx("搜索客户", "Search cli")}
-                    className="h-10 w-full max-w-[280px] rounded-xl border border-slate-200 px-3 text-sm"
-                  />
                 </div>
               </div>
               <div className="overflow-x-auto">
@@ -2962,19 +3681,21 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                       <th className="px-3 py-2 text-center whitespace-nowrap">{tx("全渠道次数", "Total count")}</th>
                       <th className="px-3 py-2 text-left whitespace-nowrap">{tx("配货金额", "Packing amount")}</th>
                       <th className="px-3 py-2 text-left whitespace-nowrap">{tx("欠款金额", "Saldo")}</th>
+                      <th className="px-3 py-2 text-center whitespace-nowrap">{tx("账期", "Plazo")}</th>
                       <th className="px-3 py-2 text-center whitespace-nowrap">{tx("逾期", "Vencidas")}</th>
+                      <th className="px-3 py-2 text-center whitespace-nowrap">{tx("是否结清", "Liquidado")}</th>
                       <th className="px-3 py-2 text-center whitespace-nowrap">{tx("VIP", "VIP")}</th>
                       <th className="px-3 py-2 text-center whitespace-nowrap">{tx("信用", "Crédito")}</th>
-                      <th className="px-3 py-2 text-center whitespace-nowrap">{tx("账期", "Plazo")}</th>
                       <th className="w-[66px] px-3 py-2 text-center whitespace-nowrap">{tx("详情", "Detail")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pagedCustomers.map((c) => {
                       const overview = customerFinanceOverviewMap.get(c.id) || { packingAmountText: "", debtAmountText: "", overdueCount: 0, creditLevel: getCustomerCreditLevelDisplay(c.creditLevel || "", "", 0) };
+                      const hasSettlementTracking = Boolean(String(overview.packingAmountText || "").trim()) || Boolean(String(overview.debtAmountText || "").trim());
                       return (
                       <tr key={c.id} className="border-t border-slate-100">
-                        <td className="px-3 py-1.5">{c.name || "-"}</td>
+                        <td className="px-3 py-1.5">{getCustomerDisplayName(c)}</td>
                         <td className="px-3 py-1.5">{c.channelText || getCustomerChannelLabel(c, tx)}</td>
                         <td className="px-3 py-1.5">$ {c.totalOrderAmountText || "0.00"}</td>
                         <td className="px-3 py-1.5 text-center">{(c.totalOrderCount ?? c.orderStats) || "-"}</td>
@@ -2984,10 +3705,20 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                             {overview.debtAmountText ? `$ ${overview.debtAmountText}` : "-"}
                           </span>
                         </td>
+                        <td className="px-3 py-1.5 text-center">{c.paymentTermText || "-"}</td>
                         <td className="px-3 py-1.5 text-center">
                           <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${overview.overdueCount > 0 ? "bg-amber-50 text-amber-700" : "bg-slate-50 text-slate-500"}`}>
                             {getOverdueLabel(overview.overdueCount, tx)}
                           </span>
+                        </td>
+                        <td className="px-3 py-1.5 text-center">
+                          {hasSettlementTracking ? (
+                            <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${overview.debtAmountText ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+                              {overview.debtAmountText ? tx("未清", "Pendiente") : tx("已结清", "Liquidado")}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-slate-400">-</span>
+                          )}
                         </td>
                         <td className="px-3 py-1.5 text-center">{isVipCustomer(c) ? <span className="inline-flex justify-center"><VipBadgeIcon /></span> : ""}</td>
                         <td className="px-3 py-1.5 text-center">
@@ -2995,7 +3726,6 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                             {overview.creditLevel || "-"}
                           </span>
                         </td>
-                        <td className="px-3 py-1.5 text-center">{c.paymentTermText || "-"}</td>
                         <td className="px-3 py-1.5 text-center">
                           <button
                             type="button"
@@ -3123,13 +3853,19 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                     <label className="mb-1 block text-xs font-medium text-slate-600">{tx("发货日期", "Fecha envio")}</label>
                     <input
                       type="date"
-                      value={manualOrderForm.shippedAt}
-                      onChange={(e) => setManualOrderForm((prev) => ({ ...prev, shippedAt: e.target.value }))}
+                      value={manualOrderForm.ygShippedAt}
+                      onChange={(e) => setManualOrderForm((prev) => ({ ...prev, ygShippedAt: e.target.value }))}
                       className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
                     />
                   </div>
                 </div>
-                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.92fr)]">
+                <div className="space-y-3">
+                  <div className="border-t border-slate-200 pt-3">
+                    <div className="text-xs font-medium tracking-[0.12em] text-slate-400">
+                      {tx("其他订单号", "Pedidos externos")}
+                    </div>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.82fr)_minmax(0,0.82fr)_minmax(0,0.92fr)]">
                   {manualOrderEditorMode === "manual" ? (
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600">{tx("其他订单号", "Pedido externo")}</label>
@@ -3178,6 +3914,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                       className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
                     />
                   </div>
+                </div>
                 </div>
               </div>
               <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-4 py-3">
@@ -3235,8 +3972,22 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                     <h4 className="text-sm font-semibold text-slate-900">{tx("客户信息", "Info cli")}</h4>
                     <button
                       type="button"
+                      onClick={() => setDetailCustomerInfoEditOpen(true)}
+                      disabled={!canManageCustomers}
+                      className={`inline-flex h-5 w-5 items-center justify-center rounded-md border transition disabled:opacity-40 ${
+                        detailCustomerInfoEditOpen
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-slate-200 bg-white text-slate-700"
+                      }`}
+                      aria-label={tx("编辑客户信息", "Edit customer info")}
+                      title={tx("编辑客户信息", "Edit customer info")}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => void saveDetailCustomerInfo()}
-                      disabled={!canManageCustomers || savingDetailCustomerInfo || !hasPendingDetailCustomerInfoChanges}
+                      disabled={!canManageCustomers || !detailCustomerInfoEditOpen || savingDetailCustomerInfo || !hasPendingDetailCustomerInfoChanges}
                       className={`inline-flex h-5 w-5 items-center justify-center rounded-md border transition disabled:opacity-40 ${
                         hasPendingDetailCustomerInfoChanges
                           ? "border-primary bg-primary text-white"
@@ -3261,7 +4012,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                       <input
                         value={detailCustomerInfoForm.name}
                         onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, name: e.target.value }))}
-                        disabled={!canManageCustomers}
+                        disabled={!canManageCustomers || !detailCustomerInfoEditOpen}
                         className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-xs font-normal text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
                       />
                     </div>
@@ -3281,7 +4032,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                         <input
                           value={detailCustomerInfoForm.cityCountry}
                           onChange={(e) => setDetailCustomerInfoForm((prev) => ({ ...prev, cityCountry: e.target.value }))}
-                          disabled={!canManageCustomers}
+                          disabled={!canManageCustomers || !detailCustomerInfoEditOpen}
                           className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-12 text-xs font-normal text-slate-700 outline-none transition focus:border-primary disabled:bg-slate-50"
                         />
                         <a
@@ -3326,7 +4077,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                     </div>
                     <div className="min-w-0 text-center">
                       <label className="mb-1 block text-center text-sm font-semibold text-slate-700">{tx("账期", "Plazo")}</label>
-                      {detailCustomer.paymentTermText ? (
+                      {detailCustomer.paymentTermText && !detailCustomerInfoEditOpen ? (
                         <PlainCustomerValue centered value={detailCustomer.paymentTermText} />
                       ) : canManageCustomers ? (
                         <div className="flex justify-center">
@@ -3338,7 +4089,8 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                                 paymentTermText: e.target.value.replace(/[^\d]/g, ""),
                               }))}
                             placeholder={tx("填写账期", "Captura plazo")}
-                            className="h-9 w-24 rounded-xl border border-slate-200 bg-white px-3 text-center text-sm font-normal text-slate-700 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+                            disabled={!detailCustomerInfoEditOpen}
+                            className="h-9 w-24 rounded-xl border border-slate-200 bg-white px-3 text-center text-sm font-normal text-slate-700 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:bg-slate-50"
                           />
                         </div>
                       ) : (
@@ -3447,6 +4199,17 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                                 {detailEditingRowId === item.id ? (
                                   <button
                                     type="button"
+                                    onClick={() => void voidTimelineRow(item)}
+                                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50"
+                                    aria-label={tx("作废", "Void")}
+                                    title={tx("作废", "Void")}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                ) : null}
+                                {detailEditingRowId === item.id ? (
+                                  <button
+                                    type="button"
                                     onClick={() => void saveInlineDetailRow()}
                                     className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-primary hover:bg-slate-50"
                                     aria-label={tx("保存", "Save")}
@@ -3518,7 +4281,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
 
         {!loading && activePaymentDetail ? (
           <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 px-4">
-            <div className="max-h-[78vh] w-full max-w-[980px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-soft">
+            <div className="max-h-[82vh] w-full max-w-[1180px] overflow-y-auto overflow-x-hidden rounded-2xl border border-slate-200 bg-white shadow-soft">
               <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
                 <h4 className="text-sm font-semibold text-slate-900">
                   {tx("付款详情", "Detalle de pago")} · {activePaymentDetail.orderNo || "-"}
@@ -3527,7 +4290,8 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                   <button
                     type="button"
                     onClick={openNewPaymentRow}
-                    className="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    disabled={activePaymentDetail.statusKey === "voided"}
+                    className="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {tx("新增付款", "Agregar pago")}
                   </button>
@@ -3575,71 +4339,70 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                   </div>
                 ) : null}
                 <div className="rounded-xl border border-slate-200">
-                  <table className="w-full table-auto text-sm">
+                  <table className="w-full table-fixed text-sm">
                     <thead className="bg-slate-50 text-xs text-slate-600">
                       <tr>
-                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("需付金额", "Monto por pagar")}</th>
-                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("本次付款金额", "Pago")}</th>
-                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("已付金额", "Monto pagado")}</th>
-                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("付款时间", "Fecha pago")}</th>
-                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("付款方式", "Metodo pago")}</th>
-                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("付款对象", "Destinatario")}</th>
-                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("未付金额", "Monto pendiente")}</th>
-                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("付款凭据", "Comprobante")}</th>
-                        <th className="px-3 py-2 text-left whitespace-nowrap">{tx("备注", "Nota")}</th>
-                        <th className="px-3 py-2 text-right whitespace-nowrap">{tx("操作", "Acciones")}</th>
+                        <th className="w-[11%] px-2 py-2 text-left">{tx("需付金额", "Monto por pagar")}</th>
+                        <th className="w-[11%] px-2 py-2 text-left">{tx("本次付款金额", "Pago")}</th>
+                        <th className="w-[11%] px-2 py-2 text-left">{tx("已付金额", "Monto pagado")}</th>
+                        <th className="w-[12%] px-2 py-2 text-left">{tx("付款时间", "Fecha pago")}</th>
+                        <th className="w-[12%] px-2 py-2 text-left">{tx("付款方式", "Metodo pago")}</th>
+                        <th className="w-[12%] px-2 py-2 text-left">{tx("付款对象", "Destinatario")}</th>
+                        <th className="w-[10%] px-2 py-2 text-left">{tx("未付金额", "Monto pendiente")}</th>
+                        <th className="w-[10%] px-2 py-2 text-left">{tx("付款凭据", "Comprobante")}</th>
+                        <th className="w-[6%] px-2 py-2 text-left">{tx("备注", "Nota")}</th>
+                        <th className="w-[5%] px-2 py-2 text-right">{tx("操作", "Acciones")}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {paymentEditingRowId === "new" ? (
                         <tr className="border-t border-slate-100 bg-slate-50/60">
-                          <td className="px-3 py-1.5 whitespace-nowrap">{paymentRowEditForm.payableAmount ? `$ ${paymentRowEditForm.payableAmount}` : "-"}</td>
-                          <td className="px-3 py-1.5 whitespace-nowrap">
+                          <td className="break-words px-2 py-1.5 align-top">{paymentRowEditForm.payableAmount ? `$ ${paymentRowEditForm.payableAmount}` : "-"}</td>
+                          <td className="px-2 py-1.5 align-top">
                             <input
                               value={paymentRowEditForm.currentPaymentAmount}
                               onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, currentPaymentAmount: e.target.value }))}
-                              className="h-8 w-[112px] rounded-xl border border-slate-200 px-3 text-sm"
+                              className="h-8 w-full min-w-0 rounded-xl border border-slate-200 px-2 text-sm"
                             />
                           </td>
-                          <td className="px-3 py-1.5 whitespace-nowrap">
+                          <td className="break-words px-2 py-1.5 align-top">
                             {paymentRowEditForm.currentPaymentAmount ? `$ ${parseAmountValue(paymentRowEditForm.currentPaymentAmount).toFixed(2)}` : "-"}
                           </td>
-                          <td className="px-3 py-1.5 whitespace-nowrap">
+                          <td className="px-2 py-1.5 align-top">
                             <input
                               type="date"
                               value={paymentRowEditForm.paymentTime}
                               onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, paymentTime: e.target.value }))}
-                              className="h-8 w-[128px] rounded-xl border border-slate-200 px-3 text-sm"
+                              className="h-8 w-full min-w-0 rounded-xl border border-slate-200 px-2 text-sm"
                             />
                           </td>
-                          <td className="px-3 py-1.5">
-                            <input
+                          <td className="px-2 py-1.5 align-top">
+                            <PaymentMethodSelect
                               value={paymentRowEditForm.paymentMethod}
-                              onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, paymentMethod: e.target.value }))}
-                              className="h-8 w-full min-w-[100px] rounded-xl border border-slate-200 px-3 text-sm"
+                              onChange={(value) => setPaymentRowEditForm((prev) => ({ ...prev, paymentMethod: value }))}
                             />
                           </td>
-                          <td className="px-3 py-1.5">
-                            <input
+                          <td className="px-2 py-1.5 align-top">
+                            <PaymentTargetSelect
                               value={paymentRowEditForm.paymentTarget}
-                              onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, paymentTarget: e.target.value }))}
-                              className="h-8 w-full min-w-[100px] rounded-xl border border-slate-200 px-3 text-sm"
+                              options={supplierShortNameOptions}
+                              onChange={(value) => setPaymentRowEditForm((prev) => ({ ...prev, paymentTarget: value }))}
                             />
                           </td>
-                          <td className="px-3 py-1.5 whitespace-nowrap">
+                          <td className="break-words px-2 py-1.5 align-top">
                             {paymentRowEditForm.currentPaymentAmount
                               ? `$ ${Math.max(parseAmountValue(paymentRowEditForm.payableAmount) - parseAmountValue(paymentRowEditForm.currentPaymentAmount), 0).toFixed(2)}`
                               : (paymentRowEditForm.payableAmount ? `$ ${parseAmountValue(paymentRowEditForm.payableAmount).toFixed(2)}` : "-")}
                           </td>
-                          <td className="px-3 py-1.5"><span className="text-sm text-slate-400">-</span></td>
-                          <td className="px-3 py-1.5">
+                          <td className="px-2 py-1.5 align-top"><span className="text-sm text-slate-400">-</span></td>
+                          <td className="px-2 py-1.5 align-top">
                             <input
                               value={paymentRowEditForm.note}
                               onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, note: e.target.value }))}
-                              className="h-8 w-full min-w-[120px] rounded-xl border border-slate-200 px-3 text-sm"
+                              className="h-8 w-full min-w-0 rounded-xl border border-slate-200 px-2 text-sm"
                             />
                           </td>
-                          <td className="px-3 py-1.5 text-right">
+                          <td className="px-2 py-1.5 text-right align-top">
                             <div className="flex flex-nowrap items-center justify-end gap-2">
                               <button
                                 type="button"
@@ -3670,67 +4433,66 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                         </tr>
                       ) : pagedPaymentRows.map((row) => (
                         <tr key={row.id} className="border-t border-slate-100">
-                          <td className="px-3 py-1.5 whitespace-nowrap">
+                          <td className="break-words px-2 py-1.5 align-top">
                             {paymentEditingRowId === row.id ? (
                               <input
                                 value={paymentRowEditForm.payableAmount}
                                 onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, payableAmount: e.target.value }))}
-                                className="h-8 w-[132px] rounded-xl border border-slate-200 px-3 text-sm"
+                                className="h-8 w-full min-w-0 rounded-xl border border-slate-200 px-2 text-sm"
                               />
                             ) : (
                               row.payableAmountText ? `$ ${row.payableAmountText}` : "-"
                             )}
                           </td>
-                          <td className="px-3 py-1.5 whitespace-nowrap">
+                          <td className="px-2 py-1.5 align-top">
                             {paymentEditingRowId === row.id ? (
                               <input
                                 value={paymentRowEditForm.currentPaymentAmount}
                                 onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, currentPaymentAmount: e.target.value }))}
-                                className="h-8 w-[112px] rounded-xl border border-slate-200 px-3 text-sm"
+                                className="h-8 w-full min-w-0 rounded-xl border border-slate-200 px-2 text-sm"
                               />
                             ) : row.currentPaymentAmountText ? `$ ${row.currentPaymentAmountText}` : "-"}
                           </td>
-                          <td className="px-3 py-1.5 whitespace-nowrap">
+                          <td className="break-words px-2 py-1.5 align-top">
                             {paymentEditingRowId === row.id && paymentRowEditForm.currentPaymentAmount
                               ? `$ ${Math.max(parseAmountValue(row.paidAmountText) - parseAmountValue(row.currentPaymentAmountText) + parseAmountValue(paymentRowEditForm.currentPaymentAmount), 0).toFixed(2)}`
                               : (row.paidAmountText ? `$ ${row.paidAmountText}` : "-")}
                           </td>
-                          <td className="px-3 py-1.5 whitespace-nowrap">
+                          <td className="px-2 py-1.5 align-top">
                             {paymentEditingRowId === row.id ? (
                               <input
                                 type="date"
                                 value={paymentRowEditForm.paymentTime}
                                 onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, paymentTime: e.target.value }))}
-                                className="h-8 w-[128px] rounded-xl border border-slate-200 px-3 text-sm"
+                                className="h-8 w-full min-w-0 rounded-xl border border-slate-200 px-2 text-sm"
                               />
                             ) : (
                               row.paymentTimeText || "-"
                             )}
                           </td>
-                          <td className="px-3 py-1.5 break-words whitespace-normal">
+                          <td className="break-words px-2 py-1.5 align-top whitespace-normal">
                             {paymentEditingRowId === row.id ? (
-                              <input
+                              <PaymentMethodSelect
                                 value={paymentRowEditForm.paymentMethod}
-                                onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, paymentMethod: e.target.value }))}
-                                className="h-8 w-full min-w-[100px] rounded-xl border border-slate-200 px-3 text-sm"
+                                onChange={(value) => setPaymentRowEditForm((prev) => ({ ...prev, paymentMethod: value }))}
                               />
                             ) : (row.paymentMethodText || "-")}
                           </td>
-                          <td className="px-3 py-1.5 break-words whitespace-normal">
+                          <td className="break-words px-2 py-1.5 align-top whitespace-normal">
                             {paymentEditingRowId === row.id ? (
-                              <input
+                              <PaymentTargetSelect
                                 value={paymentRowEditForm.paymentTarget}
-                                onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, paymentTarget: e.target.value }))}
-                                className="h-8 w-full min-w-[100px] rounded-xl border border-slate-200 px-3 text-sm"
+                                options={supplierShortNameOptions}
+                                onChange={(value) => setPaymentRowEditForm((prev) => ({ ...prev, paymentTarget: value }))}
                               />
                             ) : (row.paymentTargetText || "-")}
                           </td>
-                          <td className="px-3 py-1.5 whitespace-nowrap">
+                          <td className="break-words px-2 py-1.5 align-top">
                             {paymentEditingRowId === row.id && paymentRowEditForm.currentPaymentAmount
                               ? `$ ${Math.max(parseAmountValue(row.unpaidAmountText) + parseAmountValue(row.currentPaymentAmountText) - parseAmountValue(paymentRowEditForm.currentPaymentAmount), 0).toFixed(2)}`
                               : (row.unpaidAmountText ? `$ ${row.unpaidAmountText}` : "-")}
                           </td>
-                          <td className="px-3 py-1.5">
+                          <td className="px-2 py-1.5 align-top">
                             {(paymentEvidenceItems[row.id] || []).length ? (
                               <div className="flex flex-wrap items-center gap-2">
                                 {(paymentEvidenceItems[row.id] || []).map((item) =>
@@ -3762,16 +4524,16 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                               <span className="text-sm text-slate-400">-</span>
                             )}
                           </td>
-                          <td className="px-3 py-1.5 break-words whitespace-normal">
+                          <td className="break-words px-2 py-1.5 align-top whitespace-normal">
                             {paymentEditingRowId === row.id ? (
                               <input
                                 value={paymentRowEditForm.note}
                                 onChange={(e) => setPaymentRowEditForm((prev) => ({ ...prev, note: e.target.value }))}
-                                className="h-8 w-full min-w-[120px] rounded-xl border border-slate-200 px-3 text-sm"
+                                className="h-8 w-full min-w-0 rounded-xl border border-slate-200 px-2 text-sm"
                               />
                             ) : (row.noteText || "-")}
                           </td>
-                          <td className="px-3 py-1.5 text-right">
+                          <td className="px-2 py-1.5 text-right align-top">
                             <div className="flex flex-nowrap items-center justify-end gap-2 whitespace-nowrap">
                               <input
                                 ref={(node) => {
@@ -3954,13 +4716,10 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                   <div className="min-w-0">
                     <h3 className="text-sm font-semibold text-slate-900">{tx("分类列表", "Lista de categorias")}</h3>
                     <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
-                      {tx("点击分类可弹窗编辑；维护中文与西语映射。", "Haga clic en una categoria para editar en modal.")}
+                      {tx("点击分类可在右侧编辑；维护中文与西语映射。", "Haga clic en una categoria para editar a la derecha.")}
                     </p>
                   </div>
                   <div className="ml-auto flex w-full items-center gap-2 sm:w-auto">
-                    <div className="shrink-0">
-                      {renderSwitch(tx("启用", "Habilitado"), categoryDefaultActive, (next) => setCategoryDefaultActive(next))}
-                    </div>
                     <div className="w-full sm:w-[280px]">
                       <input
                         value={categoryKeyword}
@@ -3989,7 +4748,6 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                           className="cursor-pointer border-t border-slate-100 transition hover:bg-slate-50"
                           onClick={() => {
                             setCategoryForm(item);
-                            setCategoryModalOpen(true);
                           }}
                         >
                           <td className="px-3 py-2 font-semibold text-slate-900">{item.categoryZh}</td>
@@ -4011,7 +4769,7 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setCategoryForm(item);
-                                  setCategoryModalOpen(true);
+                                  window.setTimeout(() => categoryZhInputRef.current?.focus(), 10);
                                 }}
                                 className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-primary"
                                 title={tx("编辑", "Editar")}
@@ -4047,120 +4805,99 @@ export function SettingsClient({ isAdmin, currentPermissions, initialTab = "perm
 
               <div className="rounded-xl border border-slate-200 bg-white min-h-[580px]">
                 <div className="border-b border-slate-200 px-3 py-2">
-                  <h3 className="text-sm font-semibold text-slate-900">{tx("快捷操作", "Acciones rapidas")}</h3>
-                  <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
-                    {tx("右侧统一设置启用状态并执行同步。", "Defina estado habilitado y sincronice categorias.")}
-                  </p>
-                </div>
-                <div className="space-y-2 p-3">
-                  <div className="flex flex-wrap items-center justify-center gap-2">
-                    <button
-                      type="button"
-                      disabled={!canManageProducts}
-                      onClick={() => {
-                        setCategoryForm({ ...EMPTY_CATEGORY_MAP, active: categoryDefaultActive });
-                        setCategoryModalOpen(true);
-                        window.setTimeout(() => categoryZhInputRef.current?.focus(), 10);
-                      }}
-                      className="inline-flex h-9 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-soft disabled:opacity-40"
-                    >
-                      {tx("新增分类", "Nueva categoria")}
-                    </button>
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-slate-900">{tx("快捷操作", "Acciones rapidas")}</h3>
                     <button
                       type="button"
                       onClick={() => void loadCategoryMaps()}
                       className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
                     >
-                      {tx("同步产品分类", "Sincronizar categorias")}
+                      {tx("刷新友购产品分类", "Refrescar categorias YG")}
                     </button>
+                  </div>
+                </div>
+                <div className="space-y-3 p-3">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                    <div className="border-b border-slate-200 pb-3">
+                      <h4 className="text-sm font-semibold text-slate-900">{tx("新增分类", "Nueva categoria")}</h4>
+                    </div>
+                    <div className="grid gap-3 pt-3">
+                      <div>
+                        <label className="mb-1 block text-[11px] font-medium text-slate-600">{tx("中文分类", "Categoria ZH")}</label>
+                        <input
+                          ref={categoryZhInputRef}
+                          value={categoryForm.categoryZh}
+                          onChange={(e) => setCategoryForm((p) => ({ ...p, categoryZh: e.target.value }))}
+                          placeholder={tx("请输入中文分类", "Ingrese categoria ZH")}
+                          className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-[11px] font-medium text-slate-600">{tx("西语分类", "Categoria ES")}</label>
+                        <input
+                          value={categoryForm.categoryEs}
+                          onChange={(e) => setCategoryForm((p) => ({ ...p, categoryEs: e.target.value.toLocaleUpperCase() }))}
+                          placeholder={tx("请输入西语分类", "Ingrese categoria ES")}
+                          className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-[11px] font-medium text-slate-600">{tx("友购序号", "YG Code")}</label>
+                        <input
+                          value={categoryForm.yogoCode}
+                          onChange={(e) => setCategoryForm((p) => ({ ...p, yogoCode: e.target.value }))}
+                          onBlur={(e) =>
+                            setCategoryForm((p) => ({
+                              ...p,
+                              yogoCode: formatYogoCodeDraft(e.target.value),
+                            }))
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              const normalized = formatYogoCodeDraft((e.currentTarget as HTMLInputElement).value);
+                              setCategoryForm((p) => ({
+                                ...p,
+                                yogoCode: normalized ? `${normalized} ` : "",
+                              }));
+                            }
+                          }}
+                          placeholder={tx("例如 10 11 12", "Ej. 10 11 12")}
+                          className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                        />
+                        <p className="mt-1 text-[10px] text-slate-500">{tx("可输入多个序号（空格/换行都可），系统会自动识别并规范化", "Puede ingresar multiples codigos y el sistema los normaliza automaticamente")}</p>
+                      </div>
+                      <div>
+                        {renderSwitch(tx("启用", "Habilitado"), categoryForm.active, (next) => setCategoryForm((p) => ({ ...p, active: next })))}
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2 border-t border-slate-200 pt-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCategoryForm(EMPTY_CATEGORY_MAP);
+                        }}
+                        className="inline-flex h-9 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
+                      >
+                        {tx("取消", "Cancelar")}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!canManageProducts}
+                        onClick={async () => {
+                          const ok = await saveCategoryMap();
+                          if (ok) setCategoryForm(EMPTY_CATEGORY_MAP);
+                        }}
+                        className="inline-flex h-9 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-soft disabled:opacity-40"
+                      >
+                        {tx("保存分类", "Guardar categoria")}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {categoryModalOpen ? (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 p-4">
-                <div className="w-full max-w-[620px] rounded-xl border border-slate-200 bg-white shadow-xl">
-                  <div className="border-b border-slate-200 px-4 py-3">
-                    <h4 className="text-sm font-semibold text-slate-900">{tx("编辑分类", "Editar categoria")}</h4>
-                  </div>
-                  <div className="grid gap-3 p-4 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-1 block text-[11px] font-medium text-slate-600">{tx("中文分类", "Categoria ZH")}</label>
-                      <input
-                        ref={categoryZhInputRef}
-                        value={categoryForm.categoryZh}
-                        onChange={(e) => setCategoryForm((p) => ({ ...p, categoryZh: e.target.value }))}
-                        placeholder={tx("请输入中文分类", "Ingrese categoria ZH")}
-                        className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-[11px] font-medium text-slate-600">{tx("西语分类", "Categoria ES")}</label>
-                      <input
-                        value={categoryForm.categoryEs}
-                        onChange={(e) => setCategoryForm((p) => ({ ...p, categoryEs: e.target.value }))}
-                        placeholder={tx("请输入西语分类", "Ingrese categoria ES")}
-                        className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-[11px] font-medium text-slate-600">{tx("友购序号", "YG Code")}</label>
-                      <input
-                        value={categoryForm.yogoCode}
-                        onChange={(e) => setCategoryForm((p) => ({ ...p, yogoCode: e.target.value }))}
-                        onBlur={(e) =>
-                          setCategoryForm((p) => ({
-                            ...p,
-                            yogoCode: formatYogoCodeDraft(e.target.value),
-                          }))
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            const normalized = formatYogoCodeDraft((e.currentTarget as HTMLInputElement).value);
-                            setCategoryForm((p) => ({
-                              ...p,
-                              yogoCode: normalized ? `${normalized} ` : "",
-                            }));
-                          }
-                        }}
-                        placeholder={tx("例如 10 11 12", "Ej. 10 11 12")}
-                        className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm"
-                      />
-                      <p className="mt-1 text-[10px] text-slate-500">{tx("可输入多个序号（空格/换行都可），系统会自动识别并规范化", "Puede ingresar multiples codigos y el sistema los normaliza automaticamente")}</p>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="mb-1 block text-[11px] font-medium text-slate-600">{tx("启用状态", "Estado habilitado")}</label>
-                      {renderSwitch(tx("启用", "Habilitado"), categoryForm.active, (next) => setCategoryForm((p) => ({ ...p, active: next })))}
-                    </div>
-                  </div>
-                  <div className="flex justify-end gap-2 border-t border-slate-200 px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCategoryModalOpen(false);
-                        setCategoryForm(EMPTY_CATEGORY_MAP);
-                      }}
-                      className="inline-flex h-9 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700"
-                    >
-                      {tx("取消", "Cancelar")}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!canManageProducts}
-                      onClick={async () => {
-                        const ok = await saveCategoryMap();
-                        if (ok) setCategoryModalOpen(false);
-                      }}
-                      className="inline-flex h-9 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-soft disabled:opacity-40"
-                    >
-                      {tx("保存分类", "Guardar categoria")}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
           </div>
         ) : null}
 

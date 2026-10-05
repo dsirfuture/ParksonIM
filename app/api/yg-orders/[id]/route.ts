@@ -16,6 +16,8 @@ import { getSession } from "@/lib/tenant";
 import { normalizePhone } from "@/lib/user-account";
 
 const FIXED_WAREHOUSE = "PARKSONMX仓";
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function normalizeString(value: unknown) {
   if (typeof value !== "string") return null;
@@ -33,6 +35,16 @@ function normalizeMexicoPhone(value: unknown) {
   return `+52${local10}`;
 }
 
+function normalizeOrderLookupKey(value: string) {
+  return value.trim().replace(/\(\d+\)\s*$/u, "");
+}
+
+function deriveLastThree(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return "000";
+  return digits.slice(-3).padStart(3, "0");
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -44,8 +56,9 @@ export async function PATCH(
     }
 
     const { id } = await params;
-    if (!id) {
-      return NextResponse.json({ ok: false, error: "缺少订单ID" }, { status: 400 });
+    const targetKey = String(id || "").trim();
+    if (!targetKey) {
+      return NextResponse.json({ ok: false, error: "缺少订单标识" }, { status: 400 });
     }
 
     const body = (await request.json()) as {
@@ -64,14 +77,72 @@ export async function PATCH(
       headerMeta?: Partial<Record<keyof BillingHeaderMeta, unknown>>;
     };
 
-    const target = await prisma.ygOrderImport.findFirst({
-      where: {
-        id,
-        tenant_id: session.tenantId,
-        company_id: session.companyId,
-      },
+    const normalizedOrderKey = normalizeOrderLookupKey(targetKey);
+    const targetWhere = UUID_RE.test(targetKey)
+      ? {
+          tenant_id: session.tenantId,
+          company_id: session.companyId,
+          OR: [{ id: targetKey }, { order_no: targetKey }],
+        }
+      : {
+          tenant_id: session.tenantId,
+          company_id: session.companyId,
+          order_no: targetKey,
+        };
+
+    let target = await prisma.ygOrderImport.findFirst({
+      where: targetWhere,
       select: { id: true, order_no: true, contact_name: true, order_remark: true },
     });
+
+    // For supplemental orders like YGO... (2), auto-create a new independent billing header
+    // if exact order_no does not exist yet.
+    if (!target && !UUID_RE.test(targetKey) && !normalizeString(body.action)) {
+      const baseOrder =
+        normalizedOrderKey && normalizedOrderKey !== targetKey
+          ? await prisma.ygOrderImport.findFirst({
+              where: {
+                tenant_id: session.tenantId,
+                company_id: session.companyId,
+                order_no: normalizedOrderKey,
+              },
+              select: {
+                source_file_name: true,
+                sheet_name: true,
+                last_three: true,
+                contact_name: true,
+                company_name: true,
+                customer_name: true,
+                contact_phone: true,
+                address_text: true,
+                store_label: true,
+                customer_id: true,
+                order_key: true,
+              },
+            })
+          : null;
+
+      target = await prisma.ygOrderImport.create({
+        data: {
+          tenant_id: session.tenantId,
+          company_id: session.companyId,
+          order_no: targetKey,
+          source_file_name: baseOrder?.source_file_name || "manual_billing",
+          sheet_name: baseOrder?.sheet_name || "manual",
+          last_three: baseOrder?.last_three || deriveLastThree(targetKey),
+          contact_name: baseOrder?.contact_name || null,
+          company_name: baseOrder?.company_name || null,
+          customer_name: baseOrder?.customer_name || null,
+          contact_phone: baseOrder?.contact_phone || null,
+          address_text: baseOrder?.address_text || null,
+          store_label: baseOrder?.store_label || null,
+          customer_id: baseOrder?.customer_id || null,
+          order_key: baseOrder?.order_key || null,
+          created_by: session.userId || null,
+        },
+        select: { id: true, order_no: true, contact_name: true, order_remark: true },
+      });
+    }
 
     if (!target) {
       return NextResponse.json({ ok: false, error: "记录不存在" }, { status: 404 });
@@ -172,7 +243,7 @@ export async function PATCH(
         return NextResponse.json({ ok: false, error: "请输入完整且正确的订单号" }, { status: 400 });
       }
       if (!revokeReason) {
-        return NextResponse.json({ ok: false, error: "请填写撤销原因" }, { status: 400 });
+        return NextResponse.json({ ok: false, error: "请填写备注" }, { status: 400 });
       }
       const nextMeta: BillingHeaderMeta = {
         ...currentRemark.meta,
@@ -201,7 +272,10 @@ export async function PATCH(
       const headerMetaInput = Object.fromEntries(
         Object.entries(body.headerMeta || {}).map(([key, value]) => [key, typeof value === "string" ? value : ""]),
       ) as Partial<BillingHeaderMeta>;
-      updateData.order_remark = buildBillingRemark(normalizeString(body.remarkText), headerMetaInput);
+      updateData.order_remark = buildBillingRemark(normalizeString(body.remarkText), {
+        ...currentRemark.meta,
+        ...headerMetaInput,
+      });
     }
     if (!action && "storeLabel" in body) {
       updateData.store_label = normalizeStoreLabelInput(body.storeLabel) || null;

@@ -5,11 +5,16 @@ import { buildProductImageUrls, HAS_REMOTE_PRODUCT_IMAGE_BASE } from "@/lib/prod
 
 type ProductImageProps = {
   sku?: string | null;
+  src?: string | null;
   hasImage?: boolean;
   alt?: string;
   size?: number;
   className?: string;
+  imageClassName?: string;
   roundedClassName?: string;
+  frameClassName?: string;
+  placeholderClassName?: string;
+  fill?: boolean;
   onClick?: () => void;
 };
 
@@ -19,25 +24,34 @@ function normalizeSku(sku?: string | null) {
 
 export function ProductImage({
   sku,
+  src,
   hasImage = true,
   alt,
   size = 52,
   className = "",
+  imageClassName = "h-full w-full object-cover",
   roundedClassName = "rounded-lg",
+  frameClassName = "bg-white border border-slate-200",
+  placeholderClassName = "bg-slate-50 border border-slate-200",
+  fill = false,
   onClick,
 }: ProductImageProps) {
   const [resolvedSrc, setResolvedSrc] = useState<string | null | undefined>(undefined);
 
   const normalizedSku = useMemo(() => normalizeSku(sku), [sku]);
+  const normalizedSrc = useMemo(() => normalizeSku(src), [src]);
   const sources = useMemo(
-    () => (normalizedSku ? buildProductImageUrls(normalizedSku, ["jpg", "jpeg", "png", "webp"]) : []),
-    [normalizedSku],
+    () => {
+      const generated = normalizedSku ? buildProductImageUrls(normalizedSku, ["jpg", "jpeg", "png", "webp"]) : [];
+      return normalizedSrc ? [normalizedSrc, ...generated] : generated;
+    },
+    [normalizedSku, normalizedSrc],
   );
 
   const placeholder = (
     <div
-      className={`flex items-center justify-center border border-slate-200 bg-slate-50 text-[11px] font-medium text-slate-400 ${roundedClassName} ${className}`}
-      style={{ width: size, height: size }}
+      className={`flex items-center justify-center text-[11px] font-medium text-slate-400 ${fill ? "" : placeholderClassName} ${roundedClassName} ${className}`}
+      style={fill ? undefined : { width: size, height: size }}
     >
       空
     </div>
@@ -85,21 +99,36 @@ export function ProductImage({
     return placeholder;
   }
 
+  const imageNode = (
+    <img
+      src={resolvedSrc}
+      alt={alt || normalizedSku}
+      width={size}
+      height={size}
+      className={imageClassName}
+      onError={() => setResolvedSrc(null)}
+    />
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`overflow-hidden ${fill ? "" : frameClassName} ${roundedClassName} ${className}`}
+        style={fill ? undefined : { width: size, height: size }}
+      >
+        {imageNode}
+      </button>
+    );
+  }
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`overflow-hidden border border-slate-200 bg-white ${roundedClassName} ${className}`}
-      style={{ width: size, height: size }}
+    <div
+      className={`overflow-hidden ${fill ? "" : frameClassName} ${roundedClassName} ${className}`}
+      style={fill ? undefined : { width: size, height: size }}
     >
-      <img
-        src={resolvedSrc}
-        alt={alt || normalizedSku}
-        width={size}
-        height={size}
-        className="h-full w-full object-cover"
-        onError={() => setResolvedSrc(null)}
-      />
-    </button>
+      {imageNode}
+    </div>
   );
 }

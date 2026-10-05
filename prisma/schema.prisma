@@ -12,6 +12,34 @@ enum Role {
   worker
 }
 
+enum UserType {
+  staff
+  dropshipping_customer
+}
+
+enum CustomerOrgRole {
+  owner
+  manager
+  staff
+}
+
+enum PosUserRole {
+  admin_general
+  store_admin
+  cashier
+}
+
+enum PosPermissionEffect {
+  grant
+  deny
+}
+
+enum InviteCodeStatus {
+  active
+  disabled
+  expired
+}
+
 enum DsOrderShippingStatus {
   pending
   shipped
@@ -88,6 +116,24 @@ model Tenant {
   dsPayments           DropshippingPayment[]
   dsExchangeRates      DropshippingExchangeRate[]
   dsOrderAttachments   DropshippingOrderAttachment[]
+  inviteCodes          InviteCode[]
+  inviteCodeUsages     InviteCodeUsage[]
+  permissionGrants     UserPermissionGrant[]
+  posPermissionOverrides PosUserPermissionOverride[]
+  posAuditLogs           PosAuditLog[]
+  posInventoryMovements  PosInventoryMovement[]
+  posProductConfigs      PosProductConfig[]
+  posQuoteRecords        PosQuoteRecord[]
+  posRefundRecords       PosRefundRecord[]
+  posSaleRecords         PosSaleRecord[]
+  posStoreInventories    PosStoreInventory[]
+  posStoreSettings       PosStoreSetting[]
+  posSuspendedOrderRecords PosSuspendedOrderRecord[]
+  posTicketSettings      PosTicketSetting[]
+  posTransferRecords     PosTransferRecord[]
+  dsQuickStoreBindings DsQuickStoreBinding[]
+  dsQuickSelectedProducts DsQuickSelectedProduct[]
+  dsQuickProductDrafts DsQuickProductDraft[]
   billingActionLogs    BillingActionLog[]
 }
 
@@ -136,6 +182,24 @@ model Company {
   dsPayments           DropshippingPayment[]
   dsExchangeRates      DropshippingExchangeRate[]
   dsOrderAttachments   DropshippingOrderAttachment[]
+  inviteCodes          InviteCode[]
+  inviteCodeUsages     InviteCodeUsage[]
+  permissionGrants     UserPermissionGrant[]
+  posPermissionOverrides PosUserPermissionOverride[]
+  posAuditLogs           PosAuditLog[]
+  posInventoryMovements  PosInventoryMovement[]
+  posProductConfigs      PosProductConfig[]
+  posQuoteRecords        PosQuoteRecord[]
+  posRefundRecords       PosRefundRecord[]
+  posSaleRecords         PosSaleRecord[]
+  posStoreInventories    PosStoreInventory[]
+  posStoreSettings       PosStoreSetting[]
+  posSuspendedOrderRecords PosSuspendedOrderRecord[]
+  posTicketSettings      PosTicketSetting[]
+  posTransferRecords     PosTransferRecord[]
+  dsQuickStoreBindings DsQuickStoreBinding[]
+  dsQuickSelectedProducts DsQuickSelectedProduct[]
+  dsQuickProductDrafts DsQuickProductDraft[]
   billingActionLogs    BillingActionLog[]
 
   @@index([tenant_id])
@@ -145,27 +209,49 @@ model User {
   id         String @id @default(uuid()) @db.Uuid
   tenant_id  String @db.Uuid
   company_id String @db.Uuid
+  dropshipping_customer_id String? @db.Uuid
 
   user_id       String
   name          String
+  name_zh       String?
+  name_en       String?
   phone         String
+  phone_country String? @default("MX")
+  company_name  String?
   email         String?
   avatar_url    String?
+  remark        String?
+  data_source   String  @default("platform_created")
+  updated_by_user_id String? @db.Uuid
   password_hash String
   role          Role    @default(worker)
+  user_type     UserType @default(staff)
+  customer_org_role CustomerOrgRole?
+  pos_role      PosUserRole @default(store_admin)
+  pos_store_id  String?
   active        Boolean @default(true)
+  default_landing_path String?
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  tenant     Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  company    Company         @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  permission UserPermission?
+  tenant               Tenant                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company              Company                @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  dropshippingCustomer DropshippingCustomer?  @relation(fields: [dropshipping_customer_id], references: [id], onDelete: SetNull)
+  permission           UserPermission?
+  inviteCodeUsages     InviteCodeUsage[]
+  createdInviteCodes   InviteCode[]           @relation("InviteCodeCreator")
+  permissionGrants     UserPermissionGrant[]
+  posPermissionOverrides PosUserPermissionOverride[]
+  dsQuickStoreBindings DsQuickStoreBinding[]
+  dsQuickSelectedProducts DsQuickSelectedProduct[]
+  dsQuickProductDrafts DsQuickProductDraft[]
 
   @@unique([tenant_id, company_id, user_id])
   @@unique([tenant_id, company_id, phone])
   @@index([tenant_id, company_id, name])
   @@index([tenant_id, company_id])
+  @@index([dropshipping_customer_id])
 }
 
 model UserPermission {
@@ -194,6 +280,220 @@ model UserPermission {
   @@unique([tenant_id, company_id, user_id])
   @@index([tenant_id, company_id])
   @@map("user_permissions")
+}
+
+model PermissionDefinition {
+  id          String @id @default(uuid()) @db.Uuid
+  key         String @unique
+  module      String
+  page        String
+  action      String
+  label       String
+  description String?
+  sort_order  Int      @default(0)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  templateItems         PermissionTemplateItem[]
+  permissionGrants      UserPermissionGrant[]
+  posPermissionOverrides PosUserPermissionOverride[]
+
+  @@index([module, page, action])
+  @@map("permission_definitions")
+}
+
+model PermissionTemplate {
+  id            String @id @default(uuid()) @db.Uuid
+  template_name String
+  template_code String @unique
+  description   String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  items InviteCode[] @relation("InviteCodePermissionTemplate")
+  permissionItems PermissionTemplateItem[]
+
+  @@map("permission_templates")
+}
+
+model PermissionTemplateItem {
+  id             String @id @default(uuid()) @db.Uuid
+  template_id    String @db.Uuid
+  permission_key String
+  allowed        Boolean @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  template   PermissionTemplate  @relation(fields: [template_id], references: [id], onDelete: Cascade)
+  permission PermissionDefinition @relation(fields: [permission_key], references: [key], onDelete: Cascade)
+
+  @@unique([template_id, permission_key])
+  @@index([permission_key])
+  @@map("permission_template_items")
+}
+
+model InviteCode {
+  id                       String           @id @default(uuid()) @db.Uuid
+  tenant_id                String           @db.Uuid
+  company_id               String           @db.Uuid
+  code                     String
+  status                   InviteCodeStatus @default(active)
+  max_uses                 Int              @default(1)
+  used_count               Int              @default(0)
+  expires_at               DateTime?
+  remark                   String?
+  created_by               String?          @db.Uuid
+  register_user_type       UserType         @default(dropshipping_customer)
+  permission_template_code String?
+  created_at               DateTime         @default(now())
+  updated_at               DateTime         @updatedAt
+
+  tenant             Tenant              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company            Company             @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  creator            User?               @relation("InviteCodeCreator", fields: [created_by], references: [id], onDelete: SetNull)
+  usages             InviteCodeUsage[]
+  permissionTemplate PermissionTemplate? @relation("InviteCodePermissionTemplate", fields: [permission_template_code], references: [template_code], onDelete: SetNull)
+
+  @@unique([tenant_id, company_id, code])
+  @@index([tenant_id, company_id])
+  @@index([status, expires_at])
+  @@map("invite_codes")
+}
+
+model InviteCodeUsage {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenant_id       String   @db.Uuid
+  company_id      String   @db.Uuid
+  invite_code_id  String   @db.Uuid
+  user_id         String   @db.Uuid
+  used_at         DateTime @default(now())
+  register_ip     String?
+  register_source String?
+
+  tenant     Tenant     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company    Company    @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  inviteCode InviteCode @relation(fields: [invite_code_id], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([invite_code_id, user_id])
+  @@index([tenant_id, company_id])
+  @@index([user_id, used_at])
+  @@map("invite_code_usages")
+}
+
+model UserPermissionGrant {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenant_id      String   @db.Uuid
+  company_id     String   @db.Uuid
+  user_id        String   @db.Uuid
+  permission_key String
+  allowed        Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  tenant     Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company    Company              @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  user       User                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  permission PermissionDefinition @relation(fields: [permission_key], references: [key], onDelete: Cascade)
+
+  @@unique([tenant_id, company_id, user_id, permission_key])
+  @@index([tenant_id, company_id, user_id])
+  @@map("user_permission_grants")
+}
+
+model PosUserPermissionOverride {
+  id             String              @id @default(uuid()) @db.Uuid
+  tenant_id      String              @db.Uuid
+  company_id     String              @db.Uuid
+  user_id        String              @db.Uuid
+  permission_key String
+  effect         PosPermissionEffect
+  created_by     String?
+  created_at     DateTime            @default(now())
+  updated_at     DateTime            @updatedAt
+
+  tenant     Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company    Company              @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  user       User                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  permission PermissionDefinition @relation(fields: [permission_key], references: [key], onDelete: Cascade)
+
+  @@unique([tenant_id, company_id, user_id, permission_key])
+  @@index([tenant_id, company_id, user_id])
+  @@map("pos_user_permission_overrides")
+}
+
+model DsQuickStoreBinding {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenant_id        String   @db.Uuid
+  company_id       String   @db.Uuid
+  user_id          String   @db.Uuid
+  platform         String
+  shop_name        String?
+  bind_status      String   @default("unbound")
+  authorized_at    DateTime?
+  expired_at       DateTime?
+  account_id       String?
+  external_shop_id String?
+  metadata_json    Json?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, company_id, user_id, platform])
+  @@index([tenant_id, company_id, user_id])
+  @@map("ds_quick_store_bindings")
+}
+
+model DsQuickSelectedProduct {
+  id                    String   @id @default(uuid()) @db.Uuid
+  tenant_id             String   @db.Uuid
+  company_id            String   @db.Uuid
+  user_id               String   @db.Uuid
+  platform              String?
+  product_catalog_id    String?  @db.Uuid
+  sku                   String
+  barcode               String?
+  name_zh               String?
+  name_es               String?
+  product_snapshot_json Json?
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, company_id, user_id, sku])
+  @@index([tenant_id, company_id, user_id])
+  @@map("ds_quick_selected_products")
+}
+
+model DsQuickProductDraft {
+  id                 String   @id @default(uuid()) @db.Uuid
+  tenant_id          String   @db.Uuid
+  company_id         String   @db.Uuid
+  user_id            String   @db.Uuid
+  platform           String
+  store_binding_id   String?  @db.Uuid
+  product_catalog_id String?  @db.Uuid
+  sku                String
+  product_name       String
+  draft_status       String   @default("pending")
+  failure_reason     String?
+  payload_json       Json?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, company_id, user_id])
+  @@index([platform, draft_status])
+  @@map("ds_quick_product_drafts")
 }
 
 model SupplierProfile {
@@ -416,12 +716,22 @@ model DropshippingCustomer {
   company_id String @db.Uuid
 
   name                String
+  name_zh             String?
+  name_en             String?
   contact_name        String?
   phone               String?
   notes               String?
   default_platform    String?
   default_rate_mode   String?
   default_settle_rule String?
+  custom_domain         String?
+  custom_domain_enabled Boolean @default(false)
+  default_access_url    String?
+  default_slug          String?
+  domain_source         String  @default("system_default")
+  domain_status         String  @default("not_set")
+  domain_updated_at     DateTime?
+  domain_updated_by     String? @db.Uuid
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -429,6 +739,7 @@ model DropshippingCustomer {
   tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
+  users       User[]
   inventories DropshippingCustomerInventory[]
   orders      DropshippingOrder[]
   payments    DropshippingPayment[]
@@ -1221,4 +1532,420 @@ model YgOrderSyncLog {
   @@index([tenant_id, company_id])
   @@index([created_at])
   @@map("yg_order_sync_logs")
+}
+
+model PosAuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenant_id   String   @db.Uuid
+  company_id  String   @db.Uuid
+  action_type String
+  module      String
+  actor_user_id String?
+  actor_name  String
+  actor_role  String
+  store_id    String?
+  target_type String?
+  target_id   String?
+  target_folio String?
+  summary     String
+  details_json Json?
+  result_status String
+  created_at  DateTime @default(now())
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, company_id, actor_user_id, created_at])
+  @@index([tenant_id, company_id, created_at])
+  @@index([tenant_id, company_id, module, action_type, result_status])
+  @@index([tenant_id, company_id, store_id, created_at])
+  @@map("pos_audit_logs")
+}
+
+model PosInventoryMovement {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenant_id    String   @db.Uuid
+  company_id   String   @db.Uuid
+  store_id     String   @default("default")
+  product_id   String
+  move_type    String
+  qty_change   Int
+  qty_before   Int
+  qty_after    Int
+  source_type  String
+  source_id    String?
+  source_folio String?
+  note         String?
+  created_by   String?
+  created_at   DateTime @default(now())
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@index([product_id, created_at])
+  @@index([source_type, source_id])
+  @@index([tenant_id, company_id, store_id, created_at])
+  @@map("pos_inventory_movements")
+}
+
+model PosProductConfig {
+  id                String   @id @default(uuid()) @db.Uuid
+  tenant_id         String   @db.Uuid
+  company_id        String   @db.Uuid
+  source_product_id String   @db.Uuid
+  store_id          String   @default("default")
+  barcode           String?
+  clave             String?
+  name_cn           String?
+  name_es           String?
+  spec              String?
+  pos_price         Decimal? @db.Decimal(14, 2)
+  active            Boolean  @default(true)
+  allow_discount    Boolean  @default(true)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+  importer          String?
+  origin            String?
+  short_desc        String?
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, company_id, store_id, source_product_id])
+  @@index([barcode])
+  @@index([clave])
+  @@index([source_product_id])
+  @@index([tenant_id, company_id, store_id])
+  @@map("pos_product_configs")
+}
+
+model PosQuoteRecord {
+  id             String         @id @default(uuid()) @db.Uuid
+  tenant_id      String         @db.Uuid
+  company_id     String         @db.Uuid
+  folio          String
+  store_id       String         @default("default")
+  cashier_id     String?
+  cashier_name   String
+  customer_name  String?
+  customer_phone String?
+  customer_rfc   String?
+  note           String?
+  subtotal       Decimal        @db.Decimal(14, 2)
+  discount_total Decimal        @db.Decimal(14, 2)
+  total          Decimal        @db.Decimal(14, 2)
+  status         String         @default("draft")
+  created_at     DateTime       @default(now())
+  updated_at     DateTime @updatedAt
+
+  lines   PosQuoteLine[]
+  tenant  Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company Company        @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, company_id, folio])
+  @@index([created_at])
+  @@index([tenant_id, company_id, store_id, status])
+  @@map("pos_quote_records")
+}
+
+model PosQuoteLine {
+  id               String         @id @default(uuid()) @db.Uuid
+  quote_id         String         @db.Uuid
+  product_id       String
+  barcode_snapshot String?
+  clave_snapshot   String?
+  name_cn_snapshot String?
+  name_es_snapshot String?
+  spec_snapshot    String?
+  qty              Int
+  unit_price       Decimal        @db.Decimal(14, 2)
+  discount_type    String?
+  discount_value   Decimal?       @db.Decimal(14, 2)
+  subtotal         Decimal        @db.Decimal(14, 2)
+
+  quote PosQuoteRecord @relation(fields: [quote_id], references: [id], onDelete: Cascade)
+
+  @@index([quote_id])
+  @@map("pos_quote_lines")
+}
+
+model PosSaleRecord {
+  id              String          @id @default(uuid()) @db.Uuid
+  tenant_id       String          @db.Uuid
+  company_id      String          @db.Uuid
+  folio           String
+  store_id        String          @default("default")
+  cashier_id      String?
+  cashier_name    String
+  source_type     String          @default("direct")
+  source_id       String?
+  customer_name   String?
+  customer_phone  String?
+  customer_rfc    String?
+  note            String?
+  subtotal        Decimal         @db.Decimal(14, 2)
+  discount_total  Decimal         @db.Decimal(14, 2)
+  total           Decimal         @db.Decimal(14, 2)
+  payment_method  String?
+  received_amount Decimal         @db.Decimal(14, 2)
+  change_amount   Decimal         @db.Decimal(14, 2)
+  status          String          @default("completed")
+  created_at      DateTime        @default(now())
+  updated_at      DateTime @updatedAt
+
+  refundRecord PosRefundRecord?
+  lines        PosSaleLine[]
+  tenant       Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company      Company         @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, company_id, folio])
+  @@index([created_at])
+  @@index([source_type, source_id])
+  @@index([tenant_id, company_id, store_id, status])
+  @@map("pos_sale_records")
+}
+
+model PosSaleLine {
+  id               String          @id @default(uuid()) @db.Uuid
+  sale_record_id   String          @db.Uuid
+  product_id       String
+  barcode_snapshot String?
+  clave_snapshot   String?
+  name_cn_snapshot String?
+  name_es_snapshot String?
+  spec_snapshot    String?
+  qty              Int
+  unit_price       Decimal         @db.Decimal(14, 2)
+  discount_type    String?
+  discount_value   Decimal?        @db.Decimal(14, 2)
+  subtotal         Decimal         @db.Decimal(14, 2)
+
+  saleRecord  PosSaleRecord   @relation(fields: [sale_record_id], references: [id], onDelete: Cascade)
+  refundLines PosRefundLine[]
+
+  @@index([sale_record_id])
+  @@map("pos_sale_lines")
+}
+
+model PosRefundRecord {
+  id             String          @id @default(uuid()) @db.Uuid
+  tenant_id      String          @db.Uuid
+  company_id     String          @db.Uuid
+  sale_record_id String          @unique @db.Uuid
+  folio          String
+  store_id       String          @default("default")
+  cashier_id     String?
+  cashier_name   String
+  reason         String?
+  subtotal       Decimal         @db.Decimal(14, 2)
+  discount_total Decimal         @db.Decimal(14, 2)
+  total          Decimal         @db.Decimal(14, 2)
+  created_at     DateTime        @default(now())
+
+  lines      PosRefundLine[]
+  saleRecord PosSaleRecord @relation(fields: [sale_record_id], references: [id], onDelete: Cascade)
+  tenant     Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company    Company       @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, company_id, folio])
+  @@index([sale_record_id])
+  @@index([tenant_id, company_id, store_id, created_at])
+  @@map("pos_refund_records")
+}
+
+model PosRefundLine {
+  id               String          @id @default(uuid()) @db.Uuid
+  refund_record_id String          @db.Uuid
+  sale_line_id     String          @db.Uuid
+  product_id       String
+  qty              Int
+  unit_price       Decimal         @db.Decimal(14, 2)
+  subtotal         Decimal         @db.Decimal(14, 2)
+
+  refundRecord PosRefundRecord @relation(fields: [refund_record_id], references: [id], onDelete: Cascade)
+  saleLine     PosSaleLine     @relation(fields: [sale_line_id], references: [id], onDelete: Cascade)
+
+  @@index([refund_record_id])
+  @@index([sale_line_id])
+  @@map("pos_refund_lines")
+}
+
+model PosStoreInventory {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenant_id     String   @db.Uuid
+  company_id    String   @db.Uuid
+  store_id      String   @default("default")
+  product_id    String
+  on_hand_qty   Int      @default(0)
+  reserved_qty  Int      @default(0)
+  available_qty Int      @default(0)
+  min_stock     Int      @default(0)
+  active        Boolean  @default(true)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, company_id, store_id, product_id])
+  @@index([product_id])
+  @@index([tenant_id, company_id, store_id, active])
+  @@map("pos_store_inventories")
+}
+
+model PosStoreSetting {
+  id                         String   @id @default(uuid()) @db.Uuid
+  tenant_id                  String   @db.Uuid
+  company_id                 String   @db.Uuid
+  store_id                   String
+  store_name                 String
+  store_code                 String?
+  address                    String?
+  phone                      String?
+  rfc                        String?
+  active                     Boolean  @default(true)
+  default_ticket_header      String?
+  ticket_subtitle            String?
+  created_at                 DateTime @default(now())
+  updated_at                 DateTime @updatedAt
+  company_full_name          String?
+  cashier_auto_close_enabled Boolean  @default(false)
+  cashier_auto_close_minutes Int      @default(10)
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, company_id, store_id])
+  @@index([tenant_id, company_id, store_id])
+  @@map("pos_store_settings")
+}
+
+model PosSuspendedOrderRecord {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenant_id     String    @db.Uuid
+  company_id    String    @db.Uuid
+  folio         String
+  store_id      String    @default("default")
+  cashier_id    String?
+  cashier_name  String
+  customer_name String?
+  customer_phone String?
+  customer_rfc  String?
+  note          String?
+  subtotal      Decimal   @db.Decimal(14, 2)
+  discount_total Decimal  @db.Decimal(14, 2)
+  total         Decimal   @db.Decimal(14, 2)
+  payment_method String?
+  status        String    @default("suspended")
+  created_at    DateTime  @default(now())
+  updated_at    DateTime @updatedAt
+
+  lines   PosSuspendedOrderLine[]
+  tenant  Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, company_id, folio])
+  @@index([created_at])
+  @@index([tenant_id, company_id, store_id, status])
+  @@map("pos_suspended_orders")
+}
+
+model PosSuspendedOrderLine {
+  id                 String                  @id @default(uuid()) @db.Uuid
+  suspended_order_id String                  @db.Uuid
+  product_id         String
+  barcode_snapshot   String?
+  clave_snapshot     String?
+  name_cn_snapshot   String?
+  name_es_snapshot   String?
+  spec_snapshot      String?
+  qty                Int
+  unit_price         Decimal                 @db.Decimal(14, 2)
+  discount_type      String?
+  discount_value     Decimal?                @db.Decimal(14, 2)
+  subtotal           Decimal                 @db.Decimal(14, 2)
+
+  suspendedOrder PosSuspendedOrderRecord @relation(fields: [suspended_order_id], references: [id], onDelete: Cascade)
+
+  @@index([suspended_order_id])
+  @@map("pos_suspended_order_lines")
+}
+
+model PosTicketSetting {
+  id                     String   @id @default(uuid()) @db.Uuid
+  tenant_id              String   @db.Uuid
+  company_id             String   @db.Uuid
+  store_id               String   @default("default")
+  ticket_header_name     String?
+  ticket_header_subtitle String?
+  address                String?
+  phone                  String?
+  rfc                    String?
+  footer_line_1          String?
+  footer_line_2          String?
+  show_rfc               Boolean  @default(false)
+  show_cashier           Boolean  @default(true)
+  show_customer          Boolean  @default(true)
+  created_at             DateTime @default(now())
+  updated_at             DateTime @updatedAt
+  qr_content             String?
+  show_qr                Boolean  @default(false)
+  show_website           Boolean  @default(false)
+  show_whatsapp          Boolean  @default(false)
+  website                String?
+  whatsapp               String?
+  logo_url               String?
+  show_logo              Boolean  @default(false)
+  show_ticket_barcode    Boolean  @default(true)
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, company_id, store_id])
+  @@index([tenant_id, company_id, store_id])
+  @@map("pos_ticket_settings")
+}
+
+model PosTransferRecord {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenant_id       String   @db.Uuid
+  company_id      String   @db.Uuid
+  folio           String
+  from_store_id   String
+  to_store_id     String
+  created_by      String?
+  created_by_name String
+  note            String?
+  status          String   @default("draft")
+  sent_at         DateTime?
+  received_at     DateTime?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  lines   PosTransferLine[]
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, company_id, folio])
+  @@index([created_at])
+  @@index([tenant_id, company_id, from_store_id, status])
+  @@index([tenant_id, company_id, to_store_id, status])
+  @@map("pos_transfer_records")
+}
+
+model PosTransferLine {
+  id                 String            @id @default(uuid()) @db.Uuid
+  transfer_record_id String            @db.Uuid
+  product_id         String
+  barcode_snapshot   String?
+  clave_snapshot     String?
+  name_cn_snapshot   String?
+  name_es_snapshot   String?
+  spec_snapshot      String?
+  qty                Int
+
+  transferRecord PosTransferRecord @relation(fields: [transfer_record_id], references: [id], onDelete: Cascade)
+
+  @@index([transfer_record_id])
+  @@map("pos_transfer_lines")
 }

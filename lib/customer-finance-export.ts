@@ -1,7 +1,10 @@
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
-import fontkit from "@pdf-lib/fontkit";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 
 export type CustomerFinanceOrderExportRow = {
   orderNo: string;
@@ -10,6 +13,7 @@ export type CustomerFinanceOrderExportRow = {
   orderAmountText: string;
   packingAmountText: string;
   shippedAtText: string;
+  remarkText: string;
 };
 
 export type CustomerFinancePaymentExportRow = {
@@ -20,6 +24,7 @@ export type CustomerFinancePaymentExportRow = {
   paymentMethodText: string;
   paymentTargetText: string;
   unpaidAmountText: string;
+  remarkText: string;
 };
 
 export type CustomerFinanceDetailExportPayload = {
@@ -39,28 +44,6 @@ export type CustomerFinanceDetailExportPayload = {
   paymentRows: CustomerFinancePaymentExportRow[];
 };
 
-type EmbeddedFonts = {
-  zhRegular: PDFFont;
-  zhBold: PDFFont;
-  latinRegular: PDFFont;
-  latinBold: PDFFont;
-};
-
-const PAGE_WIDTH = 842;
-const PAGE_HEIGHT = 595;
-const PAGE_PADDING_X = 34;
-const PAGE_PADDING_TOP = 34;
-const PAGE_PADDING_BOTTOM = 28;
-const PRIMARY_COLOR = rgb(47 / 255, 60 / 255, 127 / 255);
-const BORDER_COLOR = rgb(226 / 255, 232 / 255, 240 / 255);
-const HEADER_FILL = rgb(248 / 255, 250 / 255, 252 / 255);
-const SUMMARY_FILL = rgb(243 / 255, 244 / 255, 246 / 255);
-const TEXT_COLOR = rgb(51 / 255, 65 / 255, 85 / 255);
-const MUTED_COLOR = rgb(100 / 255, 116 / 255, 139 / 255);
-const VIP_COLOR = rgb(187 / 255, 163 / 255, 20 / 255);
-const DANGER_COLOR = rgb(220 / 255, 38 / 255, 38 / 255);
-const VIP_ICON_PATH = "M17.42 3a2 2 0 0 1 1.649.868l.087.14L22.49 9.84a2 2 0 0 1-.208 2.283l-.114.123l-9.283 9.283a1.25 1.25 0 0 1-1.666.091l-.102-.09l-9.283-9.284a2 2 0 0 1-.4-2.257l.078-.15l3.333-5.832a2 2 0 0 1 1.572-1.001L6.58 3zM7.293 9.293a1 1 0 0 0 0 1.414l3.823 3.823a1.25 1.25 0 0 0 1.768 0l3.823-3.823a1 1 0 1 0-1.414-1.414L12 12.586L8.707 9.293a1 1 0 0 0-1.414 0";
-
 function sanitizeFileName(value: string) {
   return String(value || "customer-finance")
     .trim()
@@ -69,73 +52,18 @@ function sanitizeFileName(value: string) {
     .trim();
 }
 
-function hasChineseGlyph(value: string) {
-  return /[\u3400-\u9FFF\uF900-\uFAFF]/.test(String(value || ""));
+function escapeHtml(value: string) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
-async function loadFontBytes(candidates: string[]) {
-  for (const candidate of candidates) {
-    try {
-      return await fs.readFile(candidate);
-    } catch {
-      continue;
-    }
-  }
-  return null;
-}
-
-async function embedFonts(pdfDoc: PDFDocument): Promise<EmbeddedFonts> {
-  pdfDoc.registerFontkit(fontkit);
-
-  const zhRegularBytes = await loadFontBytes([
-    path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Regular.otf"),
-    path.join(process.cwd(), "public", "fonts", "NotoSansSC-Regular.otf"),
-    path.join(process.cwd(), "public", "fonts", "NotoSansSC-Regular.ttf"),
-    "C:\\Windows\\Fonts\\msyh.ttf",
-    "C:\\Windows\\Fonts\\simhei.ttf",
-  ]);
-  const zhBoldBytes = await loadFontBytes([
-    path.join(process.cwd(), "public", "fonts", "NotoSansSC-Bold.otf"),
-    path.join(process.cwd(), "public", "fonts", "NotoSansSC-Bold.ttf"),
-    "C:\\Windows\\Fonts\\msyhbd.ttf",
-    "C:\\Windows\\Fonts\\simhei.ttf",
-  ]);
-  const latinRegularBytes = await loadFontBytes([
-    path.join(process.cwd(), "public", "fonts", "SourceSans3-Regular.ttf"),
-    path.join(process.cwd(), "public", "fonts", "SourceSans3-VariableFont_wght.ttf"),
-    "C:\\Windows\\Fonts\\arial.ttf",
-    "C:\\Windows\\Fonts\\calibri.ttf",
-  ]);
-  const latinBoldBytes = await loadFontBytes([
-    path.join(process.cwd(), "public", "fonts", "SourceSans3-SemiBold.ttf"),
-    path.join(process.cwd(), "public", "fonts", "SourceSans3-VariableFont_wght.ttf"),
-    "C:\\Windows\\Fonts\\arialbd.ttf",
-    "C:\\Windows\\Fonts\\calibrib.ttf",
-  ]);
-
-  return {
-    zhRegular: zhRegularBytes
-      ? await pdfDoc.embedFont(zhRegularBytes, { subset: false })
-      : await pdfDoc.embedFont(StandardFonts.Helvetica),
-    zhBold: zhBoldBytes
-      ? await pdfDoc.embedFont(zhBoldBytes, { subset: false })
-      : zhRegularBytes
-        ? await pdfDoc.embedFont(zhRegularBytes, { subset: false })
-        : await pdfDoc.embedFont(StandardFonts.HelveticaBold),
-    latinRegular: latinRegularBytes
-      ? await pdfDoc.embedFont(latinRegularBytes, { subset: false })
-      : await pdfDoc.embedFont(StandardFonts.Helvetica),
-    latinBold: latinBoldBytes
-      ? await pdfDoc.embedFont(latinBoldBytes, { subset: false })
-      : await pdfDoc.embedFont(StandardFonts.HelveticaBold),
-  };
-}
-
-function getFont(fonts: EmbeddedFonts, value: string, bold = false) {
-  if (hasChineseGlyph(value)) {
-    return bold ? fonts.zhBold : fonts.zhRegular;
-  }
-  return bold ? fonts.latinBold : fonts.latinRegular;
+function normalizeDisplay(value: string) {
+  const text = String(value || "").trim();
+  return text || "-";
 }
 
 function formatDateLabel() {
@@ -144,118 +72,256 @@ function formatDateLabel() {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(new Date()).replace(/\//g, "/");
+  }).format(new Date());
 }
 
-function wrapText(text: string, width: number, font: PDFFont, size: number) {
-  const content = String(text || "-").trim() || "-";
-  const lines: string[] = [];
-  let current = "";
-  for (const char of content) {
-    const next = current + char;
-    if (font.widthOfTextAtSize(next, size) <= width || !current) {
-      current = next;
+function findBrowserExecutable() {
+  return [
+    process.env.PARKSON_PDF_BROWSER,
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/google-chrome",
+    "/usr/bin/microsoft-edge",
+  ].filter(Boolean) as string[];
+}
+
+async function resolveBrowserExecutable() {
+  for (const candidate of findBrowserExecutable()) {
+    try {
+      await fs.access(candidate);
+      return candidate;
+    } catch {
       continue;
     }
-    lines.push(current);
-    current = char;
   }
-  if (current) lines.push(current);
-  return lines.length ? lines : ["-"];
+  throw new Error("未找到可用的浏览器 PDF 渲染器");
 }
 
-function drawText(page: PDFPage, fonts: EmbeddedFonts, value: string, options: {
-  x: number;
-  y: number;
-  size?: number;
-  color?: ReturnType<typeof rgb>;
-  bold?: boolean;
-}) {
-  const text = String(value || "");
-  const font = getFont(fonts, text, options.bold);
-  page.drawText(text, {
-    x: options.x,
-    y: options.y,
-    size: options.size ?? 10,
-    font,
-    color: options.color ?? TEXT_COLOR,
-  });
+function isPositiveAmount(value: string) {
+  const numeric = Number(String(value || "").replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(numeric) && numeric > 0;
 }
 
-function drawRoundedRect(page: PDFPage, x: number, y: number, width: number, height: number, fill?: ReturnType<typeof rgb>) {
-  page.drawRectangle({
-    x,
-    y,
-    width,
-    height,
-    color: fill,
-    borderColor: BORDER_COLOR,
-    borderWidth: 1,
-  });
-}
+function buildCustomerFinanceHtml(payload: CustomerFinanceDetailExportPayload) {
+  const orderRows = payload.orderRows.length
+    ? payload.orderRows.map((row) => `
+      <tr>
+        <td>${escapeHtml(normalizeDisplay(row.orderNo))}</td>
+        <td>${escapeHtml(normalizeDisplay(row.channelText))}</td>
+        <td>${escapeHtml(normalizeDisplay(row.orderDateText))}</td>
+        <td class="num">${escapeHtml(normalizeDisplay(row.orderAmountText))}</td>
+        <td class="num">${escapeHtml(normalizeDisplay(row.packingAmountText))}</td>
+        <td>${escapeHtml(normalizeDisplay(row.shippedAtText))}</td>
+        <td>${escapeHtml(normalizeDisplay(row.remarkText))}</td>
+      </tr>`).join("")
+    : `<tr><td colspan="7" class="empty">当前没有匹配到下单记录</td></tr>`;
 
-function drawFieldCard(page: PDFPage, fonts: EmbeddedFonts, input: {
-  x: number;
-  y: number;
-  width: number;
-  label: string;
-  value: string;
-}) {
-  const cardHeight = 48;
-  drawRoundedRect(page, input.x, input.y - cardHeight, input.width, cardHeight, rgb(1, 1, 1));
-  drawText(page, fonts, input.label, {
-    x: input.x + 10,
-    y: input.y - 14,
-    size: 9,
-    color: MUTED_COLOR,
-    bold: false,
-  });
-  const lines = wrapText(input.value, input.width - 20, getFont(fonts, input.value, false), 9);
-  lines.slice(0, 2).forEach((line, index) => {
-    drawText(page, fonts, line, {
-      x: input.x + 10,
-      y: input.y - 30 - index * 10,
-      size: 9,
-      color: TEXT_COLOR,
-      bold: false,
-    });
-  });
-}
+  const paymentRows = payload.paymentRows.length
+    ? payload.paymentRows.map((row) => {
+        const unpaid = normalizeDisplay(row.unpaidAmountText);
+        const unpaidClass = isPositiveAmount(unpaid) ? "num danger" : "num";
+        return `
+          <tr>
+            <td>${escapeHtml(normalizeDisplay(row.orderNo))}</td>
+            <td class="num">${escapeHtml(normalizeDisplay(row.payableAmountText))}</td>
+            <td class="num">${escapeHtml(normalizeDisplay(row.paidAmountText))}</td>
+            <td>${escapeHtml(normalizeDisplay(row.paymentTimeText))}</td>
+            <td>${escapeHtml(normalizeDisplay(row.paymentMethodText))}</td>
+            <td class="${unpaidClass}">${escapeHtml(unpaid)}</td>
+            <td>${escapeHtml(normalizeDisplay(row.remarkText))}</td>
+          </tr>`;
+      }).join("")
+    : `<tr><td colspan="7" class="empty">当前没有付款记录</td></tr>`;
 
-function drawSummaryCard(page: PDFPage, fonts: EmbeddedFonts, input: {
-  x: number;
-  y: number;
-  width: number;
-  label: string;
-  value: string;
-  vipIcon?: boolean;
-}) {
-  const cardHeight = 52;
-  drawRoundedRect(page, input.x, input.y - cardHeight, input.width, cardHeight, SUMMARY_FILL);
-  drawText(page, fonts, input.label, {
-    x: input.x + input.width / 2 - getFont(fonts, input.label, true).widthOfTextAtSize(input.label, 9) / 2,
-    y: input.y - 16,
-    size: 9,
-    color: MUTED_COLOR,
-    bold: true,
-  });
-  if (input.vipIcon) {
-    page.drawSvgPath(VIP_ICON_PATH, {
-      x: input.x + input.width / 2 - 8,
-      y: input.y - 28,
-      scale: 0.66,
-      color: VIP_COLOR,
-    });
-    return;
-  }
-  const font = getFont(fonts, input.value, false);
-  drawText(page, fonts, input.value, {
-    x: input.x + input.width / 2 - font.widthOfTextAtSize(input.value, 11) / 2,
-    y: input.y - 35,
-    size: 11,
-    color: TEXT_COLOR,
-    bold: false,
-  });
+  const vipText = normalizeDisplay(payload.vipLevel);
+  const creditText = normalizeDisplay(payload.creditLevel);
+  const vipIsActive = vipText.toUpperCase() === "VIP";
+  const vipContent = vipIsActive
+    ? `<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+         <path d="M17.42 3a2 2 0 0 1 1.649.868l.087.14L22.49 9.84a2 2 0 0 1-.208 2.283l-.114.123l-9.283 9.283a1.25 1.25 0 0 1-1.666.091l-.102-.09l-9.283-9.284a2 2 0 0 1-.4-2.257l.078-.15l3.333-5.832a2 2 0 0 1 1.572-1.001L6.58 3zM7.293 9.293a1 1 0 0 0 0 1.414l3.823 3.823a1.25 1.25 0 0 0 1.768 0l3.823-3.823a1 1 0 1 0-1.414-1.414L12 12.586L8.707 9.293a1 1 0 0 0-1.414 0"
+           fill="#c0a11b"/>
+       </svg>`
+    : escapeHtml(vipText);
+
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(payload.customerName)} 客户财务</title>
+  <style>
+    @page { size: A4 landscape; margin: 18mm 16mm 14mm; }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+      color: #334155;
+      font-family: "Microsoft YaHei", "Noto Sans SC", "PingFang SC", "Segoe UI", Arial, sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    body { font-size: 12px; }
+    .page { width: 100%; }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+    .brand-left {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: .02em;
+      color: #2f3c7f;
+    }
+    .brand-right {
+      font-size: 16px;
+      font-weight: 700;
+      color: #64748b;
+    }
+    .grid4 {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .card, .summary-card, .table-wrap {
+      border: 1px solid #dbe4f0;
+      background: #fff;
+    }
+    .card {
+      min-height: 58px;
+      padding: 10px 12px;
+    }
+    .card.large {
+      margin-top: 10px;
+      min-height: 64px;
+    }
+    .label {
+      font-size: 11px;
+      color: #64748b;
+      margin-bottom: 8px;
+    }
+    .value {
+      font-size: 12px;
+      color: #334155;
+      word-break: break-word;
+    }
+    .summary-row {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .summary-card {
+      min-height: 70px;
+      padding: 12px 10px;
+      text-align: center;
+      background: #f4f6fa;
+    }
+    .summary-card .label { margin-bottom: 10px; }
+    .summary-card .value { font-size: 15px; }
+    .vip-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 20px;
+    }
+    .section-title {
+      margin: 28px 0 10px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #334155;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    th, td {
+      border-bottom: 1px solid #dbe4f0;
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+      word-break: break-word;
+    }
+    th {
+      font-size: 11px;
+      font-weight: 600;
+      color: #64748b;
+      background: #fff;
+    }
+    td { color: #334155; }
+    td.num { text-align: left; }
+    th.num { text-align: left; }
+    .danger { color: #dc2626; }
+    .empty {
+      text-align: center;
+      color: #94a3b8;
+      padding: 14px 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="topbar">
+      <div class="brand-left">PARKSONMX</div>
+      <div class="brand-right">百盛供应链</div>
+    </div>
+    <div class="grid4">
+      <div class="card"><div class="label">客户名称</div><div class="value">${escapeHtml(normalizeDisplay(payload.realName))}</div></div>
+      <div class="card"><div class="label">联系人</div><div class="value">${escapeHtml(normalizeDisplay(payload.contact))}</div></div>
+      <div class="card"><div class="label">手机</div><div class="value">${escapeHtml(normalizeDisplay(payload.phone))}</div></div>
+      <div class="card"><div class="label">门店编号</div><div class="value">${escapeHtml(normalizeDisplay(payload.stores))}</div></div>
+    </div>
+    <div class="card large"><div class="label">客户地址</div><div class="value">${escapeHtml(normalizeDisplay(payload.address))}</div></div>
+
+    <div class="summary-row">
+      <div class="summary-card"><div class="label">VIP等级</div><div class="value"><span class="vip-icon">${vipContent}</span></div></div>
+      <div class="summary-card"><div class="label">信用等级</div><div class="value">${escapeHtml(creditText)}</div></div>
+      <div class="summary-card"><div class="label">下单次数</div><div class="value">${escapeHtml(normalizeDisplay(payload.totalOrderCount))}</div></div>
+      <div class="summary-card"><div class="label">下单金额</div><div class="value">${escapeHtml(normalizeDisplay(payload.totalOrderAmountText))}</div></div>
+      <div class="summary-card"><div class="label">累计配货金额</div><div class="value">${escapeHtml(normalizeDisplay(payload.totalPackingAmountText))}</div></div>
+    </div>
+
+    <div class="section-title">订单总览</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:14.28%">订单号</th>
+            <th style="width:14.28%">渠道</th>
+            <th style="width:14.28%">下单日期</th>
+            <th class="num" style="width:14.28%">下单金额</th>
+            <th class="num" style="width:14.28%">配货金额</th>
+            <th style="width:14.28%">发货日期</th>
+            <th style="width:14.32%">备注</th>
+          </tr>
+        </thead>
+        <tbody>${orderRows}</tbody>
+      </table>
+    </div>
+
+    <div class="section-title">付款详情</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:14.28%">订单号</th>
+            <th class="num" style="width:14.28%">需付金额</th>
+            <th class="num" style="width:14.28%">已付金额</th>
+            <th style="width:14.28%">付款时间</th>
+            <th style="width:14.28%">付款方式</th>
+            <th class="num" style="width:14.28%">未付金额</th>
+            <th style="width:14.32%">备注</th>
+          </tr>
+        </thead>
+        <tbody>${paymentRows}</tbody>
+      </table>
+    </div>
+
+  </div>
+</body>
+</html>`;
 }
 
 export function buildCustomerFinancePdfFileName(customerName: string) {
@@ -263,345 +329,34 @@ export function buildCustomerFinancePdfFileName(customerName: string) {
 }
 
 export async function buildCustomerFinanceDetailPdf(payload: CustomerFinanceDetailExportPayload) {
-  const pdfDoc = await PDFDocument.create();
-  const fonts = await embedFonts(pdfDoc);
-  let page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-  let cursorY = PAGE_HEIGHT - PAGE_PADDING_TOP;
+  const browserPath = await resolveBrowserExecutable();
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "parkson-cf-pdf-"));
+  const htmlPath = path.join(tempDir, "customer-finance.html");
+  const pdfPath = path.join(tempDir, "customer-finance.pdf");
 
-  const addNewPage = () => {
-    page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-    cursorY = PAGE_HEIGHT - PAGE_PADDING_TOP;
-  };
-
-  const drawSectionTitle = (title: string) => {
-    const titleX = PAGE_PADDING_X;
-    const titleY = cursorY;
-    drawText(page, fonts, title, { x: titleX, y: titleY, size: 12, color: TEXT_COLOR, bold: true });
-    drawText(page, fonts, title, { x: titleX + 0.35, y: titleY, size: 12, color: TEXT_COLOR, bold: true });
-    drawText(page, fonts, title, { x: titleX, y: titleY + 0.2, size: 12, color: TEXT_COLOR, bold: true });
-    cursorY -= 12;
-  };
-
-  const drawSectionDivider = () => {
-    page.drawLine({
-      start: { x: PAGE_PADDING_X, y: cursorY },
-      end: { x: PAGE_WIDTH - PAGE_PADDING_X, y: cursorY },
-      color: BORDER_COLOR,
-      thickness: 1,
-    });
-    cursorY -= 14;
-  };
-
-  drawText(page, fonts, "PARKSONMX", { x: PAGE_PADDING_X, y: cursorY, size: 19, color: PRIMARY_COLOR, bold: true });
-  const exportDate = `导出日期 ${formatDateLabel()}`;
-  const exportDateFont = getFont(fonts, exportDate, false);
-  drawText(page, fonts, exportDate, {
-    x: PAGE_WIDTH - PAGE_PADDING_X - exportDateFont.widthOfTextAtSize(exportDate, 9),
-    y: cursorY - 2,
-    size: 9,
-    color: MUTED_COLOR,
-    bold: false,
-  });
-  cursorY -= 18;
-
-  cursorY -= 20;
-
-  const infoFieldGap = 8;
-  const infoFieldWidth = (PAGE_WIDTH - PAGE_PADDING_X * 2 - infoFieldGap * 3) / 4;
-  let infoX = PAGE_PADDING_X;
-  [
-    ["客户名称", payload.realName],
-    ["联系人", payload.contact],
-    ["手机", payload.phone],
-    ["门店编号", payload.stores],
-  ].forEach(([label, value], index) => {
-    if (index === 0) {
-      const cardHeight = 48;
-      drawRoundedRect(page, infoX, cursorY - cardHeight, infoFieldWidth, cardHeight, rgb(1, 1, 1));
-      const displayValue = String(value || "-");
-      const size = 14;
-      drawText(page, fonts, displayValue, {
-        x: infoX + 10,
-        y: cursorY - 30,
-        size,
-        color: TEXT_COLOR,
-        bold: true,
-      });
-    } else {
-      drawFieldCard(page, fonts, {
-        x: infoX,
-        y: cursorY,
-        width: infoFieldWidth,
-        label,
-        value,
-      });
-    }
-    infoX += infoFieldWidth + infoFieldGap;
-  });
-  cursorY -= 62;
-
-  drawFieldCard(page, fonts, {
-    x: PAGE_PADDING_X,
-    y: cursorY,
-    width: PAGE_WIDTH - PAGE_PADDING_X * 2,
-    label: "客户地址",
-    value: payload.address,
-  });
-  cursorY -= 66;
-
-  const summaryWidth = (PAGE_WIDTH - PAGE_PADDING_X * 2 - 32) / 5;
-  let summaryX = PAGE_PADDING_X;
-  [
-    ["VIP等级", payload.vipLevel],
-    ["信用等级", payload.creditLevel],
-    ["下单次数", payload.totalOrderCount],
-    ["下单金额", payload.totalOrderAmountText],
-    ["累计配货金额", payload.totalPackingAmountText],
-  ].forEach(([label, value], index) => {
-    drawSummaryCard(page, fonts, {
-      x: summaryX,
-      y: cursorY,
-      width: summaryWidth,
-      label,
-      value,
-      vipIcon: index === 0 && String(payload.vipLevel || "").trim().toUpperCase() === "VIP",
-    });
-    summaryX += summaryWidth + 8;
-  });
-  cursorY -= 84;
-
-  drawSectionTitle("订单总览");
-
-  const columns = [
-    { key: "orderNo", label: "订单号", width: 248 },
-    { key: "channelText", label: "渠道", width: 94 },
-    { key: "orderDateText", label: "下单日期", width: 102 },
-    { key: "orderAmountText", label: "下单金额", width: 110 },
-    { key: "packingAmountText", label: "配货金额", width: 110 },
-    { key: "shippedAtText", label: "发货日期", width: 110 },
-  ] as const;
-
-  const paymentColumns = [
-    { key: "orderNo", label: "订单号", width: 248 },
-    { key: "payableAmountText", label: "需付金额", width: 96 },
-    { key: "paidAmountText", label: "已付金额", width: 96 },
-    { key: "paymentTimeText", label: "付款时间", width: 114 },
-    { key: "paymentMethodText", label: "付款方式", width: 116 },
-    { key: "unpaidAmountText", label: "未付金额", width: 104 },
-  ] as const;
-
-  const drawTableHeader = () => {
-    let colX = PAGE_PADDING_X;
-    const headerHeight = 24;
-    page.drawRectangle({
-      x: PAGE_PADDING_X,
-      y: cursorY - headerHeight,
-      width: PAGE_WIDTH - PAGE_PADDING_X * 2,
-      height: headerHeight,
-      color: rgb(1, 1, 1),
-      borderColor: BORDER_COLOR,
-      borderWidth: 1,
-    });
-    for (const column of columns) {
-      drawText(page, fonts, column.label, {
-        x: colX + 8,
-        y: cursorY - 16,
-        size: 9,
-        color: MUTED_COLOR,
-        bold: true,
-      });
-      colX += column.width;
-    }
-    cursorY -= headerHeight;
-  };
-
-  const ensureTableSpace = (neededHeight: number) => {
-    if (cursorY - neededHeight >= PAGE_PADDING_BOTTOM) return;
-    addNewPage();
-    drawSectionTitle("订单总览");
-    drawTableHeader();
-  };
-
-  drawTableHeader();
-
-  for (const row of payload.orderRows) {
-    const rowValues = [
-      row.orderNo || "-",
-      row.channelText || "-",
-      row.orderDateText || "-",
-      row.orderAmountText || "-",
-      row.packingAmountText || "-",
-      row.shippedAtText || "-",
-    ];
-    const wrapped = rowValues.map((value, index) =>
-      wrapText(value, columns[index]!.width - 16, getFont(fonts, value, false), 9),
-    );
-    const lineCount = Math.max(...wrapped.map((lines) => lines.length), 1);
-    const rowHeight = Math.max(24, 8 + lineCount * 11);
-    ensureTableSpace(rowHeight);
-
-    page.drawRectangle({
-      x: PAGE_PADDING_X,
-      y: cursorY - rowHeight,
-      width: PAGE_WIDTH - PAGE_PADDING_X * 2,
-      height: rowHeight,
-      borderColor: BORDER_COLOR,
-      borderWidth: 1,
+  try {
+    await fs.writeFile(htmlPath, buildCustomerFinanceHtml(payload), "utf8");
+    await execFileAsync(browserPath, [
+      "--headless",
+      "--no-sandbox",
+      "--disable-gpu",
+      "--disable-dev-shm-usage",
+      "--allow-file-access-from-files",
+      "--no-pdf-header-footer",
+      `--print-to-pdf=${pdfPath}`,
+      "--print-to-pdf-no-header",
+      `file://${htmlPath}`,
+    ], {
+      env: {
+        ...process.env,
+        LANG: "zh_CN.UTF-8",
+      },
+      maxBuffer: 20 * 1024 * 1024,
     });
 
-    let colX = PAGE_PADDING_X;
-    wrapped.forEach((lines, index) => {
-      lines.forEach((line, lineIndex) => {
-        drawText(page, fonts, line, {
-          x: colX + 8,
-          y: cursorY - 16 - lineIndex * 10,
-          size: 9,
-          color: TEXT_COLOR,
-          bold: false,
-        });
-      });
-      colX += columns[index]!.width;
-    });
-
-    cursorY -= rowHeight;
+    const pdfBytes = await fs.readFile(pdfPath);
+    return new Uint8Array(pdfBytes);
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
   }
-
-  if (payload.orderRows.length === 0) {
-    const emptyHeight = 32;
-    ensureTableSpace(emptyHeight);
-    page.drawRectangle({
-      x: PAGE_PADDING_X,
-      y: cursorY - emptyHeight,
-      width: PAGE_WIDTH - PAGE_PADDING_X * 2,
-      height: emptyHeight,
-      borderColor: BORDER_COLOR,
-      borderWidth: 1,
-    });
-    drawText(page, fonts, "当前没有匹配到下单记录", {
-      x: PAGE_PADDING_X + 12,
-      y: cursorY - 20,
-      size: 9,
-      color: MUTED_COLOR,
-      bold: false,
-    });
-    cursorY -= emptyHeight;
-  }
-
-  cursorY -= 28;
-  drawSectionTitle("付款详情");
-
-  const drawPaymentTableHeader = () => {
-    let colX = PAGE_PADDING_X;
-    const headerHeight = 24;
-    page.drawRectangle({
-      x: PAGE_PADDING_X,
-      y: cursorY - headerHeight,
-      width: PAGE_WIDTH - PAGE_PADDING_X * 2,
-      height: headerHeight,
-      color: rgb(1, 1, 1),
-      borderColor: BORDER_COLOR,
-      borderWidth: 1,
-    });
-    for (const column of paymentColumns) {
-      drawText(page, fonts, column.label, {
-        x: colX + 8,
-        y: cursorY - 16,
-        size: 9,
-        color: MUTED_COLOR,
-        bold: true,
-      });
-      colX += column.width;
-    }
-    cursorY -= headerHeight;
-  };
-
-  const ensurePaymentTableSpace = (neededHeight: number) => {
-    if (cursorY - neededHeight >= PAGE_PADDING_BOTTOM) return;
-    addNewPage();
-    drawSectionTitle("付款详情");
-    drawPaymentTableHeader();
-  };
-
-  drawPaymentTableHeader();
-
-  for (const row of payload.paymentRows) {
-    const rowValues = [
-      row.orderNo || "-",
-      row.payableAmountText || "-",
-      row.paidAmountText || "-",
-      row.paymentTimeText || "-",
-      row.paymentMethodText || "-",
-      row.unpaidAmountText || "-",
-    ];
-    const wrapped = rowValues.map((value, index) =>
-      wrapText(value, paymentColumns[index]!.width - 16, getFont(fonts, value, false), 9),
-    );
-    const lineCount = Math.max(...wrapped.map((lines) => lines.length), 1);
-    const rowHeight = Math.max(24, 8 + lineCount * 11);
-    ensurePaymentTableSpace(rowHeight);
-
-    page.drawRectangle({
-      x: PAGE_PADDING_X,
-      y: cursorY - rowHeight,
-      width: PAGE_WIDTH - PAGE_PADDING_X * 2,
-      height: rowHeight,
-      borderColor: BORDER_COLOR,
-      borderWidth: 1,
-    });
-
-    let colX = PAGE_PADDING_X;
-    wrapped.forEach((lines, index) => {
-      lines.forEach((line, lineIndex) => {
-        const isUnpaidAmountColumn = paymentColumns[index]?.key === "unpaidAmountText";
-        const hasConcreteValue = String(row.unpaidAmountText || "").trim() && String(row.unpaidAmountText || "").trim() !== "-";
-        drawText(page, fonts, line, {
-          x: colX + 8,
-          y: cursorY - 16 - lineIndex * 10,
-          size: 9,
-          color: isUnpaidAmountColumn && hasConcreteValue ? DANGER_COLOR : TEXT_COLOR,
-          bold: false,
-        });
-      });
-      colX += paymentColumns[index]!.width;
-    });
-
-    cursorY -= rowHeight;
-  }
-
-  if (payload.paymentRows.length === 0) {
-    const emptyHeight = 32;
-    ensurePaymentTableSpace(emptyHeight);
-    page.drawRectangle({
-      x: PAGE_PADDING_X,
-      y: cursorY - emptyHeight,
-      width: PAGE_WIDTH - PAGE_PADDING_X * 2,
-      height: emptyHeight,
-      borderColor: BORDER_COLOR,
-      borderWidth: 1,
-    });
-    drawText(page, fonts, "当前没有付款详情记录", {
-      x: PAGE_PADDING_X + 12,
-      y: cursorY - 20,
-      size: 9,
-      color: MUTED_COLOR,
-      bold: false,
-    });
-    cursorY -= emptyHeight;
-  }
-
-  const pageCount = pdfDoc.getPageCount();
-  for (let i = 0; i < pageCount; i += 1) {
-    const targetPage = pdfDoc.getPage(i);
-    const footer = `PARKSONMX · ${i + 1}/${pageCount}`;
-    const footerFont = getFont(fonts, footer, false);
-    targetPage.drawText(footer, {
-      x: PAGE_WIDTH - PAGE_PADDING_X - footerFont.widthOfTextAtSize(footer, 8),
-      y: 14,
-      size: 8,
-      font: footerFont,
-      color: MUTED_COLOR,
-    });
-  }
-
-  return pdfDoc.save({ useObjectStreams: true });
 }

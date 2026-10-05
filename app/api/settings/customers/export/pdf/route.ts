@@ -41,6 +41,7 @@ export async function POST(request: Request) {
             orderAmountText: normalizeValue(item?.orderAmountText),
             packingAmountText: normalizeValue(item?.packingAmountText),
             shippedAtText: normalizeValue(item?.shippedAtText),
+            remarkText: normalizeValue(item?.remarkText),
           }))
         : [],
       paymentRows: Array.isArray(body.paymentRows)
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
             paymentMethodText: normalizeValue(item?.paymentMethodText),
             paymentTargetText: normalizeValue(item?.paymentTargetText),
             unpaidAmountText: normalizeValue(item?.unpaidAmountText),
+            remarkText: normalizeValue(item?.remarkText),
           }))
         : [],
     };

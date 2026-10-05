@@ -1,17 +1,28 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { getExchangeRatePayload, getOverview } from "@/lib/dropshipping";
-import { hasPermission } from "@/lib/permissions";
+import { getResolvedLandingPath, hasAppPermission } from "@/lib/permissions";
 import { getLang } from "@/lib/i18n-server";
 import { getSession } from "@/lib/tenant";
 import { DropshippingClient } from "./DropshippingClient";
 
-export default async function DropshippingPage() {
+export default async function DropshippingPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const session = await getSession();
   const lang = await getLang();
 
   if (!session) redirect("/login");
-  if (!(await hasPermission(session, "viewReports"))) redirect("/dashboard");
+  if (!(await hasAppPermission(session, "dropshipping.view"))) {
+    redirect(await getResolvedLandingPath(session));
+  }
+
+  const params = (await searchParams) || {};
+  const rawTab = Array.isArray(params.tab) ? params.tab[0] : params.tab;
+  const allowedTabs = new Set(["overview", "orders", "inventory", "finance", "supplier_misc", "quick_setup"]);
+  const initialActiveTab = allowedTabs.has(String(rawTab || "")) ? (String(rawTab) as "overview" | "orders" | "inventory" | "finance" | "supplier_misc" | "quick_setup") : undefined;
 
   try {
     const [overview, exchangeRate] = await Promise.all([
@@ -23,6 +34,8 @@ export default async function DropshippingPage() {
       <AppShell>
         <DropshippingClient
           initialLang={lang}
+          initialActiveTab={initialActiveTab}
+          sessionUserType={session.userType}
           initialOverview={overview}
           initialOrders={[]}
           initialInventory={[]}

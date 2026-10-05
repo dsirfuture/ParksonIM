@@ -12,6 +12,15 @@ function parseOptionalDate(value: unknown) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function normalizeOrderChannel(value: unknown, isYgOrder: boolean) {
+  if (isYgOrder) return "友购";
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return null;
+  if (["微信", "wechat"].includes(normalized)) return "微信";
+  if (["whatsapp", "what's app"].includes(normalized)) return "WhatsApp";
+  return null;
+}
+
 export async function POST(request: Request) {
   try {
     const session = await getSession();
@@ -31,20 +40,32 @@ export async function POST(request: Request) {
     const paymentTermDaysText = String(body.paymentTermDays || "").trim();
     const paymentTermDays = paymentTermDaysText ? Number.parseInt(paymentTermDaysText, 10) : null;
     const sourceType = String(body.sourceType || "").trim();
+    const ygOrderNo = String(body.ygOrderNo || "").trim();
+    const externalOrderNo = String(body.externalOrderNo || "").trim();
+    const isYgOrder = Boolean(ygOrderNo);
+    const hasExternalOrder = Boolean(externalOrderNo);
+    if (isYgOrder && hasExternalOrder) {
+      return NextResponse.json({ ok: false, error: "请将友购订单和其他渠道订单分开保存" }, { status: 400 });
+    }
     const packingAmountText = String(body.packingAmount || "").replace(/[^0-9.-]/g, "").trim();
     const billingAmountOverrideText = String(body.billingAmountOverride || "").replace(/[^0-9.-]/g, "").trim();
+    const isVoided = Boolean(body.isVoided);
     const normalizedBillingAmountOverrideText =
-      billingAmountOverrideText || (sourceType === "yg" ? packingAmountText : "");
+      isVoided ? "0.00" : (billingAmountOverrideText || (isYgOrder || sourceType === "yg" ? packingAmountText : ""));
+    const normalizedPackingAmountText = isVoided ? "0.00" : packingAmountText;
+    const resolvedOrderChannel = normalizeOrderChannel(body.orderChannel, isYgOrder);
+    const resolvedShippedAt = parseOptionalDate(isYgOrder ? body.ygShippedAt ?? body.shippedAt : body.shippedAt);
 
     const payload = {
       customer_profile_id: profileId,
       customer_name: customerName,
-      yg_order_no: String(body.ygOrderNo || "").trim() || null,
-      external_order_no: String(body.externalOrderNo || "").trim() || null,
-      order_channel: String(body.orderChannel || "").trim() || null,
+      yg_order_no: ygOrderNo || null,
+      external_order_no: isYgOrder ? null : externalOrderNo || null,
+      order_channel: resolvedOrderChannel,
+      is_voided: isVoided,
       billing_amount_override: normalizedBillingAmountOverrideText || null,
-      packing_amount: packingAmountText || null,
-      shipped_at: parseOptionalDate(body.shippedAt),
+      packing_amount: normalizedPackingAmountText || null,
+      shipped_at: resolvedShippedAt,
       paid_at: parseOptionalDate(body.paidAt),
       payment_term_days: Number.isFinite(paymentTermDays as number) ? paymentTermDays : null,
     };
@@ -65,10 +86,25 @@ export async function POST(request: Request) {
       }
 
       const updated = await withPrismaRetry(() =>
-        prisma.customerManualOrderRecord.update({
-          where: { id: recordId },
-          data: payload,
-          select: { id: true },
+        prisma.$transaction(async (tx) => {
+          const nextRecord = await tx.customerManualOrderRecord.update({
+            where: { id: recordId },
+            data: payload,
+            select: { id: true, yg_order_no: true },
+          });
+          if (isVoided) {
+            await tx.customerPaymentRecord.deleteMany({
+              where: {
+                tenant_id: session.tenantId,
+                company_id: session.companyId,
+                OR: [
+                  { manual_order_record_id: recordId },
+                  nextRecord.yg_order_no ? { source_type: "yg", order_no: nextRecord.yg_order_no } : undefined,
+                ].filter(Boolean),
+              },
+            });
+          }
+          return nextRecord;
         }),
       );
       return NextResponse.json({ ok: true, id: updated.id });

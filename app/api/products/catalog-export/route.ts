@@ -7,13 +7,17 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/tenant";
-import { hasPermission } from "@/lib/permissions";
+import { hasAppPermission, hasPermission } from "@/lib/permissions";
 import { withPrismaRetry } from "@/lib/prisma-retry";
 import { buildProductImageUrls, HAS_REMOTE_PRODUCT_IMAGE_BASE } from "@/lib/product-image-url";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 const REMOTE_IMAGE_FETCH_TIMEOUT_MS = 2500;
 const REMOTE_FONT_FETCH_TIMEOUT_MS = 5000;
+const XLSX_IMAGE_FETCH_CONCURRENCY = 24;
+const XLSX_IMAGE_PREFETCH_BATCH_SIZE = 240;
 
 const REMOTE_CJK_REGULAR_URLS = [
   "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf",
@@ -25,6 +29,7 @@ const REMOTE_CJK_BOLD_URLS = [
 
 let cachedRemoteCjkRegularFont: Buffer | null | undefined;
 let cachedRemoteCjkBoldFont: Buffer | null | undefined;
+let cachedRemoteLatinRegularFont: Buffer | null | undefined;
 
 type ProductRow = {
   sku: string;
@@ -56,7 +61,7 @@ type DocumentSettings = {
 type ExportLang = "zh" | "es";
 
 function hasChineseGlyph(value: string) {
-  return /[\u3400-\u9FFF\uF900-\uFAFF]/.test(String(value || ""));
+  return /[^\x20-\x7E\xA0-\xFF]/.test(String(value || ""));
 }
 
 function getDocumentFontName(value: string, options?: { chineseBold?: boolean }) {
@@ -141,6 +146,31 @@ function safeName(value: string) {
   return value.replace(/[\\/:*?"<>|]+/g, "_");
 }
 
+function normalizeExportTitleEs(value: string | null | undefined) {
+  return String(value || "")
+    .trim()
+    .toUpperCase();
+}
+
+function buildExportBaseName(category: string, categoryZh: string, categoryEs: string) {
+  const zhTitle = String(categoryZh || "").trim();
+  const esTitle = String(categoryEs || "").trim();
+  const fallbackCategory = category === "all" ? "ALL" : String(category || "").trim();
+  const title = zhTitle || esTitle || fallbackCategory || "CATALOG";
+  return safeName(`PARKSONMX-${title}`);
+}
+
+function buildContentDisposition(dispositionType: "inline" | "attachment", fileName: string) {
+  const fallbackAscii = safeName(
+    fileName
+      .normalize("NFKD")
+      .replace(/[^\x20-\x7E]/g, "")
+      .replace(/\s+/g, " ")
+      .trim() || "PARKSONMX-export",
+  );
+  return `${dispositionType}; filename="${fallbackAscii}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+}
+
 function toExportLang(value: string | null): ExportLang {
   return value === "es" ? "es" : "zh";
 }
@@ -172,6 +202,31 @@ async function loadImageBySku(sku: string) {
   return null;
 }
 
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  worker: (item: T, index: number) => Promise<R>,
+) {
+  if (items.length === 0) return [] as R[];
+  const safeLimit = Math.max(1, Math.min(limit, items.length));
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function runWorker() {
+    while (true) {
+      const current = nextIndex;
+      nextIndex += 1;
+      if (current >= items.length) return;
+      results[current] = await worker(items[current], current);
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: safeLimit }, () => runWorker()),
+  );
+  return results;
+}
+
 function resolveDisplayNames(item: ProductRow) {
   const normalizeName = (value: string | null | undefined) => {
     const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -200,50 +255,62 @@ function resolveDisplayNames(item: ProductRow) {
 
 async function loadPdfFont() {
   const candidates = [
-    path.join(process.cwd(), "public", "fonts", "NotoSansSC-Regular.ttf"),
-    "/usr/share/fonts/truetype/noto/NotoSansSC-Regular.ttf",
-    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Regular.ttf"),
+    path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Regular.otf"),
+    path.join(process.cwd(), "public", "fonts", "NotoSansSC-Regular.otf"),
     "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf",
-    "/usr/share/fonts/truetype/arphic/ukai.ttc",
-    "/usr/share/fonts/truetype/arphic/uming.ttc",
     "C:\\Windows\\Fonts\\msyh.ttf",
     "C:\\Windows\\Fonts\\simhei.ttf",
   ];
   for (const file of candidates) {
     try {
-      return await fs.readFile(file);
+      return {
+        bytes: await fs.readFile(file),
+        isOtf: file.toLowerCase().endsWith(".otf"),
+      };
     } catch {
       // continue
     }
   }
   if (cachedRemoteCjkRegularFont !== undefined) {
-    return cachedRemoteCjkRegularFont;
+    return cachedRemoteCjkRegularFont
+      ? { bytes: cachedRemoteCjkRegularFont, isOtf: false }
+      : null;
   }
   cachedRemoteCjkRegularFont = await loadRemoteFontBytes(REMOTE_CJK_REGULAR_URLS);
-  return cachedRemoteCjkRegularFont;
+  return cachedRemoteCjkRegularFont
+    ? { bytes: cachedRemoteCjkRegularFont, isOtf: true }
+    : null;
 }
 
 async function loadPdfBoldFont() {
   const candidates = [
-    path.join(process.cwd(), "public", "fonts", "NotoSansSC-Bold.ttf"),
-    "/usr/share/fonts/truetype/noto/NotoSansSC-Bold.ttf",
-    "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+    path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Bold.ttf"),
+    path.join(process.cwd(), "public", "fonts", "NotoSansCJKsc-Bold.otf"),
+    path.join(process.cwd(), "public", "fonts", "NotoSansSC-Bold.otf"),
     "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Bold.otf",
-    "/usr/share/fonts/truetype/arphic/ukai.ttc",
-    "/usr/share/fonts/truetype/arphic/uming.ttc",
     "C:\\Windows\\Fonts\\msyhbd.ttf",
     "C:\\Windows\\Fonts\\simhei.ttf",
   ];
   for (const file of candidates) {
     try {
-      return await fs.readFile(file);
+      return {
+        bytes: await fs.readFile(file),
+        isOtf: file.toLowerCase().endsWith(".otf"),
+      };
     } catch {
       // continue
     }
   }
-  return null;
+  if (cachedRemoteCjkBoldFont !== undefined) {
+    return cachedRemoteCjkBoldFont
+      ? { bytes: cachedRemoteCjkBoldFont, isOtf: false }
+      : null;
+  }
+  cachedRemoteCjkBoldFont = await loadRemoteFontBytes(REMOTE_CJK_BOLD_URLS);
+  return cachedRemoteCjkBoldFont
+    ? { bytes: cachedRemoteCjkBoldFont, isOtf: true }
+    : null;
 }
 
 function getImageSizeFromBuffer(buffer: Buffer): { width: number; height: number } | null {
@@ -316,11 +383,11 @@ async function loadPdfLatinSansFont() {
       // continue
     }
   }
-  if (cachedRemoteCjkBoldFont !== undefined) {
-    return cachedRemoteCjkBoldFont;
+  if (cachedRemoteLatinRegularFont !== undefined) {
+    return cachedRemoteLatinRegularFont;
   }
-  cachedRemoteCjkBoldFont = await loadRemoteFontBytes(REMOTE_CJK_BOLD_URLS);
-  return cachedRemoteCjkBoldFont;
+  cachedRemoteLatinRegularFont = null;
+  return cachedRemoteLatinRegularFont;
 }
 
 async function loadRemoteFontBytes(urls: string[]) {
@@ -534,80 +601,96 @@ async function buildCatalogXlsx(
     };
   });
 
-  for (let i = 0; i < rows.length; i += 1) {
-    const item = rows[i];
-    const rowNo = 6 + i;
-    const priceValue = toNumber(item.price);
-    const names = resolveDisplayNames(item);
-    const nameZh = names.zh;
-    const nameEs = names.es;
-    const row = ws.getRow(rowNo);
-    row.values = [
-      "",
-      item.sku,
-      nameZh || "",
-      nameEs || "",
-      item.case_pack ?? "",
-      item.carton_pack ?? "",
-      priceValue === null ? "" : `$${priceValue.toFixed(2)}`,
-    ];
-    row.height = 84;
+  for (let start = 0; start < rows.length; start += XLSX_IMAGE_PREFETCH_BATCH_SIZE) {
+    const batchRows = rows.slice(start, start + XLSX_IMAGE_PREFETCH_BATCH_SIZE);
+    const imageBatch = await mapWithConcurrency(
+      batchRows,
+      XLSX_IMAGE_FETCH_CONCURRENCY,
+      async (item) => ({
+        sku: item.sku,
+        image: await loadImageBySku(item.sku),
+      }),
+    );
+    const imageBySku = new Map<string, Awaited<ReturnType<typeof loadImageBySku>>>();
+    for (const item of imageBatch) {
+      imageBySku.set(item.sku, item.image);
+    }
 
-    row.eachCell({ includeEmpty: true }, (cell, col) => {
-      const text = String(cell.value ?? "");
-      let fontName = getDocumentFontName(text);
-      if (col === 4) {
-        fontName = "Source Sans 3";
-      } else if (col === 3) {
-        fontName = "Noto Sans SC";
-      }
-      cell.font = {
-        name: fontName,
-        size: col === 3 ? 10.5 : 10,
-        bold: col === 3 || col === 7,
-        color: col === 4 ? { argb: "FF475569" } : { argb: "FF111827" },
-      };
-      if (col === 3 || col === 4) {
-        cell.alignment = { horizontal: "left", vertical: "middle", wrapText: true };
-      } else if (col >= 5) {
-        cell.alignment = { horizontal: "center", vertical: "middle" };
+    for (let offset = 0; offset < batchRows.length; offset += 1) {
+      const item = batchRows[offset];
+      const rowNo = 6 + start + offset;
+      const priceValue = toNumber(item.price);
+      const names = resolveDisplayNames(item);
+      const nameZh = names.zh;
+      const nameEs = names.es;
+      const row = ws.getRow(rowNo);
+      row.values = [
+        "",
+        item.sku,
+        nameZh || "",
+        nameEs || "",
+        item.case_pack ?? "",
+        item.carton_pack ?? "",
+        priceValue === null ? "" : `$${priceValue.toFixed(2)}`,
+      ];
+      row.height = 84;
+
+      row.eachCell({ includeEmpty: true }, (cell, col) => {
+        const text = String(cell.value ?? "");
+        let fontName = getDocumentFontName(text);
+        if (col === 4) {
+          fontName = "Source Sans 3";
+        } else if (col === 3) {
+          fontName = "Noto Sans SC";
+        }
+        cell.font = {
+          name: fontName,
+          size: col === 3 ? 10.5 : 10,
+          bold: col === 3 || col === 7,
+          color: col === 4 ? { argb: "FF475569" } : { argb: "FF111827" },
+        };
+        if (col === 3 || col === 4) {
+          cell.alignment = { horizontal: "left", vertical: "middle", wrapText: true };
+        } else if (col >= 5) {
+          cell.alignment = { horizontal: "center", vertical: "middle" };
+        } else {
+          cell.alignment = { horizontal: "center", vertical: "middle" };
+        }
+        cell.border = {
+          top: { style: "thin", color: { argb: "FFE6EBF2" } },
+          left: { style: "thin", color: { argb: "FFE6EBF2" } },
+          bottom: { style: "thin", color: { argb: "FFE6EBF2" } },
+          right: { style: "thin", color: { argb: "FFE6EBF2" } },
+        };
+      });
+
+      const image = imageBySku.get(item.sku);
+      if (image) {
+        const imageId = wb.addImage({
+          base64: `data:image/${image.ext};base64,${image.buffer.toString("base64")}`,
+          extension: image.ext,
+        });
+        const natural = getImageSizeFromBuffer(image.buffer);
+        const cellWidth = columnWidthToPixels(Number(ws.columns[0]?.width || 18));
+        const cellHeight = rowHeightToPixels(Number(row.height || 76));
+        const targetWidth = Math.max(1, cellWidth - 6);
+        const targetHeight = Math.max(1, cellHeight - 6);
+        let drawWidth = targetWidth;
+        let drawHeight = targetHeight;
+        if (natural && natural.width > 0 && natural.height > 0) {
+          const ratio = Math.min(targetWidth / natural.width, targetHeight / natural.height);
+          drawWidth = Math.max(1, Math.floor(natural.width * ratio));
+          drawHeight = Math.max(1, Math.floor(natural.height * ratio));
+        }
+        const offsetX = Math.max(0, Math.floor((cellWidth - drawWidth) / 2));
+        const offsetY = Math.max(0, Math.floor((cellHeight - drawHeight) / 2));
+        ws.addImage(imageId, {
+          tl: { col: 0 + offsetX / cellWidth, row: (rowNo - 1) + offsetY / cellHeight },
+          ext: { width: drawWidth, height: drawHeight },
+        });
       } else {
-        cell.alignment = { horizontal: "center", vertical: "middle" };
+        row.getCell(1).value = "";
       }
-      cell.border = {
-        top: { style: "thin", color: { argb: "FFE6EBF2" } },
-        left: { style: "thin", color: { argb: "FFE6EBF2" } },
-        bottom: { style: "thin", color: { argb: "FFE6EBF2" } },
-        right: { style: "thin", color: { argb: "FFE6EBF2" } },
-      };
-    });
-
-    const image = await loadImageBySku(item.sku);
-    if (image) {
-      const imageId = wb.addImage({
-        base64: `data:image/${image.ext};base64,${image.buffer.toString("base64")}`,
-        extension: image.ext,
-      });
-      const natural = getImageSizeFromBuffer(image.buffer);
-      const cellWidth = columnWidthToPixels(Number(ws.columns[0]?.width || 18));
-      const cellHeight = rowHeightToPixels(Number(row.height || 76));
-      const targetWidth = Math.max(1, cellWidth - 6);
-      const targetHeight = Math.max(1, cellHeight - 6);
-      let drawWidth = targetWidth;
-      let drawHeight = targetHeight;
-      if (natural && natural.width > 0 && natural.height > 0) {
-        const ratio = Math.min(targetWidth / natural.width, targetHeight / natural.height);
-        drawWidth = Math.max(1, Math.floor(natural.width * ratio));
-        drawHeight = Math.max(1, Math.floor(natural.height * ratio));
-      }
-      const offsetX = Math.max(0, Math.floor((cellWidth - drawWidth) / 2));
-      const offsetY = Math.max(0, Math.floor((cellHeight - drawHeight) / 2));
-      ws.addImage(imageId, {
-        tl: { col: 0 + offsetX / cellWidth, row: (rowNo - 1) + offsetY / cellHeight },
-        ext: { width: drawWidth, height: drawHeight },
-      });
-    } else {
-      row.getCell(1).value = "";
     }
   }
 
@@ -628,20 +711,21 @@ async function buildCatalogPdf(
   _onShelfOnly: boolean,
   categoryZh: string,
   categoryEs: string,
+  lang: ExportLang,
   doc: DocumentSettings,
 ) {
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
 
-  const fontBytes = await loadPdfFont();
-  const boldFontBytes = await loadPdfBoldFont();
-  const unicodeSafe = Boolean(fontBytes);
-  const baseFont = fontBytes
-    ? await pdfDoc.embedFont(fontBytes, { subset: false })
+  const fontSource = await loadPdfFont();
+  const boldFontSource = await loadPdfBoldFont();
+  const unicodeSafe = Boolean(fontSource?.bytes);
+  const baseFont = fontSource?.bytes
+    ? await pdfDoc.embedFont(fontSource.bytes, { subset: true })
     : await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const boldFont = boldFontBytes
-    ? await pdfDoc.embedFont(boldFontBytes, { subset: false })
-    : fontBytes
+  const boldFont = boldFontSource?.bytes
+    ? await pdfDoc.embedFont(boldFontSource.bytes, { subset: true })
+    : fontSource?.bytes
       ? baseFont
       : await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   // Use stable built-in latin fonts for SKU/footer/meta to avoid abnormal character spacing in some deployments.
@@ -705,19 +789,12 @@ async function buildCatalogPdf(
     return sliced;
   };
 
-  const categoryLineRaw =
-    category === "all"
-      ? "全部品类 / ALL CATEGORIES"
-      : categoryZh && categoryEs && categoryZh !== categoryEs
-        ? `${categoryZh} / ${categoryEs}`
-        : categoryZh || categoryEs || category;
-  const categoryLine = safePdfText(categoryLineRaw, unicodeSafe);
   const titleZhRaw = categoryZh || categoryEs || "-";
   const titleEsRaw = categoryEs || categoryZh || "-";
   const titleZh = safePdfText(titleZhRaw, unicodeSafe) || safePdfText(titleEsRaw, unicodeSafe) || "-";
   const titleEs = safePdfText(titleEsRaw, unicodeSafe) || safePdfText(titleZhRaw, unicodeSafe) || "-";
   const exportDateEs = safePdfText(formatExportDateEs(new Date()), unicodeSafe);
-  const spacedEs = /^[\x20-\x7E]+$/.test(titleEs)
+  const spacedTitleEs = /^[\x20-\x7E]+$/.test(titleEs)
     ? titleEs
         .split("")
         .map((ch) => (ch === " " ? "   " : `${ch} `))
@@ -746,41 +823,39 @@ async function buildCatalogPdf(
         color: rgb(0.45, 0.45, 0.45),
       });
     }
-    if (categoryLine) {
-      const small = titleZh;
-      const big = spacedEs;
-      const smallW = fontForText(small, true).widthOfTextAtSize(small, 10);
-      const bigW = fontForText(big, true).widthOfTextAtSize(big, 22);
-      const centerX = width / 2;
-      page.drawText(small, {
-        x: centerX - smallW / 2,
-        y: height - margin - 10 - categoryOffsetY,
-        size: 10,
-        font: fontForText(small, true),
-        color: rgb(0.23, 0.25, 0.3),
-      });
-      page.drawLine({
-        start: { x: centerX - 18, y: height - margin - 20 - categoryOffsetY },
-        end: { x: centerX + 18, y: height - margin - 20 - categoryOffsetY },
-        thickness: 1.2,
-        color: rgb(0.15, 0.15, 0.18),
-      });
-      page.drawText(big, {
-        x: centerX - bigW / 2,
-        y: height - margin - 58 - categoryOffsetY,
-        size: 22,
-        font: fontForText(big, true),
-        color: rgb(0.05, 0.05, 0.08),
-      });
-      const dateW = fontForText(exportDateEs).widthOfTextAtSize(exportDateEs, 8);
-      page.drawText(exportDateEs, {
-        x: centerX - dateW / 2,
-        y: height - margin - 74 - categoryOffsetY,
-        size: 8,
-        font: fontForText(exportDateEs),
-        color: rgb(0.42, 0.45, 0.5),
-      });
-    }
+    const small = titleZh;
+    const big = spacedTitleEs;
+    const smallW = fontForText(small, true).widthOfTextAtSize(small, 10);
+    const bigW = fontForText(big, true).widthOfTextAtSize(big, 22);
+    const centerX = width / 2;
+    page.drawText(small, {
+      x: centerX - smallW / 2,
+      y: height - margin - 10 - categoryOffsetY,
+      size: 10,
+      font: fontForText(small, true),
+      color: rgb(0.23, 0.25, 0.3),
+    });
+    page.drawLine({
+      start: { x: centerX - 18, y: height - margin - 20 - categoryOffsetY },
+      end: { x: centerX + 18, y: height - margin - 20 - categoryOffsetY },
+      thickness: 1.2,
+      color: rgb(0.15, 0.15, 0.18),
+    });
+    page.drawText(big, {
+      x: centerX - bigW / 2,
+      y: height - margin - 58 - categoryOffsetY,
+      size: 22,
+      font: fontForText(big, true),
+      color: rgb(0.05, 0.05, 0.08),
+    });
+    const dateW = fontForText(exportDateEs).widthOfTextAtSize(exportDateEs, 8);
+    page.drawText(exportDateEs, {
+      x: centerX - dateW / 2,
+      y: height - margin - 74 - categoryOffsetY,
+      size: 8,
+      font: fontForText(exportDateEs),
+      color: rgb(0.42, 0.45, 0.5),
+    });
     if (doc.showFooter) {
       const phonePart = doc.showContact && doc.phone ? `  Tel: ${doc.phone}` : "";
       const waPart = doc.showContact && doc.showWhatsapp && doc.whatsapp ? `  WA: ${doc.whatsapp}` : "";
@@ -839,8 +914,8 @@ async function buildCatalogPdf(
     const names = resolveDisplayNames(item);
     const zhLineSafe = safePdfText(names.zh, unicodeSafe);
     const esLineSafe = safePdfText(names.es, unicodeSafe);
-    const zhLine = zhLineSafe;
-    const esLine = esLineSafe;
+    const primaryLine = zhLineSafe || esLineSafe;
+    const secondaryLine = esLineSafe && esLineSafe !== primaryLine ? esLineSafe : "";
     const casePack = String(item.case_pack ?? "-");
     const cartonPack = String(item.carton_pack ?? "-");
     const priceNum = toNumber(item.price);
@@ -854,12 +929,12 @@ async function buildCatalogPdf(
       2,
       Math.floor((cardH - imageBoxH - metaLinesCount * metaLineGap - minBottomPad) / descLineGap),
     );
-    const rawZhLines = zhLine ? wrapLines(zhLine, cardW - textPad * 2, zhSize, boldFont) : [];
-    const rawEsLines = esLine ? wrapLines(esLine, cardW - textPad * 2, esSize, esFont) : [];
-    const zhLineLimit = Math.min(3, maxNameLineCount);
-    const zhLines = clampWithEllipsis(rawZhLines, zhLineLimit);
-    const remainingEsLines = Math.max(0, maxNameLineCount - zhLines.length);
-    const esLines = clampWithEllipsis(rawEsLines, remainingEsLines);
+    const rawPrimaryLines = primaryLine ? wrapLines(primaryLine, cardW - textPad * 2, zhSize, fontForText(primaryLine, true)) : [];
+    const rawSecondaryLines = secondaryLine ? wrapLines(secondaryLine, cardW - textPad * 2, esSize, fontForText(secondaryLine)) : [];
+    const primaryLineLimit = Math.min(3, maxNameLineCount);
+    const primaryLines = clampWithEllipsis(rawPrimaryLines, primaryLineLimit);
+    const remainingSecondaryLines = Math.max(0, maxNameLineCount - primaryLines.length);
+    const secondaryLines = clampWithEllipsis(rawSecondaryLines, remainingSecondaryLines);
     if (col === 0 && y - cardH < margin + footerH) {
       page = pdfDoc.addPage([width, height]);
       drawPageChrome();
@@ -885,11 +960,11 @@ async function buildCatalogPdf(
     }
 
     let textY = topY - imageBoxH - 2;
-    for (const line of zhLines) {
+    for (const line of primaryLines) {
       page.drawText(line, { x: x + textPad, y: textY, size: zhSize, font: fontForText(line, true), color: rgb(0.12, 0.15, 0.2) });
       textY -= descLineGap;
     }
-    for (const line of esLines) {
+    for (const line of secondaryLines) {
       page.drawText(line, { x: x + textPad, y: textY, size: esSize, font: fontForText(line), color: rgb(0.3, 0.33, 0.38) });
       textY -= descLineGap;
     }
@@ -954,6 +1029,201 @@ async function loadImageFromUrl(url: string) {
   }
 }
 
+type CatalogExportRequestInput = {
+  tenantId: string;
+  companyId: string;
+  format: string;
+  lang: ExportLang;
+  category: string;
+  keyword: string;
+  onShelfOnly: boolean;
+  categoryZh?: string;
+  categoryEs?: string;
+};
+
+export async function buildCatalogExportResponse(input: CatalogExportRequestInput) {
+  const format = (input.format || "xlsx").toLowerCase();
+  const lang = toExportLang(input.lang);
+  const category = cleanCategory(input.category || "all");
+  const keyword = String(input.keyword || "").trim();
+  const onShelfOnly = input.onShelfOnly !== false;
+  const parsedCategory = parseBilingualCategory(category);
+  const customCategoryZh = String(input.categoryZh || "").trim();
+  const customCategoryEs = normalizeExportTitleEs(input.categoryEs);
+  let categoryZh = customCategoryZh || parsedCategory.zh;
+  let categoryEs = customCategoryEs || parsedCategory.es;
+
+  const activeCategoryMaps = await withPrismaRetry(() =>
+    prisma.productCategoryMap.findMany({
+      where: {
+        tenant_id: input.tenantId,
+        company_id: input.companyId,
+        active: true,
+      },
+      select: { category_zh: true, category_es: true, yogo_code: true },
+    }),
+  );
+  const selectedCategoryMap =
+    category === "all"
+      ? null
+      : activeCategoryMaps.find(
+          (item) =>
+            normalizeCategory(item.category_zh) === normalizeCategory(category) ||
+            normalizeCategory(item.category_es) === normalizeCategory(category),
+        ) || null;
+  if (selectedCategoryMap && !customCategoryZh && !customCategoryEs) {
+    categoryZh = selectedCategoryMap.category_zh;
+    categoryEs = normalizeExportTitleEs(selectedCategoryMap.category_es || selectedCategoryMap.category_zh);
+  }
+
+  const cfg = await withPrismaRetry(() =>
+    prisma.catalogConfig.findUnique({
+      where: {
+        tenant_id_company_id: {
+          tenant_id: input.tenantId,
+          company_id: input.companyId,
+        },
+      },
+      select: {
+        doc_header: true,
+        doc_footer: true,
+        doc_phone: true,
+        doc_logo_url: true,
+        doc_logo_position: true,
+        doc_header_align: true,
+        doc_footer_align: true,
+        doc_whatsapp: true,
+        doc_wechat: true,
+        doc_show_whatsapp: true,
+        doc_show_wechat: true,
+        doc_show_contact: true,
+        doc_show_header: true,
+        doc_show_footer: true,
+        doc_show_logo: true,
+      },
+    }),
+  );
+  const doc: DocumentSettings = {
+    headerText: cfg?.doc_header || "PARKSONMX",
+    footerText: cfg?.doc_footer || "BS DU S.A. DE C.V.",
+    phone: cfg?.doc_phone || "5530153936",
+    logoUrl: cfg?.doc_logo_url || "",
+    logoPosition:
+      cfg?.doc_logo_position === "left" ||
+      cfg?.doc_logo_position === "center" ||
+      cfg?.doc_logo_position === "top" ||
+      cfg?.doc_logo_position === "bottom"
+        ? cfg.doc_logo_position
+        : "right",
+    headerAlign:
+      cfg?.doc_header_align === "center" || cfg?.doc_header_align === "right"
+        ? cfg.doc_header_align
+        : "left",
+    footerAlign:
+      cfg?.doc_footer_align === "left" || cfg?.doc_footer_align === "center"
+        ? cfg.doc_footer_align
+        : "right",
+    whatsapp: cfg?.doc_whatsapp || "",
+    wechat: cfg?.doc_wechat || "",
+    showWhatsapp: cfg?.doc_show_whatsapp ?? false,
+    showWechat: cfg?.doc_show_wechat ?? false,
+    showContact: cfg?.doc_show_contact ?? true,
+    showHeader: cfg?.doc_show_header ?? true,
+    showFooter: cfg?.doc_show_footer ?? true,
+    showLogo: cfg?.doc_show_logo ?? false,
+  };
+
+  const rowsRaw = await withPrismaRetry(() =>
+    prisma.yogoProductSource.findMany({
+      where: {
+        tenant_id: input.tenantId,
+        company_id: input.companyId,
+        ...(onShelfOnly ? { source_disabled: false } : {}),
+        ...(keyword
+          ? {
+              OR: [
+                { product_code: { contains: keyword, mode: "insensitive" } },
+                { product_no: { contains: keyword, mode: "insensitive" } },
+                { name_cn: { contains: keyword, mode: "insensitive" } },
+                { name_es: { contains: keyword, mode: "insensitive" } },
+                { category_name: { contains: keyword, mode: "insensitive" } },
+                { subcategory_name: { contains: keyword, mode: "insensitive" } },
+                { supplier: { contains: keyword, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ category_name: "asc" }, { product_code: "asc" }],
+      select: {
+        product_code: true,
+        product_no: true,
+        name_cn: true,
+        name_es: true,
+        category_name: true,
+        subcategory_name: true,
+        supplier: true,
+        case_pack: true,
+        carton_pack: true,
+        source_price: true,
+      },
+    }),
+  );
+
+  let selectedRows = rowsRaw;
+  if (category !== "all") {
+    const selectedCode = category.replace(/\D+/g, "").slice(0, 2).padStart(2, "0");
+    const mappedCodes = selectedCategoryMap ? parseYogoCodeList(selectedCategoryMap.yogo_code) : [];
+    if (mappedCodes.length > 0) {
+      const mappedCodeSet = new Set(mappedCodes);
+      selectedRows = rowsRaw.filter((row) => mappedCodeSet.has(extractYogoCategoryCode(row.category_name)));
+    } else {
+      const normalizedSelected = normalizeCategory(category);
+      selectedRows = rowsRaw.filter((row) => {
+        const normalizedCategoryName = normalizeCategory(row.category_name);
+        const code = extractYogoCategoryCode(row.category_name);
+        return normalizedCategoryName.includes(normalizedSelected) || (selectedCode && code === selectedCode);
+      });
+    }
+  }
+  const rows: ProductRow[] = selectedRows.map((row) => ({
+    sku: row.product_code,
+    barcode: row.product_no,
+    name_zh: row.name_cn,
+    name_es: row.name_es,
+    case_pack: row.case_pack ?? null,
+    carton_pack: row.carton_pack ?? null,
+    price: row.source_price,
+  }));
+
+  if (format === "pdf") {
+    const bytes = await buildCatalogPdf(rows, category, onShelfOnly, categoryZh, categoryEs, lang, doc);
+    const name = `${buildExportBaseName(category, categoryZh, categoryEs)}.pdf`;
+    return new NextResponse(Buffer.from(bytes), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": buildContentDisposition("attachment", name),
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        Pragma: "no-cache",
+        Expires: "0",
+      },
+    });
+  }
+
+  const bytes = await buildCatalogXlsx(rows, category, onShelfOnly, doc, lang, categoryZh, categoryEs);
+  const name = `${buildExportBaseName(category, categoryZh, categoryEs)}.xlsx`;
+  return new NextResponse(Buffer.from(bytes), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": buildContentDisposition("attachment", name),
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+    },
+  });
+}
+
 export async function GET(request: Request) {
   try {
     const session = await getSession();
@@ -962,180 +1232,22 @@ export async function GET(request: Request) {
     }
 
     const canManage = await hasPermission(session, "manageProducts");
-    const canExport = await hasPermission(session, "exportProductCatalog");
+    const canExport = await hasAppPermission(session, "products.export");
     if (!canManage && !canExport) {
       return NextResponse.json({ ok: false, error: "无权限" }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
-    const format = (searchParams.get("format") || "xlsx").toLowerCase();
-    const lang = toExportLang(searchParams.get("lang"));
-    const category = cleanCategory(searchParams.get("category") || "all");
-    const onShelfOnly = (searchParams.get("onShelfOnly") || "1") !== "0";
-    const isShare = (searchParams.get("share") || "0") === "1";
-    const parsedCategory = parseBilingualCategory(category);
-    let categoryZh = searchParams.get("categoryZh") || parsedCategory.zh;
-    let categoryEs = searchParams.get("categoryEs") || parsedCategory.es;
-
-    const activeCategoryMaps = await withPrismaRetry(() =>
-      prisma.productCategoryMap.findMany({
-        where: {
-          tenant_id: session.tenantId,
-          company_id: session.companyId,
-          active: true,
-        },
-        select: { category_zh: true, category_es: true, yogo_code: true },
-      }),
-    );
-    const selectedCategoryMap =
-      category === "all"
-        ? null
-        : activeCategoryMaps.find(
-            (item) =>
-              normalizeCategory(item.category_zh) === normalizeCategory(category) ||
-              normalizeCategory(item.category_es) === normalizeCategory(category),
-          ) || null;
-    if (selectedCategoryMap) {
-      categoryZh = selectedCategoryMap.category_zh;
-      categoryEs = selectedCategoryMap.category_es || selectedCategoryMap.category_zh;
-    }
-
-    const cfg = await withPrismaRetry(() =>
-      prisma.catalogConfig.findUnique({
-        where: {
-          tenant_id_company_id: {
-            tenant_id: session.tenantId,
-            company_id: session.companyId,
-          },
-        },
-        select: {
-          doc_header: true,
-          doc_footer: true,
-          doc_phone: true,
-          doc_logo_url: true,
-          doc_logo_position: true,
-          doc_header_align: true,
-          doc_footer_align: true,
-          doc_whatsapp: true,
-          doc_wechat: true,
-          doc_show_whatsapp: true,
-          doc_show_wechat: true,
-          doc_show_contact: true,
-          doc_show_header: true,
-          doc_show_footer: true,
-          doc_show_logo: true,
-        },
-      }),
-    );
-    const doc: DocumentSettings = {
-      headerText: cfg?.doc_header || "PARKSONMX",
-      footerText: cfg?.doc_footer || "BS DU S.A. DE C.V.",
-      phone: cfg?.doc_phone || "5530153936",
-      logoUrl: cfg?.doc_logo_url || "",
-      logoPosition:
-        cfg?.doc_logo_position === "left" ||
-        cfg?.doc_logo_position === "center" ||
-        cfg?.doc_logo_position === "top" ||
-        cfg?.doc_logo_position === "bottom"
-          ? cfg.doc_logo_position
-          : "right",
-      headerAlign:
-        cfg?.doc_header_align === "center" || cfg?.doc_header_align === "right"
-          ? cfg.doc_header_align
-          : "left",
-      footerAlign:
-        cfg?.doc_footer_align === "left" || cfg?.doc_footer_align === "center"
-          ? cfg.doc_footer_align
-          : "right",
-      whatsapp: cfg?.doc_whatsapp || "",
-      wechat: cfg?.doc_wechat || "",
-      showWhatsapp: cfg?.doc_show_whatsapp ?? false,
-      showWechat: cfg?.doc_show_wechat ?? false,
-      showContact: cfg?.doc_show_contact ?? true,
-      showHeader: cfg?.doc_show_header ?? true,
-      showFooter: cfg?.doc_show_footer ?? true,
-      showLogo: cfg?.doc_show_logo ?? false,
-    };
-
-    const rowsRaw = await withPrismaRetry(() =>
-      prisma.yogoProductSource.findMany({
-        where: {
-          tenant_id: session.tenantId,
-          company_id: session.companyId,
-          ...(onShelfOnly ? { source_disabled: false } : {}),
-        },
-        orderBy: [{ category_name: "asc" }, { product_code: "asc" }],
-        select: {
-          product_code: true,
-          product_no: true,
-          name_cn: true,
-          name_es: true,
-          category_name: true,
-          case_pack: true,
-          carton_pack: true,
-          source_price: true,
-        },
-      }),
-    );
-
-    let selectedRows = rowsRaw;
-    if (category !== "all") {
-      const selectedCode = category.replace(/\D+/g, "").slice(0, 2).padStart(2, "0");
-      const mappedCodes = selectedCategoryMap ? parseYogoCodeList(selectedCategoryMap.yogo_code) : [];
-      if (mappedCodes.length > 0) {
-        const mappedCodeSet = new Set(mappedCodes);
-        selectedRows = rowsRaw.filter((row) =>
-          mappedCodeSet.has(extractYogoCategoryCode(row.category_name)),
-        );
-      } else {
-        const normalizedSelected = normalizeCategory(category);
-        selectedRows = rowsRaw.filter((row) => {
-          const normalizedCategoryName = normalizeCategory(row.category_name);
-          const code = extractYogoCategoryCode(row.category_name);
-          return (
-            normalizedCategoryName.includes(normalizedSelected) ||
-            (selectedCode && code === selectedCode)
-          );
-        });
-      }
-    }
-    const rows: ProductRow[] = selectedRows.map((row) => ({
-      sku: row.product_code,
-      barcode: row.product_no,
-      name_zh: row.name_cn,
-      name_es: row.name_es,
-      case_pack: row.case_pack ?? null,
-      carton_pack: row.carton_pack ?? null,
-      price: row.source_price,
-    }));
-
-    if (format === "pdf") {
-      const bytes = await buildCatalogPdf(
-        rows,
-        category,
-        onShelfOnly,
-        categoryZh,
-        categoryEs,
-        doc,
-      );
-      const name = safeName(`PARKSONMX-${category === "all" ? "ALL" : category}.pdf`);
-      return new NextResponse(Buffer.from(bytes), {
-        status: 200,
-        headers: {
-          "Content-Type": "application/pdf",
-          "Content-Disposition": `${isShare ? "inline" : "attachment"}; filename="${encodeURIComponent(name)}"`,
-        },
-      });
-    }
-
-    const bytes = await buildCatalogXlsx(rows, category, onShelfOnly, doc, lang, categoryZh, categoryEs);
-    const name = safeName(`PARKSONMX-${category === "all" ? "ALL" : category}.xlsx`);
-    return new NextResponse(Buffer.from(bytes), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `${isShare ? "inline" : "attachment"}; filename="${encodeURIComponent(name)}"`,
-      },
+    return await buildCatalogExportResponse({
+      tenantId: session.tenantId,
+      companyId: session.companyId,
+      format: (searchParams.get("format") || "xlsx").toLowerCase(),
+      lang: toExportLang(searchParams.get("lang")),
+      category: cleanCategory(searchParams.get("category") || "all"),
+      keyword: (searchParams.get("keyword") || "").trim(),
+      onShelfOnly: (searchParams.get("onShelfOnly") || "1") !== "0",
+      categoryZh: searchParams.get("categoryZh") || "",
+      categoryEs: searchParams.get("categoryEs") || "",
     });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "导出失败" }, { status: 500 });

@@ -1,11 +1,11 @@
 // @ts-nocheck
 ﻿import { redirect } from "next/navigation";
-import { hasLocalProductImage } from "@/lib/local-product-image";
 import { normalizeProductCode } from "@/lib/product-code";
+import { hasProductImageByKeys } from "@/lib/product-image-availability";
 import { AppShell } from "@/components/app-shell";
 import { prisma } from "@/lib/prisma";
 import { withPrismaRetry } from "@/lib/prisma-retry";
-import { hasPermission } from "@/lib/permissions";
+import { getResolvedLandingPath, hasAppPermission } from "@/lib/permissions";
 import { getSession } from "@/lib/tenant";
 import {
   extractCategoryCode,
@@ -13,6 +13,9 @@ import {
   stripLeadingCategoryCode,
 } from "@/lib/yogo-product-utils";
 import { ProductsManagementClient } from "./ProductsManagementClient";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 function toNumber(value: unknown) {
   if (value === null || value === undefined) return null;
@@ -46,10 +49,6 @@ function trailing3Digits(value: string | null | undefined) {
   return match ? match[1] : "";
 }
 
-function hasProductImage(sku: string) {
-  return hasLocalProductImage(sku, "jpg");
-}
-
 function formatZhDateTime(date: Date) {
   const parts = new Intl.DateTimeFormat("zh-CN", {
     timeZone: "America/Mexico_City",
@@ -76,7 +75,9 @@ function maxDate(values: Array<Date | null | undefined>) {
 export default async function ProductsManagementPage() {
   const session = await getSession();
   if (!session) redirect("/login");
-  if (!(await hasPermission(session, "manageProducts"))) redirect("/dashboard");
+  if (!(await hasAppPermission(session, "products.view"))) {
+    redirect(await getResolvedLandingPath(session));
+  }
 
   const yogoRows = await withPrismaRetry(() =>
     prisma.yogoProductSource.findMany({
@@ -188,11 +189,12 @@ export default async function ProductsManagementPage() {
     }
   }
 
-  const initialRows = visibleRows.map((row) => {
+  const mapProductRow = async (row: (typeof visibleRows)[number]) => {
     const discount = parseYogoDiscountParts(row.category_name, row.source_discount);
     const categoryCode = extractCategoryCode(row.category_name);
     const yogoCode = categoryCode ? categoryCode.slice(0, 2).padStart(2, "0") : "-";
     const mappedCategoryName = yogoCode === "-" ? "" : categoryCodeMap.get(yogoCode) || "";
+    const hasImage = await hasProductImageByKeys([row.product_code, row.product_no]);
     return {
       id: row.id,
       sku: row.product_code,
@@ -208,12 +210,14 @@ export default async function ProductsManagementPage() {
       categoryName: mappedCategoryName || "-",
       subcategory: stripLeadingCategoryCode(row.subcategory_name),
       supplier: row.supplier || "",
-      hasImage: hasProductImage(row.product_code),
+      hasImage,
       available: row.source_disabled ? 1 : 0,
       statusText: row.source_disabled ? "下架" : "上架",
       isNewProduct: null,
     };
-  });
+  };
+
+  const initialRows = await Promise.all(visibleRows.map(mapProductRow));
   const visibleCategoryOptions = Array.from(
     new Set(
       categoryMapRows

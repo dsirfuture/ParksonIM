@@ -26,37 +26,37 @@ export async function GET(request: Request) {
     }
 
     const compactKeyword = compactKeywordText(keyword);
-    const rows = await prisma.yogoProductSource.findMany({
+    const rows = await prisma.supplierProductSource.findMany({
       where: {
         tenant_id: session.tenantId,
         company_id: session.companyId,
         OR: [
-          { product_code: { contains: keyword, mode: "insensitive" } },
-          { product_no: { contains: keyword, mode: "insensitive" } },
-          { name_cn: { contains: keyword, mode: "insensitive" } },
+          { sku: { contains: keyword, mode: "insensitive" } },
+          { barcode: { contains: keyword, mode: "insensitive" } },
+          { name_zh: { contains: keyword, mode: "insensitive" } },
           { name_es: { contains: keyword, mode: "insensitive" } },
-          { supplier: { contains: keyword, mode: "insensitive" } },
+          { supplier_name: { contains: keyword, mode: "insensitive" } },
         ],
       },
-      orderBy: [{ updated_at: "desc" }, { product_code: "asc" }],
+      orderBy: [{ updated_at: "desc" }, { sku: "asc" }],
       take: 40,
       select: {
         id: true,
-        product_code: true,
-        product_no: true,
-        name_cn: true,
+        sku: true,
+        barcode: true,
+        name_zh: true,
         name_es: true,
-        source_price: true,
-        supplier: true,
+        unit_price: true,
+        supplier_name: true,
       },
     });
 
     const items = rows
       .filter((row) => {
         if (!compactKeyword) return true;
-        const compactSku = compactKeywordText(row.product_code);
-        const compactBarcode = compactKeywordText(row.product_no);
-        const compactNameZh = compactKeywordText(row.name_cn);
+        const compactSku = compactKeywordText(row.sku);
+        const compactBarcode = compactKeywordText(row.barcode);
+        const compactNameZh = compactKeywordText(row.name_zh);
         const compactNameEs = compactKeywordText(row.name_es);
         return (
           compactSku.includes(compactKeyword)
@@ -68,12 +68,12 @@ export async function GET(request: Request) {
       .slice(0, 8)
       .map((row) => ({
         id: row.id,
-        sku: row.product_code,
-        barcode: row.product_no || "",
-        nameZh: row.name_cn || "",
+        sku: row.sku,
+        barcode: row.barcode || "",
+        nameZh: row.name_zh || "",
         nameEs: row.name_es || "",
-        unitPrice: row.source_price,
-        supplierName: row.supplier || "",
+        unitPrice: row.unit_price,
+        supplierName: row.supplier_name || "",
       }));
 
     return NextResponse.json({ ok: true, items });

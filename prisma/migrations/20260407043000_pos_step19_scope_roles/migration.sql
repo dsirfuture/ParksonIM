@@ -1,0 +1,3 @@
+ALTER TABLE "users"
+  ADD COLUMN IF NOT EXISTS "pos_role" TEXT NOT NULL DEFAULT 'store_admin',
+  ADD COLUMN IF NOT EXISTS "pos_store_id" TEXT;

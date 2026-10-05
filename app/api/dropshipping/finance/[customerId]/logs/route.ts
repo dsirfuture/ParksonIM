@@ -150,6 +150,12 @@ export async function GET(
     if (!normalizedCustomerId) {
       return NextResponse.json({ ok: false, error: "缺少客户ID" }, { status: 400 });
     }
+    if (
+      session.dropshippingCustomerId
+      && String(session.dropshippingCustomerId || "").trim() !== normalizedCustomerId
+    ) {
+      return NextResponse.json({ ok: false, error: "无权限" }, { status: 403 });
+    }
 
     const customerOrderRows = await prisma.dropshippingOrder.findMany({
       where: {
@@ -335,6 +341,12 @@ export async function POST(
     const normalizedCustomerId = String(customerId || "").trim();
     if (!normalizedCustomerId) {
       return NextResponse.json({ ok: false, error: "缺少客户ID" }, { status: 400 });
+    }
+    if (
+      session.dropshippingCustomerId
+      && String(session.dropshippingCustomerId || "").trim() !== normalizedCustomerId
+    ) {
+      return NextResponse.json({ ok: false, error: "无权限" }, { status: 403 });
     }
 
     const body = await request.json().catch(() => ({}));

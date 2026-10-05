@@ -449,7 +449,7 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                   <col className="w-[12%]" />
                   <col className="w-[1%]" />
                   <col className="w-[1%]" />
-                  <col className="w-[18%]" />
+                  <col className="w-[9%]" />
                   <col className="w-[4%]" />
                   <col className="w-[4%]" />
                   <col className="w-[3%]" />
@@ -496,7 +496,7 @@ export function YgOrdersClient({ initialRows, summary }: YgOrdersClientProps) {
                           </td>
                           <td className="whitespace-nowrap px-3 py-2 text-slate-700">{extractPhone(row.contactPhone, row.remarkText)}</td>
                           <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums font-semibold text-slate-700">{row.orderAmountText}</td>
-                          <td className="max-w-[420px] truncate whitespace-nowrap px-3 py-2 text-slate-700">
+                          <td className="max-w-[210px] truncate whitespace-nowrap px-3 py-2 text-slate-700">
                             {cleanRemarkText(row.remarkText || "") || "-"}
                           </td>
                           <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-slate-700">{row.itemCount}</td>

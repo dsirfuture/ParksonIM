@@ -4,25 +4,10 @@ import {
   buildBillingXlsx,
   type BillingExportData,
   type BillingExportItem,
+  resolveBillingItemsWithYogoPrice,
 } from "@/lib/billing-export";
 import { writeBillingActionLog } from "@/lib/billing-action-log";
 import { getSession } from "@/lib/tenant";
-
-function toDiscountFactor(value: number | null) {
-  if (value === null || !Number.isFinite(value) || value < 0) return null;
-  return value > 1 ? value / 100 : value;
-}
-
-function calcLineTotal(item: BillingExportItem, vipDiscountEnabled: boolean) {
-  const qty = Number(item.qty || 0);
-  const unitPrice = Number(item.unitPrice || 0);
-  let factor = 1;
-  const normalDiscount = toDiscountFactor(item.normalDiscount);
-  const vipDiscount = toDiscountFactor(item.vipDiscount);
-  if (normalDiscount !== null) factor *= 1 - normalDiscount;
-  if (vipDiscountEnabled && vipDiscount !== null) factor *= 1 - vipDiscount;
-  return qty * unitPrice * factor;
-}
 
 export const runtime = "nodejs";
 
@@ -79,10 +64,12 @@ export async function POST(request: Request) {
       : [];
 
     const vipDiscountEnabled = Boolean(body.vipDiscountEnabled);
-    const computedItems = items.map((item) => ({
-      ...item,
-      lineTotal: calcLineTotal(item, vipDiscountEnabled),
-    }));
+    const computedItems = await resolveBillingItemsWithYogoPrice({
+      tenantId: session.tenantId,
+      companyId: session.companyId,
+      items,
+      vipDiscountEnabled,
+    });
     const totalQty = computedItems.reduce((sum, item) => sum + Number(item.qty || 0), 0);
     const totalAmount = computedItems.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0);
 

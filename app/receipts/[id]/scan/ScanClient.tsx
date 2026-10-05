@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import QRCode from "qrcode";
 import {
   ChangeEvent,
   DragEvent,
@@ -52,7 +53,10 @@ type TextMap = {
   uploadEvidence: string;
   finishInspection: string;
   finishingInspection: string;
+  revokeFinishInspection: string;
+  revokingFinishInspection: string;
   finishInspectionFailed: string;
+  revokeFinishInspectionFailed: string;
   supplier: string;
   uploadedAt: string;
   inspectedAt: string;
@@ -99,6 +103,12 @@ type TextMap = {
   chooseImages: string;
   noEvidence: string;
   emptyImage: string;
+  mobileScan: string;
+  mobileScanTitle: string;
+  mobileScanDesc: string;
+  mobileScanCopy: string;
+  mobileScanCopied: string;
+  mobileScanOpen: string;
 };
 
 type ScanClientProps = {
@@ -112,6 +122,8 @@ type ScanClientProps = {
   backHref: string;
   rows: ItemRow[];
   initialSummary: SummaryState;
+  stateEndpoint: string;
+  mobileSharePath: string;
   text: TextMap;
 };
 
@@ -138,6 +150,12 @@ type AddItemFormState = {
   barcode: string;
   casePack: string;
   expectedQty: string;
+};
+
+type ScanNoticeState = {
+  code: string;
+  message: string;
+  tone: "success" | "error" | "info";
 };
 
 type SummaryFilterKey = "all" | "diffQty" | "uncheckedQty";
@@ -227,6 +245,29 @@ function hasRowScanData(row: ItemRow): boolean {
   if (row.damagedQty > 0) return true;
   if (row.excessQty > 0) return true;
   return row.status !== "pending";
+}
+
+let scanNoticeTimer: number | null = null;
+
+function speakScanNotice(message: string) {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+    return;
+  }
+
+  const synth = window.speechSynthesis;
+  if (scanNoticeTimer) {
+    window.clearTimeout(scanNoticeTimer);
+  }
+  synth.cancel();
+
+  scanNoticeTimer = window.setTimeout(() => {
+    const utterance = new SpeechSynthesisUtterance(message);
+    utterance.lang = "es-MX";
+    utterance.rate = 1.02;
+    utterance.pitch = 1;
+    synth.speak(utterance);
+    scanNoticeTimer = null;
+  }, 90);
 }
 
 function SummaryCard({
@@ -446,10 +487,14 @@ export function ScanClient({
   backHref,
   rows,
   initialSummary,
+  stateEndpoint,
+  mobileSharePath,
   text,
 }: ScanClientProps) {
   const [items, setItems] = useState<ItemRow[]>(rows);
   const [summary, setSummary] = useState<SummaryState>(initialSummary);
+  const [receiptStatusState, setReceiptStatusState] = useState<ItemStatus>(receiptStatus);
+  const [receiptLockedState, setReceiptLockedState] = useState(receiptLocked);
   const [scanInput, setScanInput] = useState("");
   const [keyword, setKeyword] = useState("");
   const [summaryFilter, setSummaryFilter] = useState<SummaryFilterKey>("all");
@@ -460,6 +505,7 @@ export function ScanClient({
   const [pinnedItemId, setPinnedItemId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [revertingComplete, setRevertingComplete] = useState(false);
   const [lightbox, setLightbox] = useState<LightboxState>({
     open: false,
     src: "",
@@ -485,6 +531,12 @@ export function ScanClient({
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [addItemForm, setAddItemForm] =
     useState<AddItemFormState>(getInitialAddForm());
+  const [scanNotice, setScanNotice] = useState<ScanNoticeState | null>(null);
+  const [mobileShareOpen, setMobileShareOpen] = useState(false);
+  const [mobileShareUrl, setMobileShareUrl] = useState("");
+  const [mobileShareQr, setMobileShareQr] = useState("");
+  const [mobileShareCopied, setMobileShareCopied] = useState(false);
+  const [inspectedAtTextState, setInspectedAtTextState] = useState(inspectedAtText);
 
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
@@ -500,13 +552,133 @@ export function ScanClient({
 
   const scanInputRef = useRef<HTMLInputElement | null>(null);
   const locateTimerRef = useRef<number | null>(null);
+  const scanNoticeTimerRef = useRef<number | null>(null);
+  const itemsRef = useRef<ItemRow[]>(rows);
+  const lastRemoteScanRef = useRef<{
+    id: string;
+    goodQty: number;
+    damagedQty: number;
+    excessQty: number;
+    uncheckedQty: number;
+  } | null>(null);
 
   useEffect(() => {
     setItems(rows);
     setSummary(initialSummary);
+    setReceiptStatusState(receiptStatus);
+    setReceiptLockedState(receiptLocked);
+    setInspectedAtTextState(inspectedAtText);
     setActiveItemId(rows[0]?.id || null);
     setSummaryFilter("all");
-  }, [rows, initialSummary]);
+  }, [rows, initialSummary, receiptLocked, receiptStatus, inspectedAtText]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const absoluteUrl = new URL(mobileSharePath, window.location.origin).toString();
+    setMobileShareUrl(absoluteUrl);
+  }, [mobileSharePath]);
+
+  useEffect(() => {
+    if (!mobileShareUrl) {
+      setMobileShareQr("");
+      return;
+    }
+    let cancelled = false;
+    QRCode.toDataURL(mobileShareUrl, {
+      margin: 1,
+      width: 220,
+    }).then((dataUrl) => {
+      if (!cancelled) {
+        setMobileShareQr(dataUrl);
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setMobileShareQr("");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mobileShareUrl]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      return;
+    }
+
+    window.speechSynthesis.getVoices();
+  }, []);
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
+  useEffect(() => {
+    const timer = window.setInterval(async () => {
+      try {
+        const response = await fetch(stateEndpoint, {
+          cache: "no-store",
+        });
+        const result = await readJsonSafe(response);
+        if (!response.ok || !result?.ok) return;
+        const nextRows = Array.isArray(result.rows) ? result.rows : [];
+        const prevRows = itemsRef.current;
+        let changedRow: ItemRow | null = null;
+
+        for (const row of nextRows) {
+          const prev = prevRows.find((item) => item.id === row.id);
+          if (!prev) continue;
+          const changed =
+            row.goodQty !== prev.goodQty ||
+            row.damagedQty !== prev.damagedQty ||
+            row.excessQty !== prev.excessQty ||
+            row.uncheckedQty !== prev.uncheckedQty;
+          if (changed) {
+            changedRow = row;
+          }
+        }
+
+        setItems(nextRows);
+        setSummary(result.summary || initialSummary);
+        setReceiptStatusState(result.receiptStatus || receiptStatus);
+        setReceiptLockedState(Boolean(result.receiptLocked));
+        setInspectedAtTextState(result.inspectedAtText || inspectedAtText);
+
+        if (changedRow) {
+          setActiveItemId(changedRow.id);
+          setPinnedItemId(changedRow.id);
+          const nextSignature = {
+            id: changedRow.id,
+            goodQty: changedRow.goodQty,
+            damagedQty: changedRow.damagedQty,
+            excessQty: changedRow.excessQty,
+            uncheckedQty: changedRow.uncheckedQty,
+          };
+          const lastSignature = lastRemoteScanRef.current;
+          const isSameEvent =
+            lastSignature &&
+            lastSignature.id === nextSignature.id &&
+            lastSignature.goodQty === nextSignature.goodQty &&
+            lastSignature.damagedQty === nextSignature.damagedQty &&
+            lastSignature.excessQty === nextSignature.excessQty &&
+            lastSignature.uncheckedQty === nextSignature.uncheckedQty;
+
+          if (!isSameEvent) {
+            const code = changedRow.sku || changedRow.barcode || receiptNo;
+            const remainingUnchecked = Math.max(Number(changedRow.uncheckedQty ?? 0), 0);
+            notifyScanNotice(code, `未验${remainingUnchecked} 个`, "info");
+            lastRemoteScanRef.current = nextSignature;
+          }
+        }
+      } catch {
+        // Keep current UI state when polling fails.
+      }
+    }, 2500);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [initialSummary, inspectedAtText, receiptStatus, stateEndpoint]);
 
   useEffect(() => {
     return () => {
@@ -517,6 +689,22 @@ export function ScanClient({
       });
     };
   }, [pendingEvidenceImages]);
+
+  useEffect(() => {
+    if (!evidenceOpen) return;
+
+    function preventWindowFileDrop(event: globalThis.DragEvent) {
+      event.preventDefault();
+    }
+
+    window.addEventListener("dragover", preventWindowFileDrop);
+    window.addEventListener("drop", preventWindowFileDrop);
+
+    return () => {
+      window.removeEventListener("dragover", preventWindowFileDrop);
+      window.removeEventListener("drop", preventWindowFileDrop);
+    };
+  }, [evidenceOpen]);
 
   const filteredRows = useMemo(() => {
     const value = keyword.trim().toLowerCase();
@@ -532,9 +720,9 @@ export function ScanClient({
     });
 
     if (summaryFilter === "diffQty") {
-      list = list.filter((row) => hasRowScanData(row) && row.diffQty > 0);
+      list = list.filter((row) => row.diffQty > 0);
     } else if (summaryFilter === "uncheckedQty") {
-      list = list.filter((row) => hasRowScanData(row) && row.uncheckedQty > 0);
+      list = list.filter((row) => row.uncheckedQty > 0);
     }
 
     list = [...list].sort((a, b) => {
@@ -558,16 +746,75 @@ export function ScanClient({
   );
 
   const canFinishInspection = useMemo(() => {
-    if (receiptLocked || receiptStatus === "completed") return false;
-    if (!hasRealScanData) return false;
-    return summary.diffQtyTotal > 0 || summary.uncheckedQtyTotal > 0;
+    if (receiptLockedState || receiptStatusState === "completed") return false;
+    // Temporary: always show finish button in active scan page.
+    return true;
   }, [
-    hasRealScanData,
-    receiptLocked,
-    receiptStatus,
-    summary.diffQtyTotal,
-    summary.uncheckedQtyTotal,
+    receiptLockedState,
+    receiptStatusState,
   ]);
+
+  const showCompletedInspectionActions =
+    receiptLockedState || receiptStatusState === "completed";
+
+  function showScanNotice(
+    code: string,
+    message: string,
+    tone: "success" | "error" | "info",
+  ) {
+    const label = code.trim();
+    if (scanNoticeTimerRef.current) {
+      window.clearTimeout(scanNoticeTimerRef.current);
+      scanNoticeTimerRef.current = null;
+    }
+    setScanNotice({
+      code: label || receiptNo,
+      message,
+      tone,
+    });
+    scanNoticeTimerRef.current = window.setTimeout(() => {
+      setScanNotice(null);
+      scanInputRef.current?.focus();
+      scanNoticeTimerRef.current = null;
+    }, 1500);
+  }
+
+  function notifyScanNotice(
+    code: string,
+    message: string,
+    tone: "success" | "error" | "info" = "info",
+  ) {
+    showScanNotice(code, message, tone);
+    speakScanNotice(message);
+  }
+
+  function closeScanNotice() {
+    if (scanNoticeTimerRef.current) {
+      window.clearTimeout(scanNoticeTimerRef.current);
+      scanNoticeTimerRef.current = null;
+    }
+    setScanNotice(null);
+    window.setTimeout(() => {
+      scanInputRef.current?.focus();
+    }, 0);
+  }
+
+  async function copyMobileShareUrl() {
+    if (!mobileShareUrl) return;
+    try {
+      await navigator.clipboard.writeText(mobileShareUrl);
+      setMobileShareCopied(true);
+      window.setTimeout(() => setMobileShareCopied(false), 1500);
+    } catch {
+      setMobileShareCopied(false);
+    }
+  }
+
+  function keepScanInputFocus() {
+    window.setTimeout(() => {
+      scanInputRef.current?.focus();
+    }, 0);
+  }
 
   useEffect(() => {
     const value = scanInput.trim();
@@ -589,6 +836,12 @@ export function ScanClient({
 
       if (exact) {
         setScanInput("");
+        setActiveItemId(exact.id);
+        setPinnedItemId(exact.id);
+        if (!exact.unexpected && exact.uncheckedQty <= 0) {
+          notifyScanNotice(exact.sku || exact.barcode || receiptNo, "Exceso", "error");
+          return;
+        }
         await handleScanMatched(exact.id, exact.sku);
         return;
       }
@@ -596,9 +849,15 @@ export function ScanClient({
       const looksLikeBarcode = /^\d{6,}$/.test(value.trim());
 
       if (looksLikeBarcode) {
+        setScanInput("");
         setPendingUnknownCode(value.trim());
         setConfirmUnknownOpen(true);
+        notifyScanNotice(value.trim() || receiptNo, "Código nuevo", "info");
+        return;
       }
+
+      setScanInput("");
+      notifyScanNotice(value.trim() || receiptNo, "No encontrado", "error");
     }, 120);
 
     return () => {
@@ -681,6 +940,12 @@ export function ScanClient({
   }
 
   function closeEvidenceModal() {
+    pendingEvidenceImages.forEach((item) => {
+      if (item.local) {
+        URL.revokeObjectURL(item.url);
+      }
+    });
+    setPendingEvidenceImages([]);
     setEvidenceOpen(false);
     setEvidenceError("");
     setEvidenceDragActive(false);
@@ -689,16 +954,18 @@ export function ScanClient({
   async function queueEvidenceFiles(files: File[]) {
     if (!files.length) return;
 
-    const totalCount =
-      savedEvidenceImages.length + pendingEvidenceImages.length + files.length;
+    const availableSlots =
+      MAX_EVIDENCE_COUNT - savedEvidenceImages.length - pendingEvidenceImages.length;
 
-    if (totalCount > MAX_EVIDENCE_COUNT) {
+    if (availableSlots <= 0) {
       throw new Error(getEvidenceTooManyText(text));
     }
 
+    const acceptedFiles = files.slice(0, availableSlots);
+
     const nextImages: EvidenceItem[] = [];
 
-    for (const file of files) {
+    for (const file of acceptedFiles) {
       if (!file.type.startsWith("image/")) {
         throw new Error(getEvidenceImageOnlyText(text));
       }
@@ -722,6 +989,10 @@ export function ScanClient({
 
     setEvidenceError("");
     setPendingEvidenceImages((prev) => [...prev, ...nextImages]);
+
+    if (acceptedFiles.length < files.length) {
+      setEvidenceError(getEvidenceTooManyText(text));
+    }
   }
 
   async function handleEvidenceChoose(event: ChangeEvent<HTMLInputElement>) {
@@ -972,7 +1243,7 @@ export function ScanClient({
         }
       }
 
-      setSummary(buildSummary(next));
+      setSummary(result.summary);
       return next;
     });
 
@@ -981,8 +1252,13 @@ export function ScanClient({
   }
 
   async function handleScanMatched(itemId: string, matchedSku?: string) {
+    const previousItem =
+      itemsRef.current.find((item) => item.id === itemId) || null;
+
     try {
       setSaving(true);
+      setActiveItemId(itemId);
+      setPinnedItemId(itemId);
 
       const response = await fetch(`/api/receipts/scan/${itemId}`, {
         method: "PATCH",
@@ -1003,14 +1279,34 @@ export function ScanClient({
       }
 
       await applyServerResult(result, matchedSku);
+      const scannedCode = result.item.sku || result.item.barcode || receiptNo;
+      const remainingUnchecked = Math.max(Number(result.item.uncheckedQty ?? 0), 0);
+      notifyScanNotice(scannedCode, `Faltan ${remainingUnchecked}`, "info");
 
       window.setTimeout(() => {
         scanInputRef.current?.focus();
       }, 0);
+    } catch (error) {
+      setScanInput("");
+      notifyScanNotice(
+        previousItem?.sku || previousItem?.barcode || scanInputRef.current?.value || receiptNo,
+        "Error al guardar",
+        "error",
+      );
+      window.alert(error instanceof Error ? error.message : text.saveFailed);
     } finally {
       setSaving(false);
     }
   }
+
+  useEffect(() => {
+    return () => {
+      if (scanNoticeTimerRef.current) {
+        window.clearTimeout(scanNoticeTimerRef.current);
+        scanNoticeTimerRef.current = null;
+      }
+    };
+  }, []);
 
   async function saveItemEdit() {
     if (!editingItemId) return;
@@ -1138,6 +1434,9 @@ export function ScanClient({
         throw new Error(result?.error || text.finishInspectionFailed);
       }
 
+      setReceiptLockedState(true);
+      setReceiptStatusState("completed");
+
       window.location.assign(result?.billingHref || "/billing");
     } catch (error) {
       window.alert(
@@ -1147,8 +1446,88 @@ export function ScanClient({
     }
   }
 
+  async function revokeFinishInspection() {
+    try {
+      setRevertingComplete(true);
+
+      const response = await fetch(`/api/receipts/${receiptId}/complete`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      const result = await readJsonSafe(response);
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result?.error || text.revokeFinishInspectionFailed);
+      }
+
+      setReceiptLockedState(false);
+      setReceiptStatusState("in_progress");
+
+      window.setTimeout(() => {
+        scanInputRef.current?.focus();
+      }, 0);
+    } catch (error) {
+      window.alert(
+        error instanceof Error ? error.message : text.revokeFinishInspectionFailed,
+      );
+    } finally {
+      setRevertingComplete(false);
+    }
+  }
+
   return (
     <div className="space-y-5">
+      {scanNotice ? (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            event.preventDefault();
+            keepScanInputFocus();
+          }}
+          onDoubleClick={(event) => {
+            event.preventDefault();
+            closeScanNotice();
+          }}
+        >
+          <div
+            className={`relative flex h-[78vh] w-full max-w-[96vw] flex-col items-center justify-center overflow-hidden rounded-[40px] px-6 py-10 text-center shadow-[0_30px_120px_rgba(15,23,42,0.35)] ${
+              scanNotice.tone === "success"
+                ? "border-4 border-emerald-300 bg-emerald-50"
+                : scanNotice.tone === "error"
+                  ? "bg-transparent"
+                  : "border-4 border-primary/30 bg-white"
+            }`}
+            onMouseDown={(event) => {
+              event.preventDefault();
+              keepScanInputFocus();
+            }}
+            onDoubleClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              closeScanNotice();
+            }}
+          >
+            <div
+              className="max-w-[92%] break-all text-[9vw] font-black tracking-[0.08em] text-slate-900 sm:text-[7vw]"
+            >
+              {scanNotice.code}
+            </div>
+            <div
+              className={`mt-6 max-w-[92%] text-[10vw] font-black leading-none sm:text-[7.5vw] ${
+                /^未验\s*\d+\s*个$/.test(scanNotice.message) || scanNotice.tone === "error"
+                  ? "text-rose-500"
+                  : "text-slate-900"
+              }`}
+            >
+              {scanNotice.message}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <section className="rounded-[20px] bg-white p-6 shadow-soft">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
@@ -1163,13 +1542,31 @@ export function ScanClient({
                 {text.uploadedAt}：{uploadedAtText}
               </span>
               <span>
-                {text.inspectedAt}：{inspectedAtText}
+                {text.inspectedAt}：{inspectedAtTextState}
               </span>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            {canFinishInspection ? (
+            {showCompletedInspectionActions ? (
+              <>
+                <button
+                  type="button"
+                  disabled
+                  className="inline-flex h-10 items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 px-5 text-sm font-semibold text-slate-400"
+                >
+                  {text.finishInspection}
+                </button>
+                <button
+                  type="button"
+                  onClick={revokeFinishInspection}
+                  disabled={revertingComplete}
+                  className="inline-flex h-10 items-center justify-center rounded-2xl border border-amber-200 bg-white px-5 text-sm font-semibold text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {revertingComplete ? text.revokingFinishInspection : text.revokeFinishInspection}
+                </button>
+              </>
+            ) : canFinishInspection ? (
               <button
                 type="button"
                 onClick={finishInspection}
@@ -1179,6 +1576,13 @@ export function ScanClient({
                 {completing ? text.finishingInspection : text.finishInspection}
               </button>
             ) : null}
+            <button
+              type="button"
+              onClick={() => setMobileShareOpen(true)}
+              className="inline-flex h-10 items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              {text.mobileScan}
+            </button>
             <button
               type="button"
               onClick={openEvidenceModal}
@@ -1305,7 +1709,7 @@ export function ScanClient({
                 <button
                   type="button"
                   onClick={() => setSummaryFilter("all")}
-                  className="mt-2 inline-flex h-8 items-center rounded-full border border-primary/20 bg-primary/5 px-3 text-xs font-semibold text-primary"
+                  className="mt-2 inline-flex h-8 items-center rounded-full border border-primary/20 bg-primary/5 px-3 text-xs font-semibold text-primary transition hover:border-primary/30 hover:bg-primary/10"
                 >
                   {summaryFilter === "diffQty" ? text.diffQty : text.uncheckedQty}
                 </button>
@@ -1435,16 +1839,18 @@ export function ScanClient({
               ) : (
                 filteredRows.map((row) => {
                   const imageAlt = row.nameZh || row.nameEs || row.sku || "-";
-                  const rowHasScanData = hasRowScanData(row);
                   const damagedChanged = row.damagedQty > 0;
-                  const diffChanged = rowHasScanData && row.diffQty > 0;
+                  const diffChanged = row.diffQty > 0;
                   const excessChanged = row.excessQty > 0;
+                  const isPinned = row.id === pinnedItemId;
 
                   return (
                     <tr
                       key={row.id}
                       onClick={() => setActiveItemId(row.id)}
-                      className="cursor-pointer border-t border-slate-100 transition hover:bg-secondary-accent/30"
+                      className={`cursor-pointer border-t border-slate-100 transition hover:bg-secondary-accent/30 ${
+                        isPinned ? "bg-emerald-50 [&>td]:text-emerald-700" : ""
+                      }`}
                     >
                       <td className="px-2 py-3 align-middle">
                         {row.unexpected ? (
@@ -1461,7 +1867,7 @@ export function ScanClient({
                           />
                         )}
                       </td>
-                      <td className="whitespace-nowrap px-2 py-3 text-sm font-medium text-slate-900">
+                      <td className={`whitespace-nowrap px-2 py-3 text-sm font-medium ${isPinned ? "text-emerald-700" : "text-slate-900"}`}>
                         <div className="flex items-center gap-2">
                           <span>{row.sku || "-"}</span>
                           {row.unexpected ? (
@@ -1471,62 +1877,62 @@ export function ScanClient({
                           ) : null}
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-2 py-3 text-sm text-slate-700">
+                      <td className={`whitespace-nowrap px-2 py-3 text-sm ${isPinned ? "text-emerald-700" : "text-slate-700"}`}>
                         {row.barcode || "-"}
                       </td>
-                      <td className="truncate px-2 py-3 text-sm text-slate-700">
+                      <td className={`truncate px-2 py-3 text-sm ${isPinned ? "text-emerald-700" : "text-slate-700"}`}>
                         {row.nameZh || "-"}
                       </td>
-                      <td className="truncate px-2 py-3 text-sm text-slate-700">
+                      <td className={`truncate px-2 py-3 text-sm ${isPinned ? "text-emerald-700" : "text-slate-700"}`}>
                         {row.nameEs || "-"}
                       </td>
-                      <td className="whitespace-nowrap px-2 py-3 text-sm text-slate-700">
+                      <td className={`whitespace-nowrap px-2 py-3 text-sm ${isPinned ? "text-emerald-700" : "text-slate-700"}`}>
                         {useSupplierCasePack ? "-" : (row.casePack ?? "-")}
                       </td>
-                      <td className="whitespace-nowrap px-2 py-3 text-sm text-slate-700">
+                      <td className={`whitespace-nowrap px-2 py-3 text-sm ${isPinned ? "text-emerald-700" : "text-slate-700"}`}>
                         {useSupplierCasePack ? (row.supplierCasePack ?? "-") : "-"}
                       </td>
-                      <td className="whitespace-nowrap px-2 py-3 text-sm text-slate-700">
+                      <td className={`whitespace-nowrap px-2 py-3 text-sm ${isPinned ? "text-emerald-700" : "text-slate-700"}`}>
                         {row.expectedQty ?? 0}
                       </td>
-                      <td className="whitespace-nowrap px-2 py-3 text-sm text-slate-700">
+                      <td className={`whitespace-nowrap px-2 py-3 text-sm ${isPinned ? "text-emerald-700" : "text-slate-700"}`}>
                         {row.goodQty}
                       </td>
                       <td
                         className={`whitespace-nowrap px-2 py-3 text-sm ${
-                          diffChanged ? "text-rose-600" : "text-slate-700"
+                          isPinned ? "text-emerald-700" : (diffChanged ? "text-rose-600" : "text-slate-700")
                         }`}
                       >
                         {row.diffQty}
                       </td>
                       <td
                         className={`whitespace-nowrap px-2 py-3 text-sm ${
-                          rowHasScanData && row.uncheckedQty > 0
-                            ? "text-rose-600"
-                            : "text-slate-700"
+                          isPinned ? "text-emerald-700" : (row.uncheckedQty > 0 ? "text-rose-600" : "text-slate-700")
                         }`}
                       >
                         {row.uncheckedQty}
                       </td>
                       <td
                         className={`whitespace-nowrap px-2 py-3 text-sm ${
-                          damagedChanged ? "text-rose-600" : "text-slate-700"
+                          isPinned ? "text-emerald-700" : (damagedChanged ? "text-rose-600" : "text-slate-700")
                         }`}
                       >
                         {row.damagedQty}
                       </td>
                       <td
                         className={`whitespace-nowrap px-2 py-3 text-sm ${
-                          excessChanged ? "text-rose-600" : "text-slate-700"
+                          isPinned ? "text-emerald-700" : (excessChanged ? "text-rose-600" : "text-slate-700")
                         }`}
                       >
                         {row.excessQty}
                       </td>
                       <td className="whitespace-nowrap px-2 py-3 text-sm">
                         <span
-                          className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${getStatusClassName(
-                            row.status,
-                          )}`}
+                          className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            isPinned
+                              ? "bg-emerald-100 text-emerald-700 ring-1 ring-inset ring-emerald-300"
+                              : getStatusClassName(row.status)
+                          }`}
                         >
                           {getStatusLabel(row.status, text)}
                         </span>
@@ -1666,6 +2072,57 @@ export function ScanClient({
                 className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-soft transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {saving ? text.saving : text.save}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {mobileShareOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="w-full max-w-[420px] rounded-2xl bg-white shadow-2xl">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <h3 className="text-base font-semibold text-slate-900">
+                {text.mobileScanTitle}
+              </h3>
+              <p className="mt-1 text-sm text-slate-500">{text.mobileScanDesc}</p>
+            </div>
+            <div className="space-y-4 px-5 py-5">
+              <div className="flex justify-center">
+                {mobileShareQr ? (
+                  <img src={mobileShareQr} alt={text.mobileScanTitle} className="h-[220px] w-[220px] rounded-xl border border-slate-200 bg-white p-2" />
+                ) : (
+                  <div className="flex h-[220px] w-[220px] items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-400">
+                    QR
+                  </div>
+                )}
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 break-all">
+                {mobileShareUrl}
+              </div>
+            </div>
+            <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setMobileShareOpen(false)}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                {text.cancel}
+              </button>
+              <a
+                href={mobileShareUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                {text.mobileScanOpen}
+              </a>
+              <button
+                type="button"
+                onClick={() => void copyMobileShareUrl()}
+                className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-soft transition hover:opacity-95"
+              >
+                {mobileShareCopied ? text.mobileScanCopied : text.mobileScanCopy}
               </button>
             </div>
           </div>
@@ -1905,7 +2362,15 @@ export function ScanClient({
               </h3>
             </div>
 
-            <div className="space-y-5 px-5 py-5">
+            <div
+              onDragOver={handleEvidenceDragOver}
+              onDragEnter={handleEvidenceDragEnter}
+              onDragLeave={handleEvidenceDragLeave}
+              onDrop={handleEvidenceDrop}
+              className={`space-y-5 px-5 py-5 transition ${
+                evidenceDragActive ? "bg-primary/5" : ""
+              }`}
+            >
               <div className="flex flex-wrap items-center gap-3">
                 <label className="inline-flex h-10 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
                   {text.chooseImages}
@@ -1939,10 +2404,6 @@ export function ScanClient({
               savedEvidenceImages.length === 0 &&
               pendingEvidenceImages.length === 0 ? (
                 <div
-                  onDragOver={handleEvidenceDragOver}
-                  onDragEnter={handleEvidenceDragEnter}
-                  onDragLeave={handleEvidenceDragLeave}
-                  onDrop={handleEvidenceDrop}
                   className={`rounded-xl border border-dashed px-4 py-10 text-center text-sm transition ${
                     evidenceDragActive
                       ? "border-primary bg-primary/5 text-primary"

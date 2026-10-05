@@ -30,6 +30,12 @@ export async function GET(
     }
 
     const { customerId } = await params;
+    if (
+      session.dropshippingCustomerId
+      && String(session.dropshippingCustomerId || "").trim() !== String(customerId || "").trim()
+    ) {
+      return NextResponse.json({ error: "无权限" }, { status: 403 });
+    }
     const [items, exchangeRate] = await Promise.all([
       getFinanceRows(session),
       getExchangeRatePayload(session),
@@ -75,6 +81,14 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       payload?: WeeklyStatementPdfPayload & { exportDateCode?: string };
     };
+    const targetCustomerId = String(body?.payload?.customerId || "").trim();
+    if (
+      session.dropshippingCustomerId
+      && targetCustomerId
+      && String(session.dropshippingCustomerId || "").trim() !== targetCustomerId
+    ) {
+      return NextResponse.json({ error: "无权限" }, { status: 403 });
+    }
     if (!body?.payload) {
       return NextResponse.json({ error: "缺少导出数据" }, { status: 400 });
     }

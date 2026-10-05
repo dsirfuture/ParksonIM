@@ -60,11 +60,14 @@ services:
       CLOUDFLARE_R2_ACCOUNT_ID: ${CLOUDFLARE_R2_ACCOUNT_ID}
       CLOUDFLARE_R2_ACCESS_KEY_ID: ${CLOUDFLARE_R2_ACCESS_KEY_ID}
       CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${CLOUDFLARE_R2_SECRET_ACCESS_KEY}
+      NPM_PROXY_MANAGER_API_URL: ${NPM_PROXY_MANAGER_API_URL:-http://nginx-proxy-manager:81/api}
+      NPM_PROXY_MANAGER_KEYS_PATH: ${NPM_PROXY_MANAGER_KEYS_PATH:-/run/npm/keys.json}
     ports:
       - "127.0.0.1:13000:3000"
     volumes:
       - ./data/avatars:/data/avatars
       - ./data/supplier-logos:/data/supplier-logos
+      - /opt/stacks/nginx-proxy-manager/data/keys.json:/run/npm/keys.json:ro
     networks:
       - parksonim_internal
       - nginx-proxy-manager_default

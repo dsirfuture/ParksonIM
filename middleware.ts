@@ -5,6 +5,15 @@ const SESSION_COOKIE_NAME = "parksonim_session";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+type MiddlewareSessionPayload = {
+  userId: string;
+  tenantId: string;
+  companyId: string;
+  role: "admin" | "worker";
+  userType?: "staff" | "dropshipping_customer";
+  defaultPath?: string | null;
+};
+
 function base64UrlToBytes(value: string) {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized + "=".repeat((4 - (normalized.length % 4 || 4)) % 4);
@@ -12,13 +21,33 @@ function base64UrlToBytes(value: string) {
   return Uint8Array.from(binary, (char) => char.charCodeAt(0));
 }
 
-async function hasValidSession(request: NextRequest) {
+function isValidSessionPayload(payload: unknown): payload is MiddlewareSessionPayload {
+  if (!payload || typeof payload !== "object") return false;
+  const value = payload as Record<string, unknown>;
+  return Boolean(
+    typeof value.userId === "string" &&
+      UUID_RE.test(value.userId) &&
+      typeof value.tenantId === "string" &&
+      UUID_RE.test(value.tenantId) &&
+      typeof value.companyId === "string" &&
+      UUID_RE.test(value.companyId) &&
+      (value.role === "admin" || value.role === "worker") &&
+      (value.userType === undefined ||
+        value.userType === "staff" ||
+        value.userType === "dropshipping_customer") &&
+      (value.defaultPath === undefined ||
+        value.defaultPath === null ||
+        typeof value.defaultPath === "string"),
+  );
+}
+
+async function readValidSessionPayload(request: NextRequest): Promise<MiddlewareSessionPayload | null> {
   const raw = request.cookies.get(SESSION_COOKIE_NAME)?.value;
-  if (!raw) return false;
+  if (!raw) return null;
 
   const [encoded, received] = raw.split(".");
   const secret = process.env.SESSION_SECRET?.trim() || "parksonim-local-session-secret";
-  if (!encoded || !received || !secret) return false;
+  if (!encoded || !received || !secret) return null;
 
   try {
     const key = await crypto.subtle.importKey(
@@ -33,14 +62,18 @@ async function hasValidSession(request: NextRequest) {
     const expected = Uint8Array.from(new Uint8Array(signature));
     const actual = base64UrlToBytes(received);
 
-    if (expected.length !== actual.length) return false;
+    if (expected.length !== actual.length) return null;
     for (let i = 0; i < expected.length; i += 1) {
-      if (expected[i] !== actual[i]) return false;
+      if (expected[i] !== actual[i]) return null;
     }
 
-    return true;
+    const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - (normalized.length % 4 || 4)) % 4);
+    const json = atob(padded);
+    const payload = JSON.parse(json) as MiddlewareSessionPayload;
+    return isValidSessionPayload(payload) ? payload : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -67,15 +100,24 @@ export async function middleware(request: NextRequest) {
 
   const { pathname, search } = request.nextUrl;
   const isStaticAsset = /\.[a-zA-Z0-9]+$/.test(pathname);
+  const isPublicCatalogRoute = pathname.startsWith("/public/catalog/");
 
-  if (isStaticAsset) {
+  if (isStaticAsset || isPublicCatalogRoute) {
     return response;
   }
 
   const isLoginRoute = pathname === "/login";
   const isRegisterRoute = pathname === "/register";
-  const hasSession = await hasValidSession(request);
+  const sessionPayload = await readValidSessionPayload(request);
+  const hasSession = Boolean(sessionPayload);
   const hasDevSession = hasDevSessionConfig();
+  const sessionDefaultPath =
+    sessionPayload?.defaultPath &&
+    sessionPayload.defaultPath.startsWith("/") &&
+    sessionPayload.defaultPath !== "/login" &&
+    sessionPayload.defaultPath !== "/register"
+      ? sessionPayload.defaultPath
+      : "/dashboard";
 
   if (!hasSession && !hasDevSession && !isLoginRoute && !isRegisterRoute) {
     const loginUrl = new URL("/login", request.url);
@@ -85,8 +127,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if ((hasSession || hasDevSession) && (pathname === "/" || isLoginRoute || isRegisterRoute)) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+  if ((hasSession || hasDevSession) && pathname === "/") {
+    return NextResponse.redirect(new URL(hasSession ? sessionDefaultPath : "/dashboard", request.url));
   }
 
   if (!hasSession && !hasDevSession && pathname === "/") {
